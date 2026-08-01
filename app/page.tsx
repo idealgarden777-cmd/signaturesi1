@@ -12,11 +12,9 @@ import {
   Mic,
   ArrowUp,
   Settings,
-  SquarePen,
-  Code2,
+  Edit3,
+  Code,
   FileText,
-  ListTodo,
-  Wand2,
   Search,
   Check
 } from 'lucide-react';
@@ -38,7 +36,7 @@ export default function Home() {
     {
       id: '2',
       role: 'assistant',
-      content: `Quantum computing ka basic concept bits aur qubits ka farq hai. Normal computers mein data bits (0 ya 1) mein store hota hai, lekin quantum computers mein qubits hote hain jo ek hi waqt mein 0 aur 1 dono states mein reh sakte hain. Is phenomenon ko superposition kehte hain.\n\nIska asli fayda entanglement se milta hai, jahan qubits aapas mein is tarah jud jaate hain ke ek ki state dusre ko instant affect karti hai, chahe wo kitni hi door kyun na ho. Iski wajah se quantum computers complex problems ko parallel process kar sakte hain, jo aaj ke supercomputers ke liye solve karna namumkin hai.\n\nSocho ke agar tumhein ek maze (bhal bhulaiya) se bahar nikalna ho, toh normal computer har rasta ek-ek karke check karega. Quantum computer saare raaste ek saath check kar sakta hai aur seedha exit dhoond lega. Ye technology abhi apne shuruati daur mein hai, lekin future mein ye medicine, encryption aur material science mein revolutionary changes la sakti hai.`
+      content: `Quantum computing ka basic concept **bits** aur **qubits** ka farq hai. Normal computers mein data bits (0 ya 1) mein store hota hai, lekin quantum computers mein qubits hote hain jo ek hi waqt mein 0 aur 1 dono states mein reh sakte hain. Is phenomenon ko **superposition** kehte hain.\n\nIska asli fayda **entanglement** se milta hai, jahan qubits aapas mein is tarah jud jaate hain ke ek ki state dusre ko instant affect karti hai, chahe wo kitni hi door kyun na ho. Iski wajah se quantum computers complex problems ko parallel process kar sakte hain, jo aaj ke supercomputers ke liye solve karna namumkin hai.\n\nSocho ke agar tumhein ek maze (bhal bhulaiya) se bahar nikalna ho, toh normal computer har rasta ek-ek karke check karega. Quantum computer saare raaste ek saath check kar sakta hai aur seedha exit dhoond lega. Ye technology abhi apne shuruati daur mein hai, lekin future mein ye medicine, encryption aur material science mein revolutionary changes la sakti hai.`
     }
   ]);
   
@@ -97,7 +95,6 @@ export default function Home() {
     setInput('');
     setIsStreaming(true);
 
-    // Add to recent chats list
     setRecentChats((prev) => [userPrompt.slice(0, 28) + '...', ...prev]);
 
     try {
@@ -176,7 +173,7 @@ export default function Home() {
               onClick={handleNewConversation}
               className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-slate-800 hover:bg-slate-200/60 rounded-lg transition-all"
             >
-              <SquarePen className="w-4 h-4 text-slate-600" />
+              <Edit3 className="w-4 h-4 text-slate-600" />
               <span>New Conversation</span>
             </button>
             <button className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-slate-800 hover:bg-slate-200/60 rounded-lg transition-all">
@@ -280,7 +277,7 @@ export default function Home() {
               onClick={() => handleQuickAction('Write code for')}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-[#f4f4f6] hover:bg-slate-200/80 text-slate-700 text-xs font-medium rounded-full transition-all"
             >
-              <Code2 className="w-3.5 h-3.5" />
+              <Code className="w-3.5 h-3.5" />
               <span>Write code</span>
             </button>
             <button
@@ -294,14 +291,14 @@ export default function Home() {
               onClick={() => handleQuickAction('Make a detailed plan for')}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-[#f4f4f6] hover:bg-slate-200/80 text-slate-700 text-xs font-medium rounded-full transition-all"
             >
-              <ListTodo className="w-3.5 h-3.5" />
+              <FileText className="w-3.5 h-3.5" />
               <span>Make a plan</span>
             </button>
             <button
               onClick={() => handleQuickAction('Improve and refine this text:')}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-[#f4f4f6] hover:bg-slate-200/80 text-slate-700 text-xs font-medium rounded-full transition-all"
             >
-              <Wand2 className="w-3.5 h-3.5" />
+              <Sparkles className="w-3.5 h-3.5" />
               <span>Improve text</span>
             </button>
             <button

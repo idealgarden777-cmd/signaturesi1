@@ -9,17 +9,14 @@ interface IncomingMessage {
 
 export async function POST(req: NextRequest) {
   try {
-    const { messages, mode = 'auto' } = await req.json();
+    const { messages, selectedModel = 'deepseek-v4-flash' } = await req.json();
 
     if (!messages || !Array.isArray(messages)) {
       return NextResponse.json({ error: 'Messages array is required' }, { status: 400 });
     }
 
-    const latestText = messages[messages.length - 1]?.content || '';
-    const reasoningKeywords = ['proof', 'algorithm', 'refactor', 'math', 'architecture', 'derive', 'logic'];
-    const isReasoningNeeded = mode === 'deepseek-reasoning' || reasoningKeywords.some(kw => latestText.toLowerCase().includes(kw));
-
-    const routeTarget = isReasoningNeeded ? 'deepseek' : 'gemini-flash';
+    // Enforce STRICT selection between ONLY deepseek-v4-flash and gemini-3.1-flash-lite
+    const activeModel = selectedModel === 'gemini-3.1-flash-lite' ? 'gemini-3.1-flash-lite' : 'deepseek-v4-flash';
     const encoder = new TextEncoder();
 
     const stream = new ReadableStream({
@@ -29,14 +26,19 @@ export async function POST(req: NextRequest) {
         };
 
         try {
-          sendChunk('status', { route: routeTarget, message: `Routing to ${routeTarget}` });
+          sendChunk('status', { route: activeModel, message: `Active Model: ${activeModel}` });
 
-          if (routeTarget === 'deepseek') {
+          if (activeModel === 'deepseek-v4-flash') {
+            // 1. DeepSeek V4-Flash API
             const apiKey = process.env.DEEPSEEK_API_KEY;
             const res = await fetch('https://api.deepseek.com/chat/completions', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-              body: JSON.stringify({ model: 'deepseek-reasoner', messages, stream: true }),
+              body: JSON.stringify({ 
+                model: 'deepseek-v4-flash',
+                messages, 
+                stream: true 
+              }),
             });
 
             const reader = res.body?.getReader();
@@ -61,8 +63,9 @@ export async function POST(req: NextRequest) {
               }
             }
           } else {
+            // 2. Gemini 3.1 Flash Lite API
             const apiKey = process.env.GEMINI_API_KEY;
-            const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:streamGenerateContent?alt=sse&key=${apiKey}`;
+            const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:streamGenerateContent?alt=sse&key=${apiKey}`;
             const contents = messages.map(m => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] }));
 
             const res = await fetch(endpoint, {

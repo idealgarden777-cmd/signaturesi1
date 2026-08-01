@@ -89,11 +89,15 @@ export default function Home() {
                   setIsThinking(false);
                   assistantContent += parsed.data || '';
 
-                  // Safe Regex extraction without array split issues
-                  const htmlMatch = assistantContent.match(/```html([\s\S]*?)```/i);
-                  if (htmlMatch && htmlMatch.length > 1) {
-                    const codeText = htmlMatch;
-                    if (codeText) setCurrentArtifactCode(codeText.trim());
+                  // Exec & Pop Regex Extraction (Zero Bracket Indexing Risk)
+                  if (assistantContent.includes('```html') || assistantContent.includes('```HTML')) {
+                    const match = /```html([\s\S]*?)```/i.exec(assistantContent);
+                    if (match) {
+                      const codeText = match.pop();
+                      if (codeText) {
+                        setCurrentArtifactCode(codeText.trim());
+                      }
+                    }
                   }
 
                   const assistantMsg: ChatMessage = {

@@ -91,8 +91,9 @@ export default function Home() {
 
                   if (assistantContent.includes('```html')) {
                     const parts = assistantContent.split('```html');
-                    if (parts.length > 1 && parts) {
-                      const codeBlock = parts.split('```')[0];
+                    const targetChunk = parts.length > 1 ? parts : undefined;
+                    if (targetChunk) {
+                      const codeBlock = targetChunk.split('```')[0];
                       if (codeBlock) {
                         setCurrentArtifactCode(codeBlock.trim());
                       }

@@ -23,10 +23,8 @@ import {
   X,
   Trash2,
   Check,
-  FileText,
-  ListTodo,
-  Wand2,
-  Search
+  Columns2,
+  SquarePen
 } from 'lucide-react';
 
 export interface ChatMessage {
@@ -223,9 +221,9 @@ export default function Home() {
   return (
     <div className={`app-container ${darkMode ? 'dark-mode' : ''}`}>
       {/* Sidebar */}
-      <aside className={`sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
+      <aside className={`sidebar ${sidebarCollapsed ? 'collapsed' : ''}`} id="sidebar">
         <div className="sidebar-header">
-          <button className="brand-button" type="button">
+          <button className="brand-button" id="brandBtn" type="button">
             <span className="brand-copy">
               <strong>NEO Engine</strong>
               <small>Signaturesi Central</small>
@@ -234,31 +232,35 @@ export default function Home() {
           <button
             onClick={() => setSidebarCollapsed(true)}
             className="icon-btn"
+            id="collapseSidebarBtn"
             title="Close Sidebar"
+            type="button"
           >
-            <PanelLeftClose className="w-4 h-4" />
+            <Columns2 size={20} />
           </button>
         </div>
 
         <div className="sidebar-content">
-          <div className="sidebar-primary-nav">
-            <button onClick={handleNewConversation} className="new-chat-btn" type="button">
-              <Edit3 className="w-4 h-4 text-slate-600" />
+          <nav className="sidebar-primary-nav" aria-label="Primary navigation">
+            <button onClick={handleNewConversation} className="new-chat-btn" id="newChatBtn" type="button" title="New conversation">
+              <span className="sidebar-nav-icon"><SquarePen size={18} /></span>
               <span>New Conversation</span>
             </button>
             <button
               onClick={() => setSettingsOpen(true)}
               className="sidebar-personality-btn"
+              id="sidebarPersonalitiesBtn"
               type="button"
+              title="NEO Personalities"
             >
-              <Sparkles className="w-4 h-4 text-slate-600" />
+              <span className="sidebar-nav-icon"><Sparkles size={18} /></span>
               <span>NEO Personalities</span>
             </button>
-          </div>
+          </nav>
 
           <div className="history-section">
             <span className="section-title">Recent Chats</span>
-            <div className="history-list">
+            <div className="history-list" id="historyList">
               {conversations.map((thread) => (
                 <div
                   key={thread.id}
@@ -273,7 +275,7 @@ export default function Home() {
                     className="icon-btn"
                     title="Delete Chat"
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
+                    <Trash2 size={14} />
                   </button>
                 </div>
               ))}
@@ -282,13 +284,13 @@ export default function Home() {
         </div>
 
         <div className="sidebar-footer">
-          <button onClick={() => setSettingsOpen(true)} className="user-profile-btn" type="button">
-            <div id="userAvatar">.9</div>
+          <button onClick={() => setSettingsOpen(true)} className="user-profile-btn" id="userProfileBtn" type="button">
+            <div id="userAvatar">U</div>
             <div className="user-info">
-              <span className="user-name">@leo</span>
-              <span className="user-badge">Free Plan</span>
+              <span className="user-name" id="userNameDisplay">@leo</span>
+              <span className="user-badge" id="userPlanBadge">Free Plan</span>
             </div>
-            <Settings className="w-4 h-4 text-slate-400" />
+            <Settings size={18} className="more-icon" />
           </button>
         </div>
       </aside>
@@ -298,36 +300,39 @@ export default function Home() {
         <header className="top-bar">
           <div className="top-left">
             {sidebarCollapsed && (
-              <button onClick={() => setSidebarCollapsed(false)} className="icon-btn" title="Open Sidebar">
-                <PanelLeft className="w-4 h-4" />
+              <button onClick={() => setSidebarCollapsed(false)} className="icon-btn top-toggle-btn" id="sidebarToggleBtn" title="Toggle Sidebar" type="button">
+                <Columns2 size={20} />
               </button>
             )}
 
             <div className="model-dropdown-wrapper">
-              <div onClick={() => setModelDropdownOpen(!modelMenuOpen)} className="model-badge">
-                <span className="model-name">{selectedModel === 'l1.0' ? 'NEO L1.0' : 'NEO L1.2 Pro'}</span>
-                <ChevronDown className="w-4 h-4 model-chevron" />
+              <div onClick={() => setModelDropdownOpen(!modelMenuOpen)} className="model-badge" id="modelBadgeBtn">
+                <span className="model-name" id="currentModelDisplay">{selectedModel === 'l1.0' ? 'NEO L1.0' : 'NEO L1.2 Pro'}</span>
+                <ChevronDown size={16} className="model-chevron" />
               </div>
 
               {modelMenuOpen && (
-                <div className="model-dropdown-menu show">
+                <div className="model-dropdown-menu show" id="modelDropdownMenu">
                   <div
                     onClick={() => { setSelectedModel('l1.0'); setModelDropdownOpen(false); }}
                     className={`model-option ${selectedModel === 'l1.0' ? 'active' : ''}`}
+                    id="optL10"
                   >
                     <div className="model-opt-info">
                       <strong>NEO L1.0</strong>
-                      <small>Text & Images • Fast Responses</small>
+                      <small>Text & Images • Snappy Responses</small>
                     </div>
                   </div>
                   <div
                     onClick={() => { setSelectedModel('l1.2'); setModelDropdownOpen(false); }}
                     className={`model-option pro-option ${selectedModel === 'l1.2' ? 'active' : ''}`}
+                    id="optL12"
                   >
                     <div className="model-opt-info">
                       <strong>NEO L1.2 Pro</strong>
-                      <small>Deep Reasoning & Audio/Video</small>
+                      <small>Audio, Video, Deep Reasoning & 4K Tokens</small>
                     </div>
+                    <span className="pro-tag">PRO</span>
                   </div>
                 </div>
               )}
@@ -335,36 +340,36 @@ export default function Home() {
           </div>
 
           <div className="top-right">
-            <button onClick={toggleDarkMode} className="icon-btn" title="Toggle Theme">
-              <Sun className="w-4 h-4" />
+            <button onClick={toggleDarkMode} className="icon-btn" id="topBarDarkModeToggle" title="Toggle Theme" type="button">
+              <Sun size={20} />
             </button>
           </div>
         </header>
 
         {/* Scroll Area */}
-        <div className="scroll-area">
+        <div className="scroll-area" id="scrollArea">
           <div className="conversation-column">
             {activeMessages.length === 0 ? (
-              <div className="hero-section">
+              <div className="hero-section" id="heroSection">
                 <h1>What can I help with today?</h1>
                 <p className="hero-copy">Powered by NEO Engine. Select a prompt or type your message below.</p>
                 <div className="starter-grid">
-                  <button onClick={() => handlePromptClick('Write a Python script to scrape website data cleanly.')}>
-                    <Code2 className="w-4 h-4" /><span>Python Scraper</span>
+                  <button type="button" onClick={() => handlePromptClick('Write a Python script to scrape website data cleanly.')}>
+                    <Code2 size={16} /><span>Python Scraper</span>
                   </button>
-                  <button onClick={() => handlePromptClick('Explain quantum computing in simple terms.')}>
-                    <Cpu className="w-4 h-4" /><span>Quantum Computing</span>
+                  <button type="button" onClick={() => handlePromptClick('Explain quantum computing in simple terms.')}>
+                    <Cpu size={16} /><span>Quantum Computing</span>
                   </button>
-                  <button onClick={() => handlePromptClick('Help me outline a business plan for a new SaaS product.')}>
-                    <Lightbulb className="w-4 h-4" /><span>SaaS Business Plan</span>
+                  <button type="button" onClick={() => handlePromptClick('Help me outline a business plan for a new SaaS product.')}>
+                    <Lightbulb size={16} /><span>SaaS Business Plan</span>
                   </button>
-                  <button onClick={() => handlePromptClick('Draft a professional partnership proposal email.')}>
-                    <MailCheck className="w-4 h-4" /><span>Draft Partnership Email</span>
+                  <button type="button" onClick={() => handlePromptClick('Draft a professional partnership proposal email.')}>
+                    <MailCheck size={16} /><span>Draft Partnership Email</span>
                   </button>
                 </div>
               </div>
             ) : (
-              <div className="chat-messages">
+              <div className="chat-messages" id="chatMessages">
                 {activeMessages.map((m) => (
                   <div key={m.id} className={`message ${m.role}`}>
                     <div className="message-content">
@@ -372,11 +377,11 @@ export default function Home() {
                     </div>
                     {m.role === 'assistant' && (
                       <div className="message-actions">
-                        <button onClick={() => handleCopy(m.id, m.content)} className="msg-action-btn" title="Copy">
-                          {copiedId === m.id ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
+                        <button onClick={() => handleCopy(m.id, m.content)} className="msg-action-btn copy-msg-btn" title="Copy" type="button">
+                          {copiedId === m.id ? <Check size={16} className="text-emerald-600" /> : <Copy size={16} />}
                         </button>
-                        <button className="msg-action-btn" title="Share"><Share2 className="w-4 h-4" /></button>
-                        <button className="msg-action-btn" title="Regenerate"><RotateCw className="w-4 h-4" /></button>
+                        <button className="msg-action-btn share-msg-btn" title="Share" type="button"><Share2 size={16} /></button>
+                        <button className="msg-action-btn regen-msg-btn" title="Regenerate" type="button"><RotateCw size={16} /></button>
                       </div>
                     )}
                   </div>
@@ -389,11 +394,11 @@ export default function Home() {
 
         {/* Composer Dock */}
         <footer className="composer-dock">
-          <div className="composer-wrapper">
-            <div className="glass-input-container">
+          <div className="composer-wrapper" id="composerWrapper">
+            <div className="glass-input-container" id="glassInputContainer">
               <form onSubmit={handleSubmit} className="composer-input-row">
-                <button type="button" className="attach-btn" title="Add Attachments">
-                  <Plus className="w-5 h-5" />
+                <button type="button" className="attach-btn" id="attachBtn" title="Add Attachments">
+                  <Plus size={20} />
                 </button>
                 <textarea
                   id="chatInput"
@@ -402,11 +407,11 @@ export default function Home() {
                   onChange={(e) => setInput(e.target.value)}
                   placeholder="Message NEO..."
                 />
-                <button type="button" className="mic-btn" title="Voice Input">
-                  <Mic className="w-4 h-4" />
+                <button type="button" className="icon-btn mic-btn" id="micBtn" title="Voice Input">
+                  <Mic size={16} />
                 </button>
-                <button type="submit" disabled={!input.trim() || isStreaming} className="send-btn">
-                  <ArrowUp className="w-4 h-4" />
+                <button type="submit" disabled={!input.trim() || isStreaming} className="send-btn" id="sendBtn" title="Send Message">
+                  <ArrowUp size={18} />
                 </button>
               </form>
             </div>
@@ -423,19 +428,19 @@ export default function Home() {
             className="absolute top-2 right-2 text-slate-400 hover:text-white p-1 z-10"
             title="Close Sandbox"
           >
-            <X className="w-4 h-4" />
+            <X size={16} />
           </button>
           <ArtifactPanel code={currentArtifactCode} />
         </aside>
       )}
 
-      {/* Settings Overlay */}
+      {/* Settings Modal */}
       {settingsOpen && (
-        <div className="neo-settings-overlay show">
+        <div className="neo-settings-overlay show" id="neoSettingsOverlay">
           <div className="neo-settings-modal">
             <aside className="neo-settings-sidebar">
-              <button onClick={() => setSettingsOpen(false)} className="neo-settings-close">
-                <X className="w-5 h-5" />
+              <button onClick={() => setSettingsOpen(false)} className="neo-settings-close" id="neoSettingsCloseBtn">
+                <X size={20} />
               </button>
               <div className="neo-settings-tab active">General</div>
               <div className="neo-settings-tab">Personalities</div>

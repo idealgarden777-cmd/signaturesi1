@@ -58,8 +58,8 @@ export default function Home() {
                   if (assistantMsg.content.includes('```html')) {
                     const parts = assistantMsg.content.split('```html');
                     if (parts.length > 1 && parts) {
-                      const codeBlock = parts.split('```')[0];
-                      if (codeBlock) setCurrentArtifactCode(codeBlock);
+                      const code = parts.split('```')[0];
+                      if (code) setCurrentArtifactCode(code);
                     }
                   }
 

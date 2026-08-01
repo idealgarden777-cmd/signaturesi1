@@ -89,7 +89,6 @@ export default function Home() {
                   setIsThinking(false);
                   assistantContent += parsed.data || '';
 
-                  // Parse code blocks safely
                   if (assistantContent.includes('```html')) {
                     const parts = assistantContent.split('```html');
                     if (parts.length > 1 && parts) {

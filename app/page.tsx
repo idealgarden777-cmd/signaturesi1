@@ -67,22 +67,19 @@ export default function Home() {
       const decoder = new TextDecoder();
       const assistantMsgId = crypto.randomUUID();
       let assistantContent = '';
-      let buffer = '';
 
       if (reader) {
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
 
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-          buffer = lines.pop() || '';
+          const chunk = decoder.decode(value, { stream: true });
+          const lines = chunk.split('\n');
 
           for (const line of lines) {
-            const trimmed = line.trim();
-            if (trimmed.startsWith('data: ')) {
+            if (line.startsWith('data: ')) {
               try {
-                const parsed = JSON.parse(trimmed.slice(6));
+                const parsed = JSON.parse(line.slice(6));
 
                 if (parsed.type === 'status') {
                   setRouteTarget(parsed.data.route);
@@ -92,10 +89,11 @@ export default function Home() {
                   setIsThinking(false);
                   assistantContent += parsed.data || '';
 
-                  // RegExp Capture Group Extraction (P0 Fix)
+                  // Safe Regex extraction without array split issues
                   const htmlMatch = assistantContent.match(/```html([\s\S]*?)```/i);
-                  if (htmlMatch?.) {
-                    setCurrentArtifactCode(htmlMatch.trim());
+                  if (htmlMatch && htmlMatch.length > 1) {
+                    const codeText = htmlMatch;
+                    if (codeText) setCurrentArtifactCode(codeText.trim());
                   }
 
                   const assistantMsg: ChatMessage = {

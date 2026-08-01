@@ -93,7 +93,9 @@ export default function Home() {
                     const parts = assistantContent.split('```html');
                     if (parts.length > 1 && parts) {
                       const codeBlock = parts.split('```')[0];
-                      if (codeBlock) setCurrentArtifactCode(codeBlock.trim());
+                      if (codeBlock) {
+                        setCurrentArtifactCode(codeBlock.trim());
+                      }
                     }
                   }
 

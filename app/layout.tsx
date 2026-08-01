@@ -1,18 +1,15 @@
+import './globals.css';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'NEO & Bean AI Platform',
+  title: 'NEO Agent Platform',
   description: 'High-end Agentic AI Platform and Realtime Workspace',
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body style={{ margin: 0, backgroundColor: '#020617', color: '#f8fafc', fontFamily: 'sans-serif' }}>
+      <body className="bg-slate-950 text-slate-100 font-sans antialiased">
         {children}
       </body>
     </html>

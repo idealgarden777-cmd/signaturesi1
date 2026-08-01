@@ -14,13 +14,14 @@ import {
   ArrowUp,
   Settings,
   Edit3,
-  Code,
-  FileText,
-  Search,
-  Check,
+  Code2,
+  Cpu,
+  Lightbulb,
+  MailCheck,
   PanelLeftClose,
   PanelLeft,
-  X
+  X,
+  Check
 } from 'lucide-react';
 
 export interface ChatMessage {
@@ -29,51 +30,42 @@ export interface ChatMessage {
   content: string;
 }
 
-export interface ConversationThread {
-  id: string;
-  title: string;
-  messages: ChatMessage[];
-  updatedAt: string;
-}
-
 export default function Home() {
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [activeThreadId, setActiveThreadId] = useState<string>('default-thread');
-  const [conversations, setConversations] = useState<ConversationThread[]>([
-    {
-      id: 'default-thread',
-      title: 'Explain quantum computing',
-      updatedAt: 'Just now',
-      messages: [
-        {
-          id: '1',
-          role: 'user',
-          content: 'Explain quantum computing in simple terms.'
-        },
-        {
-          id: '2',
-          role: 'assistant',
-          content: `Quantum computing ka basic concept **bits** aur **qubits** ka farq hai. Normal computers mein data bits (0 ya 1) mein store hota hai, lekin quantum computers mein qubits hote hain jo ek hi waqt mein 0 aur 1 dono states mein reh sakte hain. Is phenomenon ko **superposition** kehte hain.\n\nIska asli fayda **entanglement** se milta hai, jahan qubits aapas mein is tarah jud jaate hain ke ek ki state dusre ko instant affect karti hai, chahe wo kitni hi door kyun na ho. Iski wajah se quantum computers complex problems ko parallel process kar sakte hain, jo aaj ke supercomputers ke liye solve karna namumkin hai.\n\nSocho ke agar tumhein ek maze (bhal bhulaiya) se bahar nikalna ho, toh normal computer har rasta ek-ek karke check karega. Quantum computer saare raaste ek saath check kar sakta hai aur seedha exit dhoond lega. Ye technology abhi apne shuruati daur mein hai, lekin future mein ye medicine, encryption aur material science mein revolutionary changes la sakti hai.`
-        }
-      ]
-    }
-  ]);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [darkMode, setDarkMode] = useState(false);
+  const [selectedModel, setSelectedModel] = useState<'l1.0' | 'l1.2'>('l1.0');
+  const [modelMenuOpen, setModelDropdownOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [activeSettingsTab, setActiveSettingsTab] = useState('general');
 
   const [input, setInput] = useState('');
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
-  const [selectedModel, setSelectedModel] = useState<'deepseek-v4-flash' | 'gemini-3.1-flash-lite'>('deepseek-v4-flash');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [currentArtifactCode, setCurrentArtifactCode] = useState('');
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+
+  const [recentChats, setRecentChats] = useState<string[]>([
+    'Explain quantum computing in si...',
+    'how are you can you summarise...',
+    'hi',
+    'Explain quantum computing in si...',
+    'How to add website link in TikTo...',
+    'What is agi',
+    'elon musk current net worth',
+    'Help me outline a business plan f...',
+    'Write a Python script to scrape w...'
+  ]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  const activeThread = conversations.find((c) => c.id === activeThreadId) || conversations[0];
-  const messages = activeThread?.messages || [];
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isStreaming]);
+
+  const toggleDarkMode = () => {
+    setDarkMode(!darkMode);
+    document.body.classList.toggle('dark-mode', !darkMode);
+  };
 
   const handleCopy = async (id: string, text: string) => {
     try {
@@ -83,66 +75,33 @@ export default function Home() {
     } catch {}
   };
 
+  const handlePromptClick = (promptText: string) => {
+    setInput(promptText);
+  };
+
   const handleNewConversation = () => {
-    const newId = crypto.randomUUID();
-    const newThread: ConversationThread = {
-      id: newId,
-      title: 'New Conversation',
-      messages: [],
-      updatedAt: 'Just now'
-    };
-    setConversations([newThread, ...conversations]);
-    setActiveThreadId(newId);
+    setMessages([]);
+    setInput('');
     setCurrentArtifactCode('');
   };
 
-  const handleSelectThread = (id: string) => {
-    setActiveThreadId(id);
-    setCurrentArtifactCode('');
-  };
-
-  const handleQuickAction = (actionText: string) => {
-    setInput(actionText + ' ');
-  };
-
-  const handleRegenerate = () => {
-    const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user');
-    if (lastUserMsg && !isStreaming) {
-      executeStreamingRequest(lastUserMsg.content, messages.filter((m) => m.id !== messages[messages.length - 1]?.id));
-    }
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || isStreaming) return;
-    executeStreamingRequest(input.trim(), messages);
-  };
 
-  const executeStreamingRequest = async (userPrompt: string, baseMessages: ChatMessage[]) => {
+    const userPrompt = input.trim();
     const userMsg: ChatMessage = {
       id: crypto.randomUUID(),
       role: 'user',
       content: userPrompt
     };
 
-    const updatedMessages = [...baseMessages, userMsg];
-    
-    setConversations((prev) =>
-      prev.map((thread) => {
-        if (thread.id === activeThreadId) {
-          return {
-            ...thread,
-            title: thread.title === 'New Conversation' ? userPrompt.slice(0, 28) + '...' : thread.title,
-            messages: updatedMessages,
-            updatedAt: 'Just now'
-          };
-        }
-        return thread;
-      })
-    );
-
+    const updatedMessages = [...messages, userMsg];
+    setMessages(updatedMessages);
     setInput('');
     setIsStreaming(true);
+
+    setRecentChats((prev) => [userPrompt.slice(0, 28) + '...', ...prev]);
 
     try {
       const res = await fetch('/api/neo/agent', {
@@ -150,7 +109,7 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: updatedMessages.map(({ role, content }) => ({ role, content })),
-          selectedModel
+          selectedModel: selectedModel === 'l1.2' ? 'deepseek-v4-flash' : 'gemini-3.1-flash-lite'
         }),
       });
 
@@ -176,6 +135,7 @@ export default function Home() {
                 if (parsed.type === 'content') {
                   assistantContent += parsed.data || '';
 
+                  // Dynamic HTML Artifact Detection
                   if (assistantContent.includes('```html') || assistantContent.includes('```HTML')) {
                     const match = /```html([\s\S]*?)```/i.exec(assistantContent);
                     if (match) {
@@ -192,18 +152,8 @@ export default function Home() {
                     content: assistantContent
                   };
 
-                  setConversations((prev) =>
-                    prev.map((thread) => {
-                      if (thread.id === activeThreadId) {
-                        const filtered = thread.messages.filter((m) => m.id !== assistantMsgId);
-                        return {
-                          ...thread,
-                          messages: [...filtered, assistantMsg]
-                        };
-                      }
-                      return thread;
-                    })
-                  );
+                  const filtered = updatedMessages.filter((m) => m.id !== assistantMsgId);
+                  setMessages([...filtered, assistantMsg]);
                 }
               } catch {}
             }
@@ -218,263 +168,223 @@ export default function Home() {
   };
 
   return (
-    <div className="flex h-screen bg-[#fcfcfc] text-slate-800 font-sans antialiased overflow-hidden">
+    <div className={`flex h-screen w-full bg-[#fcfcfc] text-slate-800 antialiased overflow-hidden ${darkMode ? 'dark-mode' : ''}`}>
       {/* Sidebar */}
-      {sidebarOpen && (
-        <aside className="w-64 bg-[#f4f4f6] border-r border-slate-200/80 flex flex-col justify-between p-3 select-none transition-all">
-          <div>
-            <div className="flex items-center justify-between px-2 py-1 mb-4">
-              <div>
-                <h1 className="font-bold text-sm text-slate-900 tracking-tight">NEO Engine</h1>
-                <p className="text-[11px] text-slate-500">Signaturesi Central</p>
-              </div>
-              <button
-                onClick={() => setSidebarOpen(false)}
-                className="text-slate-400 hover:text-slate-700 p-1 rounded-md transition-colors"
-                title="Collapse Sidebar"
-              >
-                <PanelLeftClose className="w-4 h-4" />
-              </button>
-            </div>
+      <aside className={`sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
+        <div className="sidebar-header">
+          <button className="brand-button" type="button">
+            <span className="brand-copy">
+              <strong>NEO Engine</strong>
+              <small>Signaturesi Central</small>
+            </span>
+          </button>
+          <button
+            onClick={() => setSidebarCollapsed(true)}
+            className="icon-btn"
+            title="Close Sidebar"
+          >
+            <PanelLeftClose className="w-4 h-4" />
+          </button>
+        </div>
 
-            <div className="space-y-1 mb-6">
-              <button
-                onClick={handleNewConversation}
-                className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-slate-800 hover:bg-slate-200/60 rounded-lg transition-all"
-              >
-                <Edit3 className="w-4 h-4 text-slate-600" />
-                <span>New Conversation</span>
-              </button>
-              <button className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-slate-800 hover:bg-slate-200/60 rounded-lg transition-all">
-                <Sparkles className="w-4 h-4 text-slate-600" />
-                <span>NEO Personalities</span>
-              </button>
-            </div>
+        <div className="sidebar-content">
+          <div className="sidebar-primary-nav">
+            <button onClick={handleNewConversation} className="new-chat-btn" type="button">
+              <Edit3 className="w-4 h-4" />
+              <span>New Conversation</span>
+            </button>
+            <button
+              onClick={() => {
+                setActiveSettingsTab('personalities');
+                setSettingsOpen(true);
+              }}
+              className="sidebar-personality-btn"
+              type="button"
+            >
+              <Sparkles className="w-4 h-4" />
+              <span>NEO Personalities</span>
+            </button>
+          </div>
 
-            <div className="px-2 mb-2">
-              <span className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">Recent Chats</span>
-            </div>
-            <div className="space-y-0.5 max-h-[calc(100vh-280px)] overflow-y-auto pr-1 text-xs">
-              {conversations.map((thread) => (
-                <button
-                  key={thread.id}
-                  onClick={() => handleSelectThread(thread.id)}
-                  className={`w-full text-left px-2.5 py-2 rounded-md truncate transition-all ${
-                    thread.id === activeThreadId
-                      ? 'bg-slate-200/80 text-slate-900 font-medium'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
-                  }`}
-                >
-                  {thread.title}
+          <div className="history-section">
+            <span className="section-title">Recent Chats</span>
+            <div className="history-list">
+              {recentChats.map((chat, i) => (
+                <button key={i} className="history-item">
+                  {chat}
                 </button>
               ))}
             </div>
           </div>
+        </div>
 
-          <div className="pt-2 border-t border-slate-200/80 flex items-center justify-between px-2">
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-full bg-slate-300 flex items-center justify-center text-slate-700 text-xs font-semibold">
-                .9
-              </div>
-              <div>
-                <p className="text-xs font-medium text-slate-900 leading-none">@leo</p>
-                <p className="text-[10px] text-slate-500 mt-0.5 leading-none">Free Plan</p>
-              </div>
+        <div className="sidebar-footer">
+          <button
+            onClick={() => setSettingsOpen(true)}
+            className="user-profile-btn"
+            type="button"
+          >
+            <div id="userAvatar">.9</div>
+            <div className="user-info">
+              <span className="user-name">@leo</span>
+              <span className="user-badge">Free Plan</span>
             </div>
-            <button className="text-slate-400 hover:text-slate-700 p-1">
-              <Settings className="w-4 h-4" />
-            </button>
-          </div>
-        </aside>
-      )}
+            <Settings className="w-4 h-4 text-slate-400" />
+          </button>
+        </div>
+      </aside>
 
-      {/* Main Workspace */}
-      <main className="flex-1 flex flex-col justify-between bg-white relative overflow-hidden">
-        <header className="px-6 py-3 border-b border-slate-100 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            {!sidebarOpen && (
+      {/* Main App Shell */}
+      <main className="app-shell">
+        <header className="top-bar">
+          <div className="top-left">
+            {sidebarCollapsed && (
               <button
-                onClick={() => setSidebarOpen(true)}
-                className="text-slate-400 hover:text-slate-700 p-1 rounded-md"
+                onClick={() => setSidebarCollapsed(false)}
+                className="icon-btn"
                 title="Open Sidebar"
               >
                 <PanelLeft className="w-4 h-4" />
               </button>
             )}
 
-            <div className="relative">
-              <button
-                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                className="flex items-center gap-1.5 text-sm font-semibold text-slate-800 hover:text-slate-900 bg-slate-100/60 px-3 py-1.5 rounded-lg transition-all"
+            <div className="model-dropdown-wrapper">
+              <div
+                onClick={() => setModelDropdownOpen(!modelMenuOpen)}
+                className="model-badge"
               >
-                <span>{selectedModel === 'deepseek-v4-flash' ? 'NEO L1.0 (DeepSeek V4-Flash)' : 'Gemini 3.1 Flash Lite'}</span>
-                <ChevronDown className="w-4 h-4 text-slate-500" />
-              </button>
+                <span className="model-name">
+                  {selectedModel === 'l1.0' ? 'NEO L1.0' : 'NEO L1.2 Pro'}
+                </span>
+                <ChevronDown className="w-4 h-4 model-chevron" />
+              </div>
 
-              {isDropdownOpen && (
-                <div className="absolute top-full left-0 mt-1 w-60 bg-white border border-slate-200 rounded-xl shadow-xl z-50 p-1">
-                  <button
+              {modelMenuOpen && (
+                <div className="model-dropdown-menu show">
+                  <div
                     onClick={() => {
-                      setSelectedModel('deepseek-v4-flash');
-                      setIsDropdownOpen(false);
+                      setSelectedModel('l1.0');
+                      setModelDropdownOpen(false);
                     }}
-                    className={`w-full text-left px-3 py-2 rounded-lg text-xs font-medium transition-all ${
-                      selectedModel === 'deepseek-v4-flash' ? 'bg-purple-50 text-purple-700 font-semibold' : 'text-slate-700 hover:bg-slate-100'
-                    }`}
+                    className={`model-option ${selectedModel === 'l1.0' ? 'active' : ''}`}
                   >
-                    NEO L1.0 (DeepSeek V4-Flash)
-                  </button>
-                  <button
+                    <div className="model-opt-info">
+                      <strong>NEO L1.0</strong>
+                      <small>Text & Images • Snappy Responses</small>
+                    </div>
+                  </div>
+                  <div
                     onClick={() => {
-                      setSelectedModel('gemini-3.1-flash-lite');
-                      setIsDropdownOpen(false);
+                      setSelectedModel('l1.2');
+                      setModelDropdownOpen(false);
                     }}
-                    className={`w-full text-left px-3 py-2 rounded-lg text-xs font-medium transition-all ${
-                      selectedModel === 'gemini-3.1-flash-lite' ? 'bg-purple-50 text-purple-700 font-semibold' : 'text-slate-700 hover:bg-slate-100'
-                    }`}
+                    className={`model-option pro-option ${selectedModel === 'l1.2' ? 'active' : ''}`}
                   >
-                    Gemini 3.1 Flash Lite
-                  </button>
+                    <div className="model-opt-info">
+                      <strong>NEO L1.2 Pro</strong>
+                      <small>Audio, Video, Deep Reasoning & 4K Tokens</small>
+                    </div>
+                    <span className="pro-tag">PRO</span>
+                  </div>
                 </div>
               )}
             </div>
           </div>
 
-          <button className="text-slate-400 hover:text-slate-700 p-1 rounded-md">
-            <Sun className="w-4 h-4" />
-          </button>
-        </header>
-
-        {/* Chat Feed */}
-        <div className="flex-1 overflow-y-auto px-6 py-8 max-w-3xl mx-auto w-full space-y-8">
-          {messages.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-center p-6 my-auto">
-              <div className="w-12 h-12 rounded-2xl bg-slate-100 border border-slate-200 flex items-center justify-center mb-4 shadow-sm">
-                <Sparkles className="w-6 h-6 text-purple-600" />
-              </div>
-              <h2 className="text-base font-semibold text-slate-900 mb-1">What can I help with today?</h2>
-              <p className="text-xs text-slate-500 max-w-sm">
-                Ask NEO anything, generate code components, or run deep research analysis.
-              </p>
-            </div>
-          ) : (
-            messages.map((m) => (
-              <div key={m.id} className="space-y-3">
-                {m.role === 'user' ? (
-                  <div className="flex justify-end">
-                    <div className="bg-[#f2f2f4] text-slate-900 text-sm px-4 py-2.5 rounded-2xl max-w-lg">
-                      {m.content}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-3 text-slate-800 text-sm leading-relaxed">
-                    <div className="whitespace-pre-wrap">{m.content}</div>
-
-                    <div className="flex items-center gap-3 pt-1 text-slate-400">
-                      <button
-                        onClick={() => handleCopy(m.id, m.content)}
-                        className="hover:text-slate-600 transition-colors"
-                        title="Copy"
-                      >
-                        {copiedId === m.id ? (
-                          <Check className="w-4 h-4 text-emerald-600" />
-                        ) : (
-                          <Copy className="w-4 h-4" />
-                        )}
-                      </button>
-                      <button className="hover:text-slate-600 transition-colors" title="Share">
-                        <Share2 className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={handleRegenerate}
-                        disabled={isStreaming}
-                        className="hover:text-slate-600 transition-colors disabled:opacity-40"
-                        title="Regenerate"
-                      >
-                        <RotateCw className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))
-          )}
-          <div ref={messagesEndRef} />
-        </div>
-
-        {/* Quick Action Chips & Input */}
-        <div className="max-w-3xl mx-auto w-full px-6 pb-4 pt-2">
-          <div className="flex items-center justify-center gap-2 mb-3 flex-wrap">
-            <button
-              onClick={() => handleQuickAction('Write code for')}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#f4f4f6] hover:bg-slate-200/80 text-slate-700 text-xs font-medium rounded-full transition-all"
-            >
-              <Code className="w-3.5 h-3.5" />
-              <span>Write code</span>
-            </button>
-            <button
-              onClick={() => handleQuickAction('Summarize this text:')}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#f4f4f6] hover:bg-slate-200/80 text-slate-700 text-xs font-medium rounded-full transition-all"
-            >
-              <FileText className="w-3.5 h-3.5" />
-              <span>Summarize this</span>
-            </button>
-            <button
-              onClick={() => handleQuickAction('Make a detailed plan for')}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#f4f4f6] hover:bg-slate-200/80 text-slate-700 text-xs font-medium rounded-full transition-all"
-            >
-              <FileText className="w-3.5 h-3.5" />
-              <span>Make a plan</span>
-            </button>
-            <button
-              onClick={() => handleQuickAction('Improve and refine this text:')}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#f4f4f6] hover:bg-slate-200/80 text-slate-700 text-xs font-medium rounded-full transition-all"
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Improve text</span>
-            </button>
-            <button
-              onClick={() => handleQuickAction('Research and analyze')}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#f4f4f6] hover:bg-slate-200/80 text-slate-700 text-xs font-medium rounded-full transition-all"
-            >
-              <Search className="w-3.5 h-3.5" />
-              <span>Research this</span>
+          <div className="top-right">
+            <button onClick={toggleDarkMode} className="icon-btn" title="Toggle Theme">
+              <Sun className="w-4 h-4" />
             </button>
           </div>
+        </header>
 
-          <form
-            onSubmit={handleSubmit}
-            className="flex items-center gap-2 bg-[#f4f4f6] rounded-full px-4 py-2 border border-slate-200/60 focus-within:border-slate-300 shadow-sm"
-          >
-            <button type="button" className="text-slate-500 hover:text-slate-800 p-1">
-              <Plus className="w-4 h-4" />
-            </button>
-            <input
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="Message NEO..."
-              className="flex-1 bg-transparent border-none text-sm text-slate-900 placeholder-slate-400 focus:outline-none"
-            />
-            <button type="button" className="text-slate-500 hover:text-slate-800 p-1">
-              <Mic className="w-4 h-4" />
-            </button>
-            <button
-              type="submit"
-              disabled={!input.trim() || isStreaming}
-              className="w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center hover:bg-black disabled:opacity-40 transition-all shadow"
-            >
-              <ArrowUp className="w-4 h-4" />
-            </button>
-          </form>
-
-          <p className="text-[11px] text-slate-400 text-center mt-2">
-            NEO may produce inaccurate info. Verify critical data.
-          </p>
+        {/* Scroll Area */}
+        <div className="scroll-area">
+          <div className="conversation-column">
+            {messages.length === 0 ? (
+              <div className="hero-section">
+                <h1>What can I help with today?</h1>
+                <p className="hero-copy">Powered by NEO Engine. Select a prompt or type your message below.</p>
+                <div className="starter-grid">
+                  <button
+                    onClick={() => handlePromptClick('Write a Python script to scrape website data cleanly.')}
+                  >
+                    <Code2 className="w-4 h-4" />
+                    <span>Python Scraper</span>
+                  </button>
+                  <button
+                    onClick={() => handlePromptClick('Explain quantum computing in simple terms.')}
+                  >
+                    <Cpu className="w-4 h-4" />
+                    <span>Quantum Computing</span>
+                  </button>
+                  <button
+                    onClick={() => handlePromptClick('Help me outline a business plan for a new SaaS product.')}
+                  >
+                    <Lightbulb className="w-4 h-4" />
+                    <span>SaaS Business Plan</span>
+                  </button>
+                  <button
+                    onClick={() => handlePromptClick('Draft a professional partnership proposal email.')}
+                  >
+                    <MailCheck className="w-4 h-4" />
+                    <span>Draft Partnership Email</span>
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="chat-messages">
+                {messages.map((m) => (
+                  <div key={m.id} className={`message ${m.role}`}>
+                    <div className="message-content">
+                      <div className="whitespace-pre-wrap">{m.content}</div>
+                    </div>
+                    {m.role === 'assistant' && (
+                      <div className="message-actions">
+                        <button onClick={() => handleCopy(m.id, m.content)} className="msg-action-btn">
+                          {copiedId === m.id ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
+                        </button>
+                        <button className="msg-action-btn"><Share2 className="w-4 h-4" /></button>
+                        <button className="msg-action-btn"><RotateCw className="w-4 h-4" /></button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+            <div ref={messagesEndRef} />
+          </div>
         </div>
+
+        {/* Composer Dock */}
+        <footer className="composer-dock">
+          <div className="composer-wrapper">
+            <div className="glass-input-container">
+              <form onSubmit={handleSubmit} className="composer-input-row">
+                <button type="button" className="attach-btn" title="Add Attachments">
+                  <Plus className="w-5 h-5" />
+                </button>
+                <textarea
+                  id="chatInput"
+                  rows={1}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  placeholder="Message NEO..."
+                />
+                <button type="button" className="mic-btn" title="Voice Input">
+                  <Mic className="w-4 h-4" />
+                </button>
+                <button type="submit" disabled={!input.trim() || isStreaming} className="send-btn">
+                  <ArrowUp className="w-4 h-4" />
+                </button>
+              </form>
+            </div>
+            <p className="composer-note">NEO may produce inaccurate info. Verify critical data.</p>
+          </div>
+        </footer>
       </main>
 
-      {/* Live Artifact Sandbox Drawer */}
+      {/* Live Artifact Sandbox Panel */}
       {currentArtifactCode && (
         <aside className="w-[45%] min-w-[360px] p-4 bg-slate-950 border-l border-slate-800/80 hidden lg:flex flex-col relative">
           <button
@@ -486,6 +396,35 @@ export default function Home() {
           </button>
           <ArtifactPanel code={currentArtifactCode} />
         </aside>
+      )}
+
+      {/* Settings Modal */}
+      {settingsOpen && (
+        <div className="neo-settings-overlay show">
+          <div className="neo-settings-modal">
+            <aside className="neo-settings-sidebar">
+              <button onClick={() => setSettingsOpen(false)} className="neo-settings-close">
+                <X className="w-5 h-5" />
+              </button>
+              <button
+                onClick={() => setActiveSettingsTab('general')}
+                className={`neo-settings-tab ${activeSettingsTab === 'general' ? 'active' : ''}`}
+              >
+                General
+              </button>
+              <button
+                onClick={() => setActiveSettingsTab('personalities')}
+                className={`neo-settings-tab ${activeSettingsTab === 'personalities' ? 'active' : ''}`}
+              >
+                Personalities
+              </button>
+            </aside>
+            <section className="neo-settings-content">
+              <h2>Settings</h2>
+              <p className="settings-subtitle">Manage preferences for NEO Central.</p>
+            </section>
+          </div>
+        </div>
       )}
     </div>
   );

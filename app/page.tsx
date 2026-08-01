@@ -56,8 +56,11 @@ export default function Home() {
                   assistantMsg.content += parsed.data;
 
                   if (assistantMsg.content.includes('```html')) {
-                    const code = assistantMsg.content.split('```html')?.split('```')[0];
-                    if (code) setCurrentArtifactCode(code);
+                    const parts = assistantMsg.content.split('```html');
+                    if (parts.length > 1) {
+                      const code = parts.split('```')[0];
+                      if (code) setCurrentArtifactCode(code);
+                    }
                   }
 
                   setMessages([...updatedMessages, { ...assistantMsg }]);
@@ -85,7 +88,7 @@ export default function Home() {
             <div>
               <h1 className="font-bold text-base text-white tracking-wide">NEO Agent Platform</h1>
               <p className="text-xs text-slate-400 flex items-center gap-1">
-                <Brain className="w-3 h-3 text-purple-400" /> DeepSeek R1 + Gemini Flash Engine
+                <Brain className="w-3 h-3 text-purple-400" /> DeepSeek V4-Flash + Gemini 3.1 Flash Lite
               </p>
             </div>
           </div>

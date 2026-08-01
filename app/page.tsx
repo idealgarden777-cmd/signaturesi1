@@ -44,10 +44,21 @@ export default function Home() {
   const [darkMode, setDarkMode] = useState(false);
   const [selectedModel, setSelectedModel] = useState<'l1.0' | 'l1.2'>('l1.0');
   const [modelMenuOpen, setModelDropdownOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const [input, setInput] = useState('');
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([
+    {
+      id: '1',
+      role: 'user',
+      content: 'Explain quantum computing in simple terms.'
+    },
+    {
+      id: '2',
+      role: 'assistant',
+      content: `Quantum computing ka basic concept **bits** aur **qubits** ka farq hai. Normal computers mein data bits (0 ya 1) mein store hota hai, lekin quantum computers mein qubits hote hain jo ek hi waqt mein 0 aur 1 dono states mein reh sakte hain (**superposition**).\n\nIska asli fayda **entanglement** se milta hai, jahan qubits aapas mein jud kar complex calculations parallel process kar sakte hain.`
+    }
+  ]);
+
   const [isStreaming, setIsStreaming] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [currentArtifactCode, setCurrentArtifactCode] = useState('');
@@ -219,7 +230,7 @@ export default function Home() {
   };
 
   return (
-    <div className={`app-container ${darkMode ? 'dark-mode' : ''}`}>
+    <div className={`flex h-screen w-screen overflow-hidden bg-white text-slate-800 ${darkMode ? 'dark-mode' : ''}`}>
       {/* Sidebar */}
       <aside className={`sidebar ${sidebarCollapsed ? 'collapsed' : ''}`} id="sidebar">
         <div className="sidebar-header">
@@ -247,7 +258,6 @@ export default function Home() {
               <span>New Conversation</span>
             </button>
             <button
-              onClick={() => setSettingsOpen(true)}
               className="sidebar-personality-btn"
               id="sidebarPersonalitiesBtn"
               type="button"
@@ -284,7 +294,7 @@ export default function Home() {
         </div>
 
         <div className="sidebar-footer">
-          <button onClick={() => setSettingsOpen(true)} className="user-profile-btn" id="userProfileBtn" type="button">
+          <button className="user-profile-btn" id="userProfileBtn" type="button">
             <div id="userAvatar">U</div>
             <div className="user-info">
               <span className="user-name" id="userNameDisplay">@leo</span>
@@ -295,9 +305,10 @@ export default function Home() {
         </div>
       </aside>
 
-      {/* Main App Shell */}
-      <main className="app-shell">
-        <header className="top-bar">
+      {/* Main App Shell (Full 100% Width) */}
+      <main className="flex-1 flex flex-col justify-between bg-white relative h-full w-full overflow-hidden">
+        {/* Top Bar */}
+        <header className="top-bar border-b border-slate-100">
           <div className="top-left">
             {sidebarCollapsed && (
               <button onClick={() => setSidebarCollapsed(false)} className="icon-btn top-toggle-btn" id="sidebarToggleBtn" title="Toggle Sidebar" type="button">
@@ -346,9 +357,9 @@ export default function Home() {
           </div>
         </header>
 
-        {/* Scroll Area */}
-        <div className="scroll-area" id="scrollArea">
-          <div className="conversation-column">
+        {/* Scroll Area (Centered 800px Column) */}
+        <div className="scroll-area flex-1 overflow-y-auto px-6 py-8 pb-32 w-full" id="scrollArea">
+          <div className="conversation-column max-w-3xl mx-auto w-full">
             {activeMessages.length === 0 ? (
               <div className="hero-section" id="heroSection">
                 <h1>What can I help with today?</h1>
@@ -376,7 +387,7 @@ export default function Home() {
                       <div className="whitespace-pre-wrap">{m.content}</div>
                     </div>
                     {m.role === 'assistant' && (
-                      <div className="message-actions">
+                      <div className="message-actions flex items-center gap-3 pt-1 text-slate-400">
                         <button onClick={() => handleCopy(m.id, m.content)} className="msg-action-btn copy-msg-btn" title="Copy" type="button">
                           {copiedId === m.id ? <Check size={16} className="text-emerald-600" /> : <Copy size={16} />}
                         </button>
@@ -392,13 +403,13 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Composer Dock */}
-        <footer className="composer-dock">
-          <div className="composer-wrapper" id="composerWrapper">
-            <div className="glass-input-container" id="glassInputContainer">
-              <form onSubmit={handleSubmit} className="composer-input-row">
-                <button type="button" className="attach-btn" id="attachBtn" title="Add Attachments">
-                  <Plus size={20} />
+        {/* Composer Dock Fixed at Bottom */}
+        <footer className="composer-dock absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-white via-white/90 to-transparent">
+          <div className="composer-wrapper max-w-3xl mx-auto w-full" id="composerWrapper">
+            <div className="glass-input-container bg-[#f4f4f6] rounded-full px-4 py-2 border border-slate-200/80 shadow-sm flex items-center gap-2" id="glassInputContainer">
+              <form onSubmit={handleSubmit} className="composer-input-row flex items-center gap-2 w-full">
+                <button type="button" className="attach-btn text-slate-500 hover:text-slate-800 p-1" id="attachBtn" title="Add Attachments">
+                  <Plus size={18} />
                 </button>
                 <textarea
                   id="chatInput"
@@ -406,23 +417,24 @@ export default function Home() {
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   placeholder="Message NEO..."
+                  className="flex-1 bg-transparent border-none text-sm text-slate-900 placeholder-slate-400 focus:outline-none resize-none"
                 />
-                <button type="button" className="icon-btn mic-btn" id="micBtn" title="Voice Input">
-                  <Mic size={16} />
+                <button type="button" className="icon-btn mic-btn text-slate-500 hover:text-slate-800 p-1" id="micBtn" title="Voice Input">
+                  <Mic size={18} />
                 </button>
-                <button type="submit" disabled={!input.trim() || isStreaming} className="send-btn" id="sendBtn" title="Send Message">
+                <button type="submit" disabled={!input.trim() || isStreaming} className="send-btn w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center hover:bg-black disabled:opacity-40 transition-all shadow shrink-0" id="sendBtn" title="Send Message">
                   <ArrowUp size={18} />
                 </button>
               </form>
             </div>
-            <p className="composer-note">NEO may produce inaccurate info. Verify critical data.</p>
+            <p className="composer-note text-[11px] text-slate-400 text-center mt-2">NEO may produce inaccurate info. Verify critical data.</p>
           </div>
         </footer>
       </main>
 
-      {/* Artifact Preview Drawer */}
+      {/* Slide-Over Artifact Sandbox Drawer (Only opens when code is generated) */}
       {currentArtifactCode && (
-        <aside className="w-[45%] min-w-[360px] p-4 bg-slate-950 border-l border-slate-800/80 hidden lg:flex flex-col relative shrink-0">
+        <aside className="w-[45%] min-w-[360px] p-4 bg-slate-950 border-l border-slate-800/80 hidden lg:flex flex-col relative shrink-0 h-full">
           <button
             onClick={() => setCurrentArtifactCode('')}
             className="absolute top-2 right-2 text-slate-400 hover:text-white p-1 z-10"
@@ -432,25 +444,6 @@ export default function Home() {
           </button>
           <ArtifactPanel code={currentArtifactCode} />
         </aside>
-      )}
-
-      {/* Settings Modal */}
-      {settingsOpen && (
-        <div className="neo-settings-overlay show" id="neoSettingsOverlay">
-          <div className="neo-settings-modal">
-            <aside className="neo-settings-sidebar">
-              <button onClick={() => setSettingsOpen(false)} className="neo-settings-close" id="neoSettingsCloseBtn">
-                <X size={20} />
-              </button>
-              <div className="neo-settings-tab active">General</div>
-              <div className="neo-settings-tab">Personalities</div>
-            </aside>
-            <section className="neo-settings-content">
-              <h2>Settings</h2>
-              <p className="settings-subtitle">Manage preferences for NEO Central.</p>
-            </section>
-          </div>
-        </div>
       )}
     </div>
   );

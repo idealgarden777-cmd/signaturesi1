@@ -114,7 +114,12 @@ export async function POST(req: NextRequest) {
         if (streamSuccess) {
           sendSSE('done', { status: 'complete' });
           const totalTokens = promptTokenCount + Math.max(1, completionTokenCount);
-          await adminSupabase.rpc('deduct_user_tokens', { p_user_id: user.id, p_tokens: totalTokens }).catch(() => {});
+          
+          try {
+            await adminSupabase.rpc('deduct_user_tokens', { p_user_id: user.id, p_tokens: totalTokens });
+          } catch {
+            // Ignore token deduction error safely
+          }
         }
       } catch (fatalErr: unknown) {
         const msg = fatalErr instanceof Error ? fatalErr.message : 'Execution failed';
@@ -200,7 +205,7 @@ async function executeGeminiStream(messages: MessagePayload[], sendSSE: (t: stri
       const trimmed = line.trim();
       if (trimmed.startsWith('data: ')) {
         try {
-          const parsed = JSON.parse(trimmed.slice(6));
+          const parsed = JSON.parse(line.slice(6));
           const textPart = parsed.candidates?.[0]?.content?.parts?.[0]?.text;
           if (textPart) { tokenCount++; sendSSE('content', textPart); }
         } catch {}

@@ -11,6 +11,11 @@ interface MessagePayload {
   content: string;
 }
 
+interface RequestBody {
+  messages: MessagePayload[];
+  selectedModel?: 'deepseek-v4-flash' | 'gemini-3.1-flash-lite';
+}
+
 const MAX_MESSAGE_CONTENT_LENGTH = 10000;
 const MAX_MESSAGES_COUNT = 50;
 
@@ -59,15 +64,26 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `Missing required env variables: ${missingEnv.join(', ')}` }, { status: 500 });
   }
 
-  // Session Authentication
+  // Optional Session Check (Supports both logged-in users & guest visitors)
   const supabase = getSupabaseServerClient(req);
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
-  if (authError || !user) {
-    return NextResponse.json({ error: 'Unauthorized user session' }, { status: 401 });
+  const { data: { user } } = await supabase.auth.getUser();
+
+  // If user is logged in, check quota balance
+  if (user) {
+    const adminSupabase = getSupabaseAdminClient();
+    const { data: profile } = await adminSupabase
+      .from('profiles')
+      .select('tokens_remaining')
+      .eq('id', user.id)
+      .single();
+
+    if (profile && profile.tokens_remaining <= 0) {
+      return NextResponse.json({ error: 'Quota exhausted. 0 tokens remaining.' }, { status: 402 });
+    }
   }
 
   // Payload Validation
-  let body: { messages: MessagePayload[]; selectedModel?: string };
+  let body: RequestBody;
   try {
     body = await req.json();
   } catch {
@@ -79,11 +95,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid messages payload' }, { status: 400 });
   }
 
+  const allowedRoles: AllowedRole[] = ['user', 'assistant', 'system'];
+  for (const msg of messages) {
+    if (!msg || typeof msg !== 'object' || !allowedRoles.includes(msg.role)) {
+      return NextResponse.json({ error: 'Malformed message object' }, { status: 400 });
+    }
+    if (typeof msg.content !== 'string' || msg.content.trim().length === 0 || msg.content.length > MAX_MESSAGE_CONTENT_LENGTH) {
+      return NextResponse.json({ error: 'Invalid content length' }, { status: 400 });
+    }
+  }
+
   const primaryModel = selectedModel === 'gemini-3.1-flash-lite' ? 'gemini-3.1-flash-lite' : 'deepseek-v4-flash';
   const fallbackModel = primaryModel === 'deepseek-v4-flash' ? 'gemini-3.1-flash-lite' : 'deepseek-v4-flash';
 
   const encoder = new TextEncoder();
-  const adminSupabase = getSupabaseAdminClient();
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -113,12 +138,13 @@ export async function POST(req: NextRequest) {
 
         if (streamSuccess) {
           sendSSE('done', { status: 'complete' });
-          const totalTokens = promptTokenCount + Math.max(1, completionTokenCount);
-          
-          try {
-            await adminSupabase.rpc('deduct_user_tokens', { p_user_id: user.id, p_tokens: totalTokens });
-          } catch {
-            // Ignore token deduction error safely
+
+          if (user) {
+            const adminSupabase = getSupabaseAdminClient();
+            const totalTokens = promptTokenCount + Math.max(1, completionTokenCount);
+            try {
+              await adminSupabase.rpc('deduct_user_tokens', { p_user_id: user.id, p_tokens: totalTokens });
+            } catch {}
           }
         }
       } catch (fatalErr: unknown) {

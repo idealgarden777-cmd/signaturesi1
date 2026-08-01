@@ -89,15 +89,10 @@ export default function Home() {
                   setIsThinking(false);
                   assistantContent += parsed.data || '';
 
-                  if (assistantContent.includes('```html')) {
-                    const parts = assistantContent.split('```html');
-                    const targetChunk = parts.length > 1 ? parts : undefined;
-                    if (targetChunk) {
-                      const codeBlock = targetChunk.split('```')[0];
-                      if (codeBlock) {
-                        setCurrentArtifactCode(codeBlock.trim());
-                      }
-                    }
+                  // Regex extraction (Safe & Robust)
+                  const htmlMatch = assistantContent.match(/```html([\s\S]*?)```/i);
+                  if (htmlMatch && htmlMatch.length > 1 && htmlMatch) {
+                    setCurrentArtifactCode(htmlMatch.trim());
                   }
 
                   const assistantMsg: ChatMessage = {

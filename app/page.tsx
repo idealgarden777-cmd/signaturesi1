@@ -67,19 +67,22 @@ export default function Home() {
       const decoder = new TextDecoder();
       const assistantMsgId = crypto.randomUUID();
       let assistantContent = '';
+      let buffer = '';
 
       if (reader) {
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
 
-          const chunk = decoder.decode(value, { stream: true });
-          const lines = chunk.split('\n');
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
 
           for (const line of lines) {
-            if (line.startsWith('data: ')) {
+            const trimmed = line.trim();
+            if (trimmed.startsWith('data: ')) {
               try {
-                const parsed = JSON.parse(line.slice(6));
+                const parsed = JSON.parse(trimmed.slice(6));
 
                 if (parsed.type === 'status') {
                   setRouteTarget(parsed.data.route);
@@ -89,9 +92,9 @@ export default function Home() {
                   setIsThinking(false);
                   assistantContent += parsed.data || '';
 
-                  // Regex extraction (Safe & Robust)
+                  // RegExp Capture Group Extraction (P0 Fix)
                   const htmlMatch = assistantContent.match(/```html([\s\S]*?)```/i);
-                  if (htmlMatch && htmlMatch.length > 1 && htmlMatch) {
+                  if (htmlMatch?.) {
                     setCurrentArtifactCode(htmlMatch.trim());
                   }
 

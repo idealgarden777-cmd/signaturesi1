@@ -5,9 +5,14 @@ import ThoughtChainDrawer from '@/components/ThoughtChainDrawer';
 import ArtifactPanel from '@/components/ArtifactPanel';
 import { Send, Sparkles, Brain } from 'lucide-react';
 
+interface Message {
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+}
+
 export default function Home() {
   const [input, setInput] = useState('');
-  const [messages, setMessages] = useState<any[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [thinkingText, setThinkingText] = useState('');
   const [routeTarget, setRouteTarget] = useState('gemini-flash');
   const [isThinking, setIsThinking] = useState(false);
@@ -17,7 +22,7 @@ export default function Home() {
     e.preventDefault();
     if (!input.trim()) return;
 
-    const userMsg = { role: 'user', content: input };
+    const userMsg: Message = { role: 'user', content: input };
     const updatedMessages = [...messages, userMsg];
     setMessages(updatedMessages);
     setInput('');
@@ -31,16 +36,18 @@ export default function Home() {
         body: JSON.stringify({ messages: updatedMessages }),
       });
 
+      if (!res.ok) throw new Error('API Request Failed');
+
       const reader = res.body?.getReader();
       const decoder = new TextDecoder();
-      let assistantMsg = { role: 'assistant', content: '' };
+      let assistantMsg: Message = { role: 'assistant', content: '' };
 
       if (reader) {
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
 
-          const chunk = decoder.decode(value);
+          const chunk = decoder.decode(value, { stream: true });
           const lines = chunk.split('\n');
 
           for (const line of lines) {
@@ -50,16 +57,16 @@ export default function Home() {
                 if (parsed.type === 'status') {
                   setRouteTarget(parsed.data.route);
                 } else if (parsed.type === 'thinking') {
-                  setThinkingText((prev) => prev + parsed.data);
+                  setThinkingText((prev) => prev + (parsed.data || ''));
                 } else if (parsed.type === 'content') {
                   setIsThinking(false);
-                  assistantMsg.content += parsed.data;
+                  assistantMsg.content += parsed.data || '';
 
                   if (assistantMsg.content.includes('```html')) {
                     const parts = assistantMsg.content.split('```html');
                     if (parts.length > 1 && parts) {
-                      const code = parts.split('```')[0];
-                      if (code) setCurrentArtifactCode(code);
+                      const codeBlock = parts.split('```')[0];
+                      if (codeBlock) setCurrentArtifactCode(codeBlock);
                     }
                   }
 

@@ -5,9 +5,9 @@
     const MAX_FILE_SIZE_BYTES = Number.MAX_SAFE_INTEGER;
     const MAX_ATTACHED_FILES = 5;
 
-    // ---- NEW ACCOUNTS ORIGIN & LOGIN URL ----
+    // ---- CLEAN ACCOUNTS ORIGIN & LOGIN URL (NO returnTo) ----
     const ACCOUNTS_ORIGIN = "https://accounts.signaturesi.com";
-    const LOGIN_URL = `${ACCOUNTS_ORIGIN}/?mode=login&returnTo=${encodeURIComponent(window.location.href)}`;
+    const LOGIN_URL = `${ACCOUNTS_ORIGIN}/?mode=login`;
 
     const SUPABASE_URL =
         "https://ujclhweqqifgoiscvqmd.supabase.co";
@@ -443,7 +443,7 @@
     }
 
     // --------------------------------------------------------
-    //  SESSION / AUTH (UPDATED FOR ACCOUNTS.SIGNATURESI.COM)
+    //  SESSION / AUTH (FULLY CLEAN — NO returnTo, NO signup.html)
     // --------------------------------------------------------
     async function restoreSecureSession() {
         try {
@@ -1522,7 +1522,7 @@
     }
 
     // --------------------------------------------------------
-    //  LOGOUT (UPDATED FOR ACCOUNTS.SIGNATURESI.COM)
+    //  LOGOUT (FULLY CLEAN — NO returnTo)
     // --------------------------------------------------------
     async function logoutUser() {
         const logoutButton = document.getElementById("logoutBtn");
@@ -1542,7 +1542,7 @@
         } finally {
             clearLegacyUserStorage();
             localStorage.removeItem("neo_user_memories");
-            window.location.replace(`${ACCOUNTS_ORIGIN}/?mode=login`);
+            window.location.replace(LOGIN_URL);
         }
     }
 

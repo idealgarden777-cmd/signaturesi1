@@ -2064,212 +2064,7 @@ body.dark-mode .neo-toast {
     border-color: rgba(16, 185, 129, 0.16);
 }
 
-/* ============================================================
-   ✨ OPENAI-STYLE PROFILE PANEL OVERRIDE
-   ============================================================ */
-
-#settingsPanelProfile {
-    max-width: 760px;
-    margin: 0 auto;
-}
-
-#settingsPanelProfile > h2 {
-    margin-bottom: 24px;
-}
-
-.profile-editor-card {
-    width: 100%;
-    padding: 28px;
-    border: 1px solid var(--border-subtle);
-    border-radius: 18px;
-    background: var(--bg-main);
-    box-shadow: none;
-}
-
-.profile-editor-main {
-    width: 100%;
-    display: grid;
-    grid-template-columns: 130px minmax(0, 1fr);
-    column-gap: 32px;
-    row-gap: 20px;
-    align-items: start;
-}
-
-.profile-avatar-upload {
-    grid-column: 1;
-    grid-row: 1 / span 4;
-}
-
-.profile-upload-label {
-    display: block;
-    margin-bottom: 10px;
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--text-primary);
-}
-
-.profile-upload-row {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 12px;
-}
-
-.profile-editor-avatar {
-    width: 80px;
-    height: 80px;
-    flex: 0 0 80px;
-    border-radius: 50%;
-    overflow: hidden;
-    border: 1px solid var(--border-subtle);
-    background: var(--bg-hover);
-    display: grid;
-    place-items: center;
-    font-size: 24px;
-    font-weight: 650;
-}
-
-.profile-upload-actions {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 6px;
-    width: 130px;
-}
-
-.profile-upload-actions .settings-ghost-btn {
-    width: auto;
-    height: 34px;
-    min-height: 34px;
-    padding: 0 10px;
-    border-radius: 9px;
-    font-size: 12.5px;
-    font-weight: 550;
-}
-
-.profile-upload-actions .settings-helper-text {
-    margin-top: 2px;
-    max-width: 130px;
-    text-align: center;
-    font-size: 11.5px;
-    line-height: 1.4;
-    color: var(--text-muted);
-}
-
-.profile-editor-main > label {
-    grid-column: 2;
-    width: 100%;
-    display: flex;
-    flex-direction: column;
-    gap: 7px;
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--text-primary);
-}
-
-.profile-editor-main > label input {
-    width: 100%;
-    height: 46px;
-    padding: 0 14px;
-    border: 1px solid var(--border-subtle);
-    border-radius: 12px;
-    background: var(--bg-main);
-    color: var(--text-primary);
-    font-size: 14px;
-    outline: none;
-    transition:
-        border-color 140ms ease,
-        box-shadow 140ms ease;
-}
-
-.profile-editor-main > label input:focus {
-    border-color: var(--focus-ring);
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
-}
-
-.profile-editor-actions {
-    grid-column: 2;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-top: 2px;
-}
-
-.profile-editor-actions .settings-primary-btn {
-    min-width: 112px;
-    height: 42px;
-    padding: 0 16px;
-    border-radius: 10px;
-    background: var(--text-primary);
-    color: var(--bg-main);
-    box-shadow: none;
-}
-
-.profile-editor-actions .settings-ghost-btn {
-    height: 42px;
-    padding: 0 14px;
-    border-radius: 10px;
-    background: var(--bg-hover);
-    color: var(--text-primary);
-}
-
-.profile-editor-main > .settings-helper-text {
-    grid-column: 2;
-    margin-top: -8px;
-    font-size: 12px;
-    line-height: 1.45;
-    color: var(--text-muted);
-}
-
-body.dark-mode .profile-editor-card {
-    background: var(--bg-main);
-}
-
-/* Tablet and mobile */
-@media (max-width: 700px) {
-    .profile-editor-card {
-        padding: 20px;
-    }
-
-    .profile-editor-main {
-        display: flex;
-        flex-direction: column;
-        gap: 18px;
-    }
-
-    .profile-avatar-upload {
-        width: 100%;
-    }
-
-    .profile-upload-row {
-        align-items: flex-start;
-    }
-
-    .profile-upload-actions {
-        width: auto;
-        align-items: flex-start;
-    }
-
-    .profile-upload-actions .settings-helper-text {
-        max-width: none;
-        text-align: left;
-    }
-
-    .profile-editor-main > label,
-    .profile-editor-actions,
-    .profile-editor-main > .settings-helper-text {
-        width: 100%;
-    }
-
-    .profile-editor-actions {
-        flex-wrap: wrap;
-    }
-}
-
-/* ============================================================
-   PERSONALITIES
-   ============================================================ */
-
+/* PERSONALITIES */
 .personality-grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -2697,5 +2492,214 @@ body.dark-mode .neo-source-pill:hover {
     }
     .neo-source-label {
         font-size: 11px;
+    }
+}
+
+/* =========================================================
+   PROFILE — MINIMAL CHATGPT-STYLE (FINAL OVERRIDE)
+   ========================================================= */
+
+#settingsPanelProfile {
+    width: 100%;
+    max-width: 620px;
+    margin: 0;
+}
+
+#settingsPanelProfile > h2 {
+    margin: 0 0 28px;
+    font-size: 22px;
+    font-weight: 650;
+    letter-spacing: -0.03em;
+}
+
+.profile-editor-card {
+    width: 100%;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+.profile-editor-main {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 104px minmax(0, 1fr);
+    column-gap: 24px;
+    row-gap: 22px;
+    align-items: start;
+}
+
+.profile-avatar-upload {
+    grid-column: 1 / -1;
+    width: 100%;
+    padding-bottom: 24px;
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.profile-upload-label {
+    display: none;
+}
+
+.profile-upload-row {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 18px;
+}
+
+.profile-editor-avatar {
+    width: 88px;
+    height: 88px;
+    flex: 0 0 88px;
+    border-radius: 50%;
+    overflow: hidden;
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-hover);
+    display: grid;
+    place-items: center;
+    font-size: 28px;
+    font-weight: 600;
+}
+
+.profile-upload-actions {
+    width: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 5px;
+}
+
+.profile-upload-actions .settings-ghost-btn {
+    width: auto;
+    height: auto;
+    min-height: 0;
+    padding: 4px 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: var(--text-primary);
+    font-size: 13.5px;
+    font-weight: 550;
+}
+
+.profile-upload-actions .settings-ghost-btn:hover {
+    background: transparent;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.profile-upload-actions .settings-helper-text {
+    max-width: none;
+    margin: 0;
+    text-align: left;
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--text-muted);
+}
+
+.profile-editor-main > label {
+    grid-column: 1 / -1;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 550;
+    color: var(--text-primary);
+}
+
+.profile-editor-main > label input {
+    width: 100%;
+    height: 48px;
+    padding: 0 14px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 10px;
+    background: var(--bg-main);
+    color: var(--text-primary);
+    font-size: 14.5px;
+    outline: none;
+    box-shadow: none;
+}
+
+.profile-editor-main > label input:focus {
+    border-color: var(--text-primary);
+    box-shadow: none;
+}
+
+.profile-editor-main > label input:read-only {
+    background: var(--bg-sidebar);
+    color: var(--text-muted);
+}
+
+.profile-editor-actions {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 10px;
+    padding-top: 4px;
+    margin: 0;
+}
+
+.profile-editor-actions .settings-primary-btn {
+    min-width: 72px;
+    height: 42px;
+    padding: 0 18px;
+    border: 0;
+    border-radius: 999px;
+    background: var(--text-primary);
+    color: var(--bg-main);
+    font-size: 14px;
+    font-weight: 600;
+    box-shadow: none;
+}
+
+.profile-editor-actions .settings-primary-btn:hover {
+    opacity: 0.88;
+    transform: none;
+}
+
+.profile-editor-actions .settings-ghost-btn {
+    height: 42px;
+    padding: 0 16px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--text-primary);
+    font-size: 14px;
+    font-weight: 550;
+}
+
+.profile-editor-actions .settings-ghost-btn:hover {
+    background: var(--bg-hover);
+}
+
+.profile-editor-main > .settings-helper-text {
+    display: none;
+}
+
+@media (max-width: 700px) {
+    #settingsPanelProfile {
+        max-width: none;
+    }
+
+    .profile-editor-main {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+    }
+
+    .profile-upload-row {
+        align-items: center;
+    }
+
+    .profile-editor-actions {
+        width: 100%;
+    }
+
+    .profile-editor-actions .settings-primary-btn,
+    .profile-editor-actions .settings-ghost-btn {
+        width: auto;
     }
 }

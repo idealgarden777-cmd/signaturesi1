@@ -145,11 +145,12 @@ export default async function handler(req, res) {
         });
       }
 
+      // ✅ Reverted to local `path` to ensure exact match with token
       return res.status(200).json({
         success: true,
         upload: {
           bucket: BUCKET,
-          path,
+          path: path, // Local path, exactly as sent to createSignedUploadUrl
           token: data.token
         }
       });

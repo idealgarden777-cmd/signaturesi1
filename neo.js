@@ -9,11 +9,12 @@
     const ACCOUNTS_ORIGIN = "https://accounts.signaturesi.com";
     const LOGIN_URL = `${ACCOUNTS_ORIGIN}/?mode=login`;
 
+    // ---- NEW SUPABASE PROJECT ----
     const SUPABASE_URL =
-        "https://ujclhweqqifgoiscvqmd.supabase.co";
+        "https://ajglvfoqiyrrisuoxecu.supabase.co";
 
     const SUPABASE_ANON_KEY =
-        "sb_publishable_soPYxakWGl9MTrzCjdjt2w_fR1jsVVf";
+        "sb_publishable_WnNBuQLAZzOqknbp1S3O3Q_MeCP5bim";
 
     let supabaseClient = null;
 

@@ -362,7 +362,7 @@ body.sidebar-collapsed #sidebarToggleBtn {
     height: 32px;
     position: relative;
     flex-shrink: 0;
-    overflow: hidden;
+    overflow: hidden; /* ✅ FIXED: overflow hidden */
     background-size: cover;
     background-position: center;
     background-color: var(--bg-hover);
@@ -385,15 +385,36 @@ body.sidebar-collapsed #sidebarToggleBtn {
 body.dark-mode #userAvatar::before {
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12), 0 2px 8px rgba(0, 0, 0, 0.25);
 }
+
+/* ✅ FIXED AVATAR IMAGES */
 #userAvatar img,
 .user-avatar img,
-.profile-avatar img {
-    width: 100% !important;
-    height: 100% !important;
-    object-fit: contain !important;
-    object-position: center !important;
-    border-radius: 50% !important;
-    background: #fff !important;
+.profile-avatar img,
+.profile-editor-avatar img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
+    object-position: center;
+    border-radius: inherit;
+    background: transparent;
+}
+
+/* ✅ FIXED: Settings avatar container overflow */
+.profile-editor-avatar {
+    width: 76px;
+    height: 76px;
+    border-radius: 50%;
+    background: var(--bg-hover);
+    color: var(--text-primary);
+    display: grid;
+    place-items: center;
+    font-size: 24px;
+    font-weight: 700;
+    background-size: cover;
+    background-position: center;
+    border: 1px solid var(--border-subtle);
+    overflow: hidden; /* ✅ FIXED: overflow hidden */
 }
 
 .user-info {
@@ -2090,7 +2111,7 @@ body.dark-mode .neo-toast {
     background-size: cover;
     background-position: center;
     border: 1px solid var(--border-subtle);
-    overflow: hidden;
+    overflow: hidden; /* ✅ FIXED: overflow hidden */
 }
 .profile-editor-main {
     display: flex;

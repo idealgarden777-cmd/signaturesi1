@@ -31,8 +31,8 @@
   ">
 
   <title>NEO • Signaturesi</title>
-  <!-- ABSOLUTE PATH WITH v=63 -->
-  <link rel="stylesheet" href="/neo.css?v=63">
+  <!-- ABSOLUTE PATH WITH v=65 -->
+  <link rel="stylesheet" href="/neo.css?v=65">
 
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css">
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js"></script>
@@ -256,7 +256,7 @@
           </div>
         </div>
 
-        <!-- ✅ UPDATED PROFILE PANEL WITH FILE UPLOAD -->
+        <!-- ✅ MINIMAL CHATGPT-STYLE PROFILE PANEL -->
         <div class="neo-settings-panel" id="settingsPanelProfile">
           <h2>Profile</h2>
 
@@ -271,8 +271,7 @@
 
                   <div class="profile-upload-actions">
                     <button class="settings-ghost-btn" id="chooseAvatarBtn" type="button">
-                      <i data-lucide="image-plus" size="16"></i>
-                      Upload photo
+                      Change photo
                     </button>
 
                     <button class="settings-ghost-btn" id="removeAvatarBtn" type="button">
@@ -281,9 +280,9 @@
 
                     <input id="settingsAvatarFileInput" type="file" accept="image/jpeg,image/png,image/webp" hidden>
 
-                    <small class="settings-helper-text">
-                      JPG, PNG or WebP. Maximum 5 MB.
-                    </small>
+                    <span class="settings-helper-text">
+                      PNG, JPG or WebP · Max 5 MB
+                    </span>
                   </div>
                 </div>
               </div>
@@ -294,23 +293,18 @@
               </label>
 
               <label>
-                Username
-                <input id="settingsUsernameInput" type="text" placeholder="@username">
+                Bean ID
+                <input id="settingsUsernameInput" type="text" placeholder="@username" readonly>
               </label>
 
               <div class="profile-editor-actions">
                 <button class="settings-primary-btn" id="saveProfileSettingsBtn" type="button">
-                  Save profile
+                  Save
                 </button>
-
                 <button class="settings-ghost-btn" id="resetProfileSettingsBtn" type="button">
-                  Reset
+                  Cancel
                 </button>
               </div>
-
-              <small class="settings-helper-text">
-                Bean ID users can use NEO safely without showing private card/payment details.
-              </small>
             </div>
           </div>
         </div>
@@ -406,7 +400,7 @@
     </div>
   </div>
 
-  <!-- ABSOLUTE PATH WITH v=63 -->
-  <script src="/neo.js?v=63"></script>
+  <!-- ABSOLUTE PATH WITH v=65 -->
+  <script src="/neo.js?v=65"></script>
 </body>
 </html>

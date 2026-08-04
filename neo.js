@@ -120,6 +120,19 @@
     const resetProfileSettingsBtn = document.getElementById("resetProfileSettingsBtn");
     const settingsUpgradeBtn = document.getElementById("settingsUpgradeBtn");
 
+    // --- NEW AVATAR UPLOAD DOM REFERENCES ---
+    const chooseAvatarBtn = document.getElementById("chooseAvatarBtn");
+    const removeAvatarBtn = document.getElementById("removeAvatarBtn");
+    const settingsAvatarFileInput = document.getElementById(
+        "settingsAvatarFileInput"
+    );
+    const settingsAvatarPreview = document.getElementById(
+        "settingsAvatarPreview"
+    );
+
+    let selectedAvatarFile = null;
+    let avatarPreviewUrl = "";
+
     // --------------------------------------------------------
     //  HELPER: makeConversationTitle
     // --------------------------------------------------------
@@ -1547,7 +1560,7 @@
     }
 
     // --------------------------------------------------------
-    //  SETTINGS UI
+    //  SETTINGS UI (UPDATED WITH FULL AVATAR UPLOAD/DELETE + supabaseClient CHECK)
     // --------------------------------------------------------
     function setupSettingsUI() {
         settingsBtn?.addEventListener("click", event => {
@@ -1589,22 +1602,198 @@
             localStorage.setItem("neo_theme", !isDark ? "dark" : "light");
             settingsThemeBtn.textContent = !isDark ? "Dark" : "Light";
         });
-        saveProfileSettingsBtn?.addEventListener("click", () => {
-            const displayName = document.getElementById("settingsDisplayNameInput")?.value?.trim() || "";
-            const username = document.getElementById("settingsUsernameInput")?.value?.trim() || "";
-            const avatarUrl = document.getElementById("settingsAvatarUrlInput")?.value?.trim() || "";
-            if (displayName || username || avatarUrl) {
-                showToast("Profile updated successfully.", "success");
-            } else {
-                showToast("No changes to save.", "info");
+
+        // --- AVATAR SELECTION / PREVIEW ---
+        chooseAvatarBtn?.addEventListener("click", () => {
+            settingsAvatarFileInput?.click();
+        });
+
+        settingsAvatarFileInput?.addEventListener("change", event => {
+            const file = event.target.files?.[0];
+
+            if (!file) return;
+
+            const allowedTypes = [
+                "image/jpeg",
+                "image/png",
+                "image/webp"
+            ];
+
+            if (!allowedTypes.includes(file.type)) {
+                showToast("Only JPG, PNG or WebP images are allowed.", "error");
+                event.target.value = "";
+                return;
+            }
+
+            if (file.size > 5 * 1024 * 1024) {
+                showToast("Profile photo must be under 5 MB.", "error");
+                event.target.value = "";
+                return;
+            }
+
+            if (avatarPreviewUrl.startsWith("blob:")) {
+                URL.revokeObjectURL(avatarPreviewUrl);
+            }
+
+            selectedAvatarFile = file;
+            avatarPreviewUrl = URL.createObjectURL(file);
+
+            if (settingsAvatarPreview) {
+                settingsAvatarPreview.innerHTML = "";
+
+                const image = document.createElement("img");
+                image.src = avatarPreviewUrl;
+                image.alt = "Profile photo preview";
+
+                settingsAvatarPreview.appendChild(image);
+            }
+
+            showToast("Photo selected. Press Save profile.", "success");
+        });
+
+        // --- UPDATED: SAVE PROFILE BUTTON (UPLOAD TO SUPABASE) ---
+        saveProfileSettingsBtn?.addEventListener("click", async () => {
+            if (!selectedAvatarFile) {
+                showToast("Please choose a profile photo first.", "info");
+                return;
+            }
+
+            // CHECK SUPABASE CLIENT
+            if (!supabaseClient) {
+                showToast("Upload service is not ready.", "error");
+                return;
+            }
+
+            const originalText = saveProfileSettingsBtn.textContent;
+            saveProfileSettingsBtn.disabled = true;
+            saveProfileSettingsBtn.textContent = "Saving...";
+
+            try {
+                // Step 1: Prepare upload (get signed URL)
+                const prepareResponse = await fetch("/api/profile/avatar", {
+                    method: "POST",
+                    credentials: "include",
+                    cache: "no-store",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Accept: "application/json"
+                    },
+                    body: JSON.stringify({
+                        action: "prepare",
+                        filename: selectedAvatarFile.name,
+                        mimeType: selectedAvatarFile.type,
+                        size: selectedAvatarFile.size
+                    })
+                });
+
+                const prepareData = await readJsonResponse(prepareResponse);
+                const upload = prepareData?.upload;
+
+                if (!upload?.bucket || !upload?.path || !upload?.token) {
+                    throw new Error("Upload information was not returned.");
+                }
+
+                // Step 2: Upload file to Supabase Storage using signed URL
+                const { error: uploadError } = await supabaseClient.storage
+                    .from(upload.bucket)
+                    .uploadToSignedUrl(
+                        upload.path,
+                        upload.token,
+                        selectedAvatarFile,
+                        {
+                            contentType: selectedAvatarFile.type
+                        }
+                    );
+
+                if (uploadError) {
+                    throw new Error(uploadError.message || "Photo upload failed.");
+                }
+
+                // Step 3: Save the path to user profile in DB
+                const saveResponse = await fetch("/api/profile/avatar", {
+                    method: "POST",
+                    credentials: "include",
+                    cache: "no-store",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Accept: "application/json"
+                    },
+                    body: JSON.stringify({
+                        action: "save",
+                        path: upload.path
+                    })
+                });
+
+                const saveData = await readJsonResponse(saveResponse);
+
+                // Clean up local state
+                selectedAvatarFile = null;
+
+                if (settingsAvatarFileInput) {
+                    settingsAvatarFileInput.value = "";
+                }
+
+                // Refresh UI (sidebar + settings)
+                await renderUserProfile();
+
+                showToast("Profile photo saved.", "success");
+            } catch (error) {
+                console.error("Avatar save failed:", error);
+                showToast(
+                    error?.message || "Unable to save profile photo.",
+                    "error"
+                );
+            } finally {
+                saveProfileSettingsBtn.disabled = false;
+                saveProfileSettingsBtn.textContent = originalText;
             }
         });
+
+        // --- UPDATED: REMOVE AVATAR BUTTON (DELETE FROM BACKEND) ---
+        removeAvatarBtn?.addEventListener("click", async () => {
+            try {
+                const response = await fetch("/api/profile/avatar", {
+                    method: "DELETE",
+                    credentials: "include",
+                    cache: "no-store",
+                    headers: {
+                        Accept: "application/json"
+                    }
+                });
+
+                await readJsonResponse(response);
+
+                selectedAvatarFile = null;
+
+                if (avatarPreviewUrl.startsWith("blob:")) {
+                    URL.revokeObjectURL(avatarPreviewUrl);
+                }
+
+                avatarPreviewUrl = "";
+
+                if (settingsAvatarFileInput) {
+                    settingsAvatarFileInput.value = "";
+                }
+
+                await renderUserProfile();
+
+                showToast("Profile photo removed.", "success");
+            } catch (error) {
+                console.error("Avatar removal failed:", error);
+                showToast(
+                    error?.message || "Unable to remove profile photo.",
+                    "error"
+                );
+            }
+        });
+
+        // --- RESET PROFILE BUTTON ---
         resetProfileSettingsBtn?.addEventListener("click", () => {
             document.getElementById("settingsDisplayNameInput").value = "";
             document.getElementById("settingsUsernameInput").value = "";
-            document.getElementById("settingsAvatarUrlInput").value = "";
             showToast("Profile reset to defaults.", "info");
         });
+
         settingsUpgradeBtn?.addEventListener("click", () => {
             if (userPlan === "pro") {
                 showToast("You are already on Pro plan.", "info");
@@ -1963,35 +2152,96 @@
         updateComposerShape();
     }
 
+    // --------------------------------------------------------
+    //  RENDER USER PROFILE (UPDATED: updates sidebar + settings preview)
+    // --------------------------------------------------------
     async function renderUserProfile() {
         let profile = null;
+
         try {
             const response = await fetch("/api/profile", {
                 credentials: "include",
                 cache: "no-store",
-                headers: { Accept: "application/json" }
+                headers: {
+                    Accept: "application/json"
+                }
             });
+
             if (response.ok) {
                 profile = await response.json();
             }
         } catch (error) {
             console.warn("Profile request failed:", error);
         }
-        const username = profile?.user?.username || currentUser.username || "user";
-        const plan = profile?.user?.planType || currentUser.planType || userPlan || "free";
+
+        const username =
+            profile?.user?.username ||
+            currentUser.username ||
+            "user";
+
+        const displayName =
+            profile?.profile?.displayName ||
+            profile?.profile?.display_name ||
+            currentUser.displayName ||
+            username;
+
+        const plan =
+            profile?.user?.planType ||
+            currentUser.planType ||
+            userPlan ||
+            "free";
+
+        const avatarUrl =
+            profile?.profile?.avatarUrl ||
+            profile?.profile?.avatar_url ||
+            profile?.avatarUrl ||
+            profile?.avatar_url ||
+            "";
+
+        const fallbackLetter =
+            username.charAt(0).toUpperCase() || "U";
+
         if (userNameDisplay) {
             userNameDisplay.textContent = `@${username}`;
         }
+
         if (userPlanBadge) {
-            userPlanBadge.textContent = plan === "pro" ? "Pro Plan" : "Free Plan";
+            userPlanBadge.textContent =
+                plan === "pro" ? "Pro Plan" : "Free Plan";
         }
-        const avatarUrl = profile?.profile?.avatarUrl || profile?.avatarUrl || "";
-        if (userAvatar) {
+
+        function renderAvatar(element) {
+            if (!element) return;
+
+            element.innerHTML = "";
+
             if (avatarUrl) {
-                userAvatar.innerHTML = `<img src="${sanitizeHTML(avatarUrl)}" alt="${sanitizeHTML(username)}">`;
+                const image = document.createElement("img");
+                image.src = avatarUrl;
+                image.alt = `${username} profile photo`;
+                image.referrerPolicy = "no-referrer";
+
+                element.appendChild(image);
             } else {
-                userAvatar.textContent = username.charAt(0).toUpperCase();
+                element.textContent = fallbackLetter;
             }
+        }
+
+        renderAvatar(userAvatar);
+        renderAvatar(settingsAvatarPreview);
+
+        const displayNameInput =
+            document.getElementById("settingsDisplayNameInput");
+
+        const usernameInput =
+            document.getElementById("settingsUsernameInput");
+
+        if (displayNameInput) {
+            displayNameInput.value = displayName;
+        }
+
+        if (usernameInput) {
+            usernameInput.value = `@${username}`;
         }
     }
 

@@ -749,171 +749,9 @@ body.dark-mode #userAvatar::before {
     width: 100%;
 }
 
-.message.user {
-    width: 100%;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end !important;
-    justify-content: flex-start !important;
-}
-.message.user .message-wrapper {
-    width: auto;
-    max-width: 78%;
-    margin-left: auto !important;
-    margin-right: 0 !important;
-    align-items: flex-end !important;
-}
-.message.user .message-content {
-    max-width: 100%;
-    padding: 9px 13px;
-    background: var(--user-msg-bg);
-    color: var(--text-primary);
-    border-radius: 18px;
-    font-size: 15px;
-    line-height: 1.45;
-    word-break: break-word;
-    border: none;
-    box-shadow: none;
-    width: fit-content;
-    text-align: left;
-}
-.message.user .message-media-grid,
-.message.user .user-msg-actions {
-    margin-left: auto;
-    margin-right: 0;
-    justify-content: flex-end;
-}
-.message-media-grid {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-    gap: 8px;
-    width: auto;
-    max-width: 100%;
-    margin: 0;
-}
-.message-media-grid img {
-    width: auto;
-    max-width: 360px;
-    max-height: 280px;
-    object-fit: contain;
-    border-radius: 14px;
-    border: 1px solid var(--border-subtle);
-    background: var(--bg-main);
-    box-shadow: none;
-    display: block;
-    cursor: pointer;
-}
-.message-file-pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    max-width: 260px;
-    padding: 9px 12px;
-    border-radius: 999px;
-    background: var(--user-msg-bg);
-    color: var(--text-primary);
-    border: 1px solid var(--border-subtle);
-    font-size: 13px;
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-}
-.message-file-pill i {
-    flex-shrink: 0;
-}
+/* ✨ NEW CHATGPT-STYLE USER MESSAGE (OVERRIDE BELOW) */
 
-.user-msg-actions {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    margin-top: 4px;
-    padding-right: 4px;
-    opacity: 0;
-    transition: opacity 0.15s ease;
-}
-.message.user:hover .user-msg-actions {
-    opacity: 1;
-}
-
-.user-action-btn {
-    background: transparent !important;
-    border: none !important;
-    outline: none !important;
-    box-shadow: none !important;
-    color: var(--text-muted);
-    cursor: pointer;
-    padding: 4px;
-    border-radius: 6px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    transition: color 0.12s ease, background 0.12s ease;
-}
-.user-action-btn:hover {
-    background: var(--bg-hover) !important;
-    color: var(--text-primary);
-}
-.user-action-btn svg,
-.user-action-btn i {
-    width: 14px !important;
-    height: 14px !important;
-    pointer-events: none;
-}
-
-.edit-message-box {
-    width: 100%;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    background: var(--bg-sidebar);
-    border: 1px solid var(--border-subtle);
-    border-radius: 16px;
-    padding: 12px;
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.05);
-}
-.edit-textarea {
-    width: 100%;
-    background: transparent;
-    border: none;
-    outline: none;
-    color: var(--text-primary);
-    font-size: 14.5px;
-    resize: none;
-    font-family: inherit;
-    line-height: 1.5;
-}
-.edit-actions {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 8px;
-}
-.edit-btn-cancel,
-.edit-btn-save {
-    padding: 6px 14px;
-    border-radius: 18px;
-    font-size: 13px;
-    font-weight: 500;
-    cursor: pointer;
-    border: none;
-    transition: all 0.15s ease;
-}
-.edit-btn-cancel {
-    background: transparent;
-    color: var(--text-primary);
-}
-.edit-btn-cancel:hover {
-    background: var(--bg-hover);
-}
-.edit-btn-save {
-    background: var(--text-primary);
-    color: var(--bg-main);
-}
-.edit-btn-save:hover {
-    opacity: 0.85;
-}
-
+/* ASSISTANT MESSAGE — premium typography */
 .message.assistant {
     align-items: center;
 }
@@ -2798,5 +2636,91 @@ body.dark-mode .neo-source-pill:hover {
         min-height: 34px;
         padding: 0 10px;
         font-size: 13px;
+    }
+}
+
+/* =========================================================
+   USER MESSAGE WITH IMAGE — CHATGPT STYLE
+   ========================================================= */
+
+.message.user {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+}
+
+.message.user .message-wrapper {
+    width: auto;
+    max-width: min(72%, 620px);
+    margin-left: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+}
+
+.message.user .message-content {
+    width: fit-content;
+    max-width: 100%;
+    padding: 10px 14px;
+    border-radius: 20px;
+    background: var(--user-msg-bg);
+    color: var(--text-primary);
+    font-size: 15px;
+    line-height: 1.45;
+    word-break: break-word;
+}
+
+.message.user .message-media-grid {
+    width: auto;
+    max-width: 100%;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin: 0;
+}
+
+.message.user .message-media-grid img {
+    width: auto;
+    max-width: 380px;
+    max-height: 300px;
+    display: block;
+    object-fit: contain;
+    border-radius: 16px;
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-main);
+    box-shadow: none;
+    cursor: pointer; /* ✅ Clickable feel */
+}
+
+.message.user .message-wrapper:has(.message-media-grid) {
+    gap: 7px;
+}
+
+.message.user .message-wrapper:has(.message-media-grid)
+.message-content {
+    margin-right: 2px;
+}
+
+/* ✅ User action buttons appear on hover */
+.user-msg-actions {
+    opacity: 0;
+    transition: opacity 0.15s ease;
+}
+
+.message.user:hover .user-msg-actions,
+.message.user:focus-within .user-msg-actions {
+    opacity: 1;
+}
+
+@media (max-width: 700px) {
+    .message.user .message-wrapper {
+        max-width: 88%;
+    }
+
+    .message.user .message-media-grid img {
+        max-width: min(78vw, 320px);
+        max-height: 240px;
     }
 }

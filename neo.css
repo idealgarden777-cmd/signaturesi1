@@ -2567,7 +2567,7 @@ body.dark-mode .neo-source-pill:hover {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: 5px;
+    gap: 4px;
 }
 
 .profile-upload-actions .settings-ghost-btn {
@@ -2679,6 +2679,90 @@ body.dark-mode .neo-source-pill:hover {
     display: none;
 }
 
+/* =========================================================
+   PROFILE PHOTO ACTIONS — MINIMAL PREMIUM
+   ========================================================= */
+
+.profile-upload-actions {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 14px;
+    width: auto;
+    flex-wrap: wrap;
+}
+
+.profile-upload-actions .settings-ghost-btn {
+    width: auto;
+    min-width: 0;
+    height: 36px;
+    min-height: 36px;
+    padding: 0 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 10px;
+    background: var(--bg-main);
+    color: var(--text-primary);
+    font-size: 13.5px;
+    font-weight: 550;
+    line-height: 1;
+    text-decoration: none;
+    cursor: pointer;
+    transition:
+        background-color 140ms ease,
+        border-color 140ms ease,
+        transform 100ms ease;
+}
+
+.profile-upload-actions .settings-ghost-btn:hover {
+    background: var(--bg-hover);
+    border-color: rgba(120, 120, 128, 0.32);
+    text-decoration: none;
+}
+
+.profile-upload-actions .settings-ghost-btn:active {
+    transform: scale(0.97);
+}
+
+/* Upload button */
+#chooseAvatarBtn {
+    background: var(--text-primary);
+    color: var(--bg-main);
+    border-color: var(--text-primary);
+}
+
+#chooseAvatarBtn:hover {
+    background: var(--text-primary);
+    opacity: 0.88;
+    border-color: var(--text-primary);
+}
+
+/* Remove button */
+#removeAvatarBtn {
+    background: transparent;
+    color: var(--text-muted);
+    border-color: var(--border-subtle);
+}
+
+#removeAvatarBtn:hover {
+    color: #dc2626;
+    background: rgba(220, 38, 38, 0.07);
+    border-color: rgba(220, 38, 38, 0.18);
+}
+
+/* Helper text — full width line below buttons */
+.profile-upload-actions .settings-helper-text {
+    flex-basis: 100%;
+    width: 100%;
+    margin-top: 2px;
+    color: var(--text-muted);
+    font-size: 12px;
+    line-height: 1.4;
+}
+
 @media (max-width: 700px) {
     #settingsPanelProfile {
         max-width: none;
@@ -2701,5 +2785,18 @@ body.dark-mode .neo-source-pill:hover {
     .profile-editor-actions .settings-primary-btn,
     .profile-editor-actions .settings-ghost-btn {
         width: auto;
+    }
+}
+
+@media (max-width: 520px) {
+    .profile-upload-actions {
+        gap: 8px;
+    }
+
+    .profile-upload-actions .settings-ghost-btn {
+        height: 34px;
+        min-height: 34px;
+        padding: 0 10px;
+        font-size: 13px;
     }
 }

@@ -2154,7 +2154,7 @@
     }
 
     // --------------------------------------------------------
-    //  RENDER USER PROFILE (UPDATED: updates sidebar + settings preview)
+    //  RENDER USER PROFILE (UPDATED: snake_case support + cache busting)
     // --------------------------------------------------------
     async function renderUserProfile() {
         let profile = null;
@@ -2192,6 +2192,7 @@
             userPlan ||
             "free";
 
+        // 👇 UPDATED: support both camelCase and snake_case
         const avatarUrl =
             profile?.profile?.avatarUrl ||
             profile?.profile?.avatar_url ||
@@ -2211,6 +2212,7 @@
                 plan === "pro" ? "Pro Plan" : "Free Plan";
         }
 
+        // 👇 UPDATED: add cache-busting query param and reuse for both elements
         function renderAvatar(element) {
             if (!element) return;
 
@@ -2218,10 +2220,8 @@
 
             if (avatarUrl) {
                 const image = document.createElement("img");
-                image.src = avatarUrl;
+                image.src = `${avatarUrl}?v=${Date.now()}`;
                 image.alt = `${username} profile photo`;
-                image.referrerPolicy = "no-referrer";
-
                 element.appendChild(image);
             } else {
                 element.textContent = fallbackLetter;

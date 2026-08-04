@@ -2725,143 +2725,55 @@ body.dark-mode .neo-source-pill:hover {
 }
 
 /* =========================================================
-   MESSAGE EDIT MODE — CHATGPT STYLE (OLD BLOCK – KEPT FOR REFERENCE)
-   ========================================================= */
-
-.message-edit-form {
-    width: min(100%, 620px);
-    margin-left: auto;
-    display: flex;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 10px;
-}
-
-.message-edit-textarea {
-    width: 100%;
-    min-height: 96px;
-    max-height: 240px;
-    resize: vertical;
-    padding: 14px 16px;
-    border: 1px solid var(--border-subtle);
-    border-radius: 18px;
-    background: var(--user-msg-bg);
-    color: var(--text-primary);
-    font: inherit;
-    font-size: 15px;
-    line-height: 1.5;
-    outline: none;
-    box-shadow: none;
-}
-
-.message-edit-textarea:focus {
-    border-color: rgba(0, 0, 0, 0.22);
-    box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.05);
-}
-
-body.dark-mode .message-edit-textarea:focus {
-    border-color: rgba(255, 255, 255, 0.22);
-    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.06);
-}
-
-.message-edit-actions {
-    display: flex;
-    justify-content: flex-end;
-    align-items: center;
-    gap: 8px;
-}
-
-.message-edit-cancel,
-.message-edit-submit {
-    min-height: 38px;
-    padding: 0 16px;
-    border-radius: 999px;
-    font-size: 13.5px;
-    font-weight: 600;
-    cursor: pointer;
-}
-
-.message-edit-cancel {
-    border: 1px solid var(--border-subtle);
-    background: var(--bg-main);
-    color: var(--text-primary);
-}
-
-.message-edit-submit {
-    border: 0;
-    background: var(--text-primary);
-    color: var(--bg-main);
-}
-
-.message-edit-cancel:hover {
-    background: var(--bg-hover);
-}
-
-.message-edit-submit:hover {
-    opacity: 0.88;
-}
-
-@media (max-width: 520px) {
-    .message-edit-form {
-        width: 100%;
-    }
-
-    .message-edit-textarea {
-        min-height: 88px;
-        border-radius: 16px;
-    }
-}
-
-/* =========================================================
-   MESSAGE EDIT MODE — MATCH CURRENT NEO.JS
+   MESSAGE EDIT MODE — FINAL CHATGPT STYLE
    ========================================================= */
 
 .message.user:has(.edit-message-box) {
-    align-items: flex-end;
+    width: 100%;
+    align-items: stretch;
 }
 
 .edit-message-box {
-    width: min(100%, 620px);
-    margin-left: auto;
+    width: 100%;
+    margin: 0;
+    padding: 16px;
     display: flex;
     flex-direction: column;
-    align-items: stretch;
-    gap: 10px;
+    gap: 12px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 22px;
+    background: var(--bg-sidebar);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.04);
 }
 
 .edit-textarea {
     width: 100%;
-    min-height: 96px;
-    max-height: 240px;
-    resize: vertical;
-    padding: 14px 16px;
+    min-height: 64px;
+    max-height: 220px;
+    padding: 0;
     margin: 0;
-    border: 1px solid var(--border-subtle);
-    border-radius: 18px;
-    background: var(--user-msg-bg);
+    resize: none;
+    border: 0;
+    outline: 0;
+    background: transparent;
     color: var(--text-primary);
     font: inherit;
-    font-size: 15px;
-    line-height: 1.5;
-    outline: none;
+    font-size: 16px;
+    line-height: 1.55;
     box-shadow: none;
 }
 
 .edit-textarea:focus {
-    border-color: rgba(0, 0, 0, 0.22);
-    box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.05);
-}
-
-body.dark-mode .edit-textarea:focus {
-    border-color: rgba(255, 255, 255, 0.22);
-    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.06);
+    border: 0;
+    outline: 0;
+    box-shadow: none;
 }
 
 .edit-actions {
     display: flex;
     justify-content: flex-end;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
 }
 
 .edit-btn-cancel,
@@ -2869,16 +2781,25 @@ body.dark-mode .edit-textarea:focus {
     min-height: 38px;
     padding: 0 16px;
     border-radius: 999px;
-    font-size: 13.5px;
-    font-weight: 600;
     font-family: inherit;
+    font-size: 14px;
+    font-weight: 600;
     cursor: pointer;
+    transition:
+        background-color 140ms ease,
+        color 140ms ease,
+        opacity 140ms ease,
+        transform 100ms ease;
 }
 
 .edit-btn-cancel {
-    border: 1px solid var(--border-subtle);
-    background: var(--bg-main);
+    border: 0;
+    background: transparent;
     color: var(--text-primary);
+}
+
+.edit-btn-cancel:hover {
+    background: var(--bg-hover);
 }
 
 .edit-btn-save {
@@ -2887,21 +2808,40 @@ body.dark-mode .edit-textarea:focus {
     color: var(--bg-main);
 }
 
-.edit-btn-cancel:hover {
-    background: var(--bg-hover);
+.edit-btn-save:hover {
+    opacity: 0.9;
 }
 
-.edit-btn-save:hover {
-    opacity: 0.88;
+.edit-btn-cancel:active,
+.edit-btn-save:active {
+    transform: scale(0.98);
+}
+
+body.dark-mode .edit-message-box {
+    background: var(--bg-sidebar);
+    border-color: var(--border-subtle);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
 }
 
 @media (max-width: 520px) {
     .edit-message-box {
-        width: 100%;
+        padding: 14px;
+        border-radius: 18px;
     }
 
     .edit-textarea {
-        min-height: 88px;
-        border-radius: 16px;
+        min-height: 72px;
+        font-size: 15px;
+    }
+
+    .edit-actions {
+        gap: 6px;
+    }
+
+    .edit-btn-cancel,
+    .edit-btn-save {
+        min-height: 36px;
+        padding: 0 14px;
+        font-size: 13.5px;
     }
 }

@@ -507,3 +507,161 @@ textarea#chatInput {
         min-height: 40px !important;
     }
 }
+
+/* =========================================================
+   NEO V3 — SENT IMAGE MESSAGE FIX
+   Only affects uploaded media after the message is sent.
+   ========================================================= */
+
+.message.user {
+    width: 100% !important;
+    align-items: flex-end !important;
+}
+
+.message.user .message-wrapper {
+    width: fit-content !important;
+    max-width: min(560px, 78%) !important;
+
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-end !important;
+    gap: 8px !important;
+
+    margin-left: auto !important;
+}
+
+/* User text bubble */
+.message.user .message-wrapper > .message-content {
+    width: fit-content !important;
+    max-width: 100% !important;
+
+    margin: 0 !important;
+    padding: 10px 14px !important;
+
+    border-radius: 18px !important;
+    background: #f4f4f4 !important;
+
+    font-size: 15px !important;
+    line-height: 1.5 !important;
+
+    overflow-wrap: anywhere !important;
+}
+
+/* Uploaded media container */
+.message.user .message-media-grid {
+    width: auto !important;
+    max-width: 100% !important;
+
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 8px !important;
+
+    margin: 0 !important;
+    padding: 0 !important;
+
+    overflow: hidden !important;
+    border-radius: 14px !important;
+}
+
+/* Uploaded image after sending */
+.message.user .message-media-grid img {
+    display: block !important;
+
+    width: auto !important;
+    height: auto !important;
+
+    max-width: 520px !important;
+    max-height: 420px !important;
+
+    margin: 0 !important;
+
+    object-fit: contain !important;
+    object-position: center !important;
+
+    border: 1px solid rgba(0, 0, 0, 0.08) !important;
+    border-radius: 14px !important;
+
+    background: #f7f7f8 !important;
+
+    box-shadow:
+        0 1px 2px rgba(0, 0, 0, 0.03),
+        0 8px 24px rgba(0, 0, 0, 0.05) !important;
+}
+
+/* Multiple images */
+.message.user .message-media-grid:has(img:nth-child(2)) {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    width: min(520px, 100%) !important;
+}
+
+.message.user .message-media-grid:has(img:nth-child(2)) img {
+    width: 100% !important;
+    height: 190px !important;
+    object-fit: cover !important;
+}
+
+/* User edit/copy actions */
+.message.user .user-msg-actions {
+    width: auto !important;
+
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    gap: 4px !important;
+
+    margin: 0 4px 0 0 !important;
+}
+
+/* Dark mode */
+body.dark-mode .message.user .message-wrapper > .message-content {
+    background: #303030 !important;
+    color: #ececec !important;
+}
+
+body.dark-mode .message.user .message-media-grid img {
+    border-color: rgba(255, 255, 255, 0.10) !important;
+    background: #292929 !important;
+
+    box-shadow:
+        0 1px 2px rgba(0, 0, 0, 0.18),
+        0 10px 28px rgba(0, 0, 0, 0.22) !important;
+}
+
+/* Mobile */
+@media (max-width: 767px) {
+    .message.user .message-wrapper {
+        max-width: 88% !important;
+    }
+
+    .message.user .message-media-grid,
+    .message.user .message-media-grid img {
+        max-width: 100% !important;
+    }
+
+    .message.user .message-media-grid img {
+        max-height: 320px !important;
+        border-radius: 12px !important;
+    }
+
+    .message.user .message-media-grid:has(img:nth-child(2)) {
+        width: 100% !important;
+    }
+
+    .message.user .message-media-grid:has(img:nth-child(2)) img {
+        height: 145px !important;
+    }
+}
+
+@media (max-width: 390px) {
+    .message.user .message-wrapper {
+        max-width: 92% !important;
+    }
+
+    .message.user .message-media-grid img {
+        max-height: 280px !important;
+    }
+
+    .message.user .message-media-grid:has(img:nth-child(2)) img {
+        height: 125px !important;
+    }
+}

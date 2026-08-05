@@ -187,3 +187,37 @@ select,
         transition-duration: 0.01ms !important;
     }
 }
+/* =========================================================
+   CHAT UPLOAD MEDIA — CONTROLLED SIZE
+   ========================================================= */
+
+.message-content img,
+.message-attachment img,
+.chat-image-preview img {
+    display: block;
+    width: auto !important;
+    max-width: min(520px, 100%) !important;
+    max-height: 420px !important;
+    object-fit: contain;
+    border-radius: 12px;
+    border: 1px solid var(--neo-v2-border);
+    background: var(--neo-v2-surface);
+}
+
+/* Keep user-uploaded media aligned with its message */
+.message.user .message-content img,
+.message.user .message-attachment img {
+    margin-left: auto;
+}
+
+/* Mobile */
+@media (max-width: 767px) {
+    .message-content img,
+    .message-attachment img,
+    .chat-image-preview img {
+        width: auto !important;
+        max-width: 100% !important;
+        max-height: 360px !important;
+        border-radius: 10px;
+    }
+}

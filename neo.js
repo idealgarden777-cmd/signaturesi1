@@ -1188,9 +1188,21 @@
         editButton.type = "button";
         editButton.title = "Edit message";
         editButton.innerHTML = '<i data-lucide="pencil" size="14"></i>';
-        // ✅ FIX: Pass attachments to enableUserMessageEdit
-        editButton.onclick = () => {
-            enableUserMessageEdit(containerElement, textContent, index, attachments || []);
+        // ✅ FIX: Prioritize current attachments parameter over conversation[index]
+        editButton.onclick = async () => {
+            const savedAttachments =
+                Array.isArray(attachments) && attachments.length > 0
+                    ? attachments
+                    : Array.isArray(conversation[index]?.attachments)
+                        ? conversation[index].attachments
+                        : [];
+
+            await enableUserMessageEdit(
+                containerElement,
+                textContent,
+                index,
+                savedAttachments
+            );
         };
         const copyButton = document.createElement("button");
         copyButton.className = "user-action-btn user-copy-btn";
@@ -1209,9 +1221,65 @@
         }
     }
 
-    // ✅ UPDATED: Accept existingAttachments and render media inside edit box
-    function enableUserMessageEdit(messageElement, originalText, index, existingAttachments = []) {
+    // --------------------------------------------------------
+    //  HYDRATE ATTACHMENT PREVIEWS (REFRESH SIGNED URLs)
+    // --------------------------------------------------------
+    async function hydrateAttachmentPreviews(attachments = []) {
+        if (!Array.isArray(attachments) || !supabaseClient) {
+            return attachments;
+        }
+
+        return Promise.all(
+            attachments.map(async file => {
+                if (!isImageAttachment(file)) {
+                    return file;
+                }
+
+                // ✅ Only use existing previewUrl (avoid expired signedUrl)
+                if (file.previewUrl) {
+                    return file;
+                }
+
+                if (!file.bucket || !file.path) {
+                    return file;
+                }
+
+                try {
+                    const { data, error } = await supabaseClient.storage
+                        .from(file.bucket)
+                        .createSignedUrl(file.path, 3600);
+
+                    if (!error && data?.signedUrl) {
+                        return {
+                            ...file,
+                            signedUrl: data.signedUrl
+                        };
+                    }
+                } catch (error) {
+                    console.warn("Attachment preview failed:", error);
+                }
+
+                return file;
+            })
+        );
+    }
+
+    // --------------------------------------------------------
+    //  ENABLE USER MESSAGE EDIT (ASYNC + HYDRATION)
+    // --------------------------------------------------------
+    async function enableUserMessageEdit(
+        messageElement,
+        originalText,
+        index,
+        existingAttachments = []
+    ) {
         if (isGenerating) return;
+
+        // ✅ Hydrate previews
+        existingAttachments = await hydrateAttachmentPreviews(
+            existingAttachments
+        );
+
         messageElement.innerHTML = "";
         const editBox = document.createElement("div");
         editBox.className = "edit-message-box";
@@ -1266,12 +1334,12 @@
         messageElement.appendChild(editBox);
         textarea.focus();
 
-        // ✅ Cancel: render original with attachments
+        // Cancel: restore original with attachments
         cancelButton.onclick = () => {
             renderUserMessageWrapper(messageElement, originalText, index, existingAttachments);
         };
 
-        // ✅ Save: pass attachments to handleEditedSend
+        // Save: pass hydrated attachments
         saveButton.onclick = () => {
             const updatedText = textarea.value.trim();
             if (updatedText) {
@@ -1280,9 +1348,27 @@
         };
     }
 
-    // ✅ UPDATED: accept existingAttachments
-    async function handleEditedSend(newText, targetIndex, messageElement, existingAttachments = []) {
+    // --------------------------------------------------------
+    //  HANDLE EDITED SEND (ASYNC + HYDRATION + PRESERVED COPY)
+    // --------------------------------------------------------
+    async function handleEditedSend(
+        newText,
+        targetIndex,
+        messageElement,
+        existingAttachments = []
+    ) {
         if (isGenerating) return;
+
+        // ✅ Hydrate previews for safety
+        existingAttachments = await hydrateAttachmentPreviews(
+            existingAttachments
+        );
+
+        // ✅ Create a safe copy to preserve preview URLs and signed URLs
+        const preservedAttachments = existingAttachments.map(file => ({
+            ...file
+        }));
+
         const cleanedText = String(newText || "").trim();
         if (!cleanedText) return;
         isGenerating = true;
@@ -1298,15 +1384,37 @@
                     current.nextElementSibling.remove();
                 }
             }
-            // Render updated message with attachments
-            renderUserMessageWrapper(messageElement, cleanedText, conversation.length, existingAttachments);
+            // Render updated message with preserved attachments
+            renderUserMessageWrapper(
+                messageElement,
+                cleanedText,
+                conversation.length,
+                preservedAttachments
+            );
+
             conversation.push({
                 role: "user",
                 content: cleanedText,
-                attachments: existingAttachments  // ✅ preserve attachments
+                attachments: preservedAttachments.map(file => ({
+                    provider: file.provider || "supabase",
+                    bucket: file.bucket,
+                    path: file.path,
+                    name: file.name,
+                    mimeType: file.mimeType || file.type,
+                    type: file.type || file.mimeType,
+                    category: file.category,
+                    size: file.size,
+                    previewUrl: file.previewUrl || "",
+                    signedUrl: file.signedUrl || ""
+                }))
             });
             const aiBubble = renderMessageToUI("assistant", "", null, true);
-            await submitChatRequest(aiBubble);
+            // ✅ FIX: Pass text and attachments to submitChatRequest
+            await submitChatRequest(
+                aiBubble,
+                cleanedText,
+                preservedAttachments
+            );
         } catch (error) {
             console.error("Edited message send failed:", error);
             isGenerating = false;

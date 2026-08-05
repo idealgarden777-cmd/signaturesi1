@@ -1,0 +1,74 @@
+/* =========================================================
+   NEO V3 — CLEAN MIGRATION LAYER
+   No patches. One component at a time.
+   ========================================================= */
+
+:root {
+    --neo-sidebar-width: 280px;
+    --neo-reading-width: 760px;
+    --neo-composer-width: 760px;
+
+    --neo-bg: #ffffff;
+    --neo-sidebar-bg: #f9f9f9;
+    --neo-surface: #ffffff;
+    --neo-user-surface: #f4f4f4;
+    --neo-hover: #eeeeee;
+
+    --neo-text: #171717;
+    --neo-muted: #6b6b6b;
+    --neo-border: rgba(0, 0, 0, 0.08);
+
+    --neo-radius-sm: 8px;
+    --neo-radius-md: 12px;
+    --neo-radius-lg: 18px;
+    --neo-radius-xl: 26px;
+
+    --neo-space-1: 4px;
+    --neo-space-2: 8px;
+    --neo-space-3: 12px;
+    --neo-space-4: 16px;
+    --neo-space-5: 20px;
+    --neo-space-6: 24px;
+
+    --neo-motion: 150ms ease;
+}
+
+body.dark-mode {
+    --neo-bg: #212121;
+    --neo-sidebar-bg: #171717;
+    --neo-surface: #212121;
+    --neo-user-surface: #303030;
+    --neo-hover: #2a2a2a;
+
+    --neo-text: #ececec;
+    --neo-muted: #9b9b9b;
+    --neo-border: rgba(255, 255, 255, 0.10);
+}
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    width: 100%;
+    max-width: 100%;
+    overflow: hidden;
+}
+
+body {
+    background: var(--neo-bg);
+    color: var(--neo-text);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+}
+
+.app-shell,
+.scroll-area,
+.conversation-column,
+.chat-messages,
+.composer-wrapper {
+    min-width: 0;
+}

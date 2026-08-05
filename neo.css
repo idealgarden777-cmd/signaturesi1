@@ -1042,7 +1042,7 @@ body.dark-mode #userAvatar::before {
     pointer-events: none;
 }
 
-/* COMPOSER (overridden below) */
+/* COMPOSER (old, overridden below) */
 .composer-dock {
     position: absolute;
     bottom: 0;
@@ -2468,8 +2468,7 @@ button:disabled[title] {
     .composer-dock {
         padding: var(--space-3) var(--space-3) var(--space-4) var(--space-3);
     }
-    .message.user .message-wrapper,
-    .message.user .message-content {
+    .message.user .message-wrapper {
         max-width: 88%;
     }
     .message-media-grid img {
@@ -2618,307 +2617,519 @@ body.dark-mode .neo-source-pill:hover {
 }
 
 /* =========================================================
-   PROFILE PANEL — STRUCTURE FIX (OVERRIDE)
+   NEO COMPOSER — MINIMAL iOS-INSPIRED FINAL
    ========================================================= */
 
-#settingsPanelProfile {
-    width: 100%;
-    max-width: 680px;
+.composer-dock {
+    padding:
+        var(--space-3)
+        var(--space-5)
+        calc(var(--space-3) + env(safe-area-inset-bottom));
+
+    background:
+        linear-gradient(
+            to top,
+            var(--bg-main) 72%,
+            color-mix(in srgb, var(--bg-main) 82%, transparent) 88%,
+            transparent
+        );
 }
 
-#settingsPanelProfile .profile-editor-card {
-    display: block;
-    width: 100%;
-    padding: 0;
-    border: 0;
-    border-radius: 0;
-    background: transparent;
-}
-
-#settingsPanelProfile .profile-editor-main {
-    width: 100%;
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-5);
-}
-
-#settingsPanelProfile .profile-avatar-upload {
-    width: 100%;
-    padding-bottom: var(--space-5);
-    border-bottom: 1px solid var(--border-subtle);
-}
-
-#settingsPanelProfile .profile-upload-label {
-    display: block;
-    margin-bottom: var(--space-3);
-    color: var(--text-primary);
-    font-size: 13px;
-    font-weight: 600;
-}
-
-#settingsPanelProfile .profile-upload-row {
-    display: flex;
-    align-items: center;
-    gap: var(--space-5);
-    width: 100%;
-}
-
-#settingsPanelProfile .profile-editor-avatar {
-    width: 80px;
-    height: 80px;
-    flex: 0 0 80px;
-    border-radius: 50%;
-}
-
-#settingsPanelProfile .profile-upload-actions {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: var(--space-2);
-    min-width: 0;
-}
-
-#settingsPanelProfile .profile-upload-actions .settings-helper-text {
-    width: 100%;
-    margin-top: var(--space-1);
-}
-
-#settingsPanelProfile .profile-editor-main > label {
-    width: 100%;
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
-    color: var(--text-primary);
-    font-size: 13px;
-    font-weight: 600;
-}
-
-#settingsPanelProfile .profile-editor-main > label input {
-    width: 100%;
-    min-height: 48px;
-    padding: 0 var(--space-4);
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-lg);
-    background: var(--bg-main);
-    color: var(--text-primary);
-    font-size: 16px;
-}
-
-#settingsPanelProfile .profile-editor-actions {
-    display: flex;
-    justify-content: flex-end;
-    align-items: center;
-    gap: var(--space-2);
-    margin: 0;
-    padding-top: var(--space-1);
-}
-
-@media (max-width: 700px) {
-    #settingsPanelProfile {
-        max-width: none;
-    }
-
-    #settingsPanelProfile .profile-upload-row {
-        align-items: flex-start;
-        gap: var(--space-4);
-    }
-
-    #settingsPanelProfile .profile-editor-avatar {
-        width: 72px;
-        height: 72px;
-        flex-basis: 72px;
-    }
-
-    #settingsPanelProfile .profile-upload-actions {
-        flex: 1;
-    }
-
-    #settingsPanelProfile .profile-editor-actions {
-        width: 100%;
-    }
-}
-
-/* =========================================================
-   RESPONSIVE SAFETY LAYER — DO NOT MODIFY DESKTOP BASE
-   ========================================================= */
-
-/* Universal stability */
-html,
-body {
-    width: 100%;
-    max-width: 100%;
-    overflow-x: hidden;
-}
-
-.app-shell,
-.scroll-area,
-.conversation-column,
 .composer-wrapper {
+    width: 100%;
+    max-width: 760px;
+    margin-inline: auto;
+}
+
+/* Suggestions above composer */
+.live-suggestions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-bottom: var(--space-3);
+    padding: 0 var(--space-2);
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+.live-suggestions::-webkit-scrollbar {
+    display: none;
+}
+
+.suggestion-chip {
+    min-height: 38px;
+    padding: 0 var(--space-4);
+    flex: 0 0 auto;
+
+    border: 1px solid
+        color-mix(
+            in srgb,
+            var(--border-subtle) 78%,
+            transparent
+        );
+
+    border-radius: 9999px;
+
+    background:
+        color-mix(
+            in srgb,
+            var(--bg-main) 82%,
+            transparent
+        );
+
+    color: var(--text-primary);
+
+    backdrop-filter: blur(18px) saturate(140%);
+    -webkit-backdrop-filter: blur(18px) saturate(140%);
+
+    box-shadow:
+        0 1px 2px rgba(0, 0, 0, 0.03),
+        0 4px 14px rgba(0, 0, 0, 0.035);
+
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+
+    transition:
+        background-color var(--transition-fast) ease,
+        border-color var(--transition-fast) ease,
+        transform var(--transition-fast) ease,
+        opacity var(--transition-fast) ease;
+}
+
+.suggestion-chip:hover {
+    background: var(--bg-hover);
+    border-color: var(--border-subtle);
+}
+
+.suggestion-chip:active {
+    transform: scale(0.98);
+}
+
+/* Main composer pill */
+.glass-input-container {
+    width: 100%;
+    min-height: var(--composer-height);
+
+    padding: 6px 8px;
+
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: var(--space-1);
+
+    overflow: hidden;
+
+    border: 1px solid
+        color-mix(
+            in srgb,
+            var(--border-subtle) 82%,
+            transparent
+        );
+
+    border-radius: 9999px;
+
+    background:
+        color-mix(
+            in srgb,
+            var(--bg-main) 78%,
+            transparent
+        );
+
+    backdrop-filter:
+        blur(24px)
+        saturate(155%);
+
+    -webkit-backdrop-filter:
+        blur(24px)
+        saturate(155%);
+
+    box-shadow:
+        0 1px 2px rgba(0, 0, 0, 0.04),
+        0 8px 28px rgba(0, 0, 0, 0.065),
+        inset 0 1px 0 rgba(255, 255, 255, 0.5);
+
+    transition:
+        border-color var(--transition-fast) ease,
+        box-shadow var(--transition-fast) ease,
+        background-color var(--transition-fast) ease;
+}
+
+.glass-input-container:focus-within {
+    border-color:
+        color-mix(
+            in srgb,
+            var(--text-primary) 18%,
+            var(--border-subtle)
+        );
+
+    box-shadow:
+        0 1px 2px rgba(0, 0, 0, 0.04),
+        0 10px 34px rgba(0, 0, 0, 0.085),
+        inset 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+
+/* Multi-line / attachment state */
+.glass-input-container.is-expanded,
+.glass-input-container:has(
+    .attached-chips-wrapper:not(:empty)
+) {
+    border-radius: 26px;
+    padding-top: var(--space-2);
+}
+
+/* Composer controls row */
+.composer-input-row {
+    width: 100%;
+    min-height: 44px;
+
+    display: flex;
+    align-items: flex-end;
+    gap: var(--space-1);
+}
+
+/* Input */
+textarea#chatInput {
+    flex: 1;
     min-width: 0;
-    max-width: 100%;
+    min-height: 40px;
+    max-height: 160px;
+
+    padding:
+        9px
+        var(--space-2)
+        8px;
+
+    margin: 0;
+
+    border: 0;
+    outline: 0;
+    resize: none;
+
+    background: transparent;
+    color: var(--text-primary);
+
+    font-family:
+        -apple-system,
+        BlinkMacSystemFont,
+        "SF Pro Text",
+        "Segoe UI",
+        sans-serif;
+
+    font-size: 15px;
+    font-weight: 400;
+    line-height: 1.45;
+    letter-spacing: -0.012em;
+
+    box-shadow: none;
 }
 
-/* Tablet */
-@media (max-width: 1024px) {
-    .conversation-column,
-    .composer-wrapper {
-        max-width: 760px;
-    }
+textarea#chatInput::placeholder {
+    color:
+        color-mix(
+            in srgb,
+            var(--text-muted) 88%,
+            transparent
+        );
 
-    .neo-settings-modal {
-        width: min(820px, calc(100vw - 32px));
-    }
+    opacity: 1;
 }
 
-/* Mobile */
+/* Shared composer icon buttons */
+.attach-btn,
+.mic-btn,
+.stop-recording-btn,
+.send-btn {
+    width: 40px !important;
+    height: 40px !important;
+    min-width: 40px !important;
+    min-height: 40px !important;
+
+    padding: 0 !important;
+    margin: 0 !important;
+
+    flex: 0 0 40px;
+
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    align-self: flex-end !important;
+
+    border: 0 !important;
+    border-radius: 9999px !important;
+
+    outline: 0 !important;
+    box-shadow: none !important;
+
+    cursor: pointer;
+
+    transition:
+        background-color var(--transition-fast) ease,
+        color var(--transition-fast) ease,
+        transform var(--transition-fast) ease,
+        opacity var(--transition-fast) ease;
+}
+
+/* Attach and microphone */
+.attach-btn,
+.mic-btn {
+    background: transparent !important;
+    color: var(--text-primary) !important;
+}
+
+.attach-btn:hover,
+.mic-btn:hover {
+    background: var(--bg-hover) !important;
+}
+
+.attach-btn:active,
+.mic-btn:active {
+    transform: scale(0.94);
+}
+
+.attach-btn svg,
+.attach-btn i,
+.mic-btn svg,
+.mic-btn i {
+    width: var(--icon-md) !important;
+    height: var(--icon-md) !important;
+    stroke-width: 1.8px !important;
+    transform: none !important;
+}
+
+/* Send button */
+.send-btn {
+    background: var(--text-primary) !important;
+    color: var(--bg-main) !important;
+
+    box-shadow:
+        0 2px 8px rgba(0, 0, 0, 0.12) !important;
+}
+
+.send-btn:hover:not(:disabled) {
+    opacity: 0.88;
+    transform: scale(0.96);
+}
+
+.send-btn:active:not(:disabled) {
+    transform: scale(0.92);
+}
+
+.send-btn:disabled {
+    opacity: 0.28;
+    cursor: default;
+    box-shadow: none !important;
+}
+
+.send-btn svg,
+.send-btn i {
+    width: 18px !important;
+    height: 18px !important;
+    stroke-width: 2px !important;
+}
+
+/* Attachment previews */
+.attached-chips-wrapper {
+    width: 100%;
+
+    display: flex;
+    flex-wrap: nowrap;
+
+    gap: var(--space-2);
+
+    padding:
+        var(--space-1)
+        var(--space-1)
+        var(--space-2);
+
+    overflow-x: auto;
+    overflow-y: hidden;
+
+    scrollbar-width: none;
+}
+
+.attached-chips-wrapper::-webkit-scrollbar {
+    display: none;
+}
+
+.attached-chips-wrapper:empty {
+    display: none !important;
+}
+
+.attachment-preview-card {
+    min-width: 176px !important;
+    width: 176px !important;
+    height: 54px !important;
+
+    padding:
+        6px
+        32px
+        6px
+        6px !important;
+
+    border:
+        1px solid
+        color-mix(
+            in srgb,
+            var(--border-subtle) 86%,
+            transparent
+        ) !important;
+
+    border-radius: var(--radius-lg) !important;
+
+    background:
+        color-mix(
+            in srgb,
+            var(--bg-main) 70%,
+            transparent
+        ) !important;
+
+    box-shadow: none !important;
+}
+
+.attachment-preview-card img {
+    width: 42px !important;
+    height: 42px !important;
+
+    border-radius: 10px !important;
+    object-fit: cover;
+}
+
+.attachment-remove-btn {
+    right: 7px !important;
+
+    width: 24px !important;
+    height: 24px !important;
+
+    border-radius: 9999px !important;
+
+    background:
+        color-mix(
+            in srgb,
+            var(--bg-main) 82%,
+            transparent
+        ) !important;
+
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+}
+
+/* Note beneath composer */
+.composer-note {
+    margin-top: var(--space-2) !important;
+
+    color: var(--text-muted) !important;
+
+    font-size: 11.5px !important;
+    font-weight: 400;
+    line-height: 1.35;
+    letter-spacing: -0.005em;
+
+    opacity: 0.82;
+}
+
+/* Dark mode glass tuning */
+body.dark-mode .glass-input-container {
+    background:
+        color-mix(
+            in srgb,
+            var(--bg-sidebar) 84%,
+            transparent
+        );
+
+    border-color:
+        color-mix(
+            in srgb,
+            var(--border-subtle) 90%,
+            transparent
+        );
+
+    box-shadow:
+        0 1px 2px rgba(0, 0, 0, 0.18),
+        0 10px 32px rgba(0, 0, 0, 0.26),
+        inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+body.dark-mode .suggestion-chip {
+    background:
+        color-mix(
+            in srgb,
+            var(--bg-sidebar) 80%,
+            transparent
+        );
+}
+
+/* Mobile tuning */
 @media (max-width: 767px) {
-    body,
-    .app-shell {
-        height: 100vh;
-        min-height: 100vh;
-        height: 100dvh;
-        min-height: 100dvh;
-    }
-
-    .top-bar {
-        height: 52px;
-        padding-inline:
-            max(var(--space-3), env(safe-area-inset-left))
-            max(var(--space-3), env(safe-area-inset-right));
-    }
-
-    .scroll-area {
-        padding:
-            var(--space-3)
-            var(--space-3)
-            150px;
-        overscroll-behavior-y: contain;
-        -webkit-overflow-scrolling: touch;
-    }
-
-    .conversation-column {
-        width: 100%;
-        max-width: none;
-        padding-inline: 0;
-    }
-
-    .message.assistant .message-content {
-        font-size: 15.5px !important;
-        line-height: 1.65 !important;
-    }
-
-    /* ✅ FIXED: Target both wrapper and content for safety */
-    .message.user .message-wrapper,
-    .message.user .message-content {
-        max-width: 88%;
-    }
-
     .composer-dock {
         padding:
             var(--space-2)
             var(--space-3)
-            calc(var(--space-2) + env(safe-area-inset-bottom));
+            calc(
+                var(--space-2) +
+                env(safe-area-inset-bottom)
+            );
     }
 
     .composer-wrapper {
-        width: 100%;
         max-width: none;
-    }
-
-    .glass-input-container {
-        width: 100%;
-        min-height: 56px;
-    }
-
-    textarea#chatInput,
-    input,
-    select {
-        font-size: 16px !important;
     }
 
     .live-suggestions {
-        width: 100%;
-        overflow-x: auto;
+        margin-bottom: var(--space-2);
         padding-inline: 0;
     }
 
-    .neo-settings-overlay {
-        padding: 0;
-        align-items: stretch;
+    .suggestion-chip {
+        min-height: 36px;
+        padding-inline: var(--space-3);
+        font-size: 12.5px;
     }
 
-    .neo-settings-modal {
-        width: 100%;
-        height: 100dvh;
-        max-width: none;
-        border: 0;
-        border-radius: 0;
-        grid-template-columns: 1fr;
+    .glass-input-container {
+        min-height: 56px;
+        padding: 6px;
     }
 
-    .neo-settings-sidebar {
-        display: flex;
-        flex-direction: row;
-        align-items: center;
-        overflow-x: auto;
-        border-right: 0;
-        border-bottom: 1px solid var(--border-subtle);
-        padding:
-            calc(var(--space-2) + env(safe-area-inset-top))
-            var(--space-2)
-            var(--space-2);
+    textarea#chatInput {
+        font-size: 16px;
+        padding-inline: var(--space-2);
     }
 
-    .neo-settings-tab {
-        width: auto;
-        min-width: max-content;
-        min-height: 44px;
+    .attach-btn,
+    .mic-btn,
+    .stop-recording-btn,
+    .send-btn {
+        width: 42px !important;
+        height: 42px !important;
+        min-width: 42px !important;
+        min-height: 42px !important;
+        flex-basis: 42px;
     }
 
-    .neo-settings-content {
-        padding:
-            var(--space-4)
-            var(--space-4)
-            calc(var(--space-5) + env(safe-area-inset-bottom));
-    }
-
-    .profile-upload-row {
-        align-items: flex-start;
-    }
-
-    .personality-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+    .composer-note {
+        display: none;
     }
 }
 
-/* Small phones */
 @media (max-width: 390px) {
-    .top-bar,
-    .scroll-area,
     .composer-dock {
-        padding-left: var(--space-2);
-        padding-right: var(--space-2);
+        padding-inline: var(--space-2);
     }
 
-    /* ✅ FIXED: Target both wrapper and content */
-    .message.user .message-wrapper,
-    .message.user .message-content {
-        max-width: 92%;
+    .glass-input-container {
+        padding-inline: var(--space-1);
     }
+}
 
-    .personality-grid {
-        grid-template-columns: 1fr;
-    }
-
-    .profile-upload-row {
-        flex-direction: column;
-    }
-
-    .profile-editor-actions {
-        width: 100%;
-    }
-
-    .profile-editor-actions button {
-        flex: 1;
+/* Accessibility */
+@media (prefers-reduced-motion: reduce) {
+    .glass-input-container,
+    .suggestion-chip,
+    .attach-btn,
+    .mic-btn,
+    .stop-recording-btn,
+    .send-btn {
+        transition: none !important;
     }
 }

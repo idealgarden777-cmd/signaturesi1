@@ -3144,3 +3144,50 @@ body.dark-mode .neo-source-pill:hover {
         padding: 10px;
     }
 }
+
+/* =========================================================
+   MOBILE VIEWPORT LOCK & ZOOM PREVENTION
+   ========================================================= */
+
+html,
+body {
+    width: 100%;
+    max-width: 100%;
+    min-height: 100%;
+    overflow-x: hidden;
+    touch-action: manipulation;
+    overscroll-behavior: none;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+}
+
+input,
+textarea,
+select,
+button {
+    font-size: 16px;
+}
+
+@media (max-width: 767px) {
+    body {
+        min-height: 100dvh;
+        height: 100dvh;
+    }
+
+    .app-shell {
+        height: 100dvh;
+        min-height: 100dvh;
+    }
+
+    .scroll-area {
+        overscroll-behavior-y: contain;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    /* Force 16px font size on mobile inputs to prevent iOS zoom */
+    input,
+    textarea,
+    select {
+        font-size: 16px !important;
+    }
+}

@@ -624,3 +624,196 @@ body.dark-mode .send-btn {
         transition-duration: 0.01ms !important;
     }
 }
+/* =========================================================
+   NEO UI V2 — PROFESSIONAL SPACING & MEDIA POLISH
+   Append at the very end of neo-ui-v2.css
+   ========================================================= */
+
+/* Central reading width */
+.conversation-column,
+#chatMessages {
+    width: 100% !important;
+    max-width: 760px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+}
+
+/* Give conversation breathing room above composer */
+.scroll-area {
+    padding-bottom: 190px !important;
+}
+
+/* Consistent message rhythm */
+.chat-messages {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 34px !important;
+}
+
+.message {
+    width: 100% !important;
+    margin: 0 !important;
+}
+
+/* User message */
+.message.user {
+    align-items: flex-end !important;
+}
+
+.message.user .message-content {
+    width: fit-content !important;
+    max-width: 72% !important;
+    padding: 10px 14px !important;
+    margin: 0 !important;
+    border-radius: 18px !important;
+    background: var(--v2-surface-soft) !important;
+    font-size: 15px !important;
+    line-height: 1.5 !important;
+}
+
+/* Assistant message */
+.message.assistant {
+    align-items: flex-start !important;
+}
+
+.message.assistant .message-content {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    font-size: 15.5px !important;
+    line-height: 1.7 !important;
+}
+
+/* Message action buttons */
+.message-actions {
+    margin-top: 8px !important;
+    margin-left: 0 !important;
+    gap: 4px !important;
+}
+
+.message.user .message-actions {
+    justify-content: flex-end !important;
+}
+
+/* Uploaded image inside chat */
+.message-content img {
+    display: block !important;
+    width: auto !important;
+    height: auto !important;
+    max-width: min(680px, 100%) !important;
+    max-height: 520px !important;
+    margin: 14px 0 0 !important;
+    object-fit: contain !important;
+    object-position: left top !important;
+    border: 1px solid var(--v2-border) !important;
+    border-radius: 14px !important;
+    background: var(--v2-surface) !important;
+}
+
+/* Image in a user message */
+.message.user .message-content img {
+    max-width: min(440px, 100%) !important;
+    max-height: 380px !important;
+    margin: 0 !important;
+    border-radius: 12px !important;
+}
+
+/* Prevent paragraphs from creating random vertical gaps */
+.message-content p {
+    margin-top: 0 !important;
+    margin-bottom: 14px !important;
+}
+
+.message-content p:last-child {
+    margin-bottom: 0 !important;
+}
+
+/* Composer spacing */
+.composer-dock {
+    padding-top: 16px !important;
+    padding-bottom: 14px !important;
+}
+
+.composer-wrapper {
+    width: 100% !important;
+    max-width: 760px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+}
+
+/* Prompt chips */
+.live-suggestions {
+    margin-bottom: 10px !important;
+    padding-left: 4px !important;
+    padding-right: 4px !important;
+    gap: 8px !important;
+}
+
+/* Composer */
+.glass-input-container {
+    width: 100% !important;
+    min-height: 60px !important;
+    padding: 6px 8px !important;
+    border-radius: 28px !important;
+}
+
+.composer-note {
+    margin-top: 9px !important;
+    font-size: 11.5px !important;
+    line-height: 1.4 !important;
+}
+
+/* Desktop spacing */
+@media (min-width: 768px) {
+    .scroll-area {
+        padding-left: 24px !important;
+        padding-right: 24px !important;
+    }
+
+    .message.assistant .message-content {
+        padding-right: 20px !important;
+    }
+}
+
+/* Mobile spacing */
+@media (max-width: 767px) {
+    .conversation-column,
+    #chatMessages,
+    .composer-wrapper {
+        max-width: 100% !important;
+    }
+
+    .scroll-area {
+        padding-left: 14px !important;
+        padding-right: 14px !important;
+        padding-bottom: 170px !important;
+    }
+
+    .chat-messages {
+        gap: 28px !important;
+    }
+
+    .message.user .message-content {
+        max-width: 86% !important;
+    }
+
+    .message-content img {
+        width: auto !important;
+        max-width: 100% !important;
+        max-height: 390px !important;
+        border-radius: 12px !important;
+    }
+
+    .message.user .message-content img {
+        max-width: 100% !important;
+        max-height: 320px !important;
+    }
+
+    .composer-dock {
+        padding:
+            10px
+            10px
+            calc(10px + env(safe-area-inset-bottom)) !important;
+    }
+}

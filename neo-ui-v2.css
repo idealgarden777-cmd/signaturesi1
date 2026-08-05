@@ -817,3 +817,164 @@ body.dark-mode .send-btn {
             calc(10px + env(safe-area-inset-bottom)) !important;
     }
 }
+/* =========================================================
+   NEO V2 — FINAL CHAT FLOW CORRECTION
+   ========================================================= */
+
+/* Stable centered reading column */
+.conversation-column,
+.chat-messages {
+    width: 100% !important;
+    max-width: 760px !important;
+    margin-inline: auto !important;
+    min-width: 0 !important;
+}
+
+/* Prevent composer from covering the final message */
+.scroll-area {
+    padding-bottom: 240px !important;
+    scroll-padding-bottom: 240px !important;
+}
+
+/* Consistent conversation rhythm */
+.chat-messages {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 26px !important;
+}
+
+.message {
+    width: 100% !important;
+    margin: 0 !important;
+}
+
+/* User message */
+.message.user {
+    align-items: flex-end !important;
+}
+
+.message.user .message-content {
+    width: fit-content !important;
+    max-width: 72% !important;
+    padding: 10px 14px !important;
+    margin: 0 !important;
+    border-radius: 18px !important;
+    background: var(--v2-surface-soft) !important;
+    font-size: 15px !important;
+    line-height: 1.5 !important;
+}
+
+/* Assistant message */
+.message.assistant {
+    align-items: flex-start !important;
+}
+
+.message.assistant .message-content {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: transparent !important;
+    font-size: 15.5px !important;
+    line-height: 1.7 !important;
+}
+
+/* Keep message actions close to their message */
+.message-actions,
+.message.assistant .message-actions {
+    width: auto !important;
+    margin: 7px 0 0 !important;
+    gap: 4px !important;
+}
+
+.message.user .message-actions {
+    align-self: flex-end !important;
+    justify-content: flex-end !important;
+}
+
+/* Uploaded chat image */
+.message-content img {
+    display: block !important;
+    width: auto !important;
+    height: auto !important;
+    max-width: min(560px, 100%) !important;
+    max-height: 400px !important;
+    margin: 10px 0 0 !important;
+    object-fit: contain !important;
+    object-position: left top !important;
+    border: 1px solid var(--v2-border) !important;
+    border-radius: 14px !important;
+    background: var(--v2-surface) !important;
+}
+
+/* Image message should not fill the complete chat column */
+.message:has(.message-content img) .message-content {
+    width: fit-content !important;
+    max-width: 560px !important;
+}
+
+/* User image remains aligned right */
+.message.user:has(.message-content img) {
+    align-items: flex-end !important;
+}
+
+.message.user .message-content img {
+    margin-left: auto !important;
+}
+
+/* Composer remains visually separate from conversation */
+.composer-dock {
+    z-index: 40 !important;
+    padding-top: 18px !important;
+    background:
+        linear-gradient(
+            to top,
+            var(--v2-bg) 78%,
+            rgba(255, 255, 255, 0)
+        ) !important;
+}
+
+body.dark-mode .composer-dock {
+    background:
+        linear-gradient(
+            to top,
+            var(--v2-bg) 78%,
+            rgba(33, 33, 33, 0)
+        ) !important;
+}
+
+.composer-wrapper {
+    width: 100% !important;
+    max-width: 760px !important;
+    margin-inline: auto !important;
+}
+
+/* Mobile */
+@media (max-width: 767px) {
+    .scroll-area {
+        padding-bottom: 210px !important;
+        scroll-padding-bottom: 210px !important;
+    }
+
+    .chat-messages {
+        gap: 22px !important;
+    }
+
+    .message.user .message-content {
+        max-width: 88% !important;
+    }
+
+    .message-content img,
+    .message:has(.message-content img) .message-content {
+        width: auto !important;
+        max-width: 100% !important;
+        max-height: 320px !important;
+    }
+
+    .composer-dock {
+        padding:
+            10px
+            10px
+            calc(10px + env(safe-area-inset-bottom)) !important;
+    }
+}

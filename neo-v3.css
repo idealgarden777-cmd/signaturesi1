@@ -182,3 +182,205 @@ body.dark-mode .attachment-remove-btn:hover {
         flex-basis: 124px;
     }
 }
+
+/* =========================================================
+   EDIT MESSAGE — ISOLATED FINAL FIX
+   Only affects user message edit mode.
+   ========================================================= */
+
+.message.user:has(.edit-message-box) {
+    width: 100% !important;
+    align-items: flex-end !important;
+}
+
+.message.user .edit-message-box {
+    width: min(100%, 720px) !important;
+    margin-left: auto !important;
+
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 12px !important;
+
+    padding: 16px !important;
+
+    border: 1px solid var(--neo-border) !important;
+    border-radius: 20px !important;
+
+    background: var(--neo-surface) !important;
+
+    box-shadow:
+        0 1px 2px rgba(0, 0, 0, 0.03),
+        0 8px 24px rgba(0, 0, 0, 0.05) !important;
+
+    overflow: hidden !important;
+}
+
+/* Existing attachment/image inside edit mode */
+.message.user .edit-message-media {
+    width: 100% !important;
+
+    display: flex !important;
+    justify-content: flex-end !important;
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+.message.user .edit-message-media:empty {
+    display: none !important;
+}
+
+.message.user .edit-message-media img {
+    display: block !important;
+
+    width: auto !important;
+    height: auto !important;
+
+    max-width: min(360px, 100%) !important;
+    max-height: 260px !important;
+
+    object-fit: contain !important;
+
+    border: 1px solid var(--neo-border) !important;
+    border-radius: 14px !important;
+
+    background: var(--neo-surface) !important;
+}
+
+/* Textarea */
+.message.user .edit-textarea {
+    width: 100% !important;
+    min-height: 72px !important;
+    max-height: 220px !important;
+
+    margin: 0 !important;
+    padding: 0 !important;
+
+    resize: vertical !important;
+
+    border: 0 !important;
+    outline: 0 !important;
+
+    background: transparent !important;
+    color: var(--neo-text) !important;
+
+    font: inherit !important;
+    font-size: 16px !important;
+    line-height: 1.55 !important;
+
+    box-shadow: none !important;
+}
+
+.message.user .edit-textarea:focus {
+    border: 0 !important;
+    outline: 0 !important;
+    box-shadow: none !important;
+}
+
+/* Action row */
+.message.user .edit-actions {
+    width: 100% !important;
+
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    gap: 10px !important;
+
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+/* Shared button styling */
+.message.user .edit-btn-cancel,
+.message.user .edit-btn-save {
+    min-height: 40px !important;
+
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+
+    padding: 0 16px !important;
+
+    border-radius: 999px !important;
+
+    font: inherit !important;
+    font-size: 14px !important;
+    font-weight: 600 !important;
+
+    cursor: pointer !important;
+
+    transition:
+        background-color 150ms ease,
+        color 150ms ease,
+        border-color 150ms ease,
+        opacity 150ms ease,
+        transform 150ms ease !important;
+}
+
+/* Cancel */
+.message.user .edit-btn-cancel {
+    border: 0 !important;
+    background: transparent !important;
+    color: var(--neo-text) !important;
+}
+
+.message.user .edit-btn-cancel:hover {
+    background: var(--neo-hover) !important;
+}
+
+/* Save */
+.message.user .edit-btn-save {
+    border: 0 !important;
+    background: var(--neo-text) !important;
+    color: var(--neo-bg) !important;
+}
+
+.message.user .edit-btn-save:hover {
+    opacity: 0.88 !important;
+}
+
+.message.user .edit-btn-cancel:active,
+.message.user .edit-btn-save:active {
+    transform: scale(0.97) !important;
+}
+
+/* Dark mode */
+body.dark-mode .message.user .edit-message-box {
+    background: var(--neo-surface) !important;
+    border-color: var(--neo-border) !important;
+
+    box-shadow:
+        0 1px 2px rgba(0, 0, 0, 0.18),
+        0 10px 28px rgba(0, 0, 0, 0.24) !important;
+}
+
+/* Mobile */
+@media (max-width: 767px) {
+    .message.user .edit-message-box {
+        width: 100% !important;
+        padding: 14px !important;
+        border-radius: 18px !important;
+    }
+
+    .message.user .edit-message-media img {
+        max-width: 100% !important;
+        max-height: 220px !important;
+    }
+
+    .message.user .edit-textarea {
+        min-height: 64px !important;
+        font-size: 16px !important;
+    }
+
+    .message.user .edit-actions {
+        gap: 8px !important;
+    }
+
+    .message.user .edit-btn-cancel,
+    .message.user .edit-btn-save {
+        min-height: 42px !important;
+        padding-inline: 15px !important;
+    }
+}

@@ -1,8 +1,12 @@
 /* =========================================================
-   NEO UI V2 — FOUNDATION
-   Visual consistency layer only.
-   Existing HTML, JS and functionality remain unchanged.
+   NEO UI V2 — SAFE FOUNDATION
+   Visual consistency and stability only.
+   Existing HTML, JavaScript and functionality stay unchanged.
    ========================================================= */
+
+/* ---------------------------------------------------------
+   DESIGN TOKENS
+   --------------------------------------------------------- */
 
 :root {
     /* Surfaces */
@@ -57,6 +61,10 @@
         0 10px 30px rgba(0, 0, 0, 0.08);
 }
 
+/* ---------------------------------------------------------
+   DARK MODE TOKENS
+   --------------------------------------------------------- */
+
 body.dark-mode {
     --neo-v2-bg: #212121;
     --neo-v2-surface: #292929;
@@ -77,43 +85,51 @@ body.dark-mode {
         0 12px 34px rgba(0, 0, 0, 0.30);
 }
 
-/* Global stability */
-html,
-body {
+/* ---------------------------------------------------------
+   SAFE GLOBAL FOUNDATION
+   --------------------------------------------------------- */
+
+html {
     width: 100%;
     max-width: 100%;
     overflow-x: hidden;
 }
 
 body {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
     font-family: var(--neo-v2-font);
-    background: var(--neo-v2-bg);
-    color: var(--neo-v2-text);
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
 }
 
-/* Predictable sizing */
+/* Predictable box sizing */
 *,
 *::before,
 *::after {
     box-sizing: border-box;
 }
 
-/* Prevent flex/grid overflow */
+/* Prevent layout overflow without changing component design */
 .app-shell,
 .scroll-area,
 .conversation-column,
+.chat-messages,
+.message,
+.message-content,
 .composer-wrapper,
+.glass-input-container,
 .neo-settings-content,
 .neo-settings-panel,
+.profile-editor-card,
 .profile-editor-main {
     min-width: 0;
     max-width: 100%;
 }
 
-/* Unified controls */
+/* Preserve inherited typography */
 button,
 input,
 textarea,
@@ -121,11 +137,16 @@ select {
     font: inherit;
 }
 
-button {
+/* Remove mobile tap flash */
+button,
+[role="button"] {
     -webkit-tap-highlight-color: transparent;
 }
 
-/* Accessible focus */
+/* ---------------------------------------------------------
+   ACCESSIBILITY
+   --------------------------------------------------------- */
+
 button:focus-visible,
 input:focus-visible,
 textarea:focus-visible,
@@ -135,15 +156,10 @@ select:focus-visible,
     outline-offset: 2px;
 }
 
-/* Disable accidental horizontal media overflow */
-img,
-video,
-canvas,
-svg {
-    max-width: 100%;
-}
+/* ---------------------------------------------------------
+   SAFE MOTION
+   --------------------------------------------------------- */
 
-/* Unified transitions */
 button,
 input,
 textarea,
@@ -161,7 +177,42 @@ select,
         box-shadow var(--neo-v2-transition);
 }
 
-/* Mobile form stability */
+/* ---------------------------------------------------------
+   CHAT MEDIA
+   Only targets uploaded images inside user messages.
+   Does not affect avatars, icons, logos or attachments preview.
+   --------------------------------------------------------- */
+
+.message.user .message-content img {
+    display: block;
+    width: auto !important;
+    height: auto !important;
+    max-width: min(480px, 100%) !important;
+    max-height: 380px !important;
+    margin-left: auto;
+    object-fit: contain;
+    border-radius: var(--neo-v2-radius-md);
+}
+
+/* Prevent wide tables and code blocks from breaking layout */
+.message-content pre,
+.message-content table {
+    max-width: 100%;
+}
+
+.message-content pre {
+    overflow-x: auto;
+}
+
+.message-content table {
+    display: block;
+    overflow-x: auto;
+}
+
+/* ---------------------------------------------------------
+   MOBILE STABILITY
+   --------------------------------------------------------- */
+
 @media (max-width: 767px) {
     input,
     textarea,
@@ -174,9 +225,31 @@ select,
     .app-shell {
         min-height: 100%;
     }
+
+    .message.user .message-content img {
+        width: auto !important;
+        height: auto !important;
+        max-width: 100% !important;
+        max-height: 320px !important;
+        margin-left: auto;
+        border-radius: 10px;
+    }
 }
 
-/* Reduced-motion support */
+/* ---------------------------------------------------------
+   SMALL PHONES
+   --------------------------------------------------------- */
+
+@media (max-width: 390px) {
+    .message.user .message-content img {
+        max-height: 280px !important;
+    }
+}
+
+/* ---------------------------------------------------------
+   REDUCED MOTION
+   --------------------------------------------------------- */
+
 @media (prefers-reduced-motion: reduce) {
     *,
     *::before,
@@ -185,39 +258,5 @@ select,
         animation-duration: 0.01ms !important;
         animation-iteration-count: 1 !important;
         transition-duration: 0.01ms !important;
-    }
-}
-/* =========================================================
-   CHAT UPLOAD MEDIA — CONTROLLED SIZE
-   ========================================================= */
-
-.message-content img,
-.message-attachment img,
-.chat-image-preview img {
-    display: block;
-    width: auto !important;
-    max-width: min(520px, 100%) !important;
-    max-height: 420px !important;
-    object-fit: contain;
-    border-radius: 12px;
-    border: 1px solid var(--neo-v2-border);
-    background: var(--neo-v2-surface);
-}
-
-/* Keep user-uploaded media aligned with its message */
-.message.user .message-content img,
-.message.user .message-attachment img {
-    margin-left: auto;
-}
-
-/* Mobile */
-@media (max-width: 767px) {
-    .message-content img,
-    .message-attachment img,
-    .chat-image-preview img {
-        width: auto !important;
-        max-width: 100% !important;
-        max-height: 360px !important;
-        border-radius: 10px;
     }
 }

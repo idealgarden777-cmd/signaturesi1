@@ -431,7 +431,7 @@
         configureSecurityHooks();
         initializeSidebarState();
         setupEventListeners();
-        setupMobileVisualViewport();
+        // setupMobileVisualViewport(); // REMOVED
         setupPremiumTooltips();
         setupFreemiumLogic();
         setupDragAndDrop();
@@ -2538,79 +2538,6 @@
         const watchBtn = document.getElementById("watchAdBtn");
         if (!watchBtn) return;
         showToast("Ad integration will be available soon.", "info");
-    }
-
-    // --------------------------------------------------------
-    // iOS / MOBILE VISUAL VIEWPORT FIX (improved)
-    // --------------------------------------------------------
-    function setupMobileVisualViewport() {
-        const viewport = window.visualViewport;
-
-        if (!viewport) {
-            return;
-        }
-
-        let largestViewportHeight = viewport.height;
-
-        const updateViewport = () => {
-            const currentHeight = viewport.height;
-
-            if (currentHeight > largestViewportHeight) {
-                largestViewportHeight = currentHeight;
-            }
-
-            document.documentElement.style.setProperty(
-                "--neo-mobile-vh",
-                `${Math.round(currentHeight)}px`
-            );
-
-            const keyboardHeight =
-                largestViewportHeight - currentHeight;
-
-            const keyboardOpen =
-                keyboardHeight > 120 &&
-                document.activeElement === chatInput;
-
-            document.body.classList.toggle(
-                "neo-keyboard-open",
-                keyboardOpen
-            );
-        };
-
-        viewport.addEventListener(
-            "resize",
-            updateViewport,
-            { passive: true }
-        );
-
-        viewport.addEventListener(
-            "scroll",
-            updateViewport,
-            { passive: true }
-        );
-
-        chatInput?.addEventListener("focus", updateViewport);
-        chatInput?.addEventListener("blur", () => {
-            document.body.classList.remove("neo-keyboard-open");
-
-            window.setTimeout(updateViewport, 100);
-        });
-
-        window.addEventListener(
-            "orientationchange",
-            () => {
-                window.setTimeout(() => {
-                    largestViewportHeight =
-                        window.visualViewport?.height ||
-                        window.innerHeight;
-
-                    updateViewport();
-                }, 250);
-            },
-            { passive: true }
-        );
-
-        updateViewport();
     }
 
     // --------------------------------------------------------

@@ -665,3 +665,183 @@ body.dark-mode .message.user .message-media-grid img {
         height: 125px !important;
     }
 }
+
+/* =========================================================
+   PROFILE — BLACK & WHITE PREMIUM THEME
+   Only affects Profile settings panel.
+   ========================================================= */
+
+#settingsPanelProfile {
+    color: #171717 !important;
+}
+
+/* Main profile heading */
+#settingsPanelProfile h2 {
+    color: #171717 !important;
+}
+
+/* Profile photo label */
+#settingsPanelProfile .profile-upload-label,
+#settingsPanelProfile label {
+    color: #171717 !important;
+}
+
+/* Avatar */
+#settingsPanelProfile .profile-editor-avatar {
+    background: #ffffff !important;
+    border: 1px solid rgba(0, 0, 0, 0.10) !important;
+    box-shadow: none !important;
+}
+
+/* Helper text */
+#settingsPanelProfile .settings-helper-text {
+    color: #737373 !important;
+}
+
+/* Inputs */
+#settingsPanelProfile input {
+    background: #ffffff !important;
+    color: #171717 !important;
+
+    border: 1px solid rgba(0, 0, 0, 0.10) !important;
+    border-radius: 14px !important;
+
+    box-shadow: none !important;
+}
+
+#settingsPanelProfile input:focus {
+    border-color: rgba(0, 0, 0, 0.22) !important;
+
+    outline: none !important;
+    box-shadow:
+        0 0 0 3px rgba(0, 0, 0, 0.05) !important;
+}
+
+#settingsPanelProfile input[readonly] {
+    background: #f7f7f8 !important;
+    color: #747474 !important;
+}
+
+/* Change photo — primary black */
+#settingsPanelProfile #chooseAvatarBtn {
+    background: #171717 !important;
+    color: #ffffff !important;
+
+    border: 1px solid #171717 !important;
+    border-radius: 12px !important;
+
+    box-shadow: none !important;
+}
+
+#settingsPanelProfile #chooseAvatarBtn:hover {
+    background: #000000 !important;
+    border-color: #000000 !important;
+}
+
+/* Remove — white secondary */
+#settingsPanelProfile #removeAvatarBtn {
+    background: #ffffff !important;
+    color: #6b6b6b !important;
+
+    border: 1px solid rgba(0, 0, 0, 0.10) !important;
+    border-radius: 12px !important;
+
+    box-shadow: none !important;
+}
+
+#settingsPanelProfile #removeAvatarBtn:hover {
+    background: #f4f4f4 !important;
+    color: #171717 !important;
+}
+
+/* Save — black */
+#settingsPanelProfile #saveProfileSettingsBtn {
+    background: #171717 !important;
+    color: #ffffff !important;
+
+    border: 1px solid #171717 !important;
+    border-radius: 999px !important;
+
+    box-shadow: none !important;
+}
+
+#settingsPanelProfile #saveProfileSettingsBtn:hover {
+    background: #000000 !important;
+}
+
+/* Cancel — white */
+#settingsPanelProfile #resetProfileSettingsBtn {
+    background: #ffffff !important;
+    color: #171717 !important;
+
+    border: 1px solid rgba(0, 0, 0, 0.10) !important;
+    border-radius: 999px !important;
+
+    box-shadow: none !important;
+}
+
+#settingsPanelProfile #resetProfileSettingsBtn:hover {
+    background: #f4f4f4 !important;
+}
+
+/* Remove all purple/blue focus or accent effects */
+#settingsPanelProfile button,
+#settingsPanelProfile input {
+    accent-color: #171717 !important;
+}
+
+#settingsPanelProfile button:focus-visible,
+#settingsPanelProfile input:focus-visible {
+    outline: 2px solid rgba(0, 0, 0, 0.30) !important;
+    outline-offset: 2px !important;
+}
+
+/* Profile section divider */
+#settingsPanelProfile .profile-upload-row {
+    border-bottom-color: rgba(0, 0, 0, 0.10) !important;
+}
+
+/* Dark mode */
+body.dark-mode #settingsPanelProfile {
+    color: #f1f1f1 !important;
+}
+
+body.dark-mode #settingsPanelProfile h2,
+body.dark-mode #settingsPanelProfile label,
+body.dark-mode #settingsPanelProfile .profile-upload-label {
+    color: #f1f1f1 !important;
+}
+
+body.dark-mode #settingsPanelProfile .profile-editor-avatar {
+    background: #212121 !important;
+    border-color: rgba(255, 255, 255, 0.10) !important;
+}
+
+body.dark-mode #settingsPanelProfile input {
+    background: #212121 !important;
+    color: #f1f1f1 !important;
+    border-color: rgba(255, 255, 255, 0.10) !important;
+}
+
+body.dark-mode #settingsPanelProfile input[readonly] {
+    background: #292929 !important;
+    color: #a8a8a8 !important;
+}
+
+body.dark-mode #settingsPanelProfile #chooseAvatarBtn,
+body.dark-mode #settingsPanelProfile #saveProfileSettingsBtn {
+    background: #f1f1f1 !important;
+    color: #171717 !important;
+    border-color: #f1f1f1 !important;
+}
+
+body.dark-mode #settingsPanelProfile #removeAvatarBtn,
+body.dark-mode #settingsPanelProfile #resetProfileSettingsBtn {
+    background: #292929 !important;
+    color: #f1f1f1 !important;
+    border-color: rgba(255, 255, 255, 0.10) !important;
+}
+
+body.dark-mode #settingsPanelProfile .profile-upload-row {
+    border-bottom-color: rgba(255, 255, 255, 0.10) !important;
+}

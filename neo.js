@@ -2224,6 +2224,9 @@
         return "";
     }
 
+    // --------------------------------------------------------
+    //  renderAttachedChips() – ONLY CHANGE HERE
+    // --------------------------------------------------------
     function renderAttachedChips() {
         if (!attachedChipsWrapper) return;
         attachedChipsWrapper.innerHTML = "";
@@ -2249,10 +2252,15 @@
                 box.appendChild(nameSpan);
                 card.appendChild(box);
             }
+            // --- UPDATED: remove button with icon and tooltip ---
             const remove = document.createElement("button");
             remove.type = "button";
             remove.className = "attachment-remove-btn";
-            remove.textContent = "×";
+            remove.dataset.tooltip = "Remove attachment";
+            remove.setAttribute("aria-label", "Remove attachment");
+            remove.innerHTML = `
+                <i data-lucide="x" width="14" height="14" aria-hidden="true"></i>
+            `;
             remove.addEventListener("click", () => {
                 const previewUrl = attachedFiles[index]?.previewUrl;
                 if (previewUrl && previewUrl.startsWith("blob:")) {

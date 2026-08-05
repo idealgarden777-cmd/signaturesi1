@@ -1188,8 +1188,9 @@
         editButton.type = "button";
         editButton.title = "Edit message";
         editButton.innerHTML = '<i data-lucide="pencil" size="14"></i>';
+        // ✅ FIX: Pass attachments to enableUserMessageEdit
         editButton.onclick = () => {
-            enableUserMessageEdit(containerElement, textContent, index);
+            enableUserMessageEdit(containerElement, textContent, index, attachments || []);
         };
         const copyButton = document.createElement("button");
         copyButton.className = "user-action-btn user-copy-btn";
@@ -1208,15 +1209,45 @@
         }
     }
 
-    function enableUserMessageEdit(messageElement, originalText, index) {
+    // ✅ UPDATED: Accept existingAttachments and render media inside edit box
+    function enableUserMessageEdit(messageElement, originalText, index, existingAttachments = []) {
         if (isGenerating) return;
         messageElement.innerHTML = "";
         const editBox = document.createElement("div");
         editBox.className = "edit-message-box";
+
+        // === Media wrapper ===
+        const mediaWrapper = document.createElement("div");
+        mediaWrapper.className = "edit-message-media";
+        if (existingAttachments && existingAttachments.length > 0) {
+            existingAttachments.forEach(file => {
+                if (isImageAttachment(file)) {
+                    const previewUrl = getAttachmentPreviewUrl(file);
+                    if (previewUrl) {
+                        const img = document.createElement("img");
+                        img.src = previewUrl;
+                        img.alt = file.name || "Image";
+                        mediaWrapper.appendChild(img);
+                    }
+                } else {
+                    const pill = document.createElement("div");
+                    pill.className = "message-file-pill";
+                    const icon = getFileIcon(file);
+                    const nameSpan = document.createElement("span");
+                    nameSpan.textContent = file.name || "File";
+                    pill.innerHTML = `<i data-lucide="${icon}" size="14"></i>`;
+                    pill.appendChild(nameSpan);
+                    mediaWrapper.appendChild(pill);
+                }
+            });
+        }
+        editBox.appendChild(mediaWrapper);
+
         const textarea = document.createElement("textarea");
         textarea.className = "edit-textarea";
         textarea.rows = 2;
         textarea.value = originalText;
+
         const actions = document.createElement("div");
         actions.className = "edit-actions";
         const cancelButton = document.createElement("button");
@@ -1227,24 +1258,30 @@
         saveButton.className = "edit-btn-save";
         saveButton.type = "button";
         saveButton.textContent = "Save & Submit";
+
         actions.appendChild(cancelButton);
         actions.appendChild(saveButton);
         editBox.appendChild(textarea);
         editBox.appendChild(actions);
         messageElement.appendChild(editBox);
         textarea.focus();
+
+        // ✅ Cancel: render original with attachments
         cancelButton.onclick = () => {
-            renderUserMessageWrapper(messageElement, originalText, index);
+            renderUserMessageWrapper(messageElement, originalText, index, existingAttachments);
         };
+
+        // ✅ Save: pass attachments to handleEditedSend
         saveButton.onclick = () => {
             const updatedText = textarea.value.trim();
             if (updatedText) {
-                handleEditedSend(updatedText, index, messageElement);
+                handleEditedSend(updatedText, index, messageElement, existingAttachments);
             }
         };
     }
 
-    async function handleEditedSend(newText, targetIndex, messageElement) {
+    // ✅ UPDATED: accept existingAttachments
+    async function handleEditedSend(newText, targetIndex, messageElement, existingAttachments = []) {
         if (isGenerating) return;
         const cleanedText = String(newText || "").trim();
         if (!cleanedText) return;
@@ -1261,8 +1298,13 @@
                     current.nextElementSibling.remove();
                 }
             }
-            renderUserMessageWrapper(messageElement, cleanedText, conversation.length);
-            conversation.push({ role: "user", content: cleanedText });
+            // Render updated message with attachments
+            renderUserMessageWrapper(messageElement, cleanedText, conversation.length, existingAttachments);
+            conversation.push({
+                role: "user",
+                content: cleanedText,
+                attachments: existingAttachments  // ✅ preserve attachments
+            });
             const aiBubble = renderMessageToUI("assistant", "", null, true);
             await submitChatRequest(aiBubble);
         } catch (error) {

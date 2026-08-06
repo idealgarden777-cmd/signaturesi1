@@ -1978,3 +1978,191 @@ body.dark-mode #upgradeModal .upgrade-btn-secondary:hover {
         margin-bottom: 18px !important;
     }
 }
+
+/* =========================================================
+   BILLING PANEL — COMPACT MONOCHROME STANDARD
+   Only affects the Billing settings panel.
+   ========================================================= */
+
+#settingsPanelBilling {
+    width: 100% !important;
+    max-width: 680px !important;
+    color: #171717 !important;
+}
+
+#settingsPanelBilling h2 {
+    margin: 0 0 20px !important;
+
+    font-family:
+        "Sora",
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        sans-serif !important;
+
+    font-size: 24px !important;
+    font-weight: 600 !important;
+    line-height: 1.2 !important;
+    letter-spacing: -0.03em !important;
+
+    color: #171717 !important;
+}
+
+#settingsPanelBilling .settings-row {
+    width: 100% !important;
+    min-height: 92px !important;
+
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 20px !important;
+
+    padding: 18px !important;
+
+    border: 1px solid rgba(0, 0, 0, 0.08) !important;
+    border-radius: 16px !important;
+
+    background: #ffffff !important;
+
+    box-shadow:
+        0 1px 2px rgba(0, 0, 0, 0.03),
+        0 8px 24px rgba(0, 0, 0, 0.045) !important;
+}
+
+#settingsPanelBilling .settings-row > div {
+    min-width: 0 !important;
+
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 5px !important;
+}
+
+#settingsPanelBilling #billingPlanText {
+    color: #171717 !important;
+
+    font-family:
+        "Sora",
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        sans-serif !important;
+
+    font-size: 15px !important;
+    font-weight: 600 !important;
+    line-height: 1.3 !important;
+}
+
+#settingsPanelBilling .settings-row small {
+    color: #737373 !important;
+
+    font-family:
+        "Inter",
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        sans-serif !important;
+
+    font-size: 13px !important;
+    font-weight: 400 !important;
+    line-height: 1.45 !important;
+}
+
+#settingsPanelBilling #settingsUpgradeBtn {
+    flex: 0 0 auto !important;
+
+    min-width: 96px !important;
+    min-height: 42px !important;
+
+    padding: 0 17px !important;
+
+    border: 1px solid #171717 !important;
+    border-radius: 999px !important;
+
+    background: #171717 !important;
+    color: #ffffff !important;
+
+    box-shadow: none !important;
+
+    font-family:
+        "Inter",
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        sans-serif !important;
+
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    line-height: 1 !important;
+
+    transition:
+        background-color 140ms ease,
+        transform 120ms ease !important;
+}
+
+#settingsPanelBilling #settingsUpgradeBtn:hover {
+    background: #000000 !important;
+}
+
+#settingsPanelBilling #settingsUpgradeBtn:active {
+    transform: scale(0.97) !important;
+}
+
+/* Dark mode */
+
+body.dark-mode #settingsPanelBilling {
+    color: #f5f5f5 !important;
+}
+
+body.dark-mode #settingsPanelBilling h2,
+body.dark-mode #settingsPanelBilling #billingPlanText {
+    color: #f5f5f5 !important;
+}
+
+body.dark-mode #settingsPanelBilling .settings-row {
+    border-color: rgba(255, 255, 255, 0.09) !important;
+    background: #1b1b1b !important;
+
+    box-shadow:
+        0 1px 2px rgba(0, 0, 0, 0.20),
+        0 10px 28px rgba(0, 0, 0, 0.24) !important;
+}
+
+body.dark-mode #settingsPanelBilling .settings-row small {
+    color: #a0a0a0 !important;
+}
+
+body.dark-mode #settingsPanelBilling #settingsUpgradeBtn {
+    border-color: #f5f5f5 !important;
+    background: #f5f5f5 !important;
+    color: #171717 !important;
+}
+
+/* Mobile */
+
+@media (max-width: 767px) {
+    #settingsPanelBilling {
+        max-width: none !important;
+    }
+
+    #settingsPanelBilling h2 {
+        margin-bottom: 16px !important;
+        font-size: 21px !important;
+    }
+
+    #settingsPanelBilling .settings-row {
+        min-height: 0 !important;
+
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 16px !important;
+
+        padding: 16px !important;
+
+        border-radius: 15px !important;
+    }
+
+    #settingsPanelBilling #settingsUpgradeBtn {
+        width: 100% !important;
+        min-height: 44px !important;
+    }
+}

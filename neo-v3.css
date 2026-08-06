@@ -1408,3 +1408,33 @@ body.dark-mode #settingsPanelProfile .profile-upload-row {
         min-height: 52px !important;
     }
 }
+
+/* =========================================================
+   NEO V3 — TOOLTIP PURE PILL
+   Removes all tooltip arrows.
+   ========================================================= */
+
+.neo-tooltip::before,
+.neo-tooltip::after,
+.neo-tooltip-arrow {
+    display: none !important;
+    content: none !important;
+}
+
+.neo-tooltip {
+    border-radius: 999px !important;
+    padding: 7px 14px !important;
+    min-height: 30px !important;
+    background: rgba(22, 22, 22, 0.96) !important;
+    color: #ffffff !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    box-shadow:
+        0 4px 12px rgba(0, 0, 0, 0.14),
+        0 12px 32px rgba(0, 0, 0, 0.16) !important;
+}
+
+body.dark-mode .neo-tooltip {
+    background: rgba(244, 244, 244, 0.97) !important;
+    color: #171717 !important;
+    border-color: rgba(0, 0, 0, 0.08) !important;
+}

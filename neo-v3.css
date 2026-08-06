@@ -2354,7 +2354,7 @@ body.dark-mode #settingsPanelBilling #settingsUpgradeBtn {
    ========================================================= */
 
 @media (min-width: 768px) {
-    .top-bar {
+    body.sidebar-collapsed .top-bar {
         position: relative !important;
         width: 100% !important;
         padding-left: 0 !important;

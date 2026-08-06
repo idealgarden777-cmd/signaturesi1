@@ -2248,3 +2248,42 @@ body.dark-mode #settingsPanelBilling #settingsUpgradeBtn {
         max-width: 195px !important;
     }
 }
+
+/* =========================================================
+   DESKTOP TOP BAR — SIDEBAR TOGGLE ALIGNMENT
+   Only affects desktop spacing.
+   ========================================================= */
+
+@media (min-width: 768px) {
+    .top-bar {
+        padding-left: 18px !important;
+        padding-right: 18px !important;
+    }
+
+    .top-left {
+        display: flex !important;
+        align-items: center !important;
+        gap: 10px !important;
+        min-width: 0 !important;
+    }
+
+    #sidebarToggleBtn {
+        width: 38px !important;
+        height: 38px !important;
+        min-width: 38px !important;
+        min-height: 38px !important;
+
+        margin: 0 !important;
+        padding: 0 !important;
+
+        border-radius: 10px !important;
+    }
+
+    .model-dropdown-wrapper {
+        margin-left: 0 !important;
+    }
+
+    .model-badge {
+        margin: 0 !important;
+    }
+}

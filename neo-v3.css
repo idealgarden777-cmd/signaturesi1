@@ -2287,3 +2287,50 @@ body.dark-mode #settingsPanelBilling #settingsUpgradeBtn {
         margin: 0 !important;
     }
 }
+
+/* =========================================================
+   DESKTOP — TRUE VIEWPORT CENTER WHEN SIDEBAR IS CLOSED
+   Only fixes collapsed-sidebar horizontal centering.
+   ========================================================= */
+
+@media (min-width: 768px) {
+    body.sidebar-collapsed .app-shell {
+        width: 100% !important;
+        max-width: 100% !important;
+        margin-left: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        transform: none !important;
+    }
+
+    body.sidebar-collapsed .scroll-area {
+        width: 100% !important;
+        margin-left: 0 !important;
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+    }
+
+    body.sidebar-collapsed .conversation-column {
+        width: 100% !important;
+        margin-left: auto !important;
+        margin-right: auto !important;
+    }
+
+    body.sidebar-collapsed .hero-section {
+        margin-left: auto !important;
+        margin-right: auto !important;
+    }
+
+    body.sidebar-collapsed .composer-dock {
+        left: 0 !important;
+        right: 0 !important;
+        width: 100% !important;
+        margin-left: 0 !important;
+        transform: none !important;
+    }
+
+    body.sidebar-collapsed .composer-wrapper {
+        margin-left: auto !important;
+        margin-right: auto !important;
+    }
+}

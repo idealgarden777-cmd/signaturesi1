@@ -2250,14 +2250,25 @@ body.dark-mode #settingsPanelBilling #settingsUpgradeBtn {
 }
 
 /* =========================================================
-   NEO DESKTOP — REFERENCE-MATCHED LAYOUT
-   Matches the supplied desktop composition.
+   NEO DESKTOP — FINAL STABLE SHELL + TOP BAR
+   One source of truth for sidebar open and closed states.
    ========================================================= */
 
-@media (min-width: 1024px) {
+@media (min-width: 768px) {
     :root {
-        --neo-reference-max: 920px;
-        --neo-reference-header: 72px;
+        --neo-sidebar-width: 304px;
+        --neo-topbar-height: 72px;
+        --neo-edge-gap: 24px;
+    }
+
+    /* Main application follows sidebar state */
+    .app-shell {
+        width: calc(100% - var(--neo-sidebar-width)) !important;
+        margin-left: var(--neo-sidebar-width) !important;
+
+        transition:
+            width 180ms ease,
+            margin-left 180ms ease !important;
     }
 
     body.sidebar-collapsed .app-shell {
@@ -2265,37 +2276,69 @@ body.dark-mode #settingsPanelBilling #settingsUpgradeBtn {
         margin-left: 0 !important;
     }
 
+    body:not(.sidebar-collapsed) .app-shell {
+        width: calc(100% - var(--neo-sidebar-width)) !important;
+        margin-left: var(--neo-sidebar-width) !important;
+    }
+
+    /* Full-width professional app header */
     .top-bar {
         position: sticky !important;
         top: 0 !important;
         z-index: 60 !important;
 
         width: 100% !important;
-        height: var(--neo-reference-header) !important;
-        min-height: var(--neo-reference-header) !important;
+        height: var(--neo-topbar-height) !important;
+        min-height: var(--neo-topbar-height) !important;
 
         display: flex !important;
         align-items: center !important;
         justify-content: space-between !important;
 
-        padding: 0 24px !important;
         margin: 0 !important;
+        padding: 0 var(--neo-edge-gap) !important;
 
         background: var(--bg-main, #ffffff) !important;
+        border: 0 !important;
         border-bottom: 1px solid rgba(0, 0, 0, 0.08) !important;
+
         box-shadow: none !important;
+        box-sizing: border-box !important;
     }
 
+    /* Left controls */
     .top-left {
+        position: static !important;
+        inset: auto !important;
+        transform: none !important;
+
         display: flex !important;
         align-items: center !important;
         gap: 10px !important;
+
+        width: auto !important;
+        height: 40px !important;
+
+        margin: 0 !important;
+        padding: 0 !important;
     }
 
+    /* Right control */
     .top-right {
+        position: static !important;
+        inset: auto !important;
+        transform: none !important;
+
         display: flex !important;
         align-items: center !important;
         justify-content: flex-end !important;
+
+        width: 40px !important;
+        height: 40px !important;
+        min-width: 40px !important;
+
+        margin: 0 !important;
+        padding: 0 !important;
     }
 
     #sidebarToggleBtn,
@@ -2305,223 +2348,71 @@ body.dark-mode #settingsPanelBilling #settingsUpgradeBtn {
         min-width: 40px !important;
         min-height: 40px !important;
 
-        margin: 0 !important;
-        padding: 0 !important;
-
         display: inline-flex !important;
         align-items: center !important;
         justify-content: center !important;
 
+        margin: 0 !important;
+        padding: 0 !important;
+
         border: 0 !important;
         border-radius: 10px !important;
+
         background: transparent !important;
+        color: var(--text-secondary, #5f6368) !important;
+
         box-shadow: none !important;
     }
 
-    .model-badge {
-        min-height: 40px !important;
+    #sidebarToggleBtn:hover,
+    #topBarDarkModeToggle:hover {
+        background: rgba(0, 0, 0, 0.055) !important;
+        color: var(--text-primary, #111111) !important;
+    }
+
+    .model-dropdown-wrapper {
         margin: 0 !important;
-        padding: 0 8px !important;
+        padding: 0 !important;
+    }
+
+    .model-badge {
+        height: 40px !important;
+        min-height: 40px !important;
 
         display: inline-flex !important;
         align-items: center !important;
         gap: 8px !important;
 
+        margin: 0 !important;
+        padding: 0 8px !important;
+
         border: 0 !important;
+        border-radius: 10px !important;
+
         background: transparent !important;
         box-shadow: none !important;
     }
 
-    .scroll-area {
-        height: calc(100dvh - var(--neo-reference-header)) !important;
-        min-height: 0 !important;
-
-        padding: 0 24px 180px !important;
-
-        overflow-y: auto !important;
-        overflow-x: hidden !important;
+    .model-badge:hover {
+        background: rgba(0, 0, 0, 0.055) !important;
     }
 
-    .conversation-column {
-        width: 100% !important;
-        max-width: none !important;
-        min-height: 100% !important;
-        margin: 0 !important;
-    }
-
-    .hero-section {
-        width: min(var(--neo-reference-max), 100%) !important;
-        max-width: var(--neo-reference-max) !important;
-
-        margin: 0 auto !important;
-        padding: 86px 0 220px !important;
-
-        display: flex !important;
-        flex-direction: column !important;
-        align-items: center !important;
-
-        text-align: center !important;
-    }
-
-    .hero-section h1 {
-        margin: 0 0 10px !important;
-
-        font-size: 34px !important;
-        line-height: 1.18 !important;
-        font-weight: 600 !important;
-        letter-spacing: -0.025em !important;
-    }
-
-    .hero-copy {
-        margin: 0 0 38px !important;
-
-        font-size: 16px !important;
-        line-height: 1.5 !important;
-        color: var(--text-muted, #737373) !important;
-    }
-
-    .starter-grid {
-        width: 100% !important;
-
-        display: grid !important;
-        grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-        gap: 12px !important;
-
-        margin: 0 !important;
-    }
-
-    .starter-grid button {
-        min-height: 58px !important;
-
-        padding: 0 18px !important;
-
-        display: flex !important;
-        align-items: center !important;
-        justify-content: flex-start !important;
-        gap: 12px !important;
-
-        border: 1px solid rgba(0, 0, 0, 0.10) !important;
-        border-radius: 14px !important;
-
-        background: #ffffff !important;
-        color: #111111 !important;
-
-        box-shadow: none !important;
-
-        font-size: 15px !important;
-        font-weight: 500 !important;
-        text-align: left !important;
-    }
-
-    .starter-grid button:hover {
-        background: #f7f7f7 !important;
-    }
-
-    .starter-grid button:nth-child(4) {
-        grid-column: 1 / 2 !important;
-    }
-
+    /* Main regions always follow app-shell width */
+    .scroll-area,
     .composer-dock {
-        position: fixed !important;
-        left: 0 !important;
-        right: 0 !important;
-        bottom: 0 !important;
-        z-index: 50 !important;
-
         width: 100% !important;
-
-        padding: 0 24px 18px !important;
-
-        background:
-            linear-gradient(
-                to top,
-                var(--bg-main, #ffffff) 72%,
-                rgba(255, 255, 255, 0)
-            ) !important;
-
-        pointer-events: none !important;
+        max-width: 100% !important;
     }
 
-    .composer-wrapper {
-        width: min(var(--neo-reference-max), 100%) !important;
-        max-width: var(--neo-reference-max) !important;
-
-        margin: 0 auto !important;
-
-        pointer-events: auto !important;
-    }
-
-    .live-suggestions {
-        width: 100% !important;
-
-        display: flex !important;
-        align-items: center !important;
-        justify-content: flex-start !important;
-        gap: 8px !important;
-
-        margin: 0 0 12px !important;
-
-        overflow-x: auto !important;
-        scrollbar-width: none !important;
-    }
-
-    .live-suggestions::-webkit-scrollbar {
-        display: none !important;
-    }
-
-    .suggestion-chip {
-        min-height: 40px !important;
-
-        padding: 0 16px !important;
-
-        border: 1px solid rgba(0, 0, 0, 0.09) !important;
-        border-radius: 999px !important;
-
-        background: #ffffff !important;
-        color: #111111 !important;
-
-        box-shadow:
-            0 1px 2px rgba(0, 0, 0, 0.03) !important;
-
-        white-space: nowrap !important;
-    }
-
-    .glass-input-container {
-        min-height: 64px !important;
-
-        border: 1px solid rgba(0, 0, 0, 0.10) !important;
-        border-radius: 24px !important;
-
-        background: #ffffff !important;
-
-        box-shadow:
-            0 1px 2px rgba(0, 0, 0, 0.03),
-            0 10px 30px rgba(0, 0, 0, 0.06) !important;
-    }
-
-    .composer-note {
-        margin-top: 10px !important;
-        text-align: center !important;
-    }
-
+    /* Dark theme */
     body.dark-mode .top-bar {
+        background: var(--bg-main, #212121) !important;
         border-bottom-color: rgba(255, 255, 255, 0.08) !important;
     }
 
-    body.dark-mode .starter-grid button,
-    body.dark-mode .suggestion-chip,
-    body.dark-mode .glass-input-container {
-        background: #212121 !important;
-        color: #f1f1f1 !important;
-        border-color: rgba(255, 255, 255, 0.10) !important;
-    }
-
-    body.dark-mode .composer-dock {
-        background:
-            linear-gradient(
-                to top,
-                #212121 72%,
-                rgba(33, 33, 33, 0)
-            ) !important;
+    body.dark-mode #sidebarToggleBtn:hover,
+    body.dark-mode #topBarDarkModeToggle:hover,
+    body.dark-mode .model-badge:hover {
+        background: rgba(255, 255, 255, 0.08) !important;
     }
 }

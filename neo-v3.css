@@ -2334,3 +2334,55 @@ body.dark-mode #settingsPanelBilling #settingsUpgradeBtn {
         margin-right: auto !important;
     }
 }
+
+/* =========================================================
+   DESKTOP TOP BAR — EQUAL CORNER SPACING
+   Keeps left and right controls on the same 18px inset.
+   ========================================================= */
+
+@media (min-width: 768px) {
+    .top-bar {
+        position: relative !important;
+
+        width: 100% !important;
+        padding-left: 18px !important;
+        padding-right: 18px !important;
+
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+    }
+
+    .top-left,
+    .top-right {
+        position: static !important;
+        inset: auto !important;
+        transform: none !important;
+
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
+    .top-left {
+        display: flex !important;
+        align-items: center !important;
+        gap: 10px !important;
+    }
+
+    .top-right {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: flex-end !important;
+    }
+
+    #sidebarToggleBtn,
+    #topBarDarkModeToggle {
+        width: 38px !important;
+        height: 38px !important;
+        min-width: 38px !important;
+        min-height: 38px !important;
+
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+}

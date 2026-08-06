@@ -46,8 +46,8 @@
   <!-- ABSOLUTE PATH WITH v=82 -->
   <link rel="stylesheet" href="/neo.css?v=82">
   <link rel="stylesheet" href="/neo-ui-v2.css?v=1">
-  <!-- NEW V3 COMPOSER STYLES - bumped to v=29 (single desktop top-bar block) -->
-  <link rel="stylesheet" href="/neo-v3.css?v=29">
+  <!-- NEW V3 COMPOSER STYLES - bumped to v=30 (structural fix) -->
+  <link rel="stylesheet" href="/neo-v3.css?v=30">
 
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css">
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js"></script>
@@ -123,6 +123,8 @@
   </aside>
 
   <main class="app-shell">
+
+    <!-- ✅ STRUCTURAL FIX: top-bar moved back to app-shell, before scroll-area -->
     <header class="top-bar">
       <div class="top-left">
         <button class="icon-btn top-toggle-btn" id="sidebarToggleBtn" title="Toggle Sidebar" type="button">
@@ -154,6 +156,7 @@
 
     <div class="scroll-area" id="scrollArea">
       <div class="conversation-column">
+
         <div class="hero-section" id="heroSection">
           <h1>What can I help with today?</h1>
           <p class="hero-copy">Powered by NEO Engine. Select a prompt or type your message below.</p>

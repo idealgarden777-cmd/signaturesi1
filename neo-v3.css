@@ -2250,7 +2250,7 @@ body.dark-mode #settingsPanelBilling #settingsUpgradeBtn {
 }
 
 /* =========================================================
-   NEO DESKTOP — FINAL STABLE SHELL + TOP BAR
+   NEO DESKTOP — FINAL STABLE SHELL + TOP BAR (v36)
    One source of truth for sidebar open and closed states.
    ========================================================= */
 
@@ -2265,10 +2265,7 @@ body.dark-mode #settingsPanelBilling #settingsUpgradeBtn {
     .app-shell {
         width: calc(100% - var(--neo-sidebar-width)) !important;
         margin-left: var(--neo-sidebar-width) !important;
-
-        transition:
-            width 180ms ease,
-            margin-left 180ms ease !important;
+        transition: width 180ms ease, margin-left 180ms ease !important;
     }
 
     body.sidebar-collapsed .app-shell {
@@ -2339,6 +2336,15 @@ body.dark-mode #settingsPanelBilling #settingsUpgradeBtn {
 
         margin: 0 !important;
         padding: 0 !important;
+    }
+
+    /* Main top bar toggle – hidden when sidebar is open, visible when closed */
+    body:not(.sidebar-collapsed) #sidebarToggleBtn {
+        display: none !important;
+    }
+
+    body.sidebar-collapsed #sidebarToggleBtn {
+        display: inline-flex !important;
     }
 
     #sidebarToggleBtn,

@@ -2406,3 +2406,40 @@ body.dark-mode #settingsPanelBilling #settingsUpgradeBtn {
         transform: none !important;
     }
 }
+/* =========================================================
+   DESKTOP TOP BAR — EXACT CORNER ANCHORS
+   Fixes excessive right-side spacing only.
+   ========================================================= */
+
+@media (min-width: 768px) {
+    .top-bar {
+        position: relative !important;
+        width: 100% !important;
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+    }
+
+    body.sidebar-collapsed .top-left {
+        position: absolute !important;
+        top: 50% !important;
+        left: 20px !important;
+        transform: translateY(-50%) !important;
+    }
+
+    body.sidebar-collapsed .top-right {
+        position: absolute !important;
+        top: 50% !important;
+        right: 20px !important;
+        left: auto !important;
+        transform: translateY(-50%) !important;
+
+        width: auto !important;
+        min-width: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
+    body.sidebar-collapsed #topBarDarkModeToggle {
+        margin: 0 !important;
+    }
+}

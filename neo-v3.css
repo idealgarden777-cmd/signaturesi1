@@ -2250,45 +2250,6 @@ body.dark-mode #settingsPanelBilling #settingsUpgradeBtn {
 }
 
 /* =========================================================
-   DESKTOP TOP BAR — SIDEBAR TOGGLE ALIGNMENT
-   Only affects desktop spacing.
-   ========================================================= */
-
-@media (min-width: 768px) {
-    .top-bar {
-        padding-left: 18px !important;
-        padding-right: 18px !important;
-    }
-
-    .top-left {
-        display: flex !important;
-        align-items: center !important;
-        gap: 10px !important;
-        min-width: 0 !important;
-    }
-
-    #sidebarToggleBtn {
-        width: 38px !important;
-        height: 38px !important;
-        min-width: 38px !important;
-        min-height: 38px !important;
-
-        margin: 0 !important;
-        padding: 0 !important;
-
-        border-radius: 10px !important;
-    }
-
-    .model-dropdown-wrapper {
-        margin-left: 0 !important;
-    }
-
-    .model-badge {
-        margin: 0 !important;
-    }
-}
-
-/* =========================================================
    DESKTOP — TRUE VIEWPORT CENTER WHEN SIDEBAR IS CLOSED
    Only fixes collapsed-sidebar horizontal centering.
    ========================================================= */
@@ -2387,25 +2348,6 @@ body.dark-mode #settingsPanelBilling #settingsUpgradeBtn {
     }
 }
 
-/* =========================================================
-   DESKTOP CLOSED SIDEBAR — COMFORTABLE CORNER INSET
-   Only increases top-bar edge spacing when sidebar is closed.
-   ========================================================= */
-
-@media (min-width: 768px) {
-    body.sidebar-collapsed .top-bar {
-        width: 100% !important;
-        padding-left: 37px !important;
-        padding-right: 37px !important;
-        box-sizing: border-box !important;
-    }
-
-    body.sidebar-collapsed .top-left,
-    body.sidebar-collapsed .top-right {
-        margin: 0 !important;
-        transform: none !important;
-    }
-}
 /* =========================================================
    DESKTOP TOP BAR — EXACT CORNER ANCHORS
    Fixes excessive right-side spacing only.

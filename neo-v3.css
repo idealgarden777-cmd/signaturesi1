@@ -2385,3 +2385,169 @@ body.dark-mode #settingsPanelBilling #settingsUpgradeBtn {
         margin: 0 !important;
     }
 }
+
+/* =========================================================
+   DESKTOP CLOSED SIDEBAR — PREMIUM FLOATING TOP CONTROLS
+   Only affects desktop when sidebar is closed.
+   ========================================================= */
+
+@media (min-width: 768px) {
+    body.sidebar-collapsed .top-bar {
+        position: relative !important;
+        min-height: 64px !important;
+        padding: 0 !important;
+        background: transparent !important;
+        border-bottom: 0 !important;
+    }
+
+    /* Left control capsule */
+    body.sidebar-collapsed .top-left {
+        position: absolute !important;
+        top: 12px !important;
+        left: 18px !important;
+
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 4px !important;
+
+        min-height: 44px !important;
+        padding: 4px !important;
+
+        border: 1px solid rgba(0, 0, 0, 0.08) !important;
+        border-radius: 14px !important;
+
+        background: rgba(255, 255, 255, 0.94) !important;
+
+        box-shadow:
+            0 1px 2px rgba(0, 0, 0, 0.03),
+            0 8px 24px rgba(0, 0, 0, 0.06) !important;
+
+        backdrop-filter: blur(16px) saturate(135%) !important;
+        -webkit-backdrop-filter: blur(16px) saturate(135%) !important;
+
+        transform: none !important;
+    }
+
+    body.sidebar-collapsed #sidebarToggleBtn {
+        width: 36px !important;
+        height: 36px !important;
+        min-width: 36px !important;
+        min-height: 36px !important;
+
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+
+        margin: 0 !important;
+        padding: 0 !important;
+
+        border: 0 !important;
+        border-radius: 10px !important;
+
+        background: transparent !important;
+        color: #4f4f4f !important;
+    }
+
+    body.sidebar-collapsed #sidebarToggleBtn:hover {
+        background: #f2f2f2 !important;
+        color: #111111 !important;
+    }
+
+    body.sidebar-collapsed .model-badge {
+        min-height: 36px !important;
+        padding: 0 10px !important;
+        margin: 0 !important;
+
+        border: 0 !important;
+        border-radius: 10px !important;
+
+        background: transparent !important;
+    }
+
+    body.sidebar-collapsed .model-badge:hover {
+        background: #f2f2f2 !important;
+    }
+
+    body.sidebar-collapsed .model-name {
+        font-size: 14px !important;
+        font-weight: 600 !important;
+    }
+
+    /* Right theme button */
+    body.sidebar-collapsed .top-right {
+        position: absolute !important;
+        top: 12px !important;
+        right: 18px !important;
+        left: auto !important;
+
+        width: 44px !important;
+        height: 44px !important;
+        min-width: 44px !important;
+        min-height: 44px !important;
+
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+
+        margin: 0 !important;
+        padding: 0 !important;
+
+        border: 1px solid rgba(0, 0, 0, 0.08) !important;
+        border-radius: 14px !important;
+
+        background: rgba(255, 255, 255, 0.94) !important;
+
+        box-shadow:
+            0 1px 2px rgba(0, 0, 0, 0.03),
+            0 8px 24px rgba(0, 0, 0, 0.06) !important;
+
+        backdrop-filter: blur(16px) saturate(135%) !important;
+        -webkit-backdrop-filter: blur(16px) saturate(135%) !important;
+
+        transform: none !important;
+    }
+
+    body.sidebar-collapsed #topBarDarkModeToggle {
+        width: 36px !important;
+        height: 36px !important;
+        min-width: 36px !important;
+        min-height: 36px !important;
+
+        margin: 0 !important;
+        padding: 0 !important;
+
+        border: 0 !important;
+        border-radius: 10px !important;
+
+        background: transparent !important;
+        color: #4f4f4f !important;
+    }
+
+    body.sidebar-collapsed #topBarDarkModeToggle:hover {
+        background: #f2f2f2 !important;
+        color: #111111 !important;
+    }
+
+    /* Dark mode */
+    body.dark-mode.sidebar-collapsed .top-left,
+    body.dark-mode.sidebar-collapsed .top-right {
+        border-color: rgba(255, 255, 255, 0.09) !important;
+        background: rgba(24, 24, 24, 0.94) !important;
+
+        box-shadow:
+            0 1px 2px rgba(0, 0, 0, 0.28),
+            0 10px 28px rgba(0, 0, 0, 0.32) !important;
+    }
+
+    body.dark-mode.sidebar-collapsed #sidebarToggleBtn,
+    body.dark-mode.sidebar-collapsed #topBarDarkModeToggle {
+        color: #b8b8b8 !important;
+    }
+
+    body.dark-mode.sidebar-collapsed #sidebarToggleBtn:hover,
+    body.dark-mode.sidebar-collapsed #topBarDarkModeToggle:hover,
+    body.dark-mode.sidebar-collapsed .model-badge:hover {
+        background: rgba(255, 255, 255, 0.08) !important;
+        color: #ffffff !important;
+    }
+}

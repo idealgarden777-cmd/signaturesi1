@@ -2166,3 +2166,85 @@ body.dark-mode #settingsPanelBilling #settingsUpgradeBtn {
         min-height: 44px !important;
     }
 }
+
+/* =========================================================
+   NEO MODEL MENU — COMPACT PREMIUM SIZE
+   Only reduces model dropdown size and spacing.
+   ========================================================= */
+
+.model-dropdown-menu {
+    width: 292px !important;
+    padding: 7px !important;
+
+    border-radius: 16px !important;
+
+    box-shadow:
+        0 1px 2px rgba(0, 0, 0, 0.03),
+        0 10px 28px rgba(0, 0, 0, 0.09) !important;
+}
+
+.model-option {
+    min-height: 60px !important;
+
+    padding: 10px 11px !important;
+    gap: 10px !important;
+
+    border-radius: 11px !important;
+}
+
+.model-opt-info {
+    gap: 3px !important;
+}
+
+.model-opt-info strong {
+    font-size: 14px !important;
+    line-height: 1.2 !important;
+}
+
+.model-opt-info small {
+    max-width: 205px !important;
+
+    font-size: 11.5px !important;
+    line-height: 1.35 !important;
+}
+
+.model-option .opt-check-icon {
+    width: 24px !important;
+    height: 24px !important;
+
+    padding: 5px !important;
+}
+
+.pro-tag {
+    min-height: 22px !important;
+    padding: 0 8px !important;
+
+    font-size: 9px !important;
+}
+
+.model-option.pro-option {
+    margin-top: 2px !important;
+}
+
+.model-option.pro-option::before {
+    left: 11px !important;
+    right: 11px !important;
+}
+
+/* Mobile */
+@media (max-width: 767px) {
+    .model-dropdown-menu {
+        width: min(286px, calc(100vw - 20px)) !important;
+        padding: 6px !important;
+        border-radius: 15px !important;
+    }
+
+    .model-option {
+        min-height: 58px !important;
+        padding: 9px 10px !important;
+    }
+
+    .model-opt-info small {
+        max-width: 195px !important;
+    }
+}

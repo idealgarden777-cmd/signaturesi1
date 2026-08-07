@@ -5855,3 +5855,66 @@ body.dark-mode .attachment-preview-file svg {
     border-color: rgba(255, 255, 255, 0.08) !important;
     color: #e8e8e8 !important;
 }
+/* =========================================================
+   NEO — ATTACHMENT REMOVE BUTTON
+   Smaller, neutral, premium.
+   ========================================================= */
+
+.attachment-remove-btn {
+    width: 20px !important;
+    height: 20px !important;
+    min-width: 20px !important;
+    min-height: 20px !important;
+
+    top: 6px !important;
+    right: 6px !important;
+
+    padding: 0 !important;
+
+    border: 1px solid rgba(255, 255, 255, 0.16) !important;
+    border-radius: 999px !important;
+
+    background: rgba(36, 36, 36, 0.72) !important;
+    color: rgba(255, 255, 255, 0.88) !important;
+
+    font-size: 14px !important;
+    font-weight: 400 !important;
+    line-height: 1 !important;
+
+    box-shadow:
+        0 1px 3px rgba(0, 0, 0, 0.12) !important;
+
+    opacity: 0.9 !important;
+
+    transform: none !important;
+}
+
+.attachment-remove-btn:hover {
+    background: rgba(20, 20, 20, 0.90) !important;
+    color: #ffffff !important;
+    opacity: 1 !important;
+    transform: none !important;
+}
+
+.attachment-remove-btn:active {
+    transform: none !important;
+}
+
+/* Remove any destructive red styling */
+.attachment-remove-btn,
+.attachment-remove-btn:hover,
+.attachment-remove-btn:focus-visible {
+    color: rgba(255, 255, 255, 0.92) !important;
+}
+
+/* Dark mode */
+body.dark-mode .attachment-remove-btn {
+    background: rgba(245, 245, 245, 0.14) !important;
+    color: rgba(255, 255, 255, 0.86) !important;
+    border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+body.dark-mode .attachment-remove-btn:hover {
+    background: rgba(245, 245, 245, 0.20) !important;
+    color: #ffffff !important;
+}

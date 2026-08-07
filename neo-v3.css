@@ -2250,8 +2250,7 @@ body.dark-mode #settingsPanelBilling #settingsUpgradeBtn {
 }
 
 /* =========================================================
-   NEO DESKTOP — FINAL STABLE SHELL + TOP BAR (v36)
-   One source of truth for sidebar open and closed states.
+   NEO DESKTOP — FINAL AUDIT FIX (v37)
    ========================================================= */
 
 @media (min-width: 768px) {
@@ -2261,10 +2260,25 @@ body.dark-mode #settingsPanelBilling #settingsUpgradeBtn {
         --neo-edge-gap: 24px;
     }
 
-    /* Main application follows sidebar state */
+    /* --- Sidebar -- single source of truth --- */
+    .sidebar {
+        width: var(--neo-sidebar-width) !important;
+        max-width: var(--neo-sidebar-width) !important;
+
+        /* Remove any transforms that could conflict */
+        transform: none !important;
+        transition: none !important;
+    }
+
+    /* --- App shell follows sidebar --- */
     .app-shell {
         width: calc(100% - var(--neo-sidebar-width)) !important;
         margin-left: var(--neo-sidebar-width) !important;
+
+        /* Ensure no padding/margin interferes with top bar */
+        padding: 0 !important;
+        margin-top: 0 !important;
+
         transition: width 180ms ease, margin-left 180ms ease !important;
     }
 
@@ -2278,7 +2292,7 @@ body.dark-mode #settingsPanelBilling #settingsUpgradeBtn {
         margin-left: var(--neo-sidebar-width) !important;
     }
 
-    /* Full-width professional app header */
+    /* --- Top bar: fixed at viewport top --- */
     .top-bar {
         position: sticky !important;
         top: 0 !important;
@@ -2303,7 +2317,7 @@ body.dark-mode #settingsPanelBilling #settingsUpgradeBtn {
         box-sizing: border-box !important;
     }
 
-    /* Left controls */
+    /* --- Left controls --- */
     .top-left {
         position: static !important;
         inset: auto !important;
@@ -2320,7 +2334,7 @@ body.dark-mode #settingsPanelBilling #settingsUpgradeBtn {
         padding: 0 !important;
     }
 
-    /* Right control */
+    /* --- Right control --- */
     .top-right {
         position: static !important;
         inset: auto !important;
@@ -2338,7 +2352,7 @@ body.dark-mode #settingsPanelBilling #settingsUpgradeBtn {
         padding: 0 !important;
     }
 
-    /* Main top bar toggle – hidden when sidebar is open, visible when closed */
+    /* --- Toggle visibility --- */
     body:not(.sidebar-collapsed) #sidebarToggleBtn {
         display: none !important;
     }
@@ -2347,6 +2361,7 @@ body.dark-mode #settingsPanelBilling #settingsUpgradeBtn {
         display: inline-flex !important;
     }
 
+    /* --- Shared button styling --- */
     #sidebarToggleBtn,
     #topBarDarkModeToggle {
         width: 40px !important;
@@ -2376,6 +2391,7 @@ body.dark-mode #settingsPanelBilling #settingsUpgradeBtn {
         color: var(--text-primary, #111111) !important;
     }
 
+    /* --- Model selector --- */
     .model-dropdown-wrapper {
         margin: 0 !important;
         padding: 0 !important;
@@ -2403,14 +2419,16 @@ body.dark-mode #settingsPanelBilling #settingsUpgradeBtn {
         background: rgba(0, 0, 0, 0.055) !important;
     }
 
-    /* Main regions always follow app-shell width */
+    /* --- Scroll area & composer follow app-shell width --- */
     .scroll-area,
     .composer-dock {
         width: 100% !important;
         max-width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important; /* Remove any inherited padding */
     }
 
-    /* Dark theme */
+    /* --- Dark theme --- */
     body.dark-mode .top-bar {
         background: var(--bg-main, #212121) !important;
         border-bottom-color: rgba(255, 255, 255, 0.08) !important;

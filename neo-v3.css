@@ -5682,3 +5682,118 @@ textarea#chatInput {
         transform: none !important;
     }
 }
+/* =========================================================
+   NEO — UNIFIED POPUP SYSTEM
+   Visual consistency across all floating menus.
+   ========================================================= */
+
+:root {
+    --neo-popup-bg: #ffffff;
+    --neo-popup-border: rgba(0, 0, 0, 0.08);
+    --neo-popup-radius: 16px;
+    --neo-popup-padding: 7px;
+    --neo-popup-row-height: 44px;
+    --neo-popup-row-radius: 10px;
+    --neo-popup-text: #171717;
+    --neo-popup-muted: #737373;
+    --neo-popup-hover: #f5f5f5;
+
+    --neo-popup-shadow:
+        0 1px 2px rgba(0, 0, 0, 0.03),
+        0 12px 32px rgba(0, 0, 0, 0.10);
+}
+
+body.dark-mode {
+    --neo-popup-bg: #1b1b1b;
+    --neo-popup-border: rgba(255, 255, 255, 0.09);
+    --neo-popup-text: #f2f2f2;
+    --neo-popup-muted: #9b9b9b;
+    --neo-popup-hover: #252525;
+
+    --neo-popup-shadow:
+        0 1px 2px rgba(0, 0, 0, 0.24),
+        0 14px 36px rgba(0, 0, 0, 0.38);
+}
+
+/* ---- Shared popup surfaces ---- */
+.model-dropdown-menu,
+.chat-context-menu,
+.composer-plus-menu {
+    padding: var(--neo-popup-padding) !important;
+
+    border: 1px solid var(--neo-popup-border) !important;
+    border-radius: var(--neo-popup-radius) !important;
+
+    background: var(--neo-popup-bg) !important;
+    color: var(--neo-popup-text) !important;
+
+    box-shadow: var(--neo-popup-shadow) !important;
+
+    /* Remove any extra backdrop filters for consistency */
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
+
+/* ---- Shared menu rows (for context and composer) ---- */
+.chat-context-menu button,
+.composer-plus-menu button {
+    width: 100% !important;
+    min-height: var(--neo-popup-row-height) !important;
+
+    display: flex !important;
+    align-items: center !important;
+
+    gap: 11px !important;
+
+    padding: 0 11px !important;
+
+    border: 0 !important;
+    border-radius: var(--neo-popup-row-radius) !important;
+
+    background: transparent !important;
+    color: var(--neo-popup-text) !important;
+
+    font-size: 14px !important;
+    font-weight: 500 !important;
+    line-height: 1.2 !important;
+
+    box-shadow: none !important;
+}
+
+.chat-context-menu button:hover,
+.composer-plus-menu button:hover {
+    background: var(--neo-popup-hover) !important;
+}
+
+/* ---- Icon consistency ---- */
+.chat-context-menu button svg,
+.composer-plus-menu button svg {
+    width: 19px !important;
+    height: 19px !important;
+
+    flex: 0 0 19px !important;
+
+    opacity: 0.78 !important;
+}
+
+/* ---- Destructive action (delete) ---- */
+.chat-context-menu .delete-action,
+.chat-context-menu [data-action="delete"] {
+    color: #e5484d !important;
+}
+
+/* ---- Model menu – richer rows, keep its density ---- */
+.model-dropdown-menu {
+    width: 292px !important; /* keep your existing width */
+}
+
+.model-option {
+    min-height: 60px !important;
+    padding: 10px 11px !important;
+    border-radius: 11px !important;
+    /* Inherits background, hover, etc. from the surface variables */
+}
+
+.model-option:hover {
+    background: var(--neo-popup-hover) !important;
+}

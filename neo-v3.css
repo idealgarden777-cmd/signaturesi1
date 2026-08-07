@@ -2567,23 +2567,20 @@ body.dark-mode .attachment-remove-btn {
 }
 
 /* =========================================================
-   NEO — ULTRA THIN DESKTOP TOP BAR
-   Matches the clean chat-view reference.
+   NEO DESKTOP — FINAL TOP BAR POLISH (PRIORITY 1)
    ========================================================= */
 
 @media (min-width: 768px) {
     :root {
-        --neo-topbar-height: 44px;
-        --neo-topbar-edge: 20px;
+        --neo-topbar-height: 56px;
+        --neo-topbar-edge: 16px;
     }
 
     .top-bar {
         height: var(--neo-topbar-height) !important;
         min-height: var(--neo-topbar-height) !important;
 
-        padding:
-            0
-            var(--neo-topbar-edge) !important;
+        padding: 0 var(--neo-topbar-edge) !important;
 
         display: flex !important;
         align-items: center !important;
@@ -2592,14 +2589,13 @@ body.dark-mode .attachment-remove-btn {
         background: var(--bg-main, #ffffff) !important;
 
         border: 0 !important;
-        border-bottom:
-            1px solid rgba(0, 0, 0, 0.045) !important;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.06) !important;
 
         box-shadow: none !important;
     }
 
     .top-left {
-        height: 30px !important;
+        height: 40px !important;
 
         display: flex !important;
         align-items: center !important;
@@ -2611,9 +2607,9 @@ body.dark-mode .attachment-remove-btn {
     }
 
     .top-right {
-        width: 30px !important;
-        height: 30px !important;
-        min-width: 30px !important;
+        width: 40px !important;
+        height: 40px !important;
+        min-width: 40px !important;
 
         display: flex !important;
         align-items: center !important;
@@ -2625,10 +2621,14 @@ body.dark-mode .attachment-remove-btn {
 
     #sidebarToggleBtn,
     #topBarDarkModeToggle {
-        width: 30px !important;
-        height: 30px !important;
-        min-width: 30px !important;
-        min-height: 30px !important;
+        width: 40px !important;
+        height: 40px !important;
+        min-width: 40px !important;
+        min-height: 40px !important;
+
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
 
         padding: 0 !important;
         margin: 0 !important;
@@ -2638,33 +2638,34 @@ body.dark-mode .attachment-remove-btn {
         border-radius: 8px !important;
 
         box-shadow: none !important;
-
-        opacity: 0.72;
     }
 
     #sidebarToggleBtn:hover,
     #topBarDarkModeToggle:hover {
         background: rgba(0, 0, 0, 0.04) !important;
-        opacity: 1;
     }
 
     .model-badge {
-        height: 30px !important;
-        min-height: 30px !important;
+        height: 40px !important;
+        min-height: 40px !important;
 
         display: inline-flex !important;
         align-items: center !important;
 
-        gap: 7px !important;
+        gap: 8px !important;
 
         margin: 0 !important;
-        padding: 0 5px !important;
+        padding: 0 6px !important;
 
         background: transparent !important;
         border: 0 !important;
         border-radius: 8px !important;
 
         box-shadow: none !important;
+    }
+
+    .model-badge:hover {
+        background: rgba(0, 0, 0, 0.04) !important;
     }
 
     .model-name {
@@ -2674,65 +2675,34 @@ body.dark-mode .attachment-remove-btn {
     }
 
     .model-chevron {
-        width: 15px !important;
-        height: 15px !important;
+        width: 16px !important;
+        height: 16px !important;
         opacity: 0.65 !important;
     }
 
-    /* Closed sidebar reference:
-       icon + model remain comfortably inset from viewport */
-    body.sidebar-collapsed .top-left {
-        gap: 7px !important;
-    }
-
-    /* Open sidebar:
-       model begins naturally after sidebar edge */
-    body:not(.sidebar-collapsed) .top-left {
-        padding-left: 0 !important;
-    }
-
     body.dark-mode .top-bar {
-        border-bottom-color:
-            rgba(255, 255, 255, 0.055) !important;
+        background: var(--bg-main, #212121) !important;
+        border-bottom-color: rgba(255, 255, 255, 0.06) !important;
     }
 
     body.dark-mode #sidebarToggleBtn:hover,
     body.dark-mode #topBarDarkModeToggle:hover,
     body.dark-mode .model-badge:hover {
-        background:
-            rgba(255, 255, 255, 0.055) !important;
+        background: rgba(255, 255, 255, 0.06) !important;
     }
 }
+
 /* =========================================================
-   NEO — MESSAGE IMAGE SIZE
-   Compact premium attachment rendering
+   NEO — FINAL NO-SCALE SAFETY
+   Fade-only interaction standard
    ========================================================= */
 
-.message-media-grid {
-    display: flex !important;
-    justify-content: flex-end !important;
-    width: 100% !important;
-}
-
-.message-media-grid img {
-    display: block !important;
-
-    width: auto !important;
-    max-width: min(520px, 68vw) !important;
-    max-height: 360px !important;
-
-    object-fit: contain !important;
-
-    border-radius: 14px !important;
-    border: 1px solid rgba(0, 0, 0, 0.07) !important;
-
-    box-shadow: none !important;
-}
-
-@media (max-width: 767px) {
-    .message-media-grid img {
-        max-width: min(82vw, 360px) !important;
-        max-height: 300px !important;
-        border-radius: 12px !important;
-    }
+.send-btn:hover,
+.send-btn:active,
+.attachment-preview-card:hover,
+.message.user .edit-btn-cancel:active,
+.message.user .edit-btn-save:active,
+.model-option:hover,
+.model-option:active {
+    transform: none !important;
 }

@@ -5968,3 +5968,29 @@ body.dark-mode .attachment-remove-btn:hover {
 body.dark-mode .brand-name {
     color: #f5f5f5 !important;
 }
+
+/* =========================================================
+   NEYO — HISTORY THREE-DOT ALIGNMENT
+   Vertical centering only.
+   ========================================================= */
+
+.history-item-wrapper {
+    position: relative !important;
+}
+
+.history-three-dot {
+    position: absolute !important;
+    top: 50% !important;
+    right: 8px !important;
+
+    transform: translateY(-50%) !important;
+
+    width: 30px !important;
+    height: 30px !important;
+
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+
+    margin: 0 !important;
+}

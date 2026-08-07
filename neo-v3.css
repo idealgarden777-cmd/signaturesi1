@@ -2480,71 +2480,6 @@ body.dark-mode .attachment-remove-btn {
     background: rgba(20, 20, 20, 0.78) !important;
 }
 
-/* ---------- DESKTOP TOP BAR — THINNER + BETTER BREATHING ---------- */
-
-@media (min-width: 768px) {
-
-    :root {
-        --neo-topbar-height: 50px;
-        --neo-edge-gap: 18px;
-    }
-
-    .top-bar {
-        height: var(--neo-topbar-height) !important;
-        min-height: var(--neo-topbar-height) !important;
-
-        padding-left: var(--neo-edge-gap) !important;
-        padding-right: var(--neo-edge-gap) !important;
-
-        border-bottom-color: rgba(0, 0, 0, 0.055) !important;
-    }
-
-    .top-left {
-        height: 34px !important;
-        gap: 10px !important;
-    }
-
-    .top-right {
-        width: 34px !important;
-        height: 34px !important;
-        min-width: 34px !important;
-    }
-
-    #sidebarToggleBtn,
-    #topBarDarkModeToggle {
-        width: 34px !important;
-        height: 34px !important;
-        min-width: 34px !important;
-        min-height: 34px !important;
-
-        border-radius: 8px !important;
-    }
-
-    .model-badge {
-        height: 34px !important;
-        min-height: 34px !important;
-
-        gap: 8px !important;
-
-        padding-left: 8px !important;
-        padding-right: 8px !important;
-
-        border-radius: 8px !important;
-    }
-
-    /* Sidebar closed:
-       small breathing room between toggle and model */
-    body.sidebar-collapsed .top-left {
-        gap: 8px !important;
-    }
-
-    /* Sidebar open:
-       model should not feel glued to left edge */
-    body:not(.sidebar-collapsed) .top-left {
-        padding-left: 2px !important;
-    }
-}
-
 /* =========================================================
    NEO V3 — FINAL TOOLTIP CLEANUP
    Pure pill, fade only. No scale, no arrow.
@@ -2705,4 +2640,33 @@ body.dark-mode .attachment-remove-btn {
 .model-option:hover,
 .model-option:active {
     transform: none !important;
+}
+
+/* =========================================================
+   NEO — DESKTOP SAFE EDGE + CHAT BREATHING
+   Spacing only. No redesign.
+   ========================================================= */
+
+@media (min-width: 768px) {
+
+    /* Give top bar proper premium edge spacing */
+    .top-bar {
+        padding-left: 28px !important;
+        padding-right: 28px !important;
+    }
+
+    /* Keep toggle + model from feeling glued together */
+    .top-left {
+        gap: 12px !important;
+    }
+
+    /* Push conversation away from header */
+    .scroll-area {
+        padding-top: 24px !important;
+    }
+
+    /* Keep first user message comfortably below top bar */
+    .chat-messages {
+        padding-top: 12px !important;
+    }
 }

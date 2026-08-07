@@ -2565,3 +2565,141 @@ body.dark-mode .attachment-remove-btn {
 .neo-tooltip-arrow {
     display: none !important;
 }
+
+/* =========================================================
+   NEO — ULTRA THIN DESKTOP TOP BAR
+   Matches the clean chat-view reference.
+   ========================================================= */
+
+@media (min-width: 768px) {
+    :root {
+        --neo-topbar-height: 44px;
+        --neo-topbar-edge: 20px;
+    }
+
+    .top-bar {
+        height: var(--neo-topbar-height) !important;
+        min-height: var(--neo-topbar-height) !important;
+
+        padding:
+            0
+            var(--neo-topbar-edge) !important;
+
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+
+        background: var(--bg-main, #ffffff) !important;
+
+        border: 0 !important;
+        border-bottom:
+            1px solid rgba(0, 0, 0, 0.045) !important;
+
+        box-shadow: none !important;
+    }
+
+    .top-left {
+        height: 30px !important;
+
+        display: flex !important;
+        align-items: center !important;
+
+        gap: 8px !important;
+
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
+    .top-right {
+        width: 30px !important;
+        height: 30px !important;
+        min-width: 30px !important;
+
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
+    #sidebarToggleBtn,
+    #topBarDarkModeToggle {
+        width: 30px !important;
+        height: 30px !important;
+        min-width: 30px !important;
+        min-height: 30px !important;
+
+        padding: 0 !important;
+        margin: 0 !important;
+
+        background: transparent !important;
+        border: 0 !important;
+        border-radius: 8px !important;
+
+        box-shadow: none !important;
+
+        opacity: 0.72;
+    }
+
+    #sidebarToggleBtn:hover,
+    #topBarDarkModeToggle:hover {
+        background: rgba(0, 0, 0, 0.04) !important;
+        opacity: 1;
+    }
+
+    .model-badge {
+        height: 30px !important;
+        min-height: 30px !important;
+
+        display: inline-flex !important;
+        align-items: center !important;
+
+        gap: 7px !important;
+
+        margin: 0 !important;
+        padding: 0 5px !important;
+
+        background: transparent !important;
+        border: 0 !important;
+        border-radius: 8px !important;
+
+        box-shadow: none !important;
+    }
+
+    .model-name {
+        font-size: 14px !important;
+        font-weight: 600 !important;
+        line-height: 1 !important;
+    }
+
+    .model-chevron {
+        width: 15px !important;
+        height: 15px !important;
+        opacity: 0.65 !important;
+    }
+
+    /* Closed sidebar reference:
+       icon + model remain comfortably inset from viewport */
+    body.sidebar-collapsed .top-left {
+        gap: 7px !important;
+    }
+
+    /* Open sidebar:
+       model begins naturally after sidebar edge */
+    body:not(.sidebar-collapsed) .top-left {
+        padding-left: 0 !important;
+    }
+
+    body.dark-mode .top-bar {
+        border-bottom-color:
+            rgba(255, 255, 255, 0.055) !important;
+    }
+
+    body.dark-mode #sidebarToggleBtn:hover,
+    body.dark-mode #topBarDarkModeToggle:hover,
+    body.dark-mode .model-badge:hover {
+        background:
+            rgba(255, 255, 255, 0.055) !important;
+    }
+}

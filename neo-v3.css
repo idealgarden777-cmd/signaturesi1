@@ -2409,3 +2409,26 @@ body.dark-mode #settingsPanelBilling #settingsUpgradeBtn {
         background: rgba(255, 255, 255, 0.08) !important;
     }
 }
+
+/* =========================================================
+   NEO DESKTOP — EMPTY STATE VERTICAL BALANCE
+   Removes excessive dead space without changing widths.
+   ========================================================= */
+
+@media (min-width: 768px) {
+
+    /* Bring the welcome area slightly lower */
+    .hero-section {
+        transform: translateY(26px) !important;
+    }
+
+    /* Bring composer upward into the visual composition */
+    .composer-dock {
+        bottom: 54px !important;
+    }
+
+    /* Keep disclaimer attached naturally */
+    .composer-note {
+        margin-top: 8px !important;
+    }
+}

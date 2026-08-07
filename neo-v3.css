@@ -5642,3 +5642,43 @@ textarea#chatInput {
 }
 
 /* 5. Everything else untouched – no transform/scale overrides added */
+/* =========================================================
+   NEO — FINAL MICRO ALIGNMENT PASS
+   Only edge breathing + composer vertical centering.
+   ========================================================= */
+
+@media (min-width: 768px) {
+    .top-bar {
+        padding-left: 32px !important;
+    }
+
+    .top-left {
+        gap: 12px !important;
+    }
+
+    .composer-input-row {
+        align-items: center !important;
+    }
+
+    .attach-btn,
+    .mic-btn,
+    .send-btn {
+        position: relative !important;
+        top: -2px !important;
+        transform: none !important;
+    }
+}
+
+@media (max-width: 767px) {
+    .composer-input-row {
+        align-items: center !important;
+    }
+
+    .attach-btn,
+    .mic-btn,
+    .send-btn {
+        position: relative !important;
+        top: -1px !important;
+        transform: none !important;
+    }
+}

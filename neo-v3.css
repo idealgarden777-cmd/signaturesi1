@@ -2250,55 +2250,43 @@ body.dark-mode #settingsPanelBilling #settingsUpgradeBtn {
 }
 
 /* =========================================================
-   NEO DESKTOP — FINAL AUDIT FIX (v37)
+   NEO DESKTOP — FINAL STABLE SHELL + TOP BAR (v37)
    ========================================================= */
 
 @media (min-width: 768px) {
     :root {
         --neo-sidebar-width: 304px;
-        --neo-topbar-height: 72px;
+        --neo-topbar-height: 56px;   /* 72px se thin */
         --neo-edge-gap: 24px;
     }
 
-    /* --- Sidebar -- single source of truth --- */
-    .sidebar {
-        width: var(--neo-sidebar-width) !important;
-        max-width: var(--neo-sidebar-width) !important;
-
-        /* Remove any transforms that could conflict */
-        transform: none !important;
-        transition: none !important;
-    }
-
-    /* --- App shell follows sidebar --- */
     .app-shell {
         width: calc(100% - var(--neo-sidebar-width)) !important;
+        max-width: none !important;              /* IMPORTANT */
         margin-left: var(--neo-sidebar-width) !important;
-
-        /* Ensure no padding/margin interferes with top bar */
-        padding: 0 !important;
-        margin-top: 0 !important;
-
         transition: width 180ms ease, margin-left 180ms ease !important;
     }
 
     body.sidebar-collapsed .app-shell {
         width: 100% !important;
+        max-width: none !important;
         margin-left: 0 !important;
     }
 
     body:not(.sidebar-collapsed) .app-shell {
         width: calc(100% - var(--neo-sidebar-width)) !important;
+        max-width: none !important;
         margin-left: var(--neo-sidebar-width) !important;
     }
 
-    /* --- Top bar: fixed at viewport top --- */
     .top-bar {
         position: sticky !important;
         top: 0 !important;
         z-index: 60 !important;
 
         width: 100% !important;
+        max-width: none !important;              /* THIS removes the fake gap */
+
         height: var(--neo-topbar-height) !important;
         min-height: var(--neo-topbar-height) !important;
 
@@ -2310,14 +2298,14 @@ body.dark-mode #settingsPanelBilling #settingsUpgradeBtn {
         padding: 0 var(--neo-edge-gap) !important;
 
         background: var(--bg-main, #ffffff) !important;
+
         border: 0 !important;
-        border-bottom: 1px solid rgba(0, 0, 0, 0.08) !important;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.06) !important;
 
         box-shadow: none !important;
         box-sizing: border-box !important;
     }
 
-    /* --- Left controls --- */
     .top-left {
         position: static !important;
         inset: auto !important;
@@ -2325,16 +2313,15 @@ body.dark-mode #settingsPanelBilling #settingsUpgradeBtn {
 
         display: flex !important;
         align-items: center !important;
-        gap: 10px !important;
+        gap: 8px !important;
 
         width: auto !important;
-        height: 40px !important;
+        height: 36px !important;
 
         margin: 0 !important;
         padding: 0 !important;
     }
 
-    /* --- Right control --- */
     .top-right {
         position: static !important;
         inset: auto !important;
@@ -2344,12 +2331,51 @@ body.dark-mode #settingsPanelBilling #settingsUpgradeBtn {
         align-items: center !important;
         justify-content: flex-end !important;
 
-        width: 40px !important;
-        height: 40px !important;
-        min-width: 40px !important;
+        width: 36px !important;
+        height: 36px !important;
+        min-width: 36px !important;
 
         margin: 0 !important;
         padding: 0 !important;
+    }
+
+    #sidebarToggleBtn,
+    #topBarDarkModeToggle {
+        width: 36px !important;
+        height: 36px !important;
+        min-width: 36px !important;
+        min-height: 36px !important;
+
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+
+        padding: 0 !important;
+        margin: 0 !important;
+
+        border: 0 !important;
+        border-radius: 9px !important;
+
+        background: transparent !important;
+        box-shadow: none !important;
+    }
+
+    .model-badge {
+        height: 36px !important;
+        min-height: 36px !important;
+
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 7px !important;
+
+        margin: 0 !important;
+        padding: 0 7px !important;
+
+        border: 0 !important;
+        border-radius: 9px !important;
+
+        background: transparent !important;
+        box-shadow: none !important;
     }
 
     /* --- Toggle visibility --- */
@@ -2361,71 +2387,14 @@ body.dark-mode #settingsPanelBilling #settingsUpgradeBtn {
         display: inline-flex !important;
     }
 
-    /* --- Shared button styling --- */
-    #sidebarToggleBtn,
-    #topBarDarkModeToggle {
-        width: 40px !important;
-        height: 40px !important;
-        min-width: 40px !important;
-        min-height: 40px !important;
-
-        display: inline-flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-
-        margin: 0 !important;
-        padding: 0 !important;
-
-        border: 0 !important;
-        border-radius: 10px !important;
-
-        background: transparent !important;
-        color: var(--text-secondary, #5f6368) !important;
-
-        box-shadow: none !important;
-    }
-
+    /* --- Shared button hover --- */
     #sidebarToggleBtn:hover,
     #topBarDarkModeToggle:hover {
         background: rgba(0, 0, 0, 0.055) !important;
-        color: var(--text-primary, #111111) !important;
-    }
-
-    /* --- Model selector --- */
-    .model-dropdown-wrapper {
-        margin: 0 !important;
-        padding: 0 !important;
-    }
-
-    .model-badge {
-        height: 40px !important;
-        min-height: 40px !important;
-
-        display: inline-flex !important;
-        align-items: center !important;
-        gap: 8px !important;
-
-        margin: 0 !important;
-        padding: 0 8px !important;
-
-        border: 0 !important;
-        border-radius: 10px !important;
-
-        background: transparent !important;
-        box-shadow: none !important;
     }
 
     .model-badge:hover {
         background: rgba(0, 0, 0, 0.055) !important;
-    }
-
-    /* --- Scroll area & composer follow app-shell width --- */
-    .scroll-area,
-    .composer-dock {
-        width: 100% !important;
-        max-width: 100% !important;
-        margin: 0 !important;
-        padding: 0 !important; /* Remove any inherited padding */
     }
 
     /* --- Dark theme --- */

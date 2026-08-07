@@ -2250,33 +2250,24 @@ body.dark-mode #settingsPanelBilling #settingsUpgradeBtn {
 }
 
 /* =========================================================
-   NEO DESKTOP — FINAL STABLE SHELL + TOP BAR (v37)
+   NEO DESKTOP — FINAL STABLE SHELL + TOP BAR (v40)
    ========================================================= */
 
 @media (min-width: 768px) {
     :root {
         --neo-sidebar-width: 304px;
-        --neo-topbar-height: 56px;   /* 72px se thin */
+        --neo-topbar-height: 56px;
         --neo-edge-gap: 24px;
     }
 
+    /* App-shell now uses flex layout – no manual offset */
     .app-shell {
-        width: calc(100% - var(--neo-sidebar-width)) !important;
-        max-width: none !important;              /* IMPORTANT */
-        margin-left: var(--neo-sidebar-width) !important;
-        transition: width 180ms ease, margin-left 180ms ease !important;
-    }
-
-    body.sidebar-collapsed .app-shell {
-        width: 100% !important;
+        flex: 1 1 auto !important;
+        width: auto !important;
         max-width: none !important;
+        min-width: 0 !important;
         margin-left: 0 !important;
-    }
-
-    body:not(.sidebar-collapsed) .app-shell {
-        width: calc(100% - var(--neo-sidebar-width)) !important;
-        max-width: none !important;
-        margin-left: var(--neo-sidebar-width) !important;
+        transform: none !important;
     }
 
     .top-bar {
@@ -2285,7 +2276,7 @@ body.dark-mode #settingsPanelBilling #settingsUpgradeBtn {
         z-index: 60 !important;
 
         width: 100% !important;
-        max-width: none !important;              /* THIS removes the fake gap */
+        max-width: none !important;
 
         height: var(--neo-topbar-height) !important;
         min-height: var(--neo-topbar-height) !important;
@@ -2378,7 +2369,7 @@ body.dark-mode #settingsPanelBilling #settingsUpgradeBtn {
         box-shadow: none !important;
     }
 
-    /* --- Toggle visibility --- */
+    /* Toggle visibility */
     body:not(.sidebar-collapsed) #sidebarToggleBtn {
         display: none !important;
     }
@@ -2387,7 +2378,7 @@ body.dark-mode #settingsPanelBilling #settingsUpgradeBtn {
         display: inline-flex !important;
     }
 
-    /* --- Shared button hover --- */
+    /* Hover states */
     #sidebarToggleBtn:hover,
     #topBarDarkModeToggle:hover {
         background: rgba(0, 0, 0, 0.055) !important;
@@ -2397,7 +2388,7 @@ body.dark-mode #settingsPanelBilling #settingsUpgradeBtn {
         background: rgba(0, 0, 0, 0.055) !important;
     }
 
-    /* --- Dark theme --- */
+    /* Dark mode */
     body.dark-mode .top-bar {
         background: var(--bg-main, #212121) !important;
         border-bottom-color: rgba(255, 255, 255, 0.08) !important;
@@ -2407,28 +2398,5 @@ body.dark-mode #settingsPanelBilling #settingsUpgradeBtn {
     body.dark-mode #topBarDarkModeToggle:hover,
     body.dark-mode .model-badge:hover {
         background: rgba(255, 255, 255, 0.08) !important;
-    }
-}
-
-/* =========================================================
-   NEO DESKTOP — EMPTY STATE VERTICAL BALANCE
-   Removes excessive dead space without changing widths.
-   ========================================================= */
-
-@media (min-width: 768px) {
-
-    /* Bring the welcome area slightly lower */
-    .hero-section {
-        transform: translateY(26px) !important;
-    }
-
-    /* Bring composer upward into the visual composition */
-    .composer-dock {
-        bottom: 54px !important;
-    }
-
-    /* Keep disclaimer attached naturally */
-    .composer-note {
-        margin-top: 8px !important;
     }
 }

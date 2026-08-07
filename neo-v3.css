@@ -2544,3 +2544,24 @@ body.dark-mode .attachment-remove-btn {
         padding-left: 2px !important;
     }
 }
+
+/* =========================================================
+   NEO V3 — FINAL TOOLTIP CLEANUP
+   Pure pill, fade only. No scale, no arrow.
+   ========================================================= */
+
+.neo-tooltip {
+    transform: none !important;
+    transition:
+        opacity 150ms ease,
+        visibility 150ms ease !important;
+}
+
+.neo-tooltip.is-visible {
+    transform: none !important;
+}
+
+.neo-tooltip::after,
+.neo-tooltip-arrow {
+    display: none !important;
+}

@@ -57,6 +57,12 @@
     let selectedModel = "l1.0";
     let userPlan = "free";
 
+    // Signed URL cache
+    const signedUrlCache = new Map();
+
+    // History dedupe
+    let historyLoadPromise = null;
+
     // DOM ELEMENTS
     const chatInput = document.getElementById("chatInput");
     const sendBtn = document.getElementById("sendBtn");
@@ -116,7 +122,7 @@
     const neoSettingsCloseBtn = document.getElementById("neoSettingsCloseBtn");
     const settingsTabs = document.querySelectorAll(".neo-settings-tab");
     const settingsPanels = document.querySelectorAll(".neo-settings-panel");
-    // settingsThemeBtn removed — now handled by segmented control
+    // settingsThemeBtn removed – now handled by segmented control
     const saveProfileSettingsBtn = document.getElementById("saveProfileSettingsBtn");
     const resetProfileSettingsBtn = document.getElementById("resetProfileSettingsBtn");
     const settingsUpgradeBtn = document.getElementById("settingsUpgradeBtn");
@@ -561,6 +567,94 @@
     }
 
     // --------------------------------------------------------
+    // PRIVATE CHAT — Off / On (Local preference only)
+    // --------------------------------------------------------
+    function setupPrivateChatControl() {
+        const toggle =
+            document.getElementById("settingsPrivateChatToggle");
+
+        if (!toggle) return;
+
+        const applyState = enabled => {
+            toggle.classList.toggle("active", enabled);
+
+            toggle.setAttribute(
+                "aria-checked",
+                String(enabled)
+            );
+
+            localStorage.setItem(
+                "neo_private_chat",
+                enabled ? "on" : "off"
+            );
+        };
+
+        const stored =
+            localStorage.getItem("neo_private_chat") === "on";
+
+        applyState(stored);
+
+        toggle.addEventListener("click", () => {
+            const current =
+                toggle.getAttribute("aria-checked") === "true";
+
+            applyState(!current);
+        });
+    }
+
+    // --------------------------------------------------------
+    // INTERFACE — Minimal / Warm / Glass (Local preference only)
+    // --------------------------------------------------------
+    function setupInterfaceControl() {
+        const control =
+            document.getElementById("settingsInterfaceControl");
+
+        if (!control) return;
+
+        const buttons = control.querySelectorAll("button");
+
+        const applySelection = value => {
+            const allowed = ["minimal", "warm", "glass"];
+
+            const safeValue =
+                allowed.includes(value)
+                    ? value
+                    : "minimal";
+
+            localStorage.setItem(
+                "neo_interface",
+                safeValue
+            );
+
+            buttons.forEach(button => {
+                const active =
+                    button.dataset.value === safeValue;
+
+                button.classList.toggle("active", active);
+
+                button.setAttribute(
+                    "aria-pressed",
+                    String(active)
+                );
+            });
+        };
+
+        buttons.forEach(button => {
+            button.addEventListener("click", () => {
+                applySelection(
+                    button.dataset.value || "minimal"
+                );
+            });
+        });
+
+        const stored =
+            localStorage.getItem("neo_interface")
+            || "minimal";
+
+        applySelection(stored);
+    }
+
+    // --------------------------------------------------------
     // IMAGE COMPRESSION HELPER
     // --------------------------------------------------------
     async function compressImageFile(
@@ -666,6 +760,8 @@
         setupSettingsThemeControl();
         setupSystemThemeWatcher();
         setupIntelligenceControl();
+        setupPrivateChatControl();
+        setupInterfaceControl();
         configureSecurityHooks();
         initializeSidebarState();
         setupEventListeners();
@@ -1451,7 +1547,7 @@
     }
 
     // --------------------------------------------------------
-    //  HYDRATE ATTACHMENT PREVIEWS (REFRESH SIGNED URLs)
+    //  HYDRATE ATTACHMENT PREVIEWS (REFRESH SIGNED URLs) with cache
     // --------------------------------------------------------
     async function hydrateAttachmentPreviews(attachments = []) {
         if (!Array.isArray(attachments) || !supabaseClient) {
@@ -1472,12 +1568,31 @@
                     return file;
                 }
 
+                const cacheKey = `${file.bucket}:${file.path}`;
+                const cached = signedUrlCache.get(cacheKey);
+
+                if (
+                    cached &&
+                    cached.url &&
+                    cached.expiresAt > Date.now()
+                ) {
+                    return {
+                        ...file,
+                        signedUrl: cached.url
+                    };
+                }
+
                 try {
                     const { data, error } = await supabaseClient.storage
                         .from(file.bucket)
                         .createSignedUrl(file.path, 3600);
 
                     if (!error && data?.signedUrl) {
+                        signedUrlCache.set(cacheKey, {
+                            url: data.signedUrl,
+                            expiresAt: Date.now() + 55 * 60 * 1000
+                        });
+
                         return {
                             ...file,
                             signedUrl: data.signedUrl
@@ -2521,7 +2636,7 @@
     }
 
     // --------------------------------------------------------
-    //  RENDER USER PROFILE (UPDATED: snake_case support + cache busting)
+    //  RENDER USER PROFILE
     // --------------------------------------------------------
     async function renderUserProfile() {
         let profile = null;
@@ -2612,9 +2727,23 @@
     }
 
     // --------------------------------------------------------
-    //  LOAD HISTORY (with shimmer)
+    //  LOAD HISTORY (with shimmer and dedupe)
     // --------------------------------------------------------
     async function loadHistoryFromSupabase() {
+        if (historyLoadPromise) {
+            return historyLoadPromise;
+        }
+
+        historyLoadPromise = performHistoryLoad();
+
+        try {
+            return await historyLoadPromise;
+        } finally {
+            historyLoadPromise = null;
+        }
+    }
+
+    async function performHistoryLoad() {
         if (!historyList) return;
 
         historyList.innerHTML = `

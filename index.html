@@ -35,7 +35,7 @@
 
   <title>NEYO • Signaturesi</title>
 
-  <!-- ===== ADDED: Google Fonts for brand typography ===== -->
+  <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link
@@ -43,17 +43,17 @@
     rel="stylesheet"
   >
 
-  <!-- ABSOLUTE PATH WITH v=82 -->
+  <!-- Styles -->
   <link rel="stylesheet" href="/neo.css?v=82">
-  <!-- NEO UI V2 - bumped to v=2 (chat rhythm) -->
   <link rel="stylesheet" href="/neo-ui-v2.css?v=2">
-  <!-- NEW V3 COMPOSER STYLES - bumped to v=46 (no-scale safety) -->
   <link rel="stylesheet" href="/neo-v3.css?v=46">
 
+  <!-- KaTeX -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css">
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/contrib/auto-render.min.js"></script>
 
+  <!-- External libs -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
@@ -129,7 +129,6 @@
 
   <main class="app-shell">
 
-    <!-- ✅ top-bar outside scroll-area, inside app-shell -->
     <header class="top-bar">
       <div class="top-left">
         <button class="icon-btn top-toggle-btn" id="sidebarToggleBtn" title="Toggle Sidebar" type="button">
@@ -240,46 +239,215 @@
     <div class="history-popup-item danger" id="hpDeleteBtn"><i data-lucide="trash-2" size="16"></i>Delete</div>
   </div>
 
+  <!-- ========================================================= -->
+  <!-- NEYO SETTINGS V1 — UPDATED MODAL                         -->
+  <!-- ========================================================= -->
   <div class="neo-settings-overlay" id="neoSettingsOverlay" aria-hidden="true">
     <div class="neo-settings-modal" role="dialog" aria-modal="true" aria-label="NEYO Settings">
       <aside class="neo-settings-sidebar">
+
+        <!-- Close button -->
         <button class="neo-settings-close" id="neoSettingsCloseBtn" type="button" aria-label="Close settings">
           <i data-lucide="x" size="20"></i>
         </button>
+
+        <!-- Navigation — V1 spec (11 tabs + dividers) -->
         <button class="neo-settings-tab active" type="button" data-settings-tab="general">
-          <i data-lucide="settings" size="17"></i><span>General</span>
+          <i data-lucide="settings-2" size="17"></i>
+          <span>General</span>
         </button>
-        <button class="neo-settings-tab" type="button" data-settings-tab="profile">
-          <i data-lucide="user-circle" size="17"></i><span>Profile</span>
+
+        <button class="neo-settings-tab" type="button" data-settings-tab="appearance">
+          <i data-lucide="palette" size="17"></i>
+          <span>Appearance</span>
         </button>
+
+        <button class="neo-settings-tab" type="button" data-settings-tab="workspace">
+          <i data-lucide="briefcase-business" size="17"></i>
+          <span>Workspace</span>
+        </button>
+
+        <div class="neo-settings-nav-divider"></div>
+
+        <button class="neo-settings-tab" type="button" data-settings-tab="privacy">
+          <i data-lucide="shield-check" size="17"></i>
+          <span>Privacy</span>
+        </button>
+
+        <button class="neo-settings-tab" type="button" data-settings-tab="memory">
+          <i data-lucide="brain" size="17"></i>
+          <span>Memory</span>
+        </button>
+
         <button class="neo-settings-tab" type="button" data-settings-tab="notifications">
-          <i data-lucide="bell" size="17"></i><span>Notifications</span>
+          <i data-lucide="bell" size="17"></i>
+          <span>Notifications</span>
         </button>
+
+        <button class="neo-settings-tab" type="button" data-settings-tab="files">
+          <i data-lucide="folder" size="17"></i>
+          <span>Files</span>
+        </button>
+
+        <div class="neo-settings-nav-divider"></div>
+
         <button class="neo-settings-tab" type="button" data-settings-tab="personalities">
-          <i data-lucide="sparkles" size="17"></i><span>NEYO Personalities</span>
+          <i data-lucide="sparkles" size="17"></i>
+          <span>NEYO Personalities</span>
         </button>
-        <button class="neo-settings-tab" type="button" data-settings-tab="billing">
-          <i data-lucide="credit-card" size="17"></i><span>Billing</span>
+
+        <div class="neo-settings-nav-divider"></div>
+
+        <button class="neo-settings-tab" type="button" data-settings-tab="accessibility">
+          <i data-lucide="accessibility" size="17"></i>
+          <span>Accessibility</span>
         </button>
+
+        <button class="neo-settings-tab" type="button" data-settings-tab="keyboard">
+          <i data-lucide="keyboard" size="17"></i>
+          <span>Keyboard</span>
+        </button>
+
+        <button class="neo-settings-tab" type="button" data-settings-tab="about">
+          <i data-lucide="circle-info" size="17"></i>
+          <span>About</span>
+        </button>
+
       </aside>
+
       <section class="neo-settings-content">
+
+        <!-- ========================================================= -->
+        <!-- PANEL: GENERAL — V1 SPEC                                  -->
+        <!-- ========================================================= -->
         <div class="neo-settings-panel active" id="settingsPanelGeneral">
-          <h2>General</h2>
-          <div class="settings-row">
-            <div><strong>Appearance</strong><small>Choose how NEYO looks on this device.</small></div>
-            <button class="settings-pill-btn" id="settingsThemeBtn" type="button">System</button>
+
+          <div class="neo-settings-panel-header">
+            <h2>General</h2>
+            <p>Control how NEYO behaves across your workspace.</p>
           </div>
-          <div class="settings-row">
-            <div><strong>Language</strong><small>Auto-detect Urdu, Roman Urdu, Hindi, and English.</small></div>
-            <button class="settings-pill-btn" type="button">Auto</button>
+
+          <div class="neo-settings-section">
+            <span class="neo-settings-section-title">Quick Controls</span>
+
+            <!-- Theme -->
+            <div class="settings-row">
+              <div>
+                <strong>Theme</strong>
+                <small>Choose your preferred interface theme.</small>
+              </div>
+              <div class="settings-segmented-control" id="settingsThemeControl">
+                <button type="button" data-value="system" class="active">System</button>
+                <button type="button" data-value="light">Light</button>
+                <button type="button" data-value="dark">Dark</button>
+              </div>
+            </div>
+
+            <!-- Intelligence -->
+            <div class="settings-row">
+              <div>
+                <strong>Intelligence</strong>
+                <small>Choose the default reasoning level.</small>
+              </div>
+              <div class="settings-segmented-control" id="settingsIntelligenceControl">
+                <button type="button" data-value="standard" class="active">Standard</button>
+                <button type="button" data-value="maximum">Maximum</button>
+              </div>
+            </div>
+
+            <!-- Private Chat -->
+            <div class="settings-row">
+              <div>
+                <strong>Private Chat</strong>
+                <small>Keep new chats outside saved history and memory.</small>
+              </div>
+              <button
+                class="settings-toggle"
+                id="settingsPrivateChatToggle"
+                type="button"
+                role="switch"
+                aria-checked="false"
+              >
+                <span></span>
+              </button>
+            </div>
+
+            <!-- Interface -->
+            <div class="settings-row">
+              <div>
+                <strong>Interface</strong>
+                <small>Choose the visual character of NEYO.</small>
+              </div>
+              <div class="settings-segmented-control" id="settingsInterfaceControl">
+                <button type="button" data-value="minimal" class="active">Minimal</button>
+                <button type="button" data-value="warm">Warm</button>
+                <button type="button" data-value="glass">Glass</button>
+              </div>
+            </div>
           </div>
-          <div class="settings-row">
-            <div><strong>Deep Research</strong><small>Use backend URL context when a link is attached.</small></div>
-            <span class="settings-status-pill">Ready</span>
+
+          <div class="neo-settings-section">
+            <span class="neo-settings-section-title">General Preferences</span>
+
+            <!-- Language -->
+            <div class="settings-row">
+              <div>
+                <strong>Language</strong>
+                <small>Automatically detect the language you use.</small>
+              </div>
+              <button class="settings-value-btn" id="settingsLanguageBtn" type="button">
+                Auto-detect
+                <i data-lucide="chevron-right" size="15"></i>
+              </button>
+            </div>
+
+            <!-- Default Personality -->
+            <div class="settings-row">
+              <div>
+                <strong>Default Personality</strong>
+                <small>Choose which NEYO personality starts new chats.</small>
+              </div>
+              <button class="settings-value-btn" id="settingsDefaultPersonalityBtn" type="button">
+                Neyo
+                <i data-lucide="chevron-right" size="15"></i>
+              </button>
+            </div>
+
+            <!-- Open NEYO on -->
+            <div class="settings-row">
+              <div>
+                <strong>Open NEYO on</strong>
+                <small>Choose what appears when the app opens.</small>
+              </div>
+              <button class="settings-value-btn" id="settingsOpenOnBtn" type="button">
+                New chat
+                <i data-lucide="chevron-right" size="15"></i>
+              </button>
+            </div>
+
+            <!-- Auto-save drafts -->
+            <div class="settings-row">
+              <div>
+                <strong>Auto-save drafts</strong>
+                <small>Preserve unfinished messages automatically.</small>
+              </div>
+              <button
+                class="settings-toggle active"
+                id="settingsAutoSaveToggle"
+                type="button"
+                role="switch"
+                aria-checked="true"
+              >
+                <span></span>
+              </button>
+            </div>
           </div>
+
         </div>
 
-        <!-- ✅ MINIMAL CHATGPT-STYLE PROFILE PANEL (existing HTML, unchanged) -->
+        <!-- ========================================================= -->
+        <!-- PANEL: PROFILE — KEPT INTACT                              -->
+        <!-- ========================================================= -->
         <div class="neo-settings-panel" id="settingsPanelProfile">
           <h2>Profile</h2>
 
@@ -288,21 +456,16 @@
 
               <div class="profile-avatar-upload">
                 <span class="profile-upload-label">Profile photo</span>
-
                 <div class="profile-upload-row">
                   <div class="profile-editor-avatar" id="settingsAvatarPreview">U</div>
-
                   <div class="profile-upload-actions">
                     <button class="settings-ghost-btn" id="chooseAvatarBtn" type="button">
                       Change photo
                     </button>
-
                     <button class="settings-ghost-btn" id="removeAvatarBtn" type="button">
                       Remove
                     </button>
-
                     <input id="settingsAvatarFileInput" type="file" accept="image/jpeg,image/png,image/webp" hidden>
-
                     <span class="settings-helper-text">
                       PNG, JPG or WebP · Max 5 MB
                     </span>
@@ -332,15 +495,23 @@
           </div>
         </div>
 
+        <!-- ========================================================= -->
+        <!-- PANEL: NOTIFICATIONS — REUSED                             -->
+        <!-- ========================================================= -->
         <div class="neo-settings-panel" id="settingsPanelNotifications">
           <h2>Notifications</h2>
           <div class="notification-center" id="notificationCenter">
             <div class="notification-empty-state">
-              <i data-lucide="inbox" size="22"></i><strong>No new notifications</strong>
+              <i data-lucide="inbox" size="22"></i>
+              <strong>No new notifications</strong>
               <small>Important account, billing, and NEYO updates will appear here.</small>
             </div>
           </div>
         </div>
+
+        <!-- ========================================================= -->
+        <!-- PANEL: PERSONALITIES — REUSED                             -->
+        <!-- ========================================================= -->
         <div class="neo-settings-panel" id="settingsPanelPersonalities">
           <h2>NEYO Personalities</h2>
           <p class="settings-subtitle">Choose how NEYO should respond. Custom personality is Pro only.</p>
@@ -383,17 +554,126 @@
             </button>
           </div>
         </div>
+
+        <!-- ========================================================= -->
+        <!-- PANEL: BILLING — KEPT INTACT                              -->
+        <!-- ========================================================= -->
         <div class="neo-settings-panel" id="settingsPanelBilling">
           <h2>Billing</h2>
           <div class="settings-row">
-            <div><strong id="billingPlanText">Free Plan</strong><small>Upgrade to unlock more usage and advanced features.</small></div>
+            <div>
+              <strong id="billingPlanText">Free Plan</strong>
+              <small>Upgrade to unlock more usage and advanced features.</small>
+            </div>
             <button class="settings-primary-btn" id="settingsUpgradeBtn" type="button">Upgrade</button>
           </div>
         </div>
+
+        <!-- ========================================================= -->
+        <!-- NEW PLACEHOLDER PANELS (V1 tabs)                          -->
+        <!-- ========================================================= -->
+
+        <div class="neo-settings-panel" id="settingsPanelAppearance">
+          <div class="neo-settings-panel-header">
+            <h2>Appearance</h2>
+            <p>Customize the look and feel of NEYO.</p>
+          </div>
+          <div class="neo-settings-placeholder">
+            <i data-lucide="palette" size="28"></i>
+            <strong>Appearance settings</strong>
+            <small>Coming soon.</small>
+          </div>
+        </div>
+
+        <div class="neo-settings-panel" id="settingsPanelWorkspace">
+          <div class="neo-settings-panel-header">
+            <h2>Workspace</h2>
+            <p>Manage your workspace preferences.</p>
+          </div>
+          <div class="neo-settings-placeholder">
+            <i data-lucide="briefcase-business" size="28"></i>
+            <strong>Workspace settings</strong>
+            <small>Coming soon.</small>
+          </div>
+        </div>
+
+        <div class="neo-settings-panel" id="settingsPanelPrivacy">
+          <div class="neo-settings-panel-header">
+            <h2>Privacy</h2>
+            <p>Control your data and privacy preferences.</p>
+          </div>
+          <div class="neo-settings-placeholder">
+            <i data-lucide="shield-check" size="28"></i>
+            <strong>Privacy settings</strong>
+            <small>Coming soon.</small>
+          </div>
+        </div>
+
+        <div class="neo-settings-panel" id="settingsPanelMemory">
+          <div class="neo-settings-panel-header">
+            <h2>Memory</h2>
+            <p>Manage what NEYO remembers about you.</p>
+          </div>
+          <div class="neo-settings-placeholder">
+            <i data-lucide="brain" size="28"></i>
+            <strong>Memory settings</strong>
+            <small>Coming soon.</small>
+          </div>
+        </div>
+
+        <div class="neo-settings-panel" id="settingsPanelFiles">
+          <div class="neo-settings-panel-header">
+            <h2>Files</h2>
+            <p>Manage your uploaded files and attachments.</p>
+          </div>
+          <div class="neo-settings-placeholder">
+            <i data-lucide="folder" size="28"></i>
+            <strong>Files settings</strong>
+            <small>Coming soon.</small>
+          </div>
+        </div>
+
+        <div class="neo-settings-panel" id="settingsPanelAccessibility">
+          <div class="neo-settings-panel-header">
+            <h2>Accessibility</h2>
+            <p>Make NEYO work better for you.</p>
+          </div>
+          <div class="neo-settings-placeholder">
+            <i data-lucide="accessibility" size="28"></i>
+            <strong>Accessibility settings</strong>
+            <small>Coming soon.</small>
+          </div>
+        </div>
+
+        <div class="neo-settings-panel" id="settingsPanelKeyboard">
+          <div class="neo-settings-panel-header">
+            <h2>Keyboard</h2>
+            <p>Customize keyboard shortcuts and behavior.</p>
+          </div>
+          <div class="neo-settings-placeholder">
+            <i data-lucide="keyboard" size="28"></i>
+            <strong>Keyboard settings</strong>
+            <small>Coming soon.</small>
+          </div>
+        </div>
+
+        <div class="neo-settings-panel" id="settingsPanelAbout">
+          <div class="neo-settings-panel-header">
+            <h2>About</h2>
+            <p>Version, credits, and legal information.</p>
+          </div>
+          <div class="neo-settings-placeholder">
+            <i data-lucide="circle-info" size="28"></i>
+            <strong>NEYO</strong>
+            <small>Version 1.0 · Built with ❤️</small>
+          </div>
+        </div>
+
       </section>
     </div>
   </div>
 
+  <!-- Upgrade Modal (unchanged) -->
   <div class="modal-overlay" id="upgradeModal">
     <div class="modal-card">
       <button class="modal-close-btn" id="modalCloseBtn" type="button">&times;</button>
@@ -423,7 +703,6 @@
     </div>
   </div>
 
-  <!-- NEO V3 JS (v=86 – unchanged) -->
   <script src="/neo.js?v=86"></script>
 </body>
 </html>

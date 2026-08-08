@@ -4977,3 +4977,279 @@ body.dark-mode[data-neyo-interface="glass"]
             0.01ms !important;
     }
 }
+
+/* =========================================================
+   NEYO — UNIFIED UI TOKENS V1
+   Final visual normalization layer
+   ========================================================= */
+
+:root {
+    --neyo-bg: #ffffff;
+    --neyo-surface: #ffffff;
+    --neyo-surface-soft: #f5f5f5;
+    --neyo-surface-hover: #f1f1f1;
+
+    --neyo-text: #171717;
+    --neyo-text-secondary: #737373;
+    --neyo-text-muted: #9b9b9b;
+
+    --neyo-border: rgba(0, 0, 0, 0.08);
+    --neyo-border-strong: rgba(0, 0, 0, 0.14);
+
+    --neyo-radius-sm: 10px;
+    --neyo-radius-md: 14px;
+    --neyo-radius-lg: 20px;
+    --neyo-radius-pill: 999px;
+
+    --neyo-shadow-sm:
+        0 1px 3px rgba(0, 0, 0, 0.04);
+
+    --neyo-shadow-md:
+        0 10px 32px rgba(0, 0, 0, 0.08);
+
+    --neyo-motion-fast: 150ms ease;
+    --neyo-motion-medium: 200ms ease;
+}
+
+body.dark-mode {
+    --neyo-bg: #171717;
+    --neyo-surface: #171717;
+    --neyo-surface-soft: #252525;
+    --neyo-surface-hover: #2b2b2b;
+
+    --neyo-text: #f5f5f5;
+    --neyo-text-secondary: #b5b5b5;
+    --neyo-text-muted: #8f8f8f;
+
+    --neyo-border: rgba(255, 255, 255, 0.08);
+    --neyo-border-strong: rgba(255, 255, 255, 0.15);
+
+    --neyo-shadow-sm:
+        0 1px 4px rgba(0, 0, 0, 0.26);
+
+    --neyo-shadow-md:
+        0 14px 38px rgba(0, 0, 0, 0.38);
+}
+
+
+/* ---------- Settings shell ---------- */
+
+.neo-settings-modal {
+    border-radius: var(--neyo-radius-lg) !important;
+}
+
+.neo-settings-close,
+.neo-settings-tab {
+    border-radius: var(--neyo-radius-sm) !important;
+}
+
+.neo-settings-tab.active {
+    box-shadow: var(--neyo-shadow-sm) !important;
+}
+
+
+/* ---------- General controls ---------- */
+
+#settingsPanelGeneral .settings-segmented-control {
+    border-radius: var(--neyo-radius-sm) !important;
+}
+
+#settingsPanelGeneral
+.settings-segmented-control button {
+    border-radius: 8px !important;
+}
+
+#settingsPanelGeneral .settings-value-btn {
+    border-radius: var(--neyo-radius-sm) !important;
+}
+
+#settingsPanelGeneral .settings-select-menu {
+    border-radius: var(--neyo-radius-md) !important;
+    box-shadow: var(--neyo-shadow-md) !important;
+}
+
+#settingsPanelGeneral .settings-select-option {
+    border-radius: 9px !important;
+}
+
+
+/* ---------- Model menu ---------- */
+
+.model-dropdown-menu {
+    border-radius: var(--neyo-radius-lg) !important;
+    box-shadow: var(--neyo-shadow-md) !important;
+}
+
+.model-option {
+    border-radius: var(--neyo-radius-md) !important;
+}
+
+
+/* ---------- Profile ---------- */
+
+#settingsPanelProfile input {
+    border-radius: var(--neyo-radius-md) !important;
+}
+
+#settingsPanelProfile #chooseAvatarBtn,
+#settingsPanelProfile #removeAvatarBtn {
+    border-radius: var(--neyo-radius-sm) !important;
+}
+
+
+/* ---------- Tooltips ---------- */
+
+.neo-tooltip {
+    border-radius: var(--neyo-radius-pill) !important;
+}
+
+
+/* ---------- Global motion: fade / surface only ---------- */
+
+.neo-settings-modal {
+    transform: none !important;
+
+    transition:
+        opacity var(--neyo-motion-medium) !important;
+}
+
+.neo-settings-overlay.show .neo-settings-modal {
+    transform: none !important;
+}
+
+button,
+[role="button"],
+.model-badge,
+.model-option,
+.suggestion-chip,
+.attachment-remove-btn,
+.settings-value-btn,
+.settings-select-option {
+    transform: none !important;
+
+    transition:
+        background-color var(--neyo-motion-fast),
+        color var(--neyo-motion-fast),
+        border-color var(--neyo-motion-fast),
+        opacity var(--neyo-motion-fast),
+        box-shadow var(--neyo-motion-fast)
+        !important;
+}
+
+
+/* ---------- Warm = warm-neutral, not beige theme ---------- */
+
+body[data-neyo-interface="warm"] .app-shell,
+body[data-neyo-interface="warm"] .scroll-area {
+    background: #fbfaf8 !important;
+}
+
+body[data-neyo-interface="warm"] .sidebar {
+    background: #f8f7f4 !important;
+}
+
+body[data-neyo-interface="warm"]
+.glass-input-container {
+    background: #fdfcf9 !important;
+
+    border-color:
+        rgba(0, 0, 0, 0.08) !important;
+}
+
+body[data-neyo-interface="warm"]
+.message.user
+.message-wrapper
+> .message-content {
+    background: #f2f1ee !important;
+}
+
+
+/* Warm dark stays neutral */
+
+body.dark-mode[data-neyo-interface="warm"]
+.app-shell,
+body.dark-mode[data-neyo-interface="warm"]
+.scroll-area {
+    background: #191918 !important;
+}
+
+body.dark-mode[data-neyo-interface="warm"]
+.sidebar {
+    background: #1c1c1a !important;
+}
+
+body.dark-mode[data-neyo-interface="warm"]
+.glass-input-container {
+    background: #232321 !important;
+
+    border-color:
+        rgba(255, 255, 255, 0.09) !important;
+}
+
+body.dark-mode[data-neyo-interface="warm"]
+.message.user
+.message-wrapper
+> .message-content {
+    background: #2b2b28 !important;
+}
+
+
+/* ---------- Mobile consistency ---------- */
+
+@media (max-width: 767px) {
+
+    body[data-neyo-interface="minimal"] .sidebar {
+        background: var(--mobile-surface) !important;
+    }
+
+    body[data-neyo-interface="warm"] .sidebar {
+        background: #f8f7f4 !important;
+    }
+
+    body.dark-mode[data-neyo-interface="warm"]
+    .sidebar {
+        background: #1c1c1a !important;
+    }
+
+    body[data-neyo-interface="glass"] .sidebar {
+        background:
+            rgba(248, 248, 248, 0.88) !important;
+
+        backdrop-filter:
+            blur(20px) saturate(120%) !important;
+
+        -webkit-backdrop-filter:
+            blur(20px) saturate(120%) !important;
+    }
+
+    body.dark-mode[data-neyo-interface="glass"]
+    .sidebar {
+        background:
+            rgba(18, 18, 18, 0.88) !important;
+    }
+
+    #settingsPanelGeneral
+    .settings-value-btn {
+        min-height: 36px;
+    }
+
+    #settingsPanelGeneral
+    .settings-select-option {
+        min-height: 38px;
+    }
+}
+
+
+/* ---------- Reduced motion ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+
+    *,
+    *::before,
+    *::after {
+        scroll-behavior: auto !important;
+        transition-duration: 0.01ms !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+    }
+}

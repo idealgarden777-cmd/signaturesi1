@@ -2406,8 +2406,29 @@
         }
     }
 
+    // --------------------------------------------------------
+    //  LOAD HISTORY (with shimmer)
+    // --------------------------------------------------------
     async function loadHistoryFromSupabase() {
         if (!historyList) return;
+
+        // Show shimmer
+        historyList.innerHTML = `
+            <div class="history-loading" aria-hidden="true">
+                <div class="history-skeleton-row">
+                    <div class="history-skeleton-line"></div>
+                </div>
+
+                <div class="history-skeleton-row">
+                    <div class="history-skeleton-line"></div>
+                </div>
+
+                <div class="history-skeleton-row">
+                    <div class="history-skeleton-line"></div>
+                </div>
+            </div>
+        `;
+
         try {
             const response = await fetch("/api/history", {
                 method: "GET",
@@ -2417,6 +2438,7 @@
             });
             const data = await readJsonResponse(response);
             const conversations = data.conversations || [];
+
             historyList.innerHTML = "";
             conversations.forEach(item => {
                 const row = document.createElement("div");
@@ -2504,6 +2526,9 @@
             }
         } catch (error) {
             console.warn("History load failed:", error);
+            if (historyList) {
+                historyList.innerHTML = "";
+            }
         }
     }
 

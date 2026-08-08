@@ -317,7 +317,7 @@
       <section class="neo-settings-content">
 
         <!-- ========================================================= -->
-        <!-- PANEL: GENERAL – V1 SPEC                                  -->
+        <!-- PANEL: GENERAL — V1 FINAL                                 -->
         <!-- ========================================================= -->
         <div class="neo-settings-panel active" id="settingsPanelGeneral">
           <div class="neo-settings-panel-header">
@@ -325,98 +325,342 @@
             <p>Control how NEYO behaves across your workspace.</p>
           </div>
 
+          <!-- QUICK CONTROLS -->
           <div class="neo-settings-section">
             <span class="neo-settings-section-title">Quick Controls</span>
 
+            <!-- Theme -->
             <div class="settings-row">
               <div>
                 <strong>Theme</strong>
                 <small>Choose your preferred interface theme.</small>
               </div>
-              <div class="settings-segmented-control" id="settingsThemeControl">
-                <button type="button" data-value="system" class="active">System</button>
-                <button type="button" data-value="light">Light</button>
-                <button type="button" data-value="dark">Dark</button>
+
+              <div
+                class="settings-segmented-control"
+                id="settingsThemeControl"
+                role="group"
+                aria-label="Theme"
+              >
+                <button
+                  type="button"
+                  data-value="system"
+                  class="active"
+                  aria-pressed="true"
+                >
+                  System
+                </button>
+
+                <button
+                  type="button"
+                  data-value="light"
+                  aria-pressed="false"
+                >
+                  Light
+                </button>
+
+                <button
+                  type="button"
+                  data-value="dark"
+                  aria-pressed="false"
+                >
+                  Dark
+                </button>
               </div>
             </div>
 
+            <!-- Intelligence -->
             <div class="settings-row">
               <div>
                 <strong>Intelligence</strong>
                 <small>Choose the default reasoning level.</small>
               </div>
-              <div class="settings-segmented-control" id="settingsIntelligenceControl">
-                <button type="button" data-value="standard" class="active">Standard</button>
-                <button type="button" data-value="maximum">Maximum</button>
+
+              <div
+                class="settings-segmented-control"
+                id="settingsIntelligenceControl"
+                role="group"
+                aria-label="Intelligence"
+              >
+                <button
+                  type="button"
+                  data-value="standard"
+                  class="active"
+                  aria-pressed="true"
+                >
+                  Standard
+                </button>
+
+                <button
+                  type="button"
+                  data-value="maximum"
+                  aria-pressed="false"
+                >
+                  Maximum
+                </button>
               </div>
             </div>
 
+            <!-- Private Chat -->
             <div class="settings-row">
               <div>
                 <strong>Private Chat</strong>
                 <small>Keep new chats outside saved history and memory.</small>
               </div>
-              <button class="settings-toggle" id="settingsPrivateChatToggle" type="button" role="switch" aria-checked="false">
-                <span></span>
+
+              <button
+                class="settings-toggle"
+                id="settingsPrivateChatToggle"
+                type="button"
+                role="switch"
+                aria-label="Private Chat"
+                aria-checked="false"
+              >
+                <span aria-hidden="true"></span>
               </button>
             </div>
 
+            <!-- Interface -->
             <div class="settings-row">
               <div>
                 <strong>Interface</strong>
                 <small>Choose the visual character of NEYO.</small>
               </div>
-              <div class="settings-segmented-control" id="settingsInterfaceControl">
-                <button type="button" data-value="minimal" class="active">Minimal</button>
-                <button type="button" data-value="warm">Warm</button>
-                <button type="button" data-value="glass">Glass</button>
+
+              <div
+                class="settings-segmented-control"
+                id="settingsInterfaceControl"
+                role="group"
+                aria-label="Interface style"
+              >
+                <button
+                  type="button"
+                  data-value="minimal"
+                  class="active"
+                  aria-pressed="true"
+                >
+                  Minimal
+                </button>
+
+                <button
+                  type="button"
+                  data-value="warm"
+                  aria-pressed="false"
+                >
+                  Warm
+                </button>
+
+                <button
+                  type="button"
+                  data-value="glass"
+                  aria-pressed="false"
+                >
+                  Glass
+                </button>
               </div>
             </div>
           </div>
 
+          <!-- GENERAL PREFERENCES -->
           <div class="neo-settings-section">
             <span class="neo-settings-section-title">General Preferences</span>
 
-            <div class="settings-row">
+            <!-- Language -->
+            <div class="settings-row settings-select-row">
               <div>
                 <strong>Language</strong>
-                <small>Automatically detect the language you use.</small>
+                <small>Choose how NEYO should respond by default.</small>
               </div>
-              <button class="settings-value-btn" id="settingsLanguageBtn" type="button">
-                Auto-detect
-                <i data-lucide="chevron-right" size="15"></i>
-              </button>
+
+              <div class="settings-select-wrapper">
+                <button
+                  class="settings-value-btn"
+                  id="settingsLanguageBtn"
+                  type="button"
+                  aria-haspopup="listbox"
+                  aria-expanded="false"
+                  aria-controls="settingsLanguageMenu"
+                >
+                  <span id="settingsLanguageValue">Auto-detect</span>
+                  <i data-lucide="chevron-down" size="15"></i>
+                </button>
+
+                <div
+                  class="settings-select-menu"
+                  id="settingsLanguageMenu"
+                  role="listbox"
+                  aria-label="Language"
+                  hidden
+                >
+                  <button
+                    type="button"
+                    class="settings-select-option active"
+                    data-value="auto"
+                    role="option"
+                    aria-selected="true"
+                  >
+                    Auto-detect
+                  </button>
+
+                  <button
+                    type="button"
+                    class="settings-select-option"
+                    data-value="english"
+                    role="option"
+                    aria-selected="false"
+                  >
+                    English
+                  </button>
+
+                  <button
+                    type="button"
+                    class="settings-select-option"
+                    data-value="urdu"
+                    role="option"
+                    aria-selected="false"
+                  >
+                    Urdu
+                  </button>
+
+                  <button
+                    type="button"
+                    class="settings-select-option"
+                    data-value="roman-urdu"
+                    role="option"
+                    aria-selected="false"
+                  >
+                    Roman Urdu
+                  </button>
+                </div>
+              </div>
             </div>
 
-            <div class="settings-row">
+            <!-- Default Personality -->
+            <div class="settings-row settings-select-row">
               <div>
                 <strong>Default Personality</strong>
                 <small>Choose which NEYO personality starts new chats.</small>
               </div>
-              <button class="settings-value-btn" id="settingsDefaultPersonalityBtn" type="button">
-                Neyo
-                <i data-lucide="chevron-right" size="15"></i>
-              </button>
+
+              <div class="settings-select-wrapper">
+                <button
+                  class="settings-value-btn"
+                  id="settingsDefaultPersonalityBtn"
+                  type="button"
+                  aria-haspopup="listbox"
+                  aria-expanded="false"
+                  aria-controls="settingsDefaultPersonalityMenu"
+                >
+                  <span id="settingsDefaultPersonalityValue">Neyo</span>
+                  <i data-lucide="chevron-down" size="15"></i>
+                </button>
+
+                <div
+                  class="settings-select-menu"
+                  id="settingsDefaultPersonalityMenu"
+                  role="listbox"
+                  aria-label="Default personality"
+                  hidden
+                >
+                  <button
+                    type="button"
+                    class="settings-select-option active"
+                    data-value="neyo"
+                    role="option"
+                    aria-selected="true"
+                  >
+                    Neyo
+                  </button>
+
+                  <button
+                    type="button"
+                    class="settings-select-option"
+                    data-value="zadi"
+                    role="option"
+                    aria-selected="false"
+                  >
+                    Zadi
+                  </button>
+
+                  <button
+                    type="button"
+                    class="settings-select-option"
+                    data-value="wizi"
+                    role="option"
+                    aria-selected="false"
+                  >
+                    Wizi
+                  </button>
+                </div>
+              </div>
             </div>
 
-            <div class="settings-row">
+            <!-- Open NEYO On -->
+            <div class="settings-row settings-select-row">
               <div>
                 <strong>Open NEYO on</strong>
                 <small>Choose what appears when the app opens.</small>
               </div>
-              <button class="settings-value-btn" id="settingsOpenOnBtn" type="button">
-                New chat
-                <i data-lucide="chevron-right" size="15"></i>
-              </button>
+
+              <div class="settings-select-wrapper">
+                <button
+                  class="settings-value-btn"
+                  id="settingsOpenOnBtn"
+                  type="button"
+                  aria-haspopup="listbox"
+                  aria-expanded="false"
+                  aria-controls="settingsOpenOnMenu"
+                >
+                  <span id="settingsOpenOnValue">New chat</span>
+                  <i data-lucide="chevron-down" size="15"></i>
+                </button>
+
+                <div
+                  class="settings-select-menu"
+                  id="settingsOpenOnMenu"
+                  role="listbox"
+                  aria-label="Open NEYO on"
+                  hidden
+                >
+                  <button
+                    type="button"
+                    class="settings-select-option active"
+                    data-value="new-chat"
+                    role="option"
+                    aria-selected="true"
+                  >
+                    New chat
+                  </button>
+
+                  <button
+                    type="button"
+                    class="settings-select-option"
+                    data-value="last-chat"
+                    role="option"
+                    aria-selected="false"
+                  >
+                    Last chat
+                  </button>
+                </div>
+              </div>
             </div>
 
+            <!-- Auto-save Drafts -->
             <div class="settings-row">
               <div>
                 <strong>Auto-save drafts</strong>
                 <small>Preserve unfinished messages automatically.</small>
               </div>
-              <button class="settings-toggle active" id="settingsAutoSaveToggle" type="button" role="switch" aria-checked="true">
-                <span></span>
+
+              <button
+                class="settings-toggle active"
+                id="settingsAutoSaveToggle"
+                type="button"
+                role="switch"
+                aria-label="Auto-save drafts"
+                aria-checked="true"
+              >
+                <span aria-hidden="true"></span>
               </button>
             </div>
           </div>

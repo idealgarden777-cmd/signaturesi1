@@ -3242,3 +3242,84 @@ body.dark-mode .message.assistant .message-content code:not(pre code) {
         margin-bottom: 12px !important;
     }
 }
+
+/* =========================================================
+   NEYO — HISTORY LOADING SHIMMER
+   Sidebar only. No layout changes.
+   ========================================================= */
+
+@keyframes neyoHistoryShimmer {
+    0% {
+        background-position: 200% 0;
+    }
+
+    100% {
+        background-position: -200% 0;
+    }
+}
+
+.history-loading {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.history-skeleton-row {
+    min-height: 40px;
+
+    display: flex;
+    align-items: center;
+
+    padding: 8px 9px;
+
+    border-radius: 10px;
+}
+
+.history-skeleton-line {
+    width: 62%;
+    height: 12px;
+
+    border-radius: 999px;
+
+    background:
+        linear-gradient(
+            90deg,
+            #eeeeef 25%,
+            #f7f7f8 50%,
+            #eeeeef 75%
+        );
+
+    background-size: 200% 100%;
+
+    animation:
+        neyoHistoryShimmer
+        1.35s
+        ease-in-out
+        infinite;
+}
+
+.history-skeleton-row:nth-child(2) .history-skeleton-line {
+    width: 48%;
+}
+
+.history-skeleton-row:nth-child(3) .history-skeleton-line {
+    width: 57%;
+}
+
+body.dark-mode .history-skeleton-line {
+    background:
+        linear-gradient(
+            90deg,
+            #242424 25%,
+            #303030 50%,
+            #242424 75%
+        );
+
+    background-size: 200% 100%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .history-skeleton-line {
+        animation: none !important;
+    }
+}

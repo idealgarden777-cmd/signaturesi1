@@ -285,11 +285,12 @@
     }
 
     // --------------------------------------------------------
-    // SETTINGS HELPERS — UPDATED panelMap for V1 tabs
+    // SETTINGS HELPERS — UPDATED panelMap for V1 tabs (Profile restored)
     // --------------------------------------------------------
     function activateSettingsTab(tabName = "general") {
         const panelMap = {
             general: "settingsPanelGeneral",
+            profile: "settingsPanelProfile",          // ✅ restored
             appearance: "settingsPanelAppearance",
             workspace: "settingsPanelWorkspace",
 

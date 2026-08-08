@@ -24,7 +24,7 @@ const DDG_USER_AGENT = "NEO/1.0 (https://signaturesi.com; contact@signaturesi.co
 // NEO SYSTEM INSTRUCTION – natural, human-like responses
 // ================================================================
 const NEO_RESPONSE_FORMAT = `
-You are NEO, a natural, intelligent conversational assistant.
+You are NEYO, a natural, intelligent conversational assistant.
 
 VOICE AND TONE
 - Match the user's language, tone, and level of formality.
@@ -420,10 +420,163 @@ async function runFocusedSearch(plan, rankedResults) {
 }
 
 // ================================================================
-// GEMINI URL CONTEXT CALL (no Google Search)
+// GENERAL PREFERENCE HELPERS
 // ================================================================
 
-async function callGeminiUrlContext(query, urls, model, isDeepResearch) {
+function normalizeIntelligence(value) {
+    return value === "maximum"
+        ? "maximum"
+        : "standard";
+}
+
+function normalizeLanguage(value) {
+    const allowed = [
+        "auto",
+        "english",
+        "urdu",
+        "roman-urdu"
+    ];
+
+    return allowed.includes(value)
+        ? value
+        : "auto";
+}
+
+function normalizePersonality(value) {
+    const allowed = [
+        "neyo",
+        "zadi",
+        "wizi"
+    ];
+
+    return allowed.includes(value)
+        ? value
+        : "neyo";
+}
+
+function normalizePrivateChat(value) {
+    return value === true;
+}
+
+// ================================================================
+// DYNAMIC SYSTEM INSTRUCTION BUILDER
+// ================================================================
+
+function buildSystemInstruction({
+    intelligence = "standard",
+    language = "auto",
+    personality = "neyo"
+} = {}) {
+    const intelligenceInstruction =
+        intelligence === "maximum"
+            ? `
+INTELLIGENCE MODE — MAXIMUM
+- Use deeper analysis for difficult requests.
+- Check assumptions, edge cases, constraints, and internal consistency before answering.
+- Prefer correctness and completeness over speed.
+- For simple requests, remain concise and do not over-explain.
+`
+            : `
+INTELLIGENCE MODE — STANDARD
+- Prioritize fast, clear, accurate responses.
+- Use deeper analysis only when the task actually requires it.
+- Avoid unnecessary complexity.
+`;
+
+    const languageInstructions = {
+        auto: `
+LANGUAGE
+- Detect the user's language naturally.
+- Match the user's language unless they explicitly request another language.
+`,
+        english: `
+LANGUAGE
+- Respond in English by default.
+- Preserve quoted or technical text when another language is necessary.
+`,
+        urdu: `
+LANGUAGE
+- Respond in natural Urdu script by default.
+- Keep technical names and code in their appropriate original form.
+`,
+        "roman-urdu": `
+LANGUAGE
+- Respond in natural Roman Urdu by default.
+- Keep code, APIs, technical identifiers, and product names unchanged.
+`
+    };
+
+    const personalityInstructions = {
+        neyo: `
+PERSONALITY — NEYO
+- Balanced, intelligent, practical, and composed.
+- Strong at thinking, writing, decision support, and everyday work.
+- Balance speed with useful reasoning.
+`,
+        zadi: `
+PERSONALITY — ZADI
+- Creative, expressive, imaginative, and polished.
+- Strong at writing, branding, ideation, storytelling, and creative exploration.
+- Do not sacrifice factual accuracy for creativity.
+`,
+        wizi: `
+PERSONALITY — WIZI
+- Research-oriented, analytical, careful, and evidence-conscious.
+- Strong at investigation, comparison, technical analysis, and structured reasoning.
+- Clearly distinguish verified information from uncertainty.
+`
+    };
+
+    return `
+${NEO_RESPONSE_FORMAT}
+
+${intelligenceInstruction}
+
+${languageInstructions[language]}
+
+${personalityInstructions[personality]}
+`.trim();
+}
+
+// ================================================================
+// GENERATION CONFIG BUILDER
+// ================================================================
+
+function getGenerationConfig(
+    intelligence,
+    isDeepResearch
+) {
+    if (isDeepResearch) {
+        return {
+            temperature: 0.5,
+            maxOutputTokens: 8192
+        };
+    }
+
+    if (intelligence === "maximum") {
+        return {
+            temperature: 0.55,
+            maxOutputTokens: 8192
+        };
+    }
+
+    return {
+        temperature: 0.65,
+        maxOutputTokens: 4096
+    };
+}
+
+// ================================================================
+// GEMINI URL CONTEXT CALL (no Google Search) – updated
+// ================================================================
+
+async function callGeminiUrlContext(
+    query,
+    urls,
+    model,
+    isDeepResearch,
+    preferences
+) {
     if (!GEMINI_API_KEY) throw new Error("Gemini API key missing");
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`;
 
@@ -446,14 +599,18 @@ Rules:
 
     const body = {
         systemInstruction: {
-            parts: [{ text: NEO_RESPONSE_FORMAT }]
+            parts: [{
+                text: buildSystemInstruction(
+                    preferences
+                )
+            }]
         },
         contents: [{ role: "user", parts: [{ text: contextPrompt }] }],
         tools: [{ url_context: {} }],
-        generationConfig: {
-            temperature: isDeepResearch ? 0.5 : 0.6,
-            maxOutputTokens: isDeepResearch ? 8192 : 4096
-        }
+        generationConfig: getGenerationConfig(
+            preferences.intelligence,
+            isDeepResearch
+        )
     };
 
     const response = await fetch(url, {
@@ -473,7 +630,12 @@ Rules:
 // SMART WEB ANSWER — orchestrates search + verification
 // ================================================================
 
-async function smartWebAnswer(query, model, isDeepResearch) {
+async function smartWebAnswer(
+    query,
+    model,
+    isDeepResearch,
+    preferences
+) {
     // Step 1: plan search
     const plan = await createSmartSearchPlan(query);
 
@@ -505,7 +667,13 @@ async function smartWebAnswer(query, model, isDeepResearch) {
     }
 
     // Step 6: call Gemini with URL Context
-    const geminiResponse = await callGeminiUrlContext(query, urls, model, isDeepResearch);
+    const geminiResponse = await callGeminiUrlContext(
+        query,
+        urls,
+        model,
+        isDeepResearch,
+        preferences
+    );
     const reply = geminiResponse?.candidates?.[0]?.content?.parts?.[0]?.text || '';
 
     // Extract metadata from URL Context response
@@ -533,19 +701,30 @@ async function smartWebAnswer(query, model, isDeepResearch) {
 }
 
 // ================================================================
-// STANDARD GEMINI CALL (no search)
+// STANDARD GEMINI CALL (no search) – updated
 // ================================================================
 
-async function callGemini(messages, model, isDeepResearch) {
+async function callGemini(
+    messages,
+    model,
+    isDeepResearch,
+    preferences
+) {
     if (!GEMINI_API_KEY) throw new Error("Gemini API key missing");
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`;
     const body = {
-        systemInstruction: { parts: [{ text: NEO_RESPONSE_FORMAT }] },
+        systemInstruction: {
+            parts: [{
+                text: buildSystemInstruction(
+                    preferences
+                )
+            }]
+        },
         contents: messages,
-        generationConfig: {
-            temperature: isDeepResearch ? 0.55 : 0.65,
-            maxOutputTokens: isDeepResearch ? 8192 : 4096
-        }
+        generationConfig: getGenerationConfig(
+            preferences.intelligence,
+            isDeepResearch
+        )
     };
     const response = await fetch(url, {
         method: "POST",
@@ -697,7 +876,7 @@ export default async (req, res) => {
     let isPro = false;
 
     try {
-        // --- AUTH (FIXED: added await) ---
+        // --- AUTH ---
         const auth = await getAuthenticatedUser(req);
         if (!auth?.userId) {
             return res.status(401).json({ error: "Authentication required. Please log in." });
@@ -708,7 +887,33 @@ export default async (req, res) => {
         };
         userId = user.id;
 
-        const { messages, conversationId, isDeepResearch, title } = req.body;
+        const {
+            messages,
+            conversationId,
+            isDeepResearch,
+            title
+        } = req.body || {};
+
+        // --- Extract and sanitize General preferences ---
+        const preferences = {
+            intelligence:
+                normalizeIntelligence(
+                    req.body?.intelligence
+                ),
+            language:
+                normalizeLanguage(
+                    req.body?.language
+                ),
+            personality:
+                normalizePersonality(
+                    req.body?.personality
+                )
+        };
+
+        const privateChat =
+            normalizePrivateChat(
+                req.body?.privateChat
+            );
 
         if (!Array.isArray(messages) || messages.length === 0) {
             return res.status(400).json({ error: 'Messages array required' });
@@ -788,21 +993,55 @@ export default async (req, res) => {
             ];
         }
 
-        // --- Create conversation if new ---
-        let convId = conversationId || null;
-        if (!convId) {
-            const { data: newConv, error: convError } = await supabase
-                .from('chat_conversations')
-                .insert({ user_id: user.id, title: cleanString(title || 'New conversation', 100) })
-                .select('id')
+        // ------------------------------------------------
+        // CONVERSATION PERSISTENCE
+        // Private Chat never creates/saves chat history.
+        // ------------------------------------------------
+        let convId =
+            privateChat
+                ? null
+                : conversationId || null;
+
+        if (!privateChat && !convId) {
+            const {
+                data: newConv,
+                error: convError
+            } = await supabase
+                .from("chat_conversations")
+                .insert({
+                    user_id: user.id,
+                    title: cleanString(
+                        title || "New conversation",
+                        100
+                    )
+                })
+                .select("id")
                 .single();
-            if (convError) throw new Error(convError.message);
+
+            if (convError) {
+                throw new Error(
+                    convError.message
+                );
+            }
+
             convId = newConv.id;
         }
 
-        // --- Save user message ---
-        const userText = cleanString(lastMsg.content || "");
-        await saveMessage(supabase, convId, 'user', userText || "Attachment", attachments, []);
+        const userText =
+            cleanString(
+                lastMsg.content || ""
+            );
+
+        if (!privateChat) {
+            await saveMessage(
+                supabase,
+                convId,
+                "user",
+                userText || "Attachment",
+                attachments,
+                []
+            );
+        }
 
         // --- Model mapping ---
         const model = isPro
@@ -824,7 +1063,13 @@ export default async (req, res) => {
         if (hasUrl) {
             const urls = extractUrlsFromText(userText).slice(0, MAX_URL_CONTEXT_SOURCES);
             try {
-                const contextResponse = await callGeminiUrlContext(userText, urls, model, isDeepResearch);
+                const contextResponse = await callGeminiUrlContext(
+                    userText,
+                    urls,
+                    model,
+                    isDeepResearch,
+                    preferences
+                );
                 reply = contextResponse?.candidates?.[0]?.content?.parts?.[0]?.text || '';
                 const metadata = contextResponse?.candidates?.[0]?.url_context_metadata?.url_metadata || [];
                 sources = metadata
@@ -849,7 +1094,12 @@ export default async (req, res) => {
         } else if (isCurrentQuery || isCompareQuery || isSpecificQuery) {
             // Use smart web search
             try {
-                const result = await smartWebAnswer(userText, model, isDeepResearch);
+                const result = await smartWebAnswer(
+                    userText,
+                    model,
+                    isDeepResearch,
+                    preferences
+                );
                 reply = result.reply;
                 sources = result.sources || [];
                 usedUrlContext = result.usedUrlContext || false;
@@ -861,18 +1111,33 @@ export default async (req, res) => {
 
         // If no reply yet (either no search or search failed), use normal Gemini
         if (!reply) {
-            const geminiResponse = await callGemini(geminiMessages, model, isDeepResearch);
+            const geminiResponse = await callGemini(
+                geminiMessages,
+                model,
+                isDeepResearch,
+                preferences
+            );
             reply = geminiResponse?.candidates?.[0]?.content?.parts?.[0]?.text || '';
             if (!reply) throw new Error('Gemini returned empty response');
         }
 
         // --- Save assistant message ---
-        await saveMessage(supabase, convId, 'assistant', reply, [], sources);
+        if (!privateChat) {
+            await saveMessage(
+                supabase,
+                convId,
+                "assistant",
+                reply,
+                [],
+                sources
+            );
+        }
 
         // --- Return response ---
         return res.json({
             reply,
-            conversationId: convId,
+            conversationId: privateChat ? null : convId,
+            privateChat,
             usedUrlContext,
             sources: sources.length > 0 ? sources : undefined,
             creditType: reservedType

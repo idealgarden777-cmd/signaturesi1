@@ -3735,3 +3735,459 @@ body.dark-mode .settings-value-btn:hover {
     border-color: rgba(255, 255, 255, 0.18) !important;
     color: #f5f5f5 !important;
 }
+/* =========================================================
+   NEYO SETTINGS V1 — ADD-ON
+   (Append this block to the very end of your neo-v3.css)
+   ========================================================= */
+
+/* ---- Settings overlay & modal ---- */
+.neo-settings-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.42) !important;
+    backdrop-filter: blur(6px);
+    z-index: 500;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+}
+
+.neo-settings-overlay.show {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.neo-settings-modal {
+    width: 90%;
+    max-width: 960px;
+    max-height: 85vh;
+    background: #ffffff !important;
+    border-radius: 20px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.12);
+    display: flex;
+    overflow: hidden;
+    transform: scale(0.95) translateY(10px);
+    transition: transform 0.3s ease;
+}
+
+.neo-settings-overlay.show .neo-settings-modal {
+    transform: scale(1) translateY(0);
+}
+
+/* ---- Settings sidebar ---- */
+.neo-settings-sidebar {
+    width: 240px;
+    background: #f7f7f8;
+    padding: 20px 12px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex-shrink: 0;
+    overflow-y: auto;
+    border-right: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.neo-settings-close {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    color: #737373;
+    transition: background 0.15s ease, color 0.15s ease;
+    margin-bottom: 12px;
+    align-self: flex-start;
+}
+
+.neo-settings-close:hover {
+    background: #ffffff;
+    color: #171717;
+}
+
+.neo-settings-tab {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #737373;
+    transition: all 0.15s ease;
+    width: 100%;
+    text-align: left;
+}
+
+.neo-settings-tab:hover {
+    background: #ffffff;
+    color: #171717;
+}
+
+.neo-settings-tab.active {
+    background: #ffffff;
+    color: #171717;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.neo-settings-tab i {
+    flex-shrink: 0;
+}
+
+/* ---- Dividers ---- */
+.neo-settings-nav-divider {
+    height: 1px;
+    margin: 8px 10px;
+    background: rgba(0, 0, 0, 0.07);
+}
+
+body.dark-mode .neo-settings-nav-divider {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+/* ---- Content ---- */
+.neo-settings-content {
+    flex: 1;
+    padding: 28px 32px 32px;
+    overflow-y: auto;
+    background: #ffffff;
+}
+
+.neo-settings-panel {
+    display: none;
+    animation: fadeIn 0.2s ease;
+}
+
+.neo-settings-panel.active {
+    display: block;
+}
+
+.neo-settings-panel-header {
+    margin-bottom: 24px;
+}
+
+.neo-settings-panel-header h2 {
+    font-size: 22px;
+    font-weight: 700;
+    color: #171717;
+    margin-bottom: 4px;
+}
+
+.neo-settings-panel-header p {
+    color: #737373;
+    font-size: 14px;
+}
+
+/* ---- Sections ---- */
+.neo-settings-section {
+    margin-bottom: 28px;
+}
+
+.neo-settings-section-title {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #a0a0a0;
+    margin-bottom: 12px;
+}
+
+/* ---- Settings rows ---- */
+.settings-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 0;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    gap: 16px;
+}
+
+.settings-row:last-of-type {
+    border-bottom: none;
+}
+
+.settings-row > div {
+    flex: 1;
+    min-width: 0;
+}
+
+.settings-row strong {
+    display: block;
+    font-weight: 600;
+    font-size: 15px;
+    color: #171717;
+}
+
+.settings-row small {
+    display: block;
+    font-size: 13px;
+    color: #737373;
+    margin-top: 2px;
+}
+
+/* ---- Segmented control ---- */
+.settings-segmented-control {
+    display: flex;
+    background: #f5f5f5;
+    border-radius: 10px;
+    padding: 3px;
+    gap: 2px;
+    flex-shrink: 0;
+}
+
+.settings-segmented-control button {
+    padding: 6px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #737373;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+
+.settings-segmented-control button:hover {
+    color: #171717;
+}
+
+.settings-segmented-control button.active {
+    background: #ffffff;
+    color: #171717;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+/* ---- Toggle switch ---- */
+.settings-toggle {
+    width: 44px;
+    height: 26px;
+    border-radius: 30px;
+    background: #d0d0d0;
+    transition: background 0.15s ease;
+    position: relative;
+    flex-shrink: 0;
+    cursor: pointer;
+    border: none;
+    padding: 0;
+}
+
+.settings-toggle span {
+    display: block;
+    width: 20px;
+    height: 20px;
+    background: white;
+    border-radius: 50%;
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    transition: transform 0.15s ease, background 0.15s ease;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+/* ---- Monochrome active toggle ---- */
+.settings-toggle.active {
+    background: #171717 !important;
+}
+
+.settings-toggle.active span {
+    transform: translateX(18px);
+    background: white;
+}
+
+/* ---- Value button (chevron) ---- */
+.settings-value-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px 6px 16px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #737373;
+    background: #f5f5f5;
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+.settings-value-btn:hover {
+    border-color: rgba(0, 0, 0, 0.18) !important;
+    color: #171717 !important;
+    background: #ffffff;
+}
+
+.settings-value-btn i {
+    color: #a0a0a0;
+}
+
+/* ---- Placeholder panels ---- */
+.neo-settings-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 20px;
+    text-align: center;
+    color: #a0a0a0;
+}
+
+.neo-settings-placeholder i {
+    color: #a0a0a0;
+    margin-bottom: 12px;
+}
+
+.neo-settings-placeholder strong {
+    font-weight: 600;
+    font-size: 18px;
+    color: #737373;
+    margin-bottom: 4px;
+}
+
+.neo-settings-placeholder small {
+    font-size: 14px;
+}
+
+/* ---- Responsive (mobile) ---- */
+@media (max-width: 767px) {
+    .neo-settings-modal {
+        flex-direction: column;
+        max-height: 90vh;
+        width: 95%;
+        border-radius: 18px;
+    }
+    .neo-settings-sidebar {
+        width: 100%;
+        flex-direction: row;
+        flex-wrap: wrap;
+        padding: 12px 16px;
+        border-right: none;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+        overflow-x: auto;
+        gap: 4px;
+        max-height: 200px;
+    }
+    .neo-settings-close {
+        align-self: center;
+        margin-bottom: 0;
+    }
+    .neo-settings-tab {
+        padding: 6px 12px;
+        font-size: 13px;
+        white-space: nowrap;
+        width: auto;
+    }
+    .neo-settings-tab span {
+        display: none;
+    }
+    .neo-settings-tab i {
+        margin: 0;
+    }
+    .neo-settings-nav-divider {
+        display: none;
+    }
+    .neo-settings-content {
+        padding: 20px 16px 24px;
+    }
+    .settings-row {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    .settings-segmented-control {
+        width: 100%;
+        justify-content: stretch;
+    }
+    .settings-segmented-control button {
+        flex: 1;
+        text-align: center;
+    }
+}
+
+/* ---- Dark mode overrides ---- */
+body.dark-mode .neo-settings-modal {
+    background: #171717 !important;
+}
+
+body.dark-mode .neo-settings-sidebar {
+    background: #1b1b1b;
+    border-right-color: rgba(255, 255, 255, 0.06);
+}
+
+body.dark-mode .neo-settings-close:hover,
+body.dark-mode .neo-settings-tab:hover,
+body.dark-mode .neo-settings-tab.active {
+    background: #252525;
+    color: #f5f5f5;
+}
+
+body.dark-mode .neo-settings-tab {
+    color: #9b9b9b;
+}
+
+body.dark-mode .neo-settings-content {
+    background: #171717;
+}
+
+body.dark-mode .neo-settings-panel-header h2 {
+    color: #f5f5f5;
+}
+
+body.dark-mode .neo-settings-panel-header p,
+body.dark-mode .settings-row small,
+body.dark-mode .settings-value-btn i,
+body.dark-mode .neo-settings-placeholder i,
+body.dark-mode .neo-settings-placeholder strong {
+    color: #9b9b9b;
+}
+
+body.dark-mode .settings-row strong {
+    color: #f5f5f5;
+}
+
+body.dark-mode .settings-row {
+    border-bottom-color: rgba(255, 255, 255, 0.06);
+}
+
+body.dark-mode .settings-segmented-control {
+    background: #252525;
+}
+
+body.dark-mode .settings-segmented-control button {
+    color: #9b9b9b;
+}
+
+body.dark-mode .settings-segmented-control button.active {
+    background: #171717;
+    color: #f5f5f5;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+
+body.dark-mode .settings-toggle {
+    background: #3a3a3a;
+}
+
+body.dark-mode .settings-toggle.active {
+    background: #f5f5f5 !important;
+}
+
+body.dark-mode .settings-toggle.active span {
+    background: #171717 !important;
+}
+
+body.dark-mode .settings-value-btn {
+    background: #252525;
+    border-color: rgba(255, 255, 255, 0.08);
+    color: #9b9b9b;
+}
+
+body.dark-mode .settings-value-btn:hover {
+    border-color: rgba(255, 255, 255, 0.18) !important;
+    color: #f5f5f5 !important;
+    background: #171717;
+}
+
+body.dark-mode .neo-settings-placeholder small {
+    color: #737373;
+}

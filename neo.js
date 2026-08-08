@@ -452,10 +452,9 @@
         document
             .querySelectorAll("#settingsThemeControl button")
             .forEach(button => {
-                button.classList.toggle(
-                    "active",
-                    button.dataset.value === value
-                );
+                const active = button.dataset.value === value;
+                button.classList.toggle("active", active);
+                button.setAttribute("aria-pressed", String(active));
             });
     }
 
@@ -567,15 +566,19 @@
     }
 
     // --------------------------------------------------------
-    // PRIVATE CHAT — Off / On (Local preference only)
+    // PRIVATE CHAT — Off / On
     // --------------------------------------------------------
+    function isPrivateChatEnabled() {
+        return localStorage.getItem("neo_private_chat") === "on";
+    }
+
     function setupPrivateChatControl() {
         const toggle =
             document.getElementById("settingsPrivateChatToggle");
 
         if (!toggle) return;
 
-        const applyState = enabled => {
+        const applyState = (enabled, { resetChat = false } = {}) => {
             toggle.classList.toggle("active", enabled);
 
             toggle.setAttribute(
@@ -587,6 +590,20 @@
                 "neo_private_chat",
                 enabled ? "on" : "off"
             );
+
+            document.body.classList.toggle(
+                "neo-private-chat",
+                enabled
+            );
+
+            if (
+                enabled &&
+                resetChat &&
+                !isGenerating &&
+                currentConversationId
+            ) {
+                startNewConversation();
+            }
         };
 
         const stored =
@@ -598,12 +615,14 @@
             const current =
                 toggle.getAttribute("aria-checked") === "true";
 
-            applyState(!current);
+            applyState(!current, {
+                resetChat: !current
+            });
         });
     }
 
     // --------------------------------------------------------
-    // INTERFACE — Minimal / Warm / Glass (Local preference only)
+    // INTERFACE — Minimal / Warm / Glass
     // --------------------------------------------------------
     function setupInterfaceControl() {
         const control =
@@ -626,6 +645,8 @@
                 safeValue
             );
 
+            document.body.dataset.neyoInterface = safeValue;
+
             buttons.forEach(button => {
                 const active =
                     button.dataset.value === safeValue;
@@ -647,11 +668,301 @@
             });
         });
 
-        const stored =
+        applySelection(
             localStorage.getItem("neo_interface")
-            || "minimal";
+            || "minimal"
+        );
+    }
 
-        applySelection(stored);
+    // --------------------------------------------------------
+    // GENERAL SELECT MENUS
+    // --------------------------------------------------------
+    function setupSettingsSelect({
+        buttonId,
+        menuId,
+        valueId,
+        storageKey,
+        defaultValue,
+        labels
+    }) {
+        const button = document.getElementById(buttonId);
+        const menu = document.getElementById(menuId);
+        const valueElement = document.getElementById(valueId);
+
+        if (!button || !menu || !valueElement) return;
+
+        const options =
+            Array.from(
+                menu.querySelectorAll(".settings-select-option")
+            );
+
+        const closeMenu = () => {
+            menu.hidden = true;
+            button.setAttribute("aria-expanded", "false");
+        };
+
+        const openMenu = () => {
+            document
+                .querySelectorAll(".settings-select-menu")
+                .forEach(otherMenu => {
+                    if (otherMenu !== menu) {
+                        otherMenu.hidden = true;
+                    }
+                });
+
+            document
+                .querySelectorAll(
+                    ".settings-value-btn[aria-expanded='true']"
+                )
+                .forEach(otherButton => {
+                    if (otherButton !== button) {
+                        otherButton.setAttribute(
+                            "aria-expanded",
+                            "false"
+                        );
+                    }
+                });
+
+            menu.hidden = false;
+            button.setAttribute("aria-expanded", "true");
+        };
+
+        const applySelection = value => {
+            const safeValue =
+                Object.prototype.hasOwnProperty.call(labels, value)
+                    ? value
+                    : defaultValue;
+
+            localStorage.setItem(storageKey, safeValue);
+
+            valueElement.textContent =
+                labels[safeValue];
+
+            options.forEach(option => {
+                const selected =
+                    option.dataset.value === safeValue;
+
+                option.classList.toggle(
+                    "active",
+                    selected
+                );
+
+                option.setAttribute(
+                    "aria-selected",
+                    String(selected)
+                );
+            });
+
+            closeMenu();
+
+            return safeValue;
+        };
+
+        button.addEventListener("click", event => {
+            event.stopPropagation();
+
+            if (menu.hidden) {
+                openMenu();
+            } else {
+                closeMenu();
+            }
+        });
+
+        options.forEach(option => {
+            option.addEventListener("click", event => {
+                event.stopPropagation();
+
+                applySelection(
+                    option.dataset.value || defaultValue
+                );
+            });
+        });
+
+        document.addEventListener("click", event => {
+            if (
+                !menu.hidden &&
+                !menu.contains(event.target) &&
+                !button.contains(event.target)
+            ) {
+                closeMenu();
+            }
+        });
+
+        document.addEventListener("keydown", event => {
+            if (
+                event.key === "Escape" &&
+                !menu.hidden
+            ) {
+                closeMenu();
+                button.focus();
+            }
+        });
+
+        applySelection(
+            localStorage.getItem(storageKey)
+            || defaultValue
+        );
+    }
+
+    function setupLanguageControl() {
+        setupSettingsSelect({
+            buttonId: "settingsLanguageBtn",
+            menuId: "settingsLanguageMenu",
+            valueId: "settingsLanguageValue",
+            storageKey: "neo_language",
+            defaultValue: "auto",
+            labels: {
+                auto: "Auto-detect",
+                english: "English",
+                urdu: "Urdu",
+                "roman-urdu": "Roman Urdu"
+            }
+        });
+    }
+
+    function setupDefaultPersonalityControl() {
+        setupSettingsSelect({
+            buttonId: "settingsDefaultPersonalityBtn",
+            menuId: "settingsDefaultPersonalityMenu",
+            valueId: "settingsDefaultPersonalityValue",
+            storageKey: "neo_default_personality",
+            defaultValue: "neyo",
+            labels: {
+                neyo: "Neyo",
+                zadi: "Zadi",
+                wizi: "Wizi"
+            }
+        });
+    }
+
+    function setupOpenOnControl() {
+        setupSettingsSelect({
+            buttonId: "settingsOpenOnBtn",
+            menuId: "settingsOpenOnMenu",
+            valueId: "settingsOpenOnValue",
+            storageKey: "neo_open_on",
+            defaultValue: "new-chat",
+            labels: {
+                "new-chat": "New chat",
+                "last-chat": "Last chat"
+            }
+        });
+    }
+
+    // --------------------------------------------------------
+    // AUTO-SAVE DRAFTS
+    // --------------------------------------------------------
+    function getDraftStorageKey() {
+        const userId =
+            currentUser?.id || "user";
+
+        return `neo_draft_${userId}`;
+    }
+
+    function isAutoSaveDraftsEnabled() {
+        const stored =
+            localStorage.getItem(
+                "neo_auto_save_drafts"
+            );
+
+        return stored === null || stored === "on";
+    }
+
+    function saveCurrentDraft() {
+        if (!chatInput) return;
+
+        if (!isAutoSaveDraftsEnabled()) {
+            localStorage.removeItem(
+                getDraftStorageKey()
+            );
+            return;
+        }
+
+        const value = chatInput.value;
+
+        if (value.trim()) {
+            localStorage.setItem(
+                getDraftStorageKey(),
+                value
+            );
+        } else {
+            localStorage.removeItem(
+                getDraftStorageKey()
+            );
+        }
+    }
+
+    function clearCurrentDraft() {
+        localStorage.removeItem(
+            getDraftStorageKey()
+        );
+    }
+
+    function restoreCurrentDraft() {
+        if (
+            !chatInput ||
+            !isAutoSaveDraftsEnabled()
+        ) {
+            return;
+        }
+
+        const draft =
+            localStorage.getItem(
+                getDraftStorageKey()
+            );
+
+        if (!draft) return;
+
+        chatInput.value = draft;
+        chatInput.style.height = "auto";
+        chatInput.style.height =
+            `${Math.min(chatInput.scrollHeight, 160)}px`;
+
+        updateComposerShape();
+    }
+
+    function setupAutoSaveDraftsControl() {
+        const toggle =
+            document.getElementById(
+                "settingsAutoSaveToggle"
+            );
+
+        if (!toggle) return;
+
+        const applyState = enabled => {
+            toggle.classList.toggle(
+                "active",
+                enabled
+            );
+
+            toggle.setAttribute(
+                "aria-checked",
+                String(enabled)
+            );
+
+            localStorage.setItem(
+                "neo_auto_save_drafts",
+                enabled ? "on" : "off"
+            );
+
+            if (!enabled) {
+                clearCurrentDraft();
+            } else {
+                saveCurrentDraft();
+            }
+        };
+
+        applyState(
+            isAutoSaveDraftsEnabled()
+        );
+
+        toggle.addEventListener("click", () => {
+            const current =
+                toggle.getAttribute("aria-checked")
+                === "true";
+
+            applyState(!current);
+        });
     }
 
     // --------------------------------------------------------
@@ -756,12 +1067,20 @@
         if (window.lucide) {
             window.lucide.createIcons();
         }
+
         setupTheme();
         setupSettingsThemeControl();
         setupSystemThemeWatcher();
+
         setupIntelligenceControl();
         setupPrivateChatControl();
         setupInterfaceControl();
+
+        setupLanguageControl();
+        setupDefaultPersonalityControl();
+        setupOpenOnControl();
+        setupAutoSaveDraftsControl();
+
         configureSecurityHooks();
         initializeSidebarState();
         setupEventListeners();
@@ -777,16 +1096,39 @@
         if (!authenticated) {
             return;
         }
+
         try {
             await renderUserProfile();
         } catch (error) {
             console.warn("Profile initialization failed:", error);
         }
+
         try {
             await loadHistoryFromSupabase();
+
+            const openOn =
+                localStorage.getItem("neo_open_on")
+                || "new-chat";
+
+            if (
+                openOn === "last-chat" &&
+                !isPrivateChatEnabled()
+            ) {
+                const firstHistoryItem =
+                    historyList?.querySelector(
+                        ".history-item"
+                    );
+
+                firstHistoryItem?.click();
+            }
         } catch (error) {
-            console.warn("History initialization failed:", error);
+            console.warn(
+                "History initialization failed:",
+                error
+            );
         }
+
+        restoreCurrentDraft();
 
         if (window.matchMedia("(min-width: 768px)").matches) {
             chatInput?.focus();
@@ -1872,6 +2214,7 @@
                 chatInput.value = "";
                 chatInput.style.height = "auto";
             }
+            clearCurrentDraft();
             if (heroSection) heroSection.style.display = "none";
             renderMessageToUI("user", text, messageIndex, false, uploadedAttachments);
             conversation.push({
@@ -1901,6 +2244,13 @@
             renderAdaptiveSuggestions();
             updateComposerShape();
             isGenerating = false;
+            if (chatInput && text) {
+                chatInput.value = text;
+                saveCurrentDraft();
+                chatInput.style.height = "auto";
+                chatInput.style.height =
+                    `${Math.min(chatInput.scrollHeight, 160)}px`;
+            }
             showToast(error?.message || "Unable to upload the file.", "error");
         }
     }
@@ -1920,8 +2270,14 @@
                 body: JSON.stringify({
                     messages: conversation,
                     attachments: conversation.at(-1)?.attachments || [],
-                    conversationId: currentConversationId,
+                    conversationId: isPrivateChatEnabled()
+                        ? null
+                        : currentConversationId,
                     model: selectedModel,
+                    intelligence: localStorage.getItem("neo_intelligence") || "standard",
+                    privateChat: isPrivateChatEnabled(),
+                    language: localStorage.getItem("neo_language") || "auto",
+                    personality: localStorage.getItem("neo_default_personality") || "neyo",
                     isDeepResearch: isDeepResearchMode,
                     title
                 })
@@ -1953,7 +2309,10 @@
             showAssistantError(aiBubble, error);
             return;
         }
-        if (typeof data.conversationId === "string" && data.conversationId.trim()) {
+        if (!isPrivateChatEnabled() &&
+            typeof data.conversationId === "string" &&
+            data.conversationId.trim()
+        ) {
             currentConversationId = data.conversationId.trim();
         }
         const sources = data.sources || [];
@@ -1998,10 +2357,15 @@
                 console.warn("Icon refresh failed:", iconError);
             }
         }
-        try {
-            await loadHistoryFromSupabase();
-        } catch (historyError) {
-            console.warn("History refresh failed after successful reply:", historyError);
+        if (!isPrivateChatEnabled()) {
+            try {
+                await loadHistoryFromSupabase();
+            } catch (historyError) {
+                console.warn(
+                    "History refresh failed after successful reply:",
+                    historyError
+                );
+            }
         }
     }
 
@@ -2306,6 +2670,7 @@
             this.style.height = "auto";
             this.style.height = `${Math.min(this.scrollHeight, 160)}px`;
             updateComposerShape();
+            saveCurrentDraft();
         });
         attachBtn?.addEventListener("click", event => {
             event.stopPropagation();
@@ -2356,6 +2721,7 @@
             button.addEventListener("click", () => {
                 if (!chatInput) return;
                 chatInput.value = button.getAttribute("data-prompt") || "";
+                saveCurrentDraft();
                 handleSend();
             });
         });

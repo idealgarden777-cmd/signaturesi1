@@ -4191,3 +4191,789 @@ body.dark-mode .settings-value-btn:hover {
 body.dark-mode .neo-settings-placeholder small {
     color: #737373;
 }
+/* =========================================================
+   NEYO GENERAL V1 — FINAL UI / UX
+   Append at the very end of neo-v3.css
+   ========================================================= */
+
+/* ---------------------------------------------------------
+   GENERAL PANEL — spacing + hierarchy
+   --------------------------------------------------------- */
+
+#settingsPanelGeneral {
+    max-width: 760px;
+    margin: 0 auto;
+}
+
+#settingsPanelGeneral .neo-settings-panel-header {
+    margin-bottom: 26px;
+}
+
+#settingsPanelGeneral .neo-settings-section {
+    margin-bottom: 30px;
+}
+
+#settingsPanelGeneral .neo-settings-section:last-child {
+    margin-bottom: 0;
+}
+
+#settingsPanelGeneral .settings-row {
+    min-height: 58px;
+    padding: 13px 0;
+}
+
+#settingsPanelGeneral .settings-row strong {
+    font-size: 14.5px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+}
+
+#settingsPanelGeneral .settings-row small {
+    max-width: 410px;
+    line-height: 1.45;
+}
+
+
+/* ---------------------------------------------------------
+   SEGMENTED CONTROLS
+   --------------------------------------------------------- */
+
+#settingsPanelGeneral .settings-segmented-control {
+    padding: 3px;
+    border-radius: 10px;
+    background: #f1f1f1;
+    border: 1px solid rgba(0, 0, 0, 0.035);
+}
+
+#settingsPanelGeneral .settings-segmented-control button {
+    min-height: 31px;
+    padding: 6px 13px;
+    border: 0;
+    border-radius: 8px;
+
+    background: transparent;
+    color: #737373;
+
+    font-size: 13px;
+    font-weight: 500;
+
+    cursor: pointer;
+
+    transition:
+        background-color 150ms ease,
+        color 150ms ease,
+        box-shadow 150ms ease;
+}
+
+#settingsPanelGeneral .settings-segmented-control button:hover {
+    color: #171717;
+}
+
+#settingsPanelGeneral .settings-segmented-control button.active {
+    background: #ffffff;
+    color: #171717;
+
+    box-shadow:
+        0 1px 2px rgba(0, 0, 0, 0.04),
+        0 1px 5px rgba(0, 0, 0, 0.035);
+}
+
+
+/* ---------------------------------------------------------
+   TOGGLES
+   --------------------------------------------------------- */
+
+#settingsPanelGeneral .settings-toggle {
+    width: 42px;
+    height: 24px;
+
+    border-radius: 999px;
+
+    background: #d8d8d8;
+
+    transition:
+        background-color 160ms ease;
+
+    cursor: pointer;
+}
+
+#settingsPanelGeneral .settings-toggle span {
+    width: 18px;
+    height: 18px;
+
+    top: 3px;
+    left: 3px;
+
+    transition:
+        transform 160ms ease,
+        background-color 160ms ease;
+}
+
+#settingsPanelGeneral .settings-toggle.active {
+    background: #171717 !important;
+}
+
+#settingsPanelGeneral .settings-toggle.active span {
+    transform: translateX(18px);
+    background: #ffffff !important;
+}
+
+
+/* ---------------------------------------------------------
+   VALUE / SELECT BUTTONS
+   --------------------------------------------------------- */
+
+#settingsPanelGeneral .settings-select-row {
+    overflow: visible;
+}
+
+#settingsPanelGeneral .settings-select-wrapper {
+    position: relative;
+
+    flex: 0 0 auto;
+    min-width: 150px;
+
+    display: flex;
+    justify-content: flex-end;
+
+    z-index: 5;
+}
+
+#settingsPanelGeneral .settings-value-btn {
+    min-height: 34px;
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+
+    gap: 7px;
+
+    padding: 6px 10px 6px 13px;
+
+    border:
+        1px solid rgba(0, 0, 0, 0.07);
+
+    border-radius: 9px;
+
+    background: #f6f6f6;
+    color: #555555;
+
+    font-size: 13.5px;
+    font-weight: 500;
+
+    cursor: pointer;
+
+    box-shadow: none;
+
+    transition:
+        background-color 150ms ease,
+        border-color 150ms ease,
+        color 150ms ease;
+}
+
+#settingsPanelGeneral .settings-value-btn:hover {
+    background: #ffffff !important;
+
+    border-color:
+        rgba(0, 0, 0, 0.15) !important;
+
+    color: #171717 !important;
+}
+
+#settingsPanelGeneral
+.settings-value-btn[aria-expanded="true"] {
+    background: #ffffff !important;
+
+    border-color:
+        rgba(0, 0, 0, 0.18) !important;
+
+    color: #171717 !important;
+}
+
+#settingsPanelGeneral .settings-value-btn i {
+    width: 15px;
+    height: 15px;
+
+    color: #999999;
+
+    transition:
+        transform 150ms ease,
+        color 150ms ease;
+}
+
+#settingsPanelGeneral
+.settings-value-btn[aria-expanded="true"] i {
+    transform: rotate(180deg);
+    color: #555555;
+}
+
+
+/* ---------------------------------------------------------
+   SELECT MENUS
+   --------------------------------------------------------- */
+
+#settingsPanelGeneral .settings-select-menu {
+    position: absolute;
+
+    top: calc(100% + 7px);
+    right: 0;
+
+    width: max-content;
+    min-width: 172px;
+
+    padding: 5px;
+
+    border:
+        1px solid rgba(0, 0, 0, 0.08);
+
+    border-radius: 11px;
+
+    background:
+        rgba(255, 255, 255, 0.98);
+
+    box-shadow:
+        0 12px 32px rgba(0, 0, 0, 0.10),
+        0 2px 8px rgba(0, 0, 0, 0.04);
+
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+
+    z-index: 1000;
+}
+
+#settingsPanelGeneral
+.settings-select-menu[hidden] {
+    display: none !important;
+}
+
+#settingsPanelGeneral .settings-select-option {
+    width: 100%;
+    min-height: 34px;
+
+    display: flex;
+    align-items: center;
+
+    padding: 7px 10px;
+
+    border: 0;
+    border-radius: 7px;
+
+    background: transparent;
+    color: #525252;
+
+    font-family: inherit;
+    font-size: 13.5px;
+    font-weight: 500;
+
+    text-align: left;
+
+    cursor: pointer;
+
+    transition:
+        background-color 130ms ease,
+        color 130ms ease;
+}
+
+#settingsPanelGeneral
+.settings-select-option:hover {
+    background:
+        rgba(0, 0, 0, 0.045);
+
+    color: #171717;
+}
+
+#settingsPanelGeneral
+.settings-select-option.active {
+    background:
+        rgba(0, 0, 0, 0.065);
+
+    color: #171717;
+    font-weight: 600;
+}
+
+
+/* ---------------------------------------------------------
+   KEYBOARD ACCESSIBILITY
+   --------------------------------------------------------- */
+
+#settingsPanelGeneral button:focus-visible {
+    outline:
+        2px solid rgba(23, 23, 23, 0.85);
+
+    outline-offset: 2px;
+}
+
+
+/* ---------------------------------------------------------
+   PRIVATE CHAT VISUAL STATE
+   Subtle only — no layout change.
+   --------------------------------------------------------- */
+
+body.neo-private-chat
+#settingsPanelGeneral
+#settingsPrivateChatToggle {
+    background: #171717 !important;
+}
+
+body.neo-private-chat
+#settingsPanelGeneral
+#settingsPrivateChatToggle span {
+    background: #ffffff !important;
+}
+
+
+/* =========================================================
+   INTERFACE MODES
+   These intentionally change character, not architecture.
+   ========================================================= */
+
+
+/* ---------------------------------------------------------
+   MINIMAL
+   --------------------------------------------------------- */
+
+body[data-neyo-interface="minimal"] {
+    --neyo-interface-radius: 16px;
+    --neyo-interface-surface: #ffffff;
+    --neyo-interface-soft: #f5f5f5;
+}
+
+body[data-neyo-interface="minimal"]
+.glass-input-container {
+    background: #ffffff !important;
+
+    border-color:
+        rgba(0, 0, 0, 0.09) !important;
+
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+
+    box-shadow:
+        0 1px 2px rgba(0, 0, 0, 0.03),
+        0 4px 14px rgba(0, 0, 0, 0.035) !important;
+}
+
+body[data-neyo-interface="minimal"]
+.sidebar {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
+
+
+/* ---------------------------------------------------------
+   WARM
+   --------------------------------------------------------- */
+
+body[data-neyo-interface="warm"] {
+    --neyo-interface-radius: 18px;
+    --neyo-interface-surface: #fffdf9;
+    --neyo-interface-soft: #f8f4ed;
+}
+
+body[data-neyo-interface="warm"]
+.app-shell,
+body[data-neyo-interface="warm"]
+.scroll-area {
+    background:
+        #fffdf9 !important;
+}
+
+body[data-neyo-interface="warm"]
+.glass-input-container {
+    background:
+        rgba(255, 252, 246, 0.96) !important;
+
+    border-color:
+        rgba(108, 86, 56, 0.11) !important;
+
+    box-shadow:
+        0 1px 2px rgba(70, 50, 30, 0.025),
+        0 8px 24px rgba(70, 50, 30, 0.05)
+        !important;
+}
+
+body[data-neyo-interface="warm"]
+.sidebar {
+    background:
+        #faf7f1 !important;
+}
+
+body[data-neyo-interface="warm"]
+.message.user
+.message-wrapper
+> .message-content {
+    background:
+        #f3eee6 !important;
+}
+
+
+/* ---------------------------------------------------------
+   GLASS
+   --------------------------------------------------------- */
+
+body[data-neyo-interface="glass"]
+.glass-input-container {
+    background:
+        rgba(255, 255, 255, 0.72) !important;
+
+    border-color:
+        rgba(0, 0, 0, 0.08) !important;
+
+    backdrop-filter:
+        blur(22px) saturate(130%) !important;
+
+    -webkit-backdrop-filter:
+        blur(22px) saturate(130%) !important;
+
+    box-shadow:
+        0 1px 2px rgba(0, 0, 0, 0.025),
+        0 12px 36px rgba(0, 0, 0, 0.07)
+        !important;
+}
+
+body[data-neyo-interface="glass"]
+.sidebar {
+    background:
+        rgba(248, 248, 248, 0.78) !important;
+
+    backdrop-filter:
+        blur(24px) saturate(125%) !important;
+
+    -webkit-backdrop-filter:
+        blur(24px) saturate(125%) !important;
+}
+
+body[data-neyo-interface="glass"]
+.top-bar {
+    backdrop-filter:
+        blur(18px) saturate(125%) !important;
+
+    -webkit-backdrop-filter:
+        blur(18px) saturate(125%) !important;
+}
+
+
+/* =========================================================
+   DARK MODE
+   ========================================================= */
+
+body.dark-mode
+#settingsPanelGeneral
+.settings-segmented-control {
+    background: #252525;
+
+    border-color:
+        rgba(255, 255, 255, 0.04);
+}
+
+body.dark-mode
+#settingsPanelGeneral
+.settings-segmented-control button {
+    color: #9b9b9b;
+}
+
+body.dark-mode
+#settingsPanelGeneral
+.settings-segmented-control button:hover {
+    color: #f5f5f5;
+}
+
+body.dark-mode
+#settingsPanelGeneral
+.settings-segmented-control button.active {
+    background: #171717;
+    color: #f5f5f5;
+
+    box-shadow:
+        0 1px 4px rgba(0, 0, 0, 0.35);
+}
+
+body.dark-mode
+#settingsPanelGeneral
+.settings-toggle {
+    background: #3a3a3a;
+}
+
+body.dark-mode
+#settingsPanelGeneral
+.settings-toggle.active {
+    background: #f5f5f5 !important;
+}
+
+body.dark-mode
+#settingsPanelGeneral
+.settings-toggle.active span {
+    background: #171717 !important;
+}
+
+body.dark-mode
+#settingsPanelGeneral
+.settings-value-btn {
+    background: #252525;
+
+    border-color:
+        rgba(255, 255, 255, 0.08);
+
+    color: #b5b5b5;
+}
+
+body.dark-mode
+#settingsPanelGeneral
+.settings-value-btn:hover,
+body.dark-mode
+#settingsPanelGeneral
+.settings-value-btn[aria-expanded="true"] {
+    background: #2b2b2b !important;
+
+    border-color:
+        rgba(255, 255, 255, 0.16) !important;
+
+    color: #f5f5f5 !important;
+}
+
+body.dark-mode
+#settingsPanelGeneral
+.settings-value-btn i {
+    color: #8b8b8b;
+}
+
+body.dark-mode
+#settingsPanelGeneral
+.settings-select-menu {
+    background:
+        rgba(35, 35, 35, 0.98);
+
+    border-color:
+        rgba(255, 255, 255, 0.09);
+
+    box-shadow:
+        0 14px 38px rgba(0, 0, 0, 0.42),
+        0 2px 8px rgba(0, 0, 0, 0.20);
+}
+
+body.dark-mode
+#settingsPanelGeneral
+.settings-select-option {
+    color: #bdbdbd;
+}
+
+body.dark-mode
+#settingsPanelGeneral
+.settings-select-option:hover {
+    background:
+        rgba(255, 255, 255, 0.07);
+
+    color: #ffffff;
+}
+
+body.dark-mode
+#settingsPanelGeneral
+.settings-select-option.active {
+    background:
+        rgba(255, 255, 255, 0.09);
+
+    color: #ffffff;
+}
+
+body.dark-mode
+#settingsPanelGeneral
+button:focus-visible {
+    outline-color:
+        rgba(245, 245, 245, 0.9);
+}
+
+
+/* Dark + Minimal */
+
+body.dark-mode[data-neyo-interface="minimal"]
+.glass-input-container {
+    background: #212121 !important;
+
+    border-color:
+        rgba(255, 255, 255, 0.10) !important;
+
+    box-shadow:
+        0 1px 2px rgba(0, 0, 0, 0.20),
+        0 6px 18px rgba(0, 0, 0, 0.20)
+        !important;
+}
+
+
+/* Dark + Warm */
+
+body.dark-mode[data-neyo-interface="warm"]
+.app-shell,
+body.dark-mode[data-neyo-interface="warm"]
+.scroll-area {
+    background:
+        #1d1b18 !important;
+}
+
+body.dark-mode[data-neyo-interface="warm"]
+.glass-input-container {
+    background:
+        #25221e !important;
+
+    border-color:
+        rgba(255, 235, 205, 0.10)
+        !important;
+}
+
+body.dark-mode[data-neyo-interface="warm"]
+.sidebar {
+    background:
+        #211f1b !important;
+}
+
+body.dark-mode[data-neyo-interface="warm"]
+.message.user
+.message-wrapper
+> .message-content {
+    background:
+        #2c2822 !important;
+}
+
+
+/* Dark + Glass */
+
+body.dark-mode[data-neyo-interface="glass"]
+.glass-input-container {
+    background:
+        rgba(38, 38, 38, 0.72)
+        !important;
+
+    border-color:
+        rgba(255, 255, 255, 0.10)
+        !important;
+
+    backdrop-filter:
+        blur(22px) saturate(120%)
+        !important;
+
+    -webkit-backdrop-filter:
+        blur(22px) saturate(120%)
+        !important;
+
+    box-shadow:
+        0 10px 34px rgba(0, 0, 0, 0.30)
+        !important;
+}
+
+body.dark-mode[data-neyo-interface="glass"]
+.sidebar {
+    background:
+        rgba(24, 24, 24, 0.80)
+        !important;
+}
+
+
+/* =========================================================
+   MOBILE
+   ========================================================= */
+
+@media (max-width: 767px) {
+
+    #settingsPanelGeneral {
+        max-width: none;
+    }
+
+    #settingsPanelGeneral
+    .neo-settings-panel-header {
+        margin-bottom: 20px;
+    }
+
+    #settingsPanelGeneral
+    .neo-settings-section {
+        margin-bottom: 24px;
+    }
+
+    #settingsPanelGeneral
+    .settings-row {
+        min-height: 0;
+
+        padding: 13px 0;
+
+        gap: 10px;
+    }
+
+    #settingsPanelGeneral
+    .settings-segmented-control {
+        width: 100%;
+    }
+
+    #settingsPanelGeneral
+    .settings-segmented-control button {
+        flex: 1;
+
+        min-height: 34px;
+
+        padding-left: 8px;
+        padding-right: 8px;
+
+        text-align: center;
+    }
+
+    #settingsPanelGeneral
+    .settings-select-row {
+        align-items: center;
+
+        flex-wrap: nowrap;
+    }
+
+    #settingsPanelGeneral
+    .settings-select-wrapper {
+        min-width: 128px;
+
+        margin-left: auto;
+    }
+
+    #settingsPanelGeneral
+    .settings-value-btn {
+        max-width: 150px;
+
+        overflow: hidden;
+    }
+
+    #settingsPanelGeneral
+    .settings-value-btn span {
+        overflow: hidden;
+
+        white-space: nowrap;
+
+        text-overflow: ellipsis;
+    }
+
+    #settingsPanelGeneral
+    .settings-select-menu {
+        min-width: 170px;
+
+        max-width:
+            calc(100vw - 36px);
+    }
+
+    body[data-neyo-interface="glass"]
+    .glass-input-container {
+        backdrop-filter:
+            blur(16px) saturate(120%)
+            !important;
+
+        -webkit-backdrop-filter:
+            blur(16px) saturate(120%)
+            !important;
+    }
+}
+
+
+/* =========================================================
+   REDUCED MOTION
+   ========================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+
+    #settingsPanelGeneral *,
+    #settingsPanelGeneral *::before,
+    #settingsPanelGeneral *::after {
+        transition-duration:
+            0.01ms !important;
+    }
+}

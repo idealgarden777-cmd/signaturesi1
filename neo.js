@@ -290,7 +290,7 @@
     function activateSettingsTab(tabName = "general") {
         const panelMap = {
             general: "settingsPanelGeneral",
-            profile: "settingsPanelProfile",          // ✅ restored
+            profile: "settingsPanelProfile",
             appearance: "settingsPanelAppearance",
             workspace: "settingsPanelWorkspace",
 
@@ -429,116 +429,62 @@
     }
 
     // --------------------------------------------------------
-    //  INIT
+    // THEME — System / Light / Dark (complete, no duplicate listeners)
     // --------------------------------------------------------
-    async function init() {
-        composerInputRow?.classList.remove("is-transcribing");
-        isListening = false;
-        if (window.lucide) {
-            window.lucide.createIcons();
-        }
-        setupTheme();
-        configureSecurityHooks();
-        initializeSidebarState();
-        setupEventListeners();
-        setupPremiumTooltips();
-        setupFreemiumLogic();
-        setupDragAndDrop();
-        setupPasteUpload();
-        setupSpeechRecognition();
-        renderAdaptiveSuggestions();
-        updateComposerShape();
-
-        const authenticated = await restoreSecureSession();
-        if (!authenticated) {
-            return;
-        }
-        try {
-            await renderUserProfile();
-        } catch (error) {
-            console.warn("Profile initialization failed:", error);
-        }
-        try {
-            await loadHistoryFromSupabase();
-        } catch (error) {
-            console.warn("History initialization failed:", error);
-        }
-
-        if (window.matchMedia("(min-width: 768px)").matches) {
-            chatInput?.focus();
-        }
+    function applyTheme(value = "system") {
+        const systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+        const isDark = value === "dark" || (value === "system" && systemDark);
+        document.body.classList.toggle("dark-mode", isDark);
     }
 
-    // --------------------------------------------------------
-    //  SESSION / AUTH (FULLY CLEAN — NO returnTo, NO signup.html)
-    // --------------------------------------------------------
-    async function restoreSecureSession() {
-        try {
-            const response = await fetch(
-                `${ACCOUNTS_ORIGIN}/api/auth/session`,
-                {
-                    method: "GET",
-                    credentials: "include",
-                    headers: { Accept: "application/json" },
-                    cache: "no-store"
-                }
-            );
-            const data = await response.json().catch(() => ({}));
-            if (!response.ok || !data.authenticated || !data.user) {
-                clearLegacyUserStorage();
-                window.location.replace(LOGIN_URL);
-                return false;
-            }
-            const rawPlan = String(data.user.planType || "free").trim().toLowerCase();
-            userPlan = ["pro", "neo_pro", "neo-pro", "premium", "business", "suite"].includes(rawPlan)
-                ? "pro"
-                : "free";
-            currentUser = {
-                id: data.user.id,
-                username: data.user.username || "user",
-                displayName: data.user.displayName || data.user.username || "user",
-                beanId: data.user.beanId || `${data.user.username}@bean`,
-                planType: userPlan
-            };
-            localStorage.setItem("signaturesi_user", JSON.stringify(currentUser));
-            return true;
-        } catch (error) {
-            console.error("Session restore failed:", error);
-            clearLegacyUserStorage();
-            window.location.replace(LOGIN_URL);
-            return false;
-        }
-    }
-
-    function clearLegacyUserStorage() {
-        localStorage.removeItem("signaturesi_user");
-        localStorage.removeItem("bean_user");
-        localStorage.removeItem("user");
-        localStorage.removeItem("userData");
-    }
-
-    // --------------------------------------------------------
-    //  SECURITY / THEME
-    // --------------------------------------------------------
-    function configureSecurityHooks() {
-        if (!window.DOMPurify) return;
-        window.DOMPurify.addHook("afterSanitizeAttributes", function (node) {
-            if ("target" in node) {
-                node.setAttribute("target", "_blank");
-                node.setAttribute("rel", "noopener noreferrer");
-            }
+    function syncSettingsThemeControl(value) {
+        document.querySelectorAll("#settingsThemeControl button").forEach(button => {
+            button.classList.toggle("active", button.dataset.value === value);
         });
     }
 
     function setupTheme() {
-        const isDark = localStorage.getItem("neo_theme") === "dark";
-        document.body.classList.toggle("dark-mode", isDark);
-        const toggle = () => {
-            document.body.classList.toggle("dark-mode");
-            localStorage.setItem("neo_theme", document.body.classList.contains("dark-mode") ? "dark" : "light");
+        const storedTheme = localStorage.getItem("neo_theme") || "system";
+        applyTheme(storedTheme);
+        syncSettingsThemeControl(storedTheme);
+
+        const toggleTheme = () => {
+            const currentlyDark = document.body.classList.contains("dark-mode");
+            const nextTheme = currentlyDark ? "light" : "dark";
+            localStorage.setItem("neo_theme", nextTheme);
+            applyTheme(nextTheme);
+            syncSettingsThemeControl(nextTheme);
         };
-        topBarDarkModeToggle?.addEventListener("click", toggle);
-        sidebarDarkModeToggle?.addEventListener("click", toggle);
+
+        topBarDarkModeToggle?.addEventListener("click", toggleTheme);
+        sidebarDarkModeToggle?.addEventListener("click", toggleTheme);
+    }
+
+    function setupSettingsThemeControl() {
+        const control = document.getElementById("settingsThemeControl");
+        if (!control) return;
+
+        control.querySelectorAll("button").forEach(button => {
+            button.addEventListener("click", () => {
+                const value = button.dataset.value || "system";
+                localStorage.setItem("neo_theme", value);
+                applyTheme(value);
+                syncSettingsThemeControl(value);
+            });
+        });
+
+        const storedTheme = localStorage.getItem("neo_theme") || "system";
+        syncSettingsThemeControl(storedTheme);
+    }
+
+    function setupSystemThemeWatcher() {
+        const media = window.matchMedia("(prefers-color-scheme: dark)");
+        media.addEventListener("change", () => {
+            const storedTheme = localStorage.getItem("neo_theme") || "system";
+            if (storedTheme === "system") {
+                applyTheme("system");
+            }
+        });
     }
 
     // --------------------------------------------------------
@@ -2551,6 +2497,52 @@
         const watchBtn = document.getElementById("watchAdBtn");
         if (!watchBtn) return;
         showToast("Ad integration will be available soon.", "info");
+    }
+
+    // --------------------------------------------------------
+    //  INIT — Theme setup called first
+    // --------------------------------------------------------
+    async function init() {
+        composerInputRow?.classList.remove("is-transcribing");
+        isListening = false;
+        if (window.lucide) {
+            window.lucide.createIcons();
+        }
+
+        // ✅ THEME — complete system/light/dark support
+        setupTheme();
+        setupSettingsThemeControl();
+        setupSystemThemeWatcher();
+
+        configureSecurityHooks();
+        initializeSidebarState();
+        setupEventListeners();
+        setupPremiumTooltips();
+        setupFreemiumLogic();
+        setupDragAndDrop();
+        setupPasteUpload();
+        setupSpeechRecognition();
+        renderAdaptiveSuggestions();
+        updateComposerShape();
+
+        const authenticated = await restoreSecureSession();
+        if (!authenticated) {
+            return;
+        }
+        try {
+            await renderUserProfile();
+        } catch (error) {
+            console.warn("Profile initialization failed:", error);
+        }
+        try {
+            await loadHistoryFromSupabase();
+        } catch (error) {
+            console.warn("History initialization failed:", error);
+        }
+
+        if (window.matchMedia("(min-width: 768px)").matches) {
+            chatInput?.focus();
+        }
     }
 
     // --------------------------------------------------------

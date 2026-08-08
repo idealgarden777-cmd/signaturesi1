@@ -66,13 +66,7 @@
   <aside class="sidebar collapsed" id="sidebar">
     <div class="sidebar-header">
       <button class="brand-button" id="brandBtn" type="button">
-        <img
-          src="/icon.png"
-          alt="NEYO"
-          class="brand-logo"
-          width="24"
-          height="24"
-        >
+        <img src="/icon.png" alt="NEYO" class="brand-logo" width="24" height="24">
         <span class="brand-name">NEYO</span>
       </button>
       <button class="icon-btn" id="collapseSidebarBtn" title="Close Sidebar" type="button">
@@ -240,7 +234,7 @@
   </div>
 
   <!-- ========================================================= -->
-  <!-- NEYO SETTINGS V1 — UPDATED MODAL                         -->
+  <!-- NEYO SETTINGS V1 — WITH PROFILE RESTORED                  -->
   <!-- ========================================================= -->
   <div class="neo-settings-overlay" id="neoSettingsOverlay" aria-hidden="true">
     <div class="neo-settings-modal" role="dialog" aria-modal="true" aria-label="NEYO Settings">
@@ -251,10 +245,15 @@
           <i data-lucide="x" size="20"></i>
         </button>
 
-        <!-- Navigation — V1 spec (11 tabs + dividers) -->
+        <!-- Navigation – Profile restored after General -->
         <button class="neo-settings-tab active" type="button" data-settings-tab="general">
           <i data-lucide="settings-2" size="17"></i>
           <span>General</span>
+        </button>
+
+        <button class="neo-settings-tab" type="button" data-settings-tab="profile">
+          <i data-lucide="user-circle" size="17"></i>
+          <span>Profile</span>
         </button>
 
         <button class="neo-settings-tab" type="button" data-settings-tab="appearance">
@@ -318,10 +317,9 @@
       <section class="neo-settings-content">
 
         <!-- ========================================================= -->
-        <!-- PANEL: GENERAL — V1 SPEC                                  -->
+        <!-- PANEL: GENERAL – V1 SPEC                                  -->
         <!-- ========================================================= -->
         <div class="neo-settings-panel active" id="settingsPanelGeneral">
-
           <div class="neo-settings-panel-header">
             <h2>General</h2>
             <p>Control how NEYO behaves across your workspace.</p>
@@ -330,7 +328,6 @@
           <div class="neo-settings-section">
             <span class="neo-settings-section-title">Quick Controls</span>
 
-            <!-- Theme -->
             <div class="settings-row">
               <div>
                 <strong>Theme</strong>
@@ -343,7 +340,6 @@
               </div>
             </div>
 
-            <!-- Intelligence -->
             <div class="settings-row">
               <div>
                 <strong>Intelligence</strong>
@@ -355,24 +351,16 @@
               </div>
             </div>
 
-            <!-- Private Chat -->
             <div class="settings-row">
               <div>
                 <strong>Private Chat</strong>
                 <small>Keep new chats outside saved history and memory.</small>
               </div>
-              <button
-                class="settings-toggle"
-                id="settingsPrivateChatToggle"
-                type="button"
-                role="switch"
-                aria-checked="false"
-              >
+              <button class="settings-toggle" id="settingsPrivateChatToggle" type="button" role="switch" aria-checked="false">
                 <span></span>
               </button>
             </div>
 
-            <!-- Interface -->
             <div class="settings-row">
               <div>
                 <strong>Interface</strong>
@@ -389,7 +377,6 @@
           <div class="neo-settings-section">
             <span class="neo-settings-section-title">General Preferences</span>
 
-            <!-- Language -->
             <div class="settings-row">
               <div>
                 <strong>Language</strong>
@@ -401,7 +388,6 @@
               </button>
             </div>
 
-            <!-- Default Personality -->
             <div class="settings-row">
               <div>
                 <strong>Default Personality</strong>
@@ -413,7 +399,6 @@
               </button>
             </div>
 
-            <!-- Open NEYO on -->
             <div class="settings-row">
               <div>
                 <strong>Open NEYO on</strong>
@@ -425,78 +410,55 @@
               </button>
             </div>
 
-            <!-- Auto-save drafts -->
             <div class="settings-row">
               <div>
                 <strong>Auto-save drafts</strong>
                 <small>Preserve unfinished messages automatically.</small>
               </div>
-              <button
-                class="settings-toggle active"
-                id="settingsAutoSaveToggle"
-                type="button"
-                role="switch"
-                aria-checked="true"
-              >
+              <button class="settings-toggle active" id="settingsAutoSaveToggle" type="button" role="switch" aria-checked="true">
                 <span></span>
               </button>
             </div>
           </div>
-
         </div>
 
         <!-- ========================================================= -->
-        <!-- PANEL: PROFILE — KEPT INTACT                              -->
+        <!-- PANEL: PROFILE – EXISTING (UNCHANGED)                     -->
         <!-- ========================================================= -->
         <div class="neo-settings-panel" id="settingsPanelProfile">
           <h2>Profile</h2>
-
           <div class="profile-editor-card">
             <div class="profile-editor-main">
-
               <div class="profile-avatar-upload">
                 <span class="profile-upload-label">Profile photo</span>
                 <div class="profile-upload-row">
                   <div class="profile-editor-avatar" id="settingsAvatarPreview">U</div>
                   <div class="profile-upload-actions">
-                    <button class="settings-ghost-btn" id="chooseAvatarBtn" type="button">
-                      Change photo
-                    </button>
-                    <button class="settings-ghost-btn" id="removeAvatarBtn" type="button">
-                      Remove
-                    </button>
+                    <button class="settings-ghost-btn" id="chooseAvatarBtn" type="button">Change photo</button>
+                    <button class="settings-ghost-btn" id="removeAvatarBtn" type="button">Remove</button>
                     <input id="settingsAvatarFileInput" type="file" accept="image/jpeg,image/png,image/webp" hidden>
-                    <span class="settings-helper-text">
-                      PNG, JPG or WebP · Max 5 MB
-                    </span>
+                    <span class="settings-helper-text">PNG, JPG or WebP · Max 5 MB</span>
                   </div>
                 </div>
               </div>
-
               <label>
                 Display name
                 <input id="settingsDisplayNameInput" type="text" placeholder="Your NEYO name">
               </label>
-
               <label>
                 Bean ID
                 <input id="settingsUsernameInput" type="text" placeholder="@username" readonly>
               </label>
-
               <div class="profile-editor-actions">
-                <button class="settings-primary-btn" id="saveProfileSettingsBtn" type="button">
-                  Save
-                </button>
-                <button class="settings-ghost-btn" id="resetProfileSettingsBtn" type="button">
-                  Cancel
-                </button>
+                <button class="settings-primary-btn" id="saveProfileSettingsBtn" type="button">Save</button>
+                <button class="settings-ghost-btn" id="resetProfileSettingsBtn" type="button">Cancel</button>
               </div>
             </div>
           </div>
         </div>
 
         <!-- ========================================================= -->
-        <!-- PANEL: NOTIFICATIONS — REUSED                             -->
+        <!-- PANEL: NOTIFICATIONS – EXISTING                           -->
         <!-- ========================================================= -->
         <div class="neo-settings-panel" id="settingsPanelNotifications">
           <h2>Notifications</h2>
@@ -510,7 +472,7 @@
         </div>
 
         <!-- ========================================================= -->
-        <!-- PANEL: PERSONALITIES — REUSED                             -->
+        <!-- PANEL: PERSONALITIES – EXISTING                           -->
         <!-- ========================================================= -->
         <div class="neo-settings-panel" id="settingsPanelPersonalities">
           <h2>NEYO Personalities</h2>
@@ -556,7 +518,7 @@
         </div>
 
         <!-- ========================================================= -->
-        <!-- PANEL: BILLING — KEPT INTACT                              -->
+        <!-- PANEL: BILLING – EXISTING                                 -->
         <!-- ========================================================= -->
         <div class="neo-settings-panel" id="settingsPanelBilling">
           <h2>Billing</h2>
@@ -570,9 +532,8 @@
         </div>
 
         <!-- ========================================================= -->
-        <!-- NEW PLACEHOLDER PANELS (V1 tabs)                          -->
+        <!-- NEW PLACEHOLDER PANELS                                    -->
         <!-- ========================================================= -->
-
         <div class="neo-settings-panel" id="settingsPanelAppearance">
           <div class="neo-settings-panel-header">
             <h2>Appearance</h2>

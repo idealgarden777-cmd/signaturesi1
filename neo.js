@@ -285,15 +285,24 @@
     }
 
     // --------------------------------------------------------
-    // SETTINGS HELPERS
+    // SETTINGS HELPERS — UPDATED panelMap for V1 tabs
     // --------------------------------------------------------
     function activateSettingsTab(tabName = "general") {
         const panelMap = {
             general: "settingsPanelGeneral",
-            profile: "settingsPanelProfile",
+            appearance: "settingsPanelAppearance",
+            workspace: "settingsPanelWorkspace",
+
+            privacy: "settingsPanelPrivacy",
+            memory: "settingsPanelMemory",
             notifications: "settingsPanelNotifications",
+            files: "settingsPanelFiles",
+
             personalities: "settingsPanelPersonalities",
-            billing: "settingsPanelBilling"
+
+            accessibility: "settingsPanelAccessibility",
+            keyboard: "settingsPanelKeyboard",
+            about: "settingsPanelAbout"
         };
         settingsTabs.forEach(tab => {
             tab.classList.toggle("active", tab.dataset.settingsTab === tabName);
@@ -431,7 +440,6 @@
         configureSecurityHooks();
         initializeSidebarState();
         setupEventListeners();
-        // setupMobileVisualViewport(); // REMOVED
         setupPremiumTooltips();
         setupFreemiumLogic();
         setupDragAndDrop();
@@ -455,7 +463,6 @@
             console.warn("History initialization failed:", error);
         }
 
-        // ✅ Focus only on desktop (prevents unwanted mobile keyboard)
         if (window.matchMedia("(min-width: 768px)").matches) {
             chatInput?.focus();
         }
@@ -1193,7 +1200,6 @@
         editButton.type = "button";
         editButton.title = "Edit message";
         editButton.innerHTML = '<i data-lucide="pencil" size="14"></i>';
-        // ✅ FIX: Prioritize current attachments parameter over conversation[index]
         editButton.onclick = async () => {
             const savedAttachments =
                 Array.isArray(attachments) && attachments.length > 0
@@ -1240,7 +1246,6 @@
                     return file;
                 }
 
-                // ✅ Only use existing previewUrl (avoid expired signedUrl)
                 if (file.previewUrl) {
                     return file;
                 }
@@ -1280,7 +1285,6 @@
     ) {
         if (isGenerating) return;
 
-        // ✅ Hydrate previews
         existingAttachments = await hydrateAttachmentPreviews(
             existingAttachments
         );
@@ -1289,7 +1293,6 @@
         const editBox = document.createElement("div");
         editBox.className = "edit-message-box";
 
-        // === Media wrapper ===
         const mediaWrapper = document.createElement("div");
         mediaWrapper.className = "edit-message-media";
         if (existingAttachments && existingAttachments.length > 0) {
@@ -1339,12 +1342,10 @@
         messageElement.appendChild(editBox);
         textarea.focus();
 
-        // Cancel: restore original with attachments
         cancelButton.onclick = () => {
             renderUserMessageWrapper(messageElement, originalText, index, existingAttachments);
         };
 
-        // Save: pass hydrated attachments
         saveButton.onclick = () => {
             const updatedText = textarea.value.trim();
             if (updatedText) {
@@ -1364,12 +1365,10 @@
     ) {
         if (isGenerating) return;
 
-        // ✅ Hydrate previews for safety
         existingAttachments = await hydrateAttachmentPreviews(
             existingAttachments
         );
 
-        // ✅ Create a safe copy to preserve preview URLs and signed URLs
         const preservedAttachments = existingAttachments.map(file => ({
             ...file
         }));
@@ -1389,7 +1388,6 @@
                     current.nextElementSibling.remove();
                 }
             }
-            // Render updated message with preserved attachments
             renderUserMessageWrapper(
                 messageElement,
                 cleanedText,
@@ -1414,7 +1412,6 @@
                 }))
             });
             const aiBubble = renderMessageToUI("assistant", "", null, true);
-            // ✅ FIX: Pass text and attachments to submitChatRequest
             await submitChatRequest(
                 aiBubble,
                 cleanedText,
@@ -1814,7 +1811,6 @@
                 return;
             }
 
-            // CHECK SUPABASE CLIENT
             if (!supabaseClient) {
                 showToast("Upload service is not ready.", "error");
                 return;
@@ -1825,7 +1821,6 @@
             saveProfileSettingsBtn.textContent = "Saving...";
 
             try {
-                // Step 1: Prepare upload (get signed URL)
                 const prepareResponse = await fetch("/api/profile/avatar", {
                     method: "POST",
                     credentials: "include",
@@ -1849,7 +1844,6 @@
                     throw new Error("Upload information was not returned.");
                 }
 
-                // Step 2: Upload file to Supabase Storage using signed URL
                 const { error: uploadError } = await supabaseClient.storage
                     .from(upload.bucket)
                     .uploadToSignedUrl(
@@ -1865,7 +1859,6 @@
                     throw new Error(uploadError.message || "Photo upload failed.");
                 }
 
-                // Step 3: Save the path to user profile in DB
                 const saveResponse = await fetch("/api/profile/avatar", {
                     method: "POST",
                     credentials: "include",
@@ -1880,16 +1873,14 @@
                     })
                 });
 
-                const saveData = await readJsonResponse(saveResponse);
+                await readJsonResponse(saveResponse);
 
-                // Clean up local state
                 selectedAvatarFile = null;
 
                 if (settingsAvatarFileInput) {
                     settingsAvatarFileInput.value = "";
                 }
 
-                // Refresh UI (sidebar + settings)
                 await renderUserProfile();
 
                 showToast("Profile photo saved.", "success");
@@ -2254,7 +2245,6 @@
                 box.appendChild(nameSpan);
                 card.appendChild(box);
             }
-            // --- UPDATED: remove button with icon and tooltip ---
             const remove = document.createElement("button");
             remove.type = "button";
             remove.className = "attachment-remove-btn";
@@ -2352,7 +2342,6 @@
             userPlan ||
             "free";
 
-        // 👇 UPDATED: support both camelCase and snake_case
         const avatarUrl =
             profile?.profile?.avatarUrl ||
             profile?.profile?.avatar_url ||
@@ -2372,7 +2361,6 @@
                 plan === "pro" ? "Pro Plan" : "Free Plan";
         }
 
-        // 👇 UPDATED: add cache-busting query param and reuse for both elements
         function renderAvatar(element) {
             if (!element) return;
 
@@ -2412,7 +2400,6 @@
     async function loadHistoryFromSupabase() {
         if (!historyList) return;
 
-        // Show shimmer
         historyList.innerHTML = `
             <div class="history-loading" aria-hidden="true">
                 <div class="history-skeleton-row">

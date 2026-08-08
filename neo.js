@@ -116,7 +116,7 @@
     const neoSettingsCloseBtn = document.getElementById("neoSettingsCloseBtn");
     const settingsTabs = document.querySelectorAll(".neo-settings-tab");
     const settingsPanels = document.querySelectorAll(".neo-settings-panel");
-    const settingsThemeBtn = document.getElementById("settingsThemeBtn");
+    // settingsThemeBtn removed — now handled by segmented control
     const saveProfileSettingsBtn = document.getElementById("saveProfileSettingsBtn");
     const resetProfileSettingsBtn = document.getElementById("resetProfileSettingsBtn");
     const settingsUpgradeBtn = document.getElementById("settingsUpgradeBtn");
@@ -290,6 +290,7 @@
     function activateSettingsTab(tabName = "general") {
         const panelMap = {
             general: "settingsPanelGeneral",
+            profile: "settingsPanelProfile",
             appearance: "settingsPanelAppearance",
             workspace: "settingsPanelWorkspace",
 
@@ -428,6 +429,231 @@
     }
 
     // --------------------------------------------------------
+    //  THEME SYSTEM (restored with System/Light/Dark support)
+    // --------------------------------------------------------
+    function applyTheme(value = "system") {
+        const systemDark =
+            window.matchMedia("(prefers-color-scheme: dark)").matches;
+
+        const isDark =
+            value === "dark" ||
+            (value === "system" && systemDark);
+
+        document.body.classList.toggle("dark-mode", isDark);
+    }
+
+    function syncSettingsThemeControl(value) {
+        document
+            .querySelectorAll("#settingsThemeControl button")
+            .forEach(button => {
+                button.classList.toggle(
+                    "active",
+                    button.dataset.value === value
+                );
+            });
+    }
+
+    function setupTheme() {
+        const storedTheme =
+            localStorage.getItem("neo_theme") || "system";
+
+        applyTheme(storedTheme);
+        syncSettingsThemeControl(storedTheme);
+
+        const toggleTheme = () => {
+            const isDark =
+                document.body.classList.contains("dark-mode");
+
+            const nextTheme = isDark ? "light" : "dark";
+
+            localStorage.setItem("neo_theme", nextTheme);
+
+            applyTheme(nextTheme);
+            syncSettingsThemeControl(nextTheme);
+        };
+
+        topBarDarkModeToggle?.addEventListener("click", toggleTheme);
+        sidebarDarkModeToggle?.addEventListener("click", toggleTheme);
+    }
+
+    function setupSettingsThemeControl() {
+        const control =
+            document.getElementById("settingsThemeControl");
+
+        if (!control) return;
+
+        control.querySelectorAll("button").forEach(button => {
+            button.addEventListener("click", () => {
+                const value =
+                    button.dataset.value || "system";
+
+                localStorage.setItem("neo_theme", value);
+
+                applyTheme(value);
+                syncSettingsThemeControl(value);
+            });
+        });
+
+        syncSettingsThemeControl(
+            localStorage.getItem("neo_theme") || "system"
+        );
+    }
+
+    function setupSystemThemeWatcher() {
+        const media =
+            window.matchMedia("(prefers-color-scheme: dark)");
+
+        media.addEventListener("change", () => {
+            const theme =
+                localStorage.getItem("neo_theme") || "system";
+
+            if (theme === "system") {
+                applyTheme("system");
+            }
+        });
+    }
+
+    // --------------------------------------------------------
+    // INTELLIGENCE — Standard / Maximum (Local preference only)
+    // --------------------------------------------------------
+    function setupIntelligenceControl() {
+        const control =
+            document.getElementById("settingsIntelligenceControl");
+
+        if (!control) return;
+
+        const buttons = control.querySelectorAll("button");
+
+        const applySelection = value => {
+            const safeValue =
+                value === "maximum" ? "maximum" : "standard";
+
+            localStorage.setItem(
+                "neo_intelligence",
+                safeValue
+            );
+
+            buttons.forEach(button => {
+                const active =
+                    button.dataset.value === safeValue;
+
+                button.classList.toggle("active", active);
+                button.setAttribute(
+                    "aria-pressed",
+                    String(active)
+                );
+            });
+        };
+
+        buttons.forEach(button => {
+            button.addEventListener("click", () => {
+                applySelection(
+                    button.dataset.value || "standard"
+                );
+            });
+        });
+
+        const stored =
+            localStorage.getItem("neo_intelligence")
+            || "standard";
+
+        applySelection(stored);
+    }
+
+    // --------------------------------------------------------
+    // IMAGE COMPRESSION HELPER
+    // --------------------------------------------------------
+    async function compressImageFile(
+        file,
+        {
+            maxDimension = 2048,
+            quality = 0.82,
+            maxBytes = 900 * 1024
+        } = {}
+    ) {
+        if (!(file instanceof File)) {
+            return file;
+        }
+
+        if (!file.type.startsWith("image/")) {
+            return file;
+        }
+
+        // GIF/SVG untouched
+        if (
+            file.type === "image/gif" ||
+            file.type === "image/svg+xml"
+        ) {
+            return file;
+        }
+
+        // Already small image skip
+        if (file.size <= maxBytes) {
+            return file;
+        }
+
+        try {
+            const bitmap = await createImageBitmap(file);
+
+            let width = bitmap.width;
+            let height = bitmap.height;
+
+            const scale = Math.min(
+                1,
+                maxDimension / Math.max(width, height)
+            );
+
+            width = Math.max(1, Math.round(width * scale));
+            height = Math.max(1, Math.round(height * scale));
+
+            const canvas = document.createElement("canvas");
+            canvas.width = width;
+            canvas.height = height;
+
+            const ctx = canvas.getContext("2d");
+
+            if (!ctx) {
+                bitmap.close?.();
+                return file;
+            }
+
+            ctx.drawImage(bitmap, 0, 0, width, height);
+            bitmap.close?.();
+
+            const blob = await new Promise(resolve => {
+                canvas.toBlob(
+                    resolve,
+                    "image/webp",
+                    quality
+                );
+            });
+
+            if (!blob || blob.size >= file.size) {
+                return file;
+            }
+
+            const baseName =
+                file.name.replace(/\.[^/.]+$/, "");
+
+            return new File(
+                [blob],
+                `${baseName}.webp`,
+                {
+                    type: "image/webp",
+                    lastModified: Date.now()
+                }
+            );
+        } catch (error) {
+            console.warn(
+                "Image compression failed, using original:",
+                error
+            );
+
+            return file;
+        }
+    }
+
+    // --------------------------------------------------------
     //  INIT
     // --------------------------------------------------------
     async function init() {
@@ -437,6 +663,9 @@
             window.lucide.createIcons();
         }
         setupTheme();
+        setupSettingsThemeControl();
+        setupSystemThemeWatcher();
+        setupIntelligenceControl();
         configureSecurityHooks();
         initializeSidebarState();
         setupEventListeners();
@@ -517,7 +746,7 @@
     }
 
     // --------------------------------------------------------
-    //  SECURITY / THEME
+    //  SECURITY / THEME (old theme function kept for compatibility but replaced above)
     // --------------------------------------------------------
     function configureSecurityHooks() {
         if (!window.DOMPurify) return;
@@ -527,17 +756,6 @@
                 node.setAttribute("rel", "noopener noreferrer");
             }
         });
-    }
-
-    function setupTheme() {
-        const isDark = localStorage.getItem("neo_theme") === "dark";
-        document.body.classList.toggle("dark-mode", isDark);
-        const toggle = () => {
-            document.body.classList.toggle("dark-mode");
-            localStorage.setItem("neo_theme", document.body.classList.contains("dark-mode") ? "dark" : "light");
-        };
-        topBarDarkModeToggle?.addEventListener("click", toggle);
-        sidebarDarkModeToggle?.addEventListener("click", toggle);
     }
 
     // --------------------------------------------------------
@@ -812,7 +1030,7 @@
         });
         optL10?.addEventListener("click", () => {
             selectedModel = "l1.0";
-            if (currentModelDisplay) currentModelDisplay.textContent = "NEO L1.0";
+            if (currentModelDisplay) currentModelDisplay.textContent = "NEYO L1.0";
             optL10.classList.add("active");
             optL12?.classList.remove("active");
             modelDropdownMenu?.classList.remove("show");
@@ -824,7 +1042,7 @@
                 return;
             }
             selectedModel = "l1.2";
-            if (currentModelDisplay) currentModelDisplay.textContent = "NEO L1.2 Pro";
+            if (currentModelDisplay) currentModelDisplay.textContent = "NEYO L1.2 Pro";
             optL12.classList.add("active");
             optL10?.classList.remove("active");
         });
@@ -1461,16 +1679,28 @@
     });
 
     // --------------------------------------------------------
-    //  UPLOAD FUNCTION
+    //  UPLOAD FUNCTION (with compression)
     // --------------------------------------------------------
     async function uploadFileToStorage(fileEntry) {
-        const file = fileEntry?.rawFile;
-        if (!(file instanceof File)) {
+        const originalFile = fileEntry?.rawFile;
+
+        if (!(originalFile instanceof File)) {
             throw new Error("Invalid file selected.");
         }
+
+        const file = await compressImageFile(
+            originalFile,
+            {
+                maxDimension: 2048,
+                quality: 0.82,
+                maxBytes: 900 * 1024
+            }
+        );
+
         if (!supabaseClient) {
             throw new Error("Upload service is not ready.");
         }
+
         const response = await fetch("/api/upload", {
             method: "POST",
             credentials: "include",
@@ -1719,10 +1949,7 @@
         settingsBtn?.addEventListener("click", event => {
             event.preventDefault();
             event.stopPropagation();
-            closeUserPopup();
-            closeHistoryPopup();
-            neoSettingsOverlay?.classList.add("show");
-            neoSettingsOverlay?.setAttribute("aria-hidden", "false");
+            openNeoSettings("general");
         });
         neoSettingsCloseBtn?.addEventListener("click", () => {
             neoSettingsOverlay?.classList.remove("show");
@@ -1736,24 +1963,13 @@
         });
         settingsTabs.forEach(tab => {
             tab.addEventListener("click", () => {
-                settingsTabs.forEach(t => t.classList.remove("active"));
-                tab.classList.add("active");
-                const target = tab.dataset.settingsTab;
-                settingsPanels.forEach(panel => panel.classList.remove("active"));
-                const panel = document.getElementById(`settingsPanel${target.charAt(0).toUpperCase() + target.slice(1)}`);
-                if (panel) panel.classList.add("active");
+                activateSettingsTab(tab.dataset.settingsTab || "general");
             });
         });
         document.addEventListener("keydown", event => {
             if (event.key === "Escape" && neoSettingsOverlay?.classList.contains("show")) {
                 closeNeoSettings();
             }
-        });
-        settingsThemeBtn?.addEventListener("click", () => {
-            const isDark = document.body.classList.contains("dark-mode");
-            document.body.classList.toggle("dark-mode", !isDark);
-            localStorage.setItem("neo_theme", !isDark ? "dark" : "light");
-            settingsThemeBtn.textContent = !isDark ? "Dark" : "Light";
         });
 
         // --- AVATAR SELECTION / PREVIEW ---
@@ -1804,7 +2020,7 @@
             showToast("Photo selected. Press Save profile.", "success");
         });
 
-        // --- UPDATED: SAVE PROFILE BUTTON (UPLOAD TO SUPABASE) ---
+        // --- UPDATED: SAVE PROFILE BUTTON (UPLOAD TO SUPABASE) with compression ---
         saveProfileSettingsBtn?.addEventListener("click", async () => {
             if (!selectedAvatarFile) {
                 showToast("Please choose a profile photo first.", "info");
@@ -1821,6 +2037,16 @@
             saveProfileSettingsBtn.textContent = "Saving...";
 
             try {
+                const avatarFile =
+                    await compressImageFile(
+                        selectedAvatarFile,
+                        {
+                            maxDimension: 512,
+                            quality: 0.80,
+                            maxBytes: 200 * 1024
+                        }
+                    );
+
                 const prepareResponse = await fetch("/api/profile/avatar", {
                     method: "POST",
                     credentials: "include",
@@ -1831,9 +2057,9 @@
                     },
                     body: JSON.stringify({
                         action: "prepare",
-                        filename: selectedAvatarFile.name,
-                        mimeType: selectedAvatarFile.type,
-                        size: selectedAvatarFile.size
+                        filename: avatarFile.name,
+                        mimeType: avatarFile.type,
+                        size: avatarFile.size
                     })
                 });
 
@@ -1849,9 +2075,9 @@
                     .uploadToSignedUrl(
                         upload.path,
                         upload.token,
-                        selectedAvatarFile,
+                        avatarFile,
                         {
-                            contentType: selectedAvatarFile.type
+                            contentType: avatarFile.type
                         }
                     );
 
@@ -2078,16 +2304,7 @@
             userProfileBtn.setAttribute("aria-expanded", String(willOpen));
         });
         sidebarPersonalitiesBtn?.addEventListener("click", () => {
-            userPopupMenu?.classList.remove("show");
-            neoSettingsOverlay?.classList.add("show");
-            neoSettingsOverlay?.setAttribute("aria-hidden", "false");
-            settingsTabs.forEach(tab => {
-                tab.classList.toggle("active", tab.dataset.settingsTab === "personalities");
-            });
-            settingsPanels.forEach(panel => {
-                panel.classList.remove("active");
-            });
-            document.getElementById("settingsPanelPersonalities")?.classList.add("active");
+            openNeoSettings("personalities");
         });
         setupSettingsUI();
         document.addEventListener("click", event => {

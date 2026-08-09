@@ -3323,6 +3323,7 @@ body.dark-mode .history-skeleton-line {
         animation: none !important;
     }
 }
+
 /* =========================================================
    NEYO SETTINGS V1 — ADD-ON (do not overwrite global rules)
    ========================================================= */
@@ -3690,6 +3691,7 @@ body.dark-mode .neo-settings-nav-divider {
         text-align: center;
     }
 }
+
 /* =========================================================
    NEYO SETTINGS V1 — SAFE MONOCHROME TOKENS
    Settings only. Overrides missing/legacy variables.
@@ -3735,6 +3737,7 @@ body.dark-mode .settings-value-btn:hover {
     border-color: rgba(255, 255, 255, 0.18) !important;
     color: #f5f5f5 !important;
 }
+
 /* =========================================================
    NEYO SETTINGS V1 — ADD-ON
    (Append this block to the very end of your neo-v3.css)
@@ -4191,6 +4194,7 @@ body.dark-mode .settings-value-btn:hover {
 body.dark-mode .neo-settings-placeholder small {
     color: #737373;
 }
+
 /* =========================================================
    NEYO GENERAL V1 — FINAL UI / UX
    Append at the very end of neo-v3.css
@@ -5253,6 +5257,7 @@ body.dark-mode[data-neyo-interface="warm"]
         animation-iteration-count: 1 !important;
     }
 }
+
 /* =========================================================
    NEYO APPEARANCE V1 — FINAL STYLES
    Append this block to the very end of neo-v3.css
@@ -5560,5 +5565,371 @@ body[data-neyo-motion="reduced"] *::after {
         transition-duration: 0.01ms !important;
         animation-duration: 0.01ms !important;
         animation-iteration-count: 1 !important;
+    }
+}
+
+/* =========================================================
+   UNIFIED SETTINGS PILLS — Shared across General & Appearance
+   (Replaces old segmented controls with modern pill design)
+   ========================================================= */
+
+.settings-segmented {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 0;
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+}
+
+.settings-segmented-wrap {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.settings-pill {
+    min-height: 40px;
+    padding: 0 16px;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 999px;
+    background: #ffffff;
+    color: #171717;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition:
+        background-color 140ms ease,
+        border-color 140ms ease,
+        color 140ms ease,
+        box-shadow 140ms ease;
+}
+
+.settings-pill:hover {
+    background: #f7f7f8;
+    border-color: rgba(0, 0, 0, 0.10);
+}
+
+.settings-pill.active {
+    background: var(--neyo-accent-soft, rgba(31, 143, 255, 0.10));
+    border-color: var(--neyo-accent, #1f8fff);
+    color: var(--neyo-accent, #1f8fff);
+    box-shadow: inset 0 0 0 1px var(--neyo-accent, #1f8fff);
+}
+
+.settings-pill-custom {
+    user-select: none;
+    cursor: pointer;
+}
+
+.settings-pill-custom:hover {
+    background: #f0f0f0;
+}
+
+/* Dark mode pills */
+body.dark-mode .settings-pill {
+    background: #1d1d1d;
+    color: #f3f3f3;
+    border-color: rgba(255, 255, 255, 0.10);
+}
+
+body.dark-mode .settings-pill:hover {
+    background: #282828;
+    border-color: rgba(255, 255, 255, 0.14);
+}
+
+body.dark-mode .settings-pill.active {
+    background: var(--neyo-accent-soft, rgba(31, 143, 255, 0.16));
+    border-color: var(--neyo-accent, #1f8fff);
+    color: #ffffff;
+    box-shadow: inset 0 0 0 1px var(--neyo-accent, #1f8fff);
+}
+
+/* ---------------------------------------------------------
+   ROOT ACCENT VARIABLES (Monochrome default, no blue flash)
+   --------------------------------------------------------- */
+
+:root {
+    --neyo-accent: #171717;
+    --neyo-accent-soft: rgba(23, 23, 23, 0.08);
+}
+
+/* ---------------------------------------------------------
+   HIDE APPEARANCE PREVIEW (if still present in HTML)
+   --------------------------------------------------------- */
+
+.appearance-preview,
+.appearance-preview-card,
+.appearance-preview-shell,
+.appearance-preview-window {
+    display: none !important;
+}
+
+/* ---------------------------------------------------------
+   UNIFIED SELECT BUTTONS (Dropdowns)
+   --------------------------------------------------------- */
+
+.settings-select-btn {
+    min-height: 44px;
+    padding: 0 16px;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 16px;
+    background: #ffffff;
+    color: #171717;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: border-color 140ms ease, background 140ms ease;
+}
+
+.settings-select-btn:hover {
+    border-color: rgba(0, 0, 0, 0.18);
+    background: #fafafa;
+}
+
+body.dark-mode .settings-select-btn {
+    background: #1d1d1d;
+    color: #f3f3f3;
+    border-color: rgba(255, 255, 255, 0.10);
+}
+
+body.dark-mode .settings-select-btn:hover {
+    border-color: rgba(255, 255, 255, 0.20);
+    background: #282828;
+}
+
+/* =========================================================
+   NEYO SETTINGS — FINAL PILL NORMALIZATION
+   General + Appearance unified
+   ========================================================= */
+
+#settingsPanelGeneral .settings-segmented-control,
+#settingsPanelAppearance .settings-segmented-control,
+#settingsPanelGeneral .settings-segmented,
+#settingsPanelAppearance .settings-segmented {
+    display: inline-flex !important;
+    align-items: center !important;
+    flex-wrap: wrap !important;
+
+    gap: 8px !important;
+
+    padding: 0 !important;
+
+    border: 0 !important;
+    border-radius: 0 !important;
+
+    background: transparent !important;
+
+    box-shadow: none !important;
+}
+
+#settingsPanelGeneral .settings-segmented-control button,
+#settingsPanelAppearance .settings-segmented-control button,
+#settingsPanelGeneral .settings-pill,
+#settingsPanelAppearance .settings-pill {
+    min-height: 40px !important;
+
+    padding: 0 16px !important;
+
+    border:
+        1px solid rgba(0, 0, 0, 0.08)
+        !important;
+
+    border-radius: 999px !important;
+
+    background: #ffffff !important;
+    color: #171717 !important;
+
+    font-size: 14px !important;
+    font-weight: 500 !important;
+    line-height: 1 !important;
+
+    box-shadow: none !important;
+}
+
+#settingsPanelGeneral
+.settings-segmented-control button:hover,
+#settingsPanelAppearance
+.settings-segmented-control button:hover,
+#settingsPanelGeneral .settings-pill:hover,
+#settingsPanelAppearance .settings-pill:hover {
+    background: #f7f7f8 !important;
+
+    border-color:
+        rgba(0, 0, 0, 0.12)
+        !important;
+}
+
+/* Normal selected pills remain monochrome */
+
+#settingsPanelGeneral
+.settings-segmented-control button.active,
+#settingsPanelAppearance
+.settings-segmented-control button.active {
+    background: #171717 !important;
+    color: #ffffff !important;
+
+    border-color: #171717 !important;
+
+    box-shadow: none !important;
+}
+
+/* Accent pills use chosen accent color */
+
+#settingsPanelAppearance
+#appearanceAccentControl
+.settings-pill.active,
+#settingsPanelAppearance
+#settingsAccentControl
+.settings-pill.active {
+    background:
+        var(--neyo-accent-soft)
+        !important;
+
+    color:
+        var(--neyo-accent)
+        !important;
+
+    border-color:
+        var(--neyo-accent)
+        !important;
+
+    box-shadow:
+        inset 0 0 0 1px
+        var(--neyo-accent)
+        !important;
+}
+
+
+/* Custom selected pill */
+
+#settingsPanelAppearance
+.settings-pill-custom.active {
+    background:
+        var(--neyo-accent-soft)
+        !important;
+
+    color:
+        var(--neyo-accent)
+        !important;
+
+    border-color:
+        var(--neyo-accent)
+        !important;
+
+    box-shadow:
+        inset 0 0 0 1px
+        var(--neyo-accent)
+        !important;
+}
+
+
+/* DARK */
+
+body.dark-mode
+#settingsPanelGeneral
+.settings-segmented-control button,
+body.dark-mode
+#settingsPanelAppearance
+.settings-segmented-control button,
+body.dark-mode
+#settingsPanelGeneral .settings-pill,
+body.dark-mode
+#settingsPanelAppearance .settings-pill {
+    background: #1d1d1d !important;
+    color: #f3f3f3 !important;
+
+    border-color:
+        rgba(255, 255, 255, 0.10)
+        !important;
+}
+
+body.dark-mode
+#settingsPanelGeneral
+.settings-segmented-control button:hover,
+body.dark-mode
+#settingsPanelAppearance
+.settings-segmented-control button:hover,
+body.dark-mode
+#settingsPanelGeneral .settings-pill:hover,
+body.dark-mode
+#settingsPanelAppearance .settings-pill:hover {
+    background: #282828 !important;
+}
+
+body.dark-mode
+#settingsPanelGeneral
+.settings-segmented-control button.active,
+body.dark-mode
+#settingsPanelAppearance
+.settings-segmented-control button.active {
+    background: #f5f5f5 !important;
+    color: #171717 !important;
+
+    border-color: #f5f5f5 !important;
+}
+
+/* Preserve accent color specifically for Accent row */
+
+body.dark-mode
+#settingsPanelAppearance
+#appearanceAccentControl
+.settings-pill.active,
+body.dark-mode
+#settingsPanelAppearance
+#settingsAccentControl
+.settings-pill.active,
+body.dark-mode
+#settingsPanelAppearance
+.settings-pill-custom.active {
+    background:
+        var(--neyo-accent-soft)
+        !important;
+
+    color: #ffffff !important;
+
+    border-color:
+        var(--neyo-accent)
+        !important;
+}
+
+
+/* Mobile */
+
+@media (max-width: 767px) {
+
+    #settingsPanelGeneral
+    .settings-segmented-control,
+    #settingsPanelAppearance
+    .settings-segmented-control,
+    #settingsPanelGeneral
+    .settings-segmented,
+    #settingsPanelAppearance
+    .settings-segmented {
+        justify-content: flex-end !important;
+    }
+
+    #settingsPanelGeneral
+    .settings-segmented-control button,
+    #settingsPanelAppearance
+    .settings-segmented-control button,
+    #settingsPanelGeneral
+    .settings-pill,
+    #settingsPanelAppearance
+    .settings-pill {
+        min-height: 38px !important;
+        padding-inline: 14px !important;
+
+        flex: 0 0 auto !important;
     }
 }

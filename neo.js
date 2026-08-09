@@ -63,6 +63,306 @@
     // History dedupe
     let historyLoadPromise = null;
 
+    // ---- UNIFIED PREFERENCE SYSTEM ----
+    const PREFERENCE_DEFAULTS = {
+        theme: "system",
+        interface: "minimal",
+        intelligence: "standard",
+        privateChat: false,
+        language: "auto",
+        defaultPersonality: "neyo",
+        openOn: "new-chat",
+        autoSaveDrafts: true,
+        accent: "neutral",
+        textSize: "default",
+        contentWidth: "balanced",
+        sidebarDensity: "comfortable",
+        motion: "on"
+    };
+
+    // Explicit storage keys – preserves existing user preferences
+    const PREFERENCE_STORAGE_KEYS = {
+        theme: "neo_theme",
+        interface: "neo_interface",
+        intelligence: "neo_intelligence",
+        privateChat: "neo_private_chat",
+        language: "neo_language",
+        defaultPersonality: "neo_default_personality",
+        openOn: "neo_open_on",
+        autoSaveDrafts: "neo_auto_save_drafts",
+        accent: "neo_accent",
+        textSize: "neo_text_size",
+        contentWidth: "neo_content_width",
+        sidebarDensity: "neo_sidebar_density",
+        motion: "neo_motion"
+    };
+
+    function getPreference(key) {
+        const storageKey = PREFERENCE_STORAGE_KEYS[key];
+        if (!storageKey) return PREFERENCE_DEFAULTS[key];
+
+        const stored = localStorage.getItem(storageKey);
+        if (stored === null) return PREFERENCE_DEFAULTS[key];
+
+        // Handle boolean preferences stored as "on"/"off" or "true"/"false"
+        if (key === "privateChat" || key === "autoSaveDrafts") {
+            return stored === "on" || stored === "true";
+        }
+
+        return stored;
+    }
+
+    function setPreference(key, value) {
+        const storageKey = PREFERENCE_STORAGE_KEYS[key];
+        if (!storageKey) return;
+
+        let storedValue = value;
+
+        // Convert boolean to "on"/"off" for backward compatibility
+        if (key === "privateChat" || key === "autoSaveDrafts") {
+            storedValue = value ? "on" : "off";
+        }
+
+        localStorage.setItem(storageKey, String(storedValue));
+
+        // Update body data attributes for appearance
+        if (["interface", "theme", "accent", "textSize", "contentWidth", "sidebarDensity", "motion"].includes(key)) {
+            const attr = `neyo${key.charAt(0).toUpperCase()}${key.slice(1)}`;
+            document.body.dataset[attr] = value;
+        }
+
+        // Special handling for theme
+        if (key === "theme") {
+            applyTheme(value);
+        }
+
+        // Special handling for interface
+        if (key === "interface") {
+            document.body.dataset.neyoInterface = value;
+        }
+
+        // Private chat class
+        if (key === "privateChat") {
+            document.body.classList.toggle("neo-private-chat", value);
+        }
+
+        // Auto-save drafts
+        if (key === "autoSaveDrafts") {
+            if (!value) clearCurrentDraft();
+            else saveCurrentDraft();
+        }
+
+        // Sync all UI controls
+        syncAllControls();
+        updateAppearancePreview();
+    }
+
+    function updatePreference(key, value) {
+        // Validate and normalize
+        let finalValue = value;
+
+        if (key === "theme" && !["system", "light", "dark"].includes(value)) finalValue = "system";
+        if (key === "interface" && !["minimal", "warm", "glass"].includes(value)) finalValue = "minimal";
+        if (key === "intelligence" && !["standard", "maximum"].includes(value)) finalValue = "standard";
+        if (key === "privateChat") finalValue = Boolean(value);
+        if (key === "autoSaveDrafts") finalValue = Boolean(value);
+
+        if (key === "accent" && !["neutral", "emerald", "violet", "blue"].includes(value)) finalValue = "neutral";
+        if (key === "textSize" && !["small", "default", "large"].includes(value)) finalValue = "default";
+        if (key === "contentWidth" && !["compact", "balanced", "wide"].includes(value)) finalValue = "balanced";
+        if (key === "sidebarDensity" && !["compact", "comfortable"].includes(value)) finalValue = "comfortable";
+        if (key === "motion" && !["on", "reduced"].includes(value)) finalValue = "on";
+
+        // Hardening for General preferences
+        if (key === "language" && !["auto", "english", "urdu", "roman-urdu"].includes(value)) finalValue = "auto";
+        if (key === "defaultPersonality" && !["neyo", "zadi", "wizi"].includes(value)) finalValue = "neyo";
+        if (key === "openOn" && !["new-chat", "last-chat"].includes(value)) finalValue = "new-chat";
+
+        setPreference(key, finalValue);
+    }
+
+    // ---- SYNC FUNCTIONS ----
+    function syncAllControls() {
+        syncThemeControls();
+        syncInterfaceControls();
+        syncIntelligenceControls();
+        syncPrivateChatToggle();
+        syncLanguageSelect();
+        syncPersonalitySelect();
+        syncOpenOnSelect();
+        syncAutoSaveToggle();
+        syncAccentControls();
+        syncTextSizeControls();
+        syncContentWidthControls();
+        syncSidebarDensityControls();
+        syncMotionControls();
+    }
+
+    function syncThemeControls() {
+        const val = getPreference("theme");
+        document.querySelectorAll("#settingsThemeControl button, #appearanceThemeControl button").forEach(button => {
+            const active = button.dataset.value === val;
+            button.classList.toggle("active", active);
+            button.setAttribute("aria-pressed", String(active));
+        });
+        applyTheme(val);
+    }
+
+    function syncInterfaceControls() {
+        const val = getPreference("interface");
+        document.querySelectorAll("#settingsInterfaceControl button, #appearanceInterfaceControl button").forEach(button => {
+            const active = button.dataset.value === val;
+            button.classList.toggle("active", active);
+            button.setAttribute("aria-pressed", String(active));
+        });
+        document.body.dataset.neyoInterface = val;
+    }
+
+    function syncIntelligenceControls() {
+        const val = getPreference("intelligence");
+        document.querySelectorAll("#settingsIntelligenceControl button").forEach(button => {
+            const active = button.dataset.value === val;
+            button.classList.toggle("active", active);
+            button.setAttribute("aria-pressed", String(active));
+        });
+    }
+
+    function syncPrivateChatToggle() {
+        const val = getPreference("privateChat");
+        const toggle = document.getElementById("settingsPrivateChatToggle");
+        if (!toggle) return;
+        toggle.classList.toggle("active", val);
+        toggle.setAttribute("aria-checked", String(val));
+        document.body.classList.toggle("neo-private-chat", val);
+    }
+
+    function syncLanguageSelect() {
+        const val = getPreference("language");
+        const button = document.getElementById("settingsLanguageBtn");
+        const menu = document.getElementById("settingsLanguageMenu");
+        const valueSpan = document.getElementById("settingsLanguageValue");
+        if (!button || !menu || !valueSpan) return;
+        const labels = { auto: "Auto-detect", english: "English", urdu: "Urdu", "roman-urdu": "Roman Urdu" };
+        valueSpan.textContent = labels[val] || labels.auto;
+        menu.querySelectorAll(".settings-select-option").forEach(opt => {
+            const active = opt.dataset.value === val;
+            opt.classList.toggle("active", active);
+            opt.setAttribute("aria-selected", String(active));
+        });
+    }
+
+    function syncPersonalitySelect() {
+        const val = getPreference("defaultPersonality");
+        const button = document.getElementById("settingsDefaultPersonalityBtn");
+        const menu = document.getElementById("settingsDefaultPersonalityMenu");
+        const valueSpan = document.getElementById("settingsDefaultPersonalityValue");
+        if (!button || !menu || !valueSpan) return;
+        const labels = { neyo: "Neyo", zadi: "Zadi", wizi: "Wizi" };
+        valueSpan.textContent = labels[val] || labels.neyo;
+        menu.querySelectorAll(".settings-select-option").forEach(opt => {
+            const active = opt.dataset.value === val;
+            opt.classList.toggle("active", active);
+            opt.setAttribute("aria-selected", String(active));
+        });
+    }
+
+    function syncOpenOnSelect() {
+        const val = getPreference("openOn");
+        const button = document.getElementById("settingsOpenOnBtn");
+        const menu = document.getElementById("settingsOpenOnMenu");
+        const valueSpan = document.getElementById("settingsOpenOnValue");
+        if (!button || !menu || !valueSpan) return;
+        const labels = { "new-chat": "New chat", "last-chat": "Last chat" };
+        valueSpan.textContent = labels[val] || labels["new-chat"];
+        menu.querySelectorAll(".settings-select-option").forEach(opt => {
+            const active = opt.dataset.value === val;
+            opt.classList.toggle("active", active);
+            opt.setAttribute("aria-selected", String(active));
+        });
+    }
+
+    function syncAutoSaveToggle() {
+        const val = getPreference("autoSaveDrafts");
+        const toggle = document.getElementById("settingsAutoSaveToggle");
+        if (!toggle) return;
+        toggle.classList.toggle("active", val);
+        toggle.setAttribute("aria-checked", String(val));
+    }
+
+    function syncAccentControls() {
+        const val = getPreference("accent");
+        document.querySelectorAll("#appearanceAccentControl button").forEach(button => {
+            const active = button.dataset.value === val;
+            button.classList.toggle("active", active);
+            button.setAttribute("aria-pressed", String(active));
+        });
+        document.body.dataset.neyoAccent = val;
+    }
+
+    function syncTextSizeControls() {
+        const val = getPreference("textSize");
+        document.querySelectorAll("#appearanceTextSizeControl button").forEach(button => {
+            const active = button.dataset.value === val;
+            button.classList.toggle("active", active);
+            button.setAttribute("aria-pressed", String(active));
+        });
+        document.body.dataset.neyoTextSize = val;
+    }
+
+    function syncContentWidthControls() {
+        const val = getPreference("contentWidth");
+        document.querySelectorAll("#appearanceContentWidthControl button").forEach(button => {
+            const active = button.dataset.value === val;
+            button.classList.toggle("active", active);
+            button.setAttribute("aria-pressed", String(active));
+        });
+        document.body.dataset.neyoContentWidth = val;
+    }
+
+    function syncSidebarDensityControls() {
+        const val = getPreference("sidebarDensity");
+        document.querySelectorAll("#appearanceSidebarDensityControl button").forEach(button => {
+            const active = button.dataset.value === val;
+            button.classList.toggle("active", active);
+            button.setAttribute("aria-pressed", String(active));
+        });
+        document.body.dataset.neyoSidebarDensity = val;
+    }
+
+    function syncMotionControls() {
+        const val = getPreference("motion");
+        document.querySelectorAll("#appearanceMotionControl button").forEach(button => {
+            const active = button.dataset.value === val;
+            button.classList.toggle("active", active);
+            button.setAttribute("aria-pressed", String(active));
+        });
+        document.body.dataset.neyoMotion = val;
+    }
+
+    // ---- LIVE PREVIEW ----
+    function updateAppearancePreview() {
+        const preview = document.querySelector(".appearance-preview-window");
+        if (!preview) return;
+        const theme = getPreference("theme");
+        const interfaceMode = getPreference("interface");
+        const accent = getPreference("accent");
+        const textSize = getPreference("textSize");
+        const contentWidth = getPreference("contentWidth");
+        const sidebarDensity = getPreference("sidebarDensity");
+        const motion = getPreference("motion");
+
+        preview.dataset.theme = theme;
+        preview.dataset.interface = interfaceMode;
+        preview.dataset.accent = accent;
+        preview.dataset.textSize = textSize;
+        preview.dataset.contentWidth = contentWidth;
+        preview.dataset.sidebarDensity = sidebarDensity;
+        preview.dataset.motion = motion;
+
+        const isDark = theme === "dark" || (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+        preview.classList.toggle("dark-preview", isDark);
+    }
+
     // DOM ELEMENTS
     const chatInput = document.getElementById("chatInput");
     const sendBtn = document.getElementById("sendBtn");
@@ -446,6 +746,7 @@
             (value === "system" && systemDark);
 
         document.body.classList.toggle("dark-mode", isDark);
+        document.body.dataset.neyoTheme = value;
     }
 
     function syncSettingsThemeControl(value) {
@@ -460,7 +761,7 @@
 
     function setupTheme() {
         const storedTheme =
-            localStorage.getItem("neo_theme") || "system";
+            getPreference("theme");
 
         applyTheme(storedTheme);
         syncSettingsThemeControl(storedTheme);
@@ -471,10 +772,7 @@
 
             const nextTheme = isDark ? "light" : "dark";
 
-            localStorage.setItem("neo_theme", nextTheme);
-
-            applyTheme(nextTheme);
-            syncSettingsThemeControl(nextTheme);
+            updatePreference("theme", nextTheme);
         };
 
         topBarDarkModeToggle?.addEventListener("click", toggleTheme);
@@ -492,16 +790,9 @@
                 const value =
                     button.dataset.value || "system";
 
-                localStorage.setItem("neo_theme", value);
-
-                applyTheme(value);
-                syncSettingsThemeControl(value);
+                updatePreference("theme", value);
             });
         });
-
-        syncSettingsThemeControl(
-            localStorage.getItem("neo_theme") || "system"
-        );
     }
 
     function setupSystemThemeWatcher() {
@@ -510,10 +801,11 @@
 
         media.addEventListener("change", () => {
             const theme =
-                localStorage.getItem("neo_theme") || "system";
+                getPreference("theme");
 
             if (theme === "system") {
                 applyTheme("system");
+                updateAppearancePreview();
             }
         });
     }
@@ -527,49 +819,20 @@
 
         if (!control) return;
 
-        const buttons = control.querySelectorAll("button");
-
-        const applySelection = value => {
-            const safeValue =
-                value === "maximum" ? "maximum" : "standard";
-
-            localStorage.setItem(
-                "neo_intelligence",
-                safeValue
-            );
-
-            buttons.forEach(button => {
-                const active =
-                    button.dataset.value === safeValue;
-
-                button.classList.toggle("active", active);
-                button.setAttribute(
-                    "aria-pressed",
-                    String(active)
-                );
-            });
-        };
-
-        buttons.forEach(button => {
+        control.querySelectorAll("button").forEach(button => {
             button.addEventListener("click", () => {
-                applySelection(
-                    button.dataset.value || "standard"
-                );
+                updatePreference("intelligence", button.dataset.value || "standard");
             });
         });
 
-        const stored =
-            localStorage.getItem("neo_intelligence")
-            || "standard";
-
-        applySelection(stored);
+        syncIntelligenceControls();
     }
 
     // --------------------------------------------------------
     // PRIVATE CHAT — Off / On
     // --------------------------------------------------------
     function isPrivateChatEnabled() {
-        return localStorage.getItem("neo_private_chat") === "on";
+        return getPreference("privateChat");
     }
 
     function setupPrivateChatControl() {
@@ -578,47 +841,15 @@
 
         if (!toggle) return;
 
-        const applyState = (enabled, { resetChat = false } = {}) => {
-            toggle.classList.toggle("active", enabled);
-
-            toggle.setAttribute(
-                "aria-checked",
-                String(enabled)
-            );
-
-            localStorage.setItem(
-                "neo_private_chat",
-                enabled ? "on" : "off"
-            );
-
-            document.body.classList.toggle(
-                "neo-private-chat",
-                enabled
-            );
-
-            if (
-                enabled &&
-                resetChat &&
-                !isGenerating &&
-                currentConversationId
-            ) {
+        toggle.addEventListener("click", () => {
+            const current = getPreference("privateChat");
+            updatePreference("privateChat", !current);
+            if (!current && !isGenerating && currentConversationId) {
                 startNewConversation();
             }
-        };
-
-        const stored =
-            localStorage.getItem("neo_private_chat") === "on";
-
-        applyState(stored);
-
-        toggle.addEventListener("click", () => {
-            const current =
-                toggle.getAttribute("aria-checked") === "true";
-
-            applyState(!current, {
-                resetChat: !current
-            });
         });
+
+        syncPrivateChatToggle();
     }
 
     // --------------------------------------------------------
@@ -630,58 +861,23 @@
 
         if (!control) return;
 
-        const buttons = control.querySelectorAll("button");
-
-        const applySelection = value => {
-            const allowed = ["minimal", "warm", "glass"];
-
-            const safeValue =
-                allowed.includes(value)
-                    ? value
-                    : "minimal";
-
-            localStorage.setItem(
-                "neo_interface",
-                safeValue
-            );
-
-            document.body.dataset.neyoInterface = safeValue;
-
-            buttons.forEach(button => {
-                const active =
-                    button.dataset.value === safeValue;
-
-                button.classList.toggle("active", active);
-
-                button.setAttribute(
-                    "aria-pressed",
-                    String(active)
-                );
-            });
-        };
-
-        buttons.forEach(button => {
+        control.querySelectorAll("button").forEach(button => {
             button.addEventListener("click", () => {
-                applySelection(
-                    button.dataset.value || "minimal"
-                );
+                updatePreference("interface", button.dataset.value || "minimal");
             });
         });
 
-        applySelection(
-            localStorage.getItem("neo_interface")
-            || "minimal"
-        );
+        syncInterfaceControls();
     }
 
     // --------------------------------------------------------
-    // GENERAL SELECT MENUS
+    // GENERAL SELECT MENUS (COLLISION-AWARE) — updated with preferenceKey
     // --------------------------------------------------------
     function setupSettingsSelect({
         buttonId,
         menuId,
         valueId,
-        storageKey,
+        preferenceKey,
         defaultValue,
         labels
     }) {
@@ -699,6 +895,85 @@
         const closeMenu = () => {
             menu.hidden = true;
             button.setAttribute("aria-expanded", "false");
+        };
+
+        const positionMenu = () => {
+            if (menu.hidden) return;
+
+            const buttonRect = button.getBoundingClientRect();
+            const viewportPadding = 12;
+            const gap = 7;
+
+            menu.style.position = "fixed";
+            menu.style.left = "auto";
+            menu.style.right = "auto";
+            menu.style.top = "auto";
+            menu.style.bottom = "auto";
+
+            // Temporarily position to measure
+            menu.style.visibility = "hidden";
+            menu.style.display = "block";
+
+            const menuRect = menu.getBoundingClientRect();
+
+            const spaceBelow =
+                window.innerHeight -
+                buttonRect.bottom -
+                viewportPadding;
+
+            const spaceAbove =
+                buttonRect.top -
+                viewportPadding;
+
+            const openUpward =
+                menuRect.height > spaceBelow &&
+                spaceAbove > spaceBelow;
+
+            let top;
+
+            if (openUpward) {
+                top =
+                    buttonRect.top -
+                    menuRect.height -
+                    gap;
+            } else {
+                top =
+                    buttonRect.bottom +
+                    gap;
+            }
+
+            let left =
+                buttonRect.right -
+                menuRect.width;
+
+            left = Math.max(
+                viewportPadding,
+                Math.min(
+                    left,
+                    window.innerWidth -
+                    menuRect.width -
+                    viewportPadding
+                )
+            );
+
+            top = Math.max(
+                viewportPadding,
+                Math.min(
+                    top,
+                    window.innerHeight -
+                    menuRect.height -
+                    viewportPadding
+                )
+            );
+
+            menu.style.left =
+                `${Math.round(left)}px`;
+
+            menu.style.top =
+                `${Math.round(top)}px`;
+
+            menu.style.visibility = "";
+            menu.style.display = "";
         };
 
         const openMenu = () => {
@@ -724,7 +999,13 @@
                 });
 
             menu.hidden = false;
-            button.setAttribute("aria-expanded", "true");
+
+            button.setAttribute(
+                "aria-expanded",
+                "true"
+            );
+
+            positionMenu();
         };
 
         const applySelection = value => {
@@ -733,7 +1014,7 @@
                     ? value
                     : defaultValue;
 
-            localStorage.setItem(storageKey, safeValue);
+            updatePreference(preferenceKey, safeValue);
 
             valueElement.textContent =
                 labels[safeValue];
@@ -798,9 +1079,32 @@
             }
         });
 
+        // Reposition on resize and scroll
+        window.addEventListener(
+            "resize",
+            () => {
+                if (!menu.hidden) {
+                    positionMenu();
+                }
+            },
+            { passive: true }
+        );
+
+        document
+            .querySelector(".neo-settings-content")
+            ?.addEventListener(
+                "scroll",
+                () => {
+                    if (!menu.hidden) {
+                        positionMenu();
+                    }
+                },
+                { passive: true }
+            );
+
+        // Initial sync
         applySelection(
-            localStorage.getItem(storageKey)
-            || defaultValue
+            getPreference(preferenceKey) || defaultValue
         );
     }
 
@@ -809,7 +1113,7 @@
             buttonId: "settingsLanguageBtn",
             menuId: "settingsLanguageMenu",
             valueId: "settingsLanguageValue",
-            storageKey: "neo_language",
+            preferenceKey: "language",
             defaultValue: "auto",
             labels: {
                 auto: "Auto-detect",
@@ -825,7 +1129,7 @@
             buttonId: "settingsDefaultPersonalityBtn",
             menuId: "settingsDefaultPersonalityMenu",
             valueId: "settingsDefaultPersonalityValue",
-            storageKey: "neo_default_personality",
+            preferenceKey: "defaultPersonality",
             defaultValue: "neyo",
             labels: {
                 neyo: "Neyo",
@@ -840,7 +1144,7 @@
             buttonId: "settingsOpenOnBtn",
             menuId: "settingsOpenOnMenu",
             valueId: "settingsOpenOnValue",
-            storageKey: "neo_open_on",
+            preferenceKey: "openOn",
             defaultValue: "new-chat",
             labels: {
                 "new-chat": "New chat",
@@ -860,12 +1164,7 @@
     }
 
     function isAutoSaveDraftsEnabled() {
-        const stored =
-            localStorage.getItem(
-                "neo_auto_save_drafts"
-            );
-
-        return stored === null || stored === "on";
+        return getPreference("autoSaveDrafts");
     }
 
     function saveCurrentDraft() {
@@ -929,40 +1228,92 @@
 
         if (!toggle) return;
 
-        const applyState = enabled => {
-            toggle.classList.toggle(
-                "active",
-                enabled
-            );
-
-            toggle.setAttribute(
-                "aria-checked",
-                String(enabled)
-            );
-
-            localStorage.setItem(
-                "neo_auto_save_drafts",
-                enabled ? "on" : "off"
-            );
-
-            if (!enabled) {
-                clearCurrentDraft();
-            } else {
-                saveCurrentDraft();
-            }
-        };
-
-        applyState(
-            isAutoSaveDraftsEnabled()
-        );
-
         toggle.addEventListener("click", () => {
-            const current =
-                toggle.getAttribute("aria-checked")
-                === "true";
-
-            applyState(!current);
+            const current = getPreference("autoSaveDrafts");
+            updatePreference("autoSaveDrafts", !current);
         });
+
+        syncAutoSaveToggle();
+    }
+
+    // --------------------------------------------------------
+    // APPEARANCE CONTROLS
+    // --------------------------------------------------------
+    function setupAppearanceThemeControl() {
+        const control = document.getElementById("appearanceThemeControl");
+        if (!control) return;
+        control.querySelectorAll("button").forEach(button => {
+            button.addEventListener("click", () => {
+                updatePreference("theme", button.dataset.value || "system");
+            });
+        });
+        syncThemeControls();
+    }
+
+    function setupAppearanceInterfaceControl() {
+        const control = document.getElementById("appearanceInterfaceControl");
+        if (!control) return;
+        control.querySelectorAll("button").forEach(button => {
+            button.addEventListener("click", () => {
+                updatePreference("interface", button.dataset.value || "minimal");
+            });
+        });
+        syncInterfaceControls();
+    }
+
+    function setupAppearanceAccentControl() {
+        const control = document.getElementById("appearanceAccentControl");
+        if (!control) return;
+        control.querySelectorAll("button").forEach(button => {
+            button.addEventListener("click", () => {
+                updatePreference("accent", button.dataset.value || "neutral");
+            });
+        });
+        syncAccentControls();
+    }
+
+    function setupAppearanceTextSizeControl() {
+        const control = document.getElementById("appearanceTextSizeControl");
+        if (!control) return;
+        control.querySelectorAll("button").forEach(button => {
+            button.addEventListener("click", () => {
+                updatePreference("textSize", button.dataset.value || "default");
+            });
+        });
+        syncTextSizeControls();
+    }
+
+    function setupAppearanceContentWidthControl() {
+        const control = document.getElementById("appearanceContentWidthControl");
+        if (!control) return;
+        control.querySelectorAll("button").forEach(button => {
+            button.addEventListener("click", () => {
+                updatePreference("contentWidth", button.dataset.value || "balanced");
+            });
+        });
+        syncContentWidthControls();
+    }
+
+    function setupAppearanceSidebarDensityControl() {
+        const control = document.getElementById("appearanceSidebarDensityControl");
+        if (!control) return;
+        control.querySelectorAll("button").forEach(button => {
+            button.addEventListener("click", () => {
+                updatePreference("sidebarDensity", button.dataset.value || "comfortable");
+            });
+        });
+        syncSidebarDensityControls();
+    }
+
+    function setupAppearanceMotionControl() {
+        const control = document.getElementById("appearanceMotionControl");
+        if (!control) return;
+        control.querySelectorAll("button").forEach(button => {
+            button.addEventListener("click", () => {
+                updatePreference("motion", button.dataset.value || "on");
+            });
+        });
+        syncMotionControls();
     }
 
     // --------------------------------------------------------
@@ -1068,10 +1419,12 @@
             window.lucide.createIcons();
         }
 
+        // Setup theme and appearance controls
         setupTheme();
         setupSettingsThemeControl();
         setupSystemThemeWatcher();
 
+        // General controls
         setupIntelligenceControl();
         setupPrivateChatControl();
         setupInterfaceControl();
@@ -1080,6 +1433,19 @@
         setupDefaultPersonalityControl();
         setupOpenOnControl();
         setupAutoSaveDraftsControl();
+
+        // Appearance controls
+        setupAppearanceThemeControl();
+        setupAppearanceInterfaceControl();
+        setupAppearanceAccentControl();
+        setupAppearanceTextSizeControl();
+        setupAppearanceContentWidthControl();
+        setupAppearanceSidebarDensityControl();
+        setupAppearanceMotionControl();
+
+        // Sync all controls initially
+        syncAllControls();
+        updateAppearancePreview();
 
         configureSecurityHooks();
         initializeSidebarState();
@@ -1107,12 +1473,11 @@
             await loadHistoryFromSupabase();
 
             const openOn =
-                localStorage.getItem("neo_open_on")
-                || "new-chat";
+                getPreference("openOn");
 
             if (
                 openOn === "last-chat" &&
-                !isPrivateChatEnabled()
+                !getPreference("privateChat")
             ) {
                 const firstHistoryItem =
                     historyList?.querySelector(
@@ -2261,6 +2626,7 @@
     async function submitChatRequest(aiBubble, userText, files) {
         let data;
         const title = makeConversationTitle(userText, files);
+        const privateChat = getPreference("privateChat");
         try {
             const response = await fetch("/api/chat", {
                 method: "POST",
@@ -2270,14 +2636,12 @@
                 body: JSON.stringify({
                     messages: conversation,
                     attachments: conversation.at(-1)?.attachments || [],
-                    conversationId: isPrivateChatEnabled()
-                        ? null
-                        : currentConversationId,
+                    conversationId: privateChat ? null : currentConversationId,
                     model: selectedModel,
-                    intelligence: localStorage.getItem("neo_intelligence") || "standard",
-                    privateChat: isPrivateChatEnabled(),
-                    language: localStorage.getItem("neo_language") || "auto",
-                    personality: localStorage.getItem("neo_default_personality") || "neyo",
+                    intelligence: getPreference("intelligence"),
+                    privateChat: privateChat,
+                    language: getPreference("language"),
+                    personality: getPreference("defaultPersonality"),
                     isDeepResearch: isDeepResearchMode,
                     title
                 })
@@ -2309,7 +2673,7 @@
             showAssistantError(aiBubble, error);
             return;
         }
-        if (!isPrivateChatEnabled() &&
+        if (!privateChat &&
             typeof data.conversationId === "string" &&
             data.conversationId.trim()
         ) {
@@ -2357,7 +2721,7 @@
                 console.warn("Icon refresh failed:", iconError);
             }
         }
-        if (!isPrivateChatEnabled()) {
+        if (!privateChat) {
             try {
                 await loadHistoryFromSupabase();
             } catch (historyError) {

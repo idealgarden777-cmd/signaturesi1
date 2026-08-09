@@ -1,1 +1,476 @@
+/* =========================================================
+   NEYO SETTINGS — POPUP SYSTEM
+   File: /css/settings/settings-popups.css
 
+   Purpose:
+   - Unified settings dropdowns
+   - Correct z-index / stacking
+   - Collision-safe floating menus
+   - Consistent light / dark UI
+   - Mobile-safe sizing
+
+   IMPORTANT:
+   This file must load AFTER neo-v3.css.
+   ========================================================= */
+
+
+/* =========================================================
+   SELECT WRAPPER
+   ========================================================= */
+
+.neo-settings-overlay .settings-select-wrapper {
+    position: relative;
+    z-index: 1;
+
+    flex: 0 0 auto;
+
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+
+    min-width: 0;
+}
+
+
+/*
+   JS adds .is-open whenever a menu is visible.
+
+   This lifts only the currently active control above
+   neighboring settings rows.
+*/
+
+.neo-settings-overlay .settings-select-wrapper.is-open {
+    z-index: 70000;
+}
+
+
+/* =========================================================
+   SELECT TRIGGER
+   Language / Personality / Open NEYO on
+   ========================================================= */
+
+.neo-settings-overlay .settings-value-btn,
+.neo-settings-overlay .settings-select-btn {
+    min-height: 40px;
+
+    padding: 0 14px;
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    gap: 9px;
+
+    border:
+        1px solid rgba(0, 0, 0, 0.09);
+
+    border-radius: 999px;
+
+    background: #ffffff;
+    color: #171717;
+
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1;
+
+    white-space: nowrap;
+
+    cursor: pointer;
+
+    box-shadow: none;
+
+    transition:
+        background-color 140ms ease,
+        border-color 140ms ease,
+        color 140ms ease,
+        box-shadow 140ms ease;
+}
+
+
+.neo-settings-overlay .settings-value-btn:hover,
+.neo-settings-overlay .settings-select-btn:hover {
+    background: #f7f7f8;
+
+    border-color:
+        rgba(0, 0, 0, 0.14);
+}
+
+
+.neo-settings-overlay
+.settings-value-btn[aria-expanded="true"],
+.neo-settings-overlay
+.settings-select-btn[aria-expanded="true"] {
+    background: #f7f7f8;
+
+    border-color:
+        rgba(0, 0, 0, 0.16);
+}
+
+
+/* Chevron */
+
+.neo-settings-overlay .settings-value-btn i,
+.neo-settings-overlay .settings-select-btn i {
+    width: 17px;
+    height: 17px;
+
+    flex: 0 0 auto;
+
+    color: #737373;
+
+    transition:
+        transform 140ms ease,
+        color 140ms ease;
+}
+
+
+.neo-settings-overlay
+.settings-value-btn[aria-expanded="true"] i,
+.neo-settings-overlay
+.settings-select-btn[aria-expanded="true"] i {
+    transform: rotate(180deg);
+    color: #171717;
+}
+
+
+/* =========================================================
+   FLOATING MENU
+   ========================================================= */
+
+.neo-settings-overlay .settings-select-menu {
+    position: fixed;
+
+    top: auto;
+    right: auto;
+    bottom: auto;
+    left: auto;
+
+    width: max-content;
+
+    min-width: 180px;
+    max-width:
+        min(260px, calc(100vw - 24px));
+
+    padding: 6px;
+
+    border:
+        1px solid rgba(0, 0, 0, 0.08);
+
+    border-radius: 14px;
+
+    background:
+        rgba(255, 255, 255, 0.985);
+
+    box-shadow:
+        0 2px 8px rgba(0, 0, 0, 0.04),
+        0 16px 42px rgba(0, 0, 0, 0.12);
+
+    backdrop-filter:
+        blur(18px) saturate(125%);
+
+    -webkit-backdrop-filter:
+        blur(18px) saturate(125%);
+
+    z-index: 80000;
+
+    overflow: hidden;
+
+    transform: none;
+
+    animation:
+        neyo-settings-popup-in
+        140ms ease both;
+}
+
+
+/* Hidden must always win */
+
+.neo-settings-overlay .settings-select-menu[hidden] {
+    display: none !important;
+}
+
+
+/* =========================================================
+   OPTIONS
+   ========================================================= */
+
+.neo-settings-overlay .settings-select-option {
+    width: 100%;
+    min-height: 38px;
+
+    padding: 0 11px;
+
+    display: flex;
+    align-items: center;
+
+    border: 0;
+    border-radius: 9px;
+
+    background: transparent;
+    color: #525252;
+
+    font-family: inherit;
+    font-size: 13.5px;
+    font-weight: 500;
+    line-height: 1.25;
+
+    text-align: left;
+
+    white-space: nowrap;
+
+    cursor: pointer;
+
+    box-shadow: none;
+
+    transition:
+        background-color 120ms ease,
+        color 120ms ease;
+}
+
+
+.neo-settings-overlay .settings-select-option:hover {
+    background:
+        rgba(0, 0, 0, 0.045);
+
+    color: #171717;
+}
+
+
+.neo-settings-overlay .settings-select-option.active,
+.neo-settings-overlay
+.settings-select-option[aria-selected="true"] {
+    background: #f1f1f1;
+
+    color: #171717;
+
+    font-weight: 600;
+}
+
+
+/* =========================================================
+   KEYBOARD ACCESSIBILITY
+   ========================================================= */
+
+.neo-settings-overlay
+.settings-value-btn:focus-visible,
+.neo-settings-overlay
+.settings-select-btn:focus-visible,
+.neo-settings-overlay
+.settings-select-option:focus-visible {
+    outline:
+        2px solid
+        var(--neyo-accent, #171717);
+
+    outline-offset: 2px;
+}
+
+
+/* =========================================================
+   DARK MODE
+   ========================================================= */
+
+body.dark-mode
+.neo-settings-overlay
+.settings-value-btn,
+
+body.dark-mode
+.neo-settings-overlay
+.settings-select-btn {
+    background: #1d1d1d;
+
+    color: #f3f3f3;
+
+    border-color:
+        rgba(255, 255, 255, 0.10);
+}
+
+
+body.dark-mode
+.neo-settings-overlay
+.settings-value-btn:hover,
+
+body.dark-mode
+.neo-settings-overlay
+.settings-select-btn:hover,
+
+body.dark-mode
+.neo-settings-overlay
+.settings-value-btn[aria-expanded="true"],
+
+body.dark-mode
+.neo-settings-overlay
+.settings-select-btn[aria-expanded="true"] {
+    background: #282828;
+
+    border-color:
+        rgba(255, 255, 255, 0.16);
+}
+
+
+body.dark-mode
+.neo-settings-overlay
+.settings-value-btn i,
+
+body.dark-mode
+.neo-settings-overlay
+.settings-select-btn i {
+    color: #9b9b9b;
+}
+
+
+body.dark-mode
+.neo-settings-overlay
+.settings-value-btn[aria-expanded="true"] i,
+
+body.dark-mode
+.neo-settings-overlay
+.settings-select-btn[aria-expanded="true"] i {
+    color: #f3f3f3;
+}
+
+
+/* Dark floating menu */
+
+body.dark-mode
+.neo-settings-overlay
+.settings-select-menu {
+    background:
+        rgba(30, 30, 30, 0.985);
+
+    border-color:
+        rgba(255, 255, 255, 0.09);
+
+    box-shadow:
+        0 2px 10px rgba(0, 0, 0, 0.24),
+        0 18px 48px rgba(0, 0, 0, 0.48);
+}
+
+
+body.dark-mode
+.neo-settings-overlay
+.settings-select-option {
+    color: #bdbdbd;
+}
+
+
+body.dark-mode
+.neo-settings-overlay
+.settings-select-option:hover {
+    background:
+        rgba(255, 255, 255, 0.07);
+
+    color: #ffffff;
+}
+
+
+body.dark-mode
+.neo-settings-overlay
+.settings-select-option.active,
+
+body.dark-mode
+.neo-settings-overlay
+.settings-select-option[aria-selected="true"] {
+    background:
+        rgba(255, 255, 255, 0.09);
+
+    color: #ffffff;
+}
+
+
+/* =========================================================
+   POPUP ANIMATION
+   Fade only — no scale
+   ========================================================= */
+
+@keyframes neyo-settings-popup-in {
+
+    from {
+        opacity: 0;
+        transform: translateY(-2px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+
+/* =========================================================
+   MOBILE
+   ========================================================= */
+
+@media (max-width: 767px) {
+
+    .neo-settings-overlay
+    .settings-value-btn,
+
+    .neo-settings-overlay
+    .settings-select-btn {
+        min-height: 38px;
+
+        max-width: 160px;
+
+        padding-inline: 13px;
+    }
+
+
+    .neo-settings-overlay
+    .settings-value-btn span,
+
+    .neo-settings-overlay
+    .settings-select-btn span {
+        overflow: hidden;
+
+        text-overflow: ellipsis;
+
+        white-space: nowrap;
+    }
+
+
+    .neo-settings-overlay
+    .settings-select-menu {
+        min-width: 176px;
+
+        max-width:
+            calc(100vw - 24px);
+    }
+
+
+    .neo-settings-overlay
+    .settings-select-option {
+        min-height: 40px;
+    }
+}
+
+
+/* =========================================================
+   REDUCED MOTION
+   ========================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+
+    .neo-settings-overlay
+    .settings-select-menu {
+        animation: none;
+    }
+
+    .neo-settings-overlay
+    .settings-value-btn,
+
+    .neo-settings-overlay
+    .settings-select-btn,
+
+    .neo-settings-overlay
+    .settings-select-option {
+        transition-duration: 0.01ms;
+    }
+}
+
+
+body[data-neyo-motion="reduced"]
+.neo-settings-overlay
+.settings-select-menu {
+    animation: none;
+}

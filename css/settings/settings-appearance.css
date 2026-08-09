@@ -1,1 +1,559 @@
+/* =========================================================
+   NEYO SETTINGS — APPEARANCE MODULE
+   File: /css/settings/settings-appearance.css
 
+   Purpose:
+   - Unified Appearance pills
+   - Accent presets + custom color visual state
+   - Text size / width / density / motion controls
+   - No preview card
+   - Light / dark consistency
+
+   IMPORTANT:
+   Load AFTER neo-v3.css.
+   ========================================================= */
+
+
+/* =========================================================
+   PANEL
+   ========================================================= */
+
+#settingsPanelAppearance {
+    max-width: 760px;
+    margin: 0 auto;
+}
+
+#settingsPanelAppearance .neo-settings-panel-header {
+    margin-bottom: 26px;
+}
+
+#settingsPanelAppearance .neo-settings-section {
+    margin-bottom: 30px;
+}
+
+#settingsPanelAppearance .neo-settings-section:last-child {
+    margin-bottom: 0;
+}
+
+#settingsPanelAppearance .settings-row {
+    min-height: 62px;
+    padding: 14px 0;
+
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    gap: 24px;
+
+    border-bottom:
+        1px solid rgba(0, 0, 0, 0.08);
+}
+
+#settingsPanelAppearance .settings-row:last-child {
+    border-bottom: 0;
+}
+
+#settingsPanelAppearance .settings-row > div:first-child {
+    min-width: 0;
+}
+
+#settingsPanelAppearance .settings-row strong {
+    display: block;
+
+    margin-bottom: 4px;
+
+    color: #171717;
+
+    font-size: 14.5px;
+    font-weight: 600;
+    line-height: 1.3;
+}
+
+#settingsPanelAppearance .settings-row small {
+    display: block;
+
+    max-width: 410px;
+
+    color: #737373;
+
+    font-size: 13.5px;
+    line-height: 1.45;
+}
+
+
+/* =========================================================
+   SECTION TITLES
+   ========================================================= */
+
+#settingsPanelAppearance
+.neo-settings-section-title {
+    display: block;
+
+    margin-bottom: 10px;
+
+    color: #9b9b9b;
+
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+
+/* =========================================================
+   REMOVE OLD PREVIEW
+   ========================================================= */
+
+#settingsPanelAppearance .appearance-preview,
+#settingsPanelAppearance .appearance-preview-card,
+#settingsPanelAppearance .appearance-preview-shell,
+#settingsPanelAppearance .appearance-preview-window {
+    display: none !important;
+}
+
+
+/* =========================================================
+   SHARED PILL GROUP
+   ========================================================= */
+
+#settingsPanelAppearance
+.settings-segmented-control,
+
+#settingsPanelAppearance
+.settings-segmented {
+    display: inline-flex;
+
+    align-items: center;
+    justify-content: flex-end;
+
+    flex-wrap: wrap;
+
+    gap: 8px;
+
+    padding: 0;
+
+    background: transparent;
+
+    border: 0;
+
+    box-shadow: none;
+}
+
+
+/* =========================================================
+   NORMAL PILLS
+   ========================================================= */
+
+#settingsPanelAppearance
+.settings-segmented-control button,
+
+#settingsPanelAppearance
+.settings-pill {
+    min-height: 40px;
+
+    padding: 0 16px;
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    border:
+        1px solid rgba(0, 0, 0, 0.09);
+
+    border-radius: 999px;
+
+    background: #ffffff;
+    color: #171717;
+
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1;
+
+    white-space: nowrap;
+
+    cursor: pointer;
+
+    box-shadow: none;
+
+    transition:
+        background-color 140ms ease,
+        border-color 140ms ease,
+        color 140ms ease,
+        opacity 140ms ease;
+}
+
+
+#settingsPanelAppearance
+.settings-segmented-control button:hover,
+
+#settingsPanelAppearance
+.settings-pill:hover {
+    background: #f7f7f8;
+
+    border-color:
+        rgba(0, 0, 0, 0.14);
+}
+
+
+/* Selected normal options */
+
+#settingsPanelAppearance
+.settings-segmented-control button.active,
+
+#settingsPanelAppearance
+.settings-pill.active {
+    background: #171717;
+
+    color: #ffffff;
+
+    border-color: #171717;
+}
+
+
+/* =========================================================
+   ACCENT GROUP
+   ========================================================= */
+
+#appearanceAccentControl,
+#settingsAccentControl {
+    max-width: 440px;
+}
+
+
+/* Accent preset active state */
+
+#settingsPanelAppearance
+#appearanceAccentControl
+button.active,
+
+#settingsPanelAppearance
+#settingsAccentControl
+button.active {
+    background:
+        var(--neyo-accent-soft, rgba(23, 23, 23, 0.08));
+
+    color:
+        var(--neyo-accent, #171717);
+
+    border-color:
+        var(--neyo-accent, #171717);
+
+    box-shadow:
+        inset 0 0 0 1px
+        var(--neyo-accent, #171717);
+}
+
+
+/* =========================================================
+   CUSTOM COLOR BUTTON
+   ========================================================= */
+
+#settingsPanelAppearance
+.settings-pill-custom {
+    min-height: 40px;
+
+    padding: 0 16px;
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    gap: 8px;
+
+    border:
+        1px solid rgba(0, 0, 0, 0.09);
+
+    border-radius: 999px;
+
+    background: #ffffff;
+    color: #171717;
+
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1;
+
+    white-space: nowrap;
+
+    cursor: pointer;
+
+    transition:
+        background-color 140ms ease,
+        border-color 140ms ease,
+        color 140ms ease;
+}
+
+
+#settingsPanelAppearance
+.settings-pill-custom:hover {
+    background: #f7f7f8;
+
+    border-color:
+        rgba(0, 0, 0, 0.14);
+}
+
+
+#settingsPanelAppearance
+.settings-pill-custom.active {
+    background:
+        var(--neyo-accent-soft, rgba(23, 23, 23, 0.08));
+
+    color:
+        var(--neyo-accent, #171717);
+
+    border-color:
+        var(--neyo-accent, #171717);
+
+    box-shadow:
+        inset 0 0 0 1px
+        var(--neyo-accent, #171717);
+}
+
+
+/* Optional color dot inside Custom */
+
+#settingsPanelAppearance
+.settings-pill-custom::before {
+    content: "";
+
+    width: 12px;
+    height: 12px;
+
+    flex: 0 0 12px;
+
+    border-radius: 999px;
+
+    background:
+        var(--neyo-accent, #171717);
+
+    box-shadow:
+        inset 0 0 0 1px
+        rgba(0, 0, 0, 0.10);
+}
+
+
+/* Native picker itself stays invisible */
+
+#customAccentPicker {
+    position: absolute;
+
+    width: 1px;
+    height: 1px;
+
+    opacity: 0;
+
+    pointer-events: none;
+}
+
+
+/* =========================================================
+   FOCUS
+   ========================================================= */
+
+#settingsPanelAppearance button:focus-visible,
+#settingsPanelAppearance label:focus-visible {
+    outline:
+        2px solid
+        var(--neyo-accent, #171717);
+
+    outline-offset: 2px;
+}
+
+
+/* =========================================================
+   DARK MODE
+   ========================================================= */
+
+body.dark-mode
+#settingsPanelAppearance
+.settings-row {
+    border-bottom-color:
+        rgba(255, 255, 255, 0.07);
+}
+
+body.dark-mode
+#settingsPanelAppearance
+.settings-row strong {
+    color: #f5f5f5;
+}
+
+body.dark-mode
+#settingsPanelAppearance
+.settings-row small {
+    color: #9b9b9b;
+}
+
+body.dark-mode
+#settingsPanelAppearance
+.neo-settings-section-title {
+    color: #777777;
+}
+
+
+body.dark-mode
+#settingsPanelAppearance
+.settings-segmented-control button,
+
+body.dark-mode
+#settingsPanelAppearance
+.settings-pill,
+
+body.dark-mode
+#settingsPanelAppearance
+.settings-pill-custom {
+    background: #1d1d1d;
+
+    color: #f3f3f3;
+
+    border-color:
+        rgba(255, 255, 255, 0.10);
+}
+
+
+body.dark-mode
+#settingsPanelAppearance
+.settings-segmented-control button:hover,
+
+body.dark-mode
+#settingsPanelAppearance
+.settings-pill:hover,
+
+body.dark-mode
+#settingsPanelAppearance
+.settings-pill-custom:hover {
+    background: #282828;
+
+    border-color:
+        rgba(255, 255, 255, 0.16);
+}
+
+
+/* Normal active in dark mode */
+
+body.dark-mode
+#settingsPanelAppearance
+.settings-segmented-control button.active,
+
+body.dark-mode
+#settingsPanelAppearance
+.settings-pill.active {
+    background: #f5f5f5;
+
+    color: #171717;
+
+    border-color: #f5f5f5;
+}
+
+
+/* Accent active must remain colored */
+
+body.dark-mode
+#settingsPanelAppearance
+#appearanceAccentControl
+button.active,
+
+body.dark-mode
+#settingsPanelAppearance
+#settingsAccentControl
+button.active,
+
+body.dark-mode
+#settingsPanelAppearance
+.settings-pill-custom.active {
+    background:
+        var(--neyo-accent-soft);
+
+    color:
+        var(--neyo-accent);
+
+    border-color:
+        var(--neyo-accent);
+}
+
+
+/* =========================================================
+   MOBILE
+   ========================================================= */
+
+@media (max-width: 767px) {
+
+    #settingsPanelAppearance {
+        max-width: none;
+    }
+
+    #settingsPanelAppearance
+    .neo-settings-panel-header {
+        margin-bottom: 20px;
+    }
+
+    #settingsPanelAppearance
+    .neo-settings-section {
+        margin-bottom: 24px;
+    }
+
+    #settingsPanelAppearance
+    .settings-row {
+        align-items: flex-start;
+
+        flex-direction: column;
+
+        gap: 10px;
+
+        padding: 14px 0;
+    }
+
+    #settingsPanelAppearance
+    .settings-segmented-control,
+
+    #settingsPanelAppearance
+    .settings-segmented {
+        width: 100%;
+
+        justify-content: flex-start;
+    }
+
+    #settingsPanelAppearance
+    .settings-segmented-control button,
+
+    #settingsPanelAppearance
+    .settings-pill,
+
+    #settingsPanelAppearance
+    .settings-pill-custom {
+        min-height: 38px;
+
+        padding-inline: 14px;
+
+        flex: 0 0 auto;
+    }
+
+    #appearanceAccentControl,
+    #settingsAccentControl {
+        max-width: 100%;
+    }
+}
+
+
+/* =========================================================
+   REDUCED MOTION
+   ========================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+
+    #settingsPanelAppearance button,
+    #settingsPanelAppearance
+    .settings-pill-custom {
+        transition-duration: 0.01ms;
+    }
+}
+
+
+body[data-neyo-motion="reduced"]
+#settingsPanelAppearance button,
+
+body[data-neyo-motion="reduced"]
+#settingsPanelAppearance
+.settings-pill-custom {
+    transition-duration: 0.01ms;
+}

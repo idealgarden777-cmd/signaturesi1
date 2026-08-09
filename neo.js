@@ -152,6 +152,11 @@
             else saveCurrentDraft();
         }
 
+        // Apply accent visual immediately
+        if (key === "accent") {
+            applyAccentVisual(value);
+        }
+
         // Sync all UI controls
         syncAllControls();
         updateAppearancePreview();
@@ -167,7 +172,27 @@
         if (key === "privateChat") finalValue = Boolean(value);
         if (key === "autoSaveDrafts") finalValue = Boolean(value);
 
-        if (key === "accent" && !["neutral", "emerald", "violet", "blue"].includes(value)) finalValue = "neutral";
+        // Accent: allow presets or custom hex
+        if (key === "accent") {
+            const presetAccents = [
+                "neutral",
+                "blue",
+                "emerald",
+                "violet"
+            ];
+
+            const isCustomHex =
+                typeof value === "string" &&
+                /^#[0-9a-fA-F]{6}$/.test(value);
+
+            if (
+                !presetAccents.includes(value) &&
+                !isCustomHex
+            ) {
+                finalValue = "neutral";
+            }
+        }
+
         if (key === "textSize" && !["small", "default", "large"].includes(value)) finalValue = "default";
         if (key === "contentWidth" && !["compact", "balanced", "wide"].includes(value)) finalValue = "balanced";
         if (key === "sidebarDensity" && !["compact", "comfortable"].includes(value)) finalValue = "comfortable";
@@ -289,14 +314,81 @@
         toggle.setAttribute("aria-checked", String(val));
     }
 
+    // =========================================================
+    // ACCENT COLOR SYSTEM — Full custom hex support
+    // =========================================================
+
+    const ACCENT_COLORS = {
+        neutral: "#171717",
+        blue: "#3377e8",
+        emerald: "#0f8f66",
+        violet: "#7660e8"
+    };
+
+    function normalizeHexColor(value) {
+        const color = String(value || "").trim();
+        if (/^#[0-9a-fA-F]{6}$/.test(color)) {
+            return color.toLowerCase();
+        }
+        return null;
+    }
+
+    function hexToRgb(hex) {
+        const safeHex = normalizeHexColor(hex);
+        if (!safeHex) {
+            return { r: 23, g: 23, b: 23 };
+        }
+        const value = parseInt(safeHex.slice(1), 16);
+        return {
+            r: (value >> 16) & 255,
+            g: (value >> 8) & 255,
+            b: value & 255
+        };
+    }
+
+    function applyAccentVisual(value) {
+        const presetColor = ACCENT_COLORS[value];
+        const customColor = normalizeHexColor(value);
+        const color = presetColor || customColor || ACCENT_COLORS.neutral;
+        const rgb = hexToRgb(color);
+
+        document.documentElement.style.setProperty("--neyo-accent", color);
+        document.documentElement.style.setProperty("--neyo-accent-soft", `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.10)`);
+
+        // Set data attribute for custom vs preset
+        document.body.dataset.neyoAccent = customColor
+            ? "custom"
+            : (ACCENT_COLORS[value] ? value : "neutral");
+    }
+
     function syncAccentControls() {
-        const val = getPreference("accent");
-        document.querySelectorAll("#appearanceAccentControl button").forEach(button => {
-            const active = button.dataset.value === val;
-            button.classList.toggle("active", active);
-            button.setAttribute("aria-pressed", String(active));
-        });
-        document.body.dataset.neyoAccent = val;
+        const value = getPreference("accent");
+        const customColor = normalizeHexColor(value);
+
+        const control = document.getElementById("appearanceAccentControl") ||
+                        document.getElementById("settingsAccentControl");
+
+        if (control) {
+            control.querySelectorAll("button[data-value], button[data-accent], .settings-pill[data-accent]")
+                .forEach(button => {
+                    const buttonValue = button.dataset.value || button.dataset.accent;
+                    const active = !customColor && buttonValue === value;
+                    button.classList.toggle("active", active);
+                    button.setAttribute("aria-pressed", String(active));
+                });
+
+            const customButton = control.querySelector(".settings-pill-custom");
+            if (customButton) {
+                customButton.classList.toggle("active", Boolean(customColor));
+            }
+        }
+
+        const picker = document.getElementById("customAccentPicker");
+        if (picker && customColor) {
+            picker.value = customColor;
+        }
+
+        applyAccentVisual(value);
     }
 
     function syncTextSizeControls() {
@@ -422,7 +514,6 @@
     const neoSettingsCloseBtn = document.getElementById("neoSettingsCloseBtn");
     const settingsTabs = document.querySelectorAll(".neo-settings-tab");
     const settingsPanels = document.querySelectorAll(".neo-settings-panel");
-    // settingsThemeBtn removed – now handled by segmented control
     const saveProfileSettingsBtn = document.getElementById("saveProfileSettingsBtn");
     const resetProfileSettingsBtn = document.getElementById("resetProfileSettingsBtn");
     const settingsUpgradeBtn = document.getElementById("settingsUpgradeBtn");
@@ -599,14 +690,11 @@
             profile: "settingsPanelProfile",
             appearance: "settingsPanelAppearance",
             workspace: "settingsPanelWorkspace",
-
             privacy: "settingsPanelPrivacy",
             memory: "settingsPanelMemory",
             notifications: "settingsPanelNotifications",
             files: "settingsPanelFiles",
-
             personalities: "settingsPanelPersonalities",
-
             accessibility: "settingsPanelAccessibility",
             keyboard: "settingsPanelKeyboard",
             about: "settingsPanelAbout"
@@ -1261,14 +1349,64 @@
         syncInterfaceControls();
     }
 
+    // =========================================================
+    // NEW ACCENT SETUP WITH CUSTOM PICKER
+    // =========================================================
     function setupAppearanceAccentControl() {
-        const control = document.getElementById("appearanceAccentControl");
+        const control =
+            document.getElementById("appearanceAccentControl") ||
+            document.getElementById("settingsAccentControl");
+
+        const customPicker =
+            document.getElementById("customAccentPicker");
+
         if (!control) return;
-        control.querySelectorAll("button").forEach(button => {
-            button.addEventListener("click", () => {
-                updatePreference("accent", button.dataset.value || "neutral");
+
+        /* Preset accent pills */
+        control
+            .querySelectorAll("button[data-value], button[data-accent], .settings-pill[data-accent]")
+            .forEach(button => {
+                button.addEventListener("click", () => {
+                    const value = button.dataset.value || button.dataset.accent;
+                    if (!value) return;
+
+                    // If this element represents the Custom action rather than a real color preset
+                    if (value === "custom") {
+                        customPicker?.click();
+                        return;
+                    }
+
+                    updatePreference("accent", value);
+                });
             });
-        });
+
+        /* Custom pill */
+        const customButton = control.querySelector(".settings-pill-custom");
+        if (customButton) {
+            customButton.addEventListener("click", (event) => {
+                // If it's a LABEL with for attribute, it already opens natively.
+                if (customButton.tagName !== "LABEL") {
+                    event.preventDefault();
+                    customPicker?.click();
+                }
+            });
+        }
+
+        /* Live custom color */
+        if (customPicker) {
+            customPicker.addEventListener("input", () => {
+                const color = normalizeHexColor(customPicker.value);
+                if (!color) return;
+                updatePreference("accent", color);
+            });
+
+            customPicker.addEventListener("change", () => {
+                const color = normalizeHexColor(customPicker.value);
+                if (!color) return;
+                updatePreference("accent", color);
+            });
+        }
+
         syncAccentControls();
     }
 
@@ -1437,7 +1575,7 @@
         // Appearance controls
         setupAppearanceThemeControl();
         setupAppearanceInterfaceControl();
-        setupAppearanceAccentControl();
+        setupAppearanceAccentControl();  // <-- updated
         setupAppearanceTextSizeControl();
         setupAppearanceContentWidthControl();
         setupAppearanceSidebarDensityControl();

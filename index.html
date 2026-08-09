@@ -776,20 +776,138 @@
         </div>
 
         <!-- ========================================================= -->
-        <!-- NEW PLACEHOLDER PANELS                                    -->
+        <!-- PANEL: APPEARANCE – V1 (NEW)                              -->
         <!-- ========================================================= -->
         <div class="neo-settings-panel" id="settingsPanelAppearance">
+
           <div class="neo-settings-panel-header">
             <h2>Appearance</h2>
-            <p>Customize the look and feel of NEYO.</p>
+            <p>Personalize how NEYO looks and feels.</p>
           </div>
-          <div class="neo-settings-placeholder">
-            <i data-lucide="palette" size="28"></i>
-            <strong>Appearance settings</strong>
-            <small>Coming soon.</small>
+
+          <!-- LIVE PREVIEW -->
+          <div class="appearance-preview" id="appearancePreview">
+            <div class="appearance-preview-window">
+
+              <div class="appearance-preview-sidebar">
+                <span></span>
+                <span></span>
+                <span></span>
+              </div>
+
+              <div class="appearance-preview-main">
+                <div class="appearance-preview-message"></div>
+                <div class="appearance-preview-composer">
+                  <span>Message NEYO...</span>
+                  <div class="appearance-preview-send"></div>
+                </div>
+              </div>
+
+            </div>
           </div>
+
+          <!-- VISUAL STYLE -->
+          <div class="neo-settings-section">
+            <span class="neo-settings-section-title">Visual Style</span>
+
+            <div class="settings-row">
+              <div>
+                <strong>Interface</strong>
+                <small>Choose the visual character of NEYO.</small>
+              </div>
+              <div class="settings-segmented-control" id="appearanceInterfaceControl" role="group" aria-label="Interface style">
+                <button type="button" data-value="minimal" aria-pressed="false">Minimal</button>
+                <button type="button" data-value="warm" aria-pressed="false">Warm</button>
+                <button type="button" data-value="glass" aria-pressed="false">Glass</button>
+              </div>
+            </div>
+
+            <div class="settings-row">
+              <div>
+                <strong>Theme</strong>
+                <small>Choose your preferred interface theme.</small>
+              </div>
+              <div class="settings-segmented-control" id="appearanceThemeControl" role="group" aria-label="Theme">
+                <button type="button" data-value="system" aria-pressed="false">System</button>
+                <button type="button" data-value="light" aria-pressed="false">Light</button>
+                <button type="button" data-value="dark" aria-pressed="false">Dark</button>
+              </div>
+            </div>
+
+            <div class="settings-row">
+              <div>
+                <strong>Accent</strong>
+                <small>Choose a subtle interface accent.</small>
+              </div>
+              <div class="settings-segmented-control" id="appearanceAccentControl" role="group" aria-label="Accent color">
+                <button type="button" data-value="neutral" aria-pressed="false">Neutral</button>
+                <button type="button" data-value="emerald" aria-pressed="false">Emerald</button>
+                <button type="button" data-value="violet" aria-pressed="false">Violet</button>
+                <button type="button" data-value="blue" aria-pressed="false">Blue</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- DISPLAY -->
+          <div class="neo-settings-section">
+            <span class="neo-settings-section-title">Display</span>
+
+            <div class="settings-row">
+              <div>
+                <strong>Text Size</strong>
+                <small>Adjust conversation text size.</small>
+              </div>
+              <div class="settings-segmented-control" id="appearanceTextSizeControl" role="group" aria-label="Text size">
+                <button type="button" data-value="small" aria-pressed="false">Small</button>
+                <button type="button" data-value="default" aria-pressed="false">Default</button>
+                <button type="button" data-value="large" aria-pressed="false">Large</button>
+              </div>
+            </div>
+
+            <div class="settings-row">
+              <div>
+                <strong>Content Width</strong>
+                <small>Control the width of conversations.</small>
+              </div>
+              <div class="settings-segmented-control" id="appearanceContentWidthControl" role="group" aria-label="Content width">
+                <button type="button" data-value="compact" aria-pressed="false">Compact</button>
+                <button type="button" data-value="balanced" aria-pressed="false">Balanced</button>
+                <button type="button" data-value="wide" aria-pressed="false">Wide</button>
+              </div>
+            </div>
+
+            <div class="settings-row">
+              <div>
+                <strong>Sidebar Density</strong>
+                <small>Adjust spacing in navigation and history.</small>
+              </div>
+              <div class="settings-segmented-control" id="appearanceSidebarDensityControl" role="group" aria-label="Sidebar density">
+                <button type="button" data-value="compact" aria-pressed="false">Compact</button>
+                <button type="button" data-value="comfortable" aria-pressed="false">Comfortable</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- MOTION -->
+          <div class="neo-settings-section">
+            <span class="neo-settings-section-title">Motion</span>
+            <div class="settings-row">
+              <div>
+                <strong>Interface Motion</strong>
+                <small>Reduce non-essential animation across NEYO.</small>
+              </div>
+              <div class="settings-segmented-control" id="appearanceMotionControl" role="group" aria-label="Interface motion">
+                <button type="button" data-value="on" aria-pressed="false">On</button>
+                <button type="button" data-value="reduced" aria-pressed="false">Reduced</button>
+              </div>
+            </div>
+          </div>
+
         </div>
 
+        <!-- ========================================================= -->
+        <!-- PANEL: WORKSPACE – PLACEHOLDER                            -->
+        <!-- ========================================================= -->
         <div class="neo-settings-panel" id="settingsPanelWorkspace">
           <div class="neo-settings-panel-header">
             <h2>Workspace</h2>
@@ -802,6 +920,9 @@
           </div>
         </div>
 
+        <!-- ========================================================= -->
+        <!-- PANEL: PRIVACY – PLACEHOLDER                              -->
+        <!-- ========================================================= -->
         <div class="neo-settings-panel" id="settingsPanelPrivacy">
           <div class="neo-settings-panel-header">
             <h2>Privacy</h2>
@@ -814,6 +935,9 @@
           </div>
         </div>
 
+        <!-- ========================================================= -->
+        <!-- PANEL: MEMORY – PLACEHOLDER                               -->
+        <!-- ========================================================= -->
         <div class="neo-settings-panel" id="settingsPanelMemory">
           <div class="neo-settings-panel-header">
             <h2>Memory</h2>
@@ -826,6 +950,9 @@
           </div>
         </div>
 
+        <!-- ========================================================= -->
+        <!-- PANEL: FILES – PLACEHOLDER                                -->
+        <!-- ========================================================= -->
         <div class="neo-settings-panel" id="settingsPanelFiles">
           <div class="neo-settings-panel-header">
             <h2>Files</h2>
@@ -838,6 +965,9 @@
           </div>
         </div>
 
+        <!-- ========================================================= -->
+        <!-- PANEL: ACCESSIBILITY – PLACEHOLDER                        -->
+        <!-- ========================================================= -->
         <div class="neo-settings-panel" id="settingsPanelAccessibility">
           <div class="neo-settings-panel-header">
             <h2>Accessibility</h2>
@@ -850,6 +980,9 @@
           </div>
         </div>
 
+        <!-- ========================================================= -->
+        <!-- PANEL: KEYBOARD – PLACEHOLDER                             -->
+        <!-- ========================================================= -->
         <div class="neo-settings-panel" id="settingsPanelKeyboard">
           <div class="neo-settings-panel-header">
             <h2>Keyboard</h2>
@@ -862,6 +995,9 @@
           </div>
         </div>
 
+        <!-- ========================================================= -->
+        <!-- PANEL: ABOUT – PLACEHOLDER                                -->
+        <!-- ========================================================= -->
         <div class="neo-settings-panel" id="settingsPanelAbout">
           <div class="neo-settings-panel-header">
             <h2>About</h2>

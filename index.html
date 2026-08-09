@@ -48,6 +48,10 @@
   <link rel="stylesheet" href="/neo-ui-v2.css?v=2">
   <link rel="stylesheet" href="/neo-v3.css?v=46">
 
+  <!-- Modular Settings -->
+  <link rel="stylesheet" href="/css/settings/settings-popups.css">
+  <link rel="stylesheet" href="/css/settings/settings-appearance.css">
+
   <!-- KaTeX -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css">
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js"></script>
@@ -776,7 +780,7 @@
         </div>
 
         <!-- ========================================================= -->
-        <!-- PANEL: APPEARANCE – V1 (NEW)                              -->
+        <!-- PANEL: APPEARANCE – V1 (UPDATED)                          -->
         <!-- ========================================================= -->
         <div class="neo-settings-panel" id="settingsPanelAppearance">
 
@@ -785,26 +789,7 @@
             <p>Personalize how NEYO looks and feels.</p>
           </div>
 
-          <!-- LIVE PREVIEW -->
-          <div class="appearance-preview" id="appearancePreview">
-            <div class="appearance-preview-window">
-
-              <div class="appearance-preview-sidebar">
-                <span></span>
-                <span></span>
-                <span></span>
-              </div>
-
-              <div class="appearance-preview-main">
-                <div class="appearance-preview-message"></div>
-                <div class="appearance-preview-composer">
-                  <span>Message NEYO...</span>
-                  <div class="appearance-preview-send"></div>
-                </div>
-              </div>
-
-            </div>
-          </div>
+          <!-- LIVE PREVIEW BLOCK REMOVED -->
 
           <!-- VISUAL STYLE -->
           <div class="neo-settings-section">
@@ -834,16 +819,19 @@
               </div>
             </div>
 
+            <!-- UPDATED ACCENT ROW WITH CUSTOM PICKER -->
             <div class="settings-row">
               <div>
                 <strong>Accent</strong>
                 <small>Choose a subtle interface accent.</small>
               </div>
-              <div class="settings-segmented-control" id="appearanceAccentControl" role="group" aria-label="Accent color">
-                <button type="button" data-value="neutral" aria-pressed="false">Neutral</button>
-                <button type="button" data-value="emerald" aria-pressed="false">Emerald</button>
-                <button type="button" data-value="violet" aria-pressed="false">Violet</button>
-                <button type="button" data-value="blue" aria-pressed="false">Blue</button>
+              <div class="settings-segmented" id="appearanceAccentControl" role="group" aria-label="Accent color">
+                <button type="button" class="settings-pill" data-value="neutral" aria-pressed="false">Neutral</button>
+                <button type="button" class="settings-pill" data-value="emerald" aria-pressed="false">Emerald</button>
+                <button type="button" class="settings-pill" data-value="violet" aria-pressed="false">Violet</button>
+                <button type="button" class="settings-pill" data-value="blue" aria-pressed="false">Blue</button>
+                <button type="button" class="settings-pill settings-pill-custom" aria-pressed="false" aria-label="Choose custom accent color">Custom</button>
+                <input id="customAccentPicker" type="color" value="#3377e8" aria-label="Custom accent color">
               </div>
             </div>
           </div>
@@ -1045,5 +1033,10 @@
   </div>
 
   <script src="/neo.js?v=86"></script>
+
+  <!-- Modular Settings -->
+  <script src="/js/settings/settings-popups.js"></script>
+  <!-- settings-appearance.js abhi load nahi karna (duplicate listeners se bachne ke liye) -->
+
 </body>
 </html>

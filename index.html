@@ -43,14 +43,14 @@
     rel="stylesheet"
   >
 
-  <!-- Styles -->
+  <!-- ====== CORE LEGACY STYLES (ONLY) ====== -->
   <link rel="stylesheet" href="/neo.css?v=82">
   <link rel="stylesheet" href="/neo-ui-v2.css?v=2">
   <link rel="stylesheet" href="/neo-v3.css?v=46">
 
-  <!-- Modular Settings -->
-  <link rel="stylesheet" href="/css/settings/settings-popups.css">
-  <link rel="stylesheet" href="/css/settings/settings-appearance.css">
+  <!-- ====== MODULAR SETTINGS CSS — DISABLED FOR CLEAN BASELINE ====== -->
+  <!-- <link rel="stylesheet" href="/css/settings/settings-popups.css"> -->
+  <!-- <link rel="stylesheet" href="/css/settings/settings-appearance.css"> -->
 
   <!-- KaTeX -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css">
@@ -65,8 +65,10 @@
 </head>
 <body class="sidebar-collapsed">
 
+  <!-- ====== SIDEBAR SCRIM ====== -->
   <div class="sidebar-scrim" id="sidebarScrim"></div>
 
+  <!-- ====== SIDEBAR ====== -->
   <aside class="sidebar collapsed" id="sidebar">
     <div class="sidebar-header">
       <button class="brand-button" id="brandBtn" type="button">
@@ -125,8 +127,10 @@
     </div>
   </aside>
 
+  <!-- ====== MAIN APP SHELL ====== -->
   <main class="app-shell">
 
+    <!-- TOP BAR -->
     <header class="top-bar">
       <div class="top-left">
         <button class="icon-btn top-toggle-btn" id="sidebarToggleBtn" title="Toggle Sidebar" type="button">
@@ -156,9 +160,11 @@
       </div>
     </header>
 
+    <!-- SCROLL AREA -->
     <div class="scroll-area" id="scrollArea">
       <div class="conversation-column">
 
+        <!-- HERO SECTION -->
         <div class="hero-section" id="heroSection">
           <h1>What can I help with today?</h1>
           <p class="hero-copy">Powered by NEYO Engine. Select a prompt or type your message below.</p>
@@ -177,10 +183,13 @@
             </button>
           </div>
         </div>
+
+        <!-- CHAT MESSAGES -->
         <div class="chat-messages" id="chatMessages"></div>
       </div>
     </div>
 
+    <!-- COMPOSER -->
     <footer class="composer-dock">
       <div class="composer-wrapper" id="composerWrapper">
         <div class="drag-drop-overlay" id="dragDropOverlay">
@@ -230,6 +239,7 @@
     </footer>
   </main>
 
+  <!-- ====== HISTORY POPUP MENU ====== -->
   <div class="history-popup-menu" id="historyPopupMenu">
     <div class="history-popup-item" id="hpShareBtn"><i data-lucide="share-2" size="16"></i>Share conversation</div>
     <div class="history-popup-item" id="hpPinBtn"><i data-lucide="pin" size="16"></i>Pin</div>
@@ -237,19 +247,15 @@
     <div class="history-popup-item danger" id="hpDeleteBtn"><i data-lucide="trash-2" size="16"></i>Delete</div>
   </div>
 
-  <!-- ========================================================= -->
-  <!-- NEYO SETTINGS V1 — WITH PROFILE RESTORED                  -->
-  <!-- ========================================================= -->
+  <!-- ====== NEYO SETTINGS (FULL MODAL) ====== -->
   <div class="neo-settings-overlay" id="neoSettingsOverlay" aria-hidden="true">
     <div class="neo-settings-modal" role="dialog" aria-modal="true" aria-label="NEYO Settings">
       <aside class="neo-settings-sidebar">
 
-        <!-- Close button -->
         <button class="neo-settings-close" id="neoSettingsCloseBtn" type="button" aria-label="Close settings">
           <i data-lucide="x" size="20"></i>
         </button>
 
-        <!-- Navigation – Profile restored after General -->
         <button class="neo-settings-tab active" type="button" data-settings-tab="general">
           <i data-lucide="settings-2" size="17"></i>
           <span>General</span>
@@ -320,359 +326,98 @@
 
       <section class="neo-settings-content">
 
-        <!-- ========================================================= -->
-        <!-- PANEL: GENERAL — V1 FINAL                                 -->
-        <!-- ========================================================= -->
+        <!-- GENERAL -->
         <div class="neo-settings-panel active" id="settingsPanelGeneral">
           <div class="neo-settings-panel-header">
             <h2>General</h2>
             <p>Control how NEYO behaves across your workspace.</p>
           </div>
-
-          <!-- QUICK CONTROLS -->
           <div class="neo-settings-section">
             <span class="neo-settings-section-title">Quick Controls</span>
-
-            <!-- Theme -->
             <div class="settings-row">
-              <div>
-                <strong>Theme</strong>
-                <small>Choose your preferred interface theme.</small>
-              </div>
-
-              <div
-                class="settings-segmented-control"
-                id="settingsThemeControl"
-                role="group"
-                aria-label="Theme"
-              >
-                <button
-                  type="button"
-                  data-value="system"
-                  class="active"
-                  aria-pressed="true"
-                >
-                  System
-                </button>
-
-                <button
-                  type="button"
-                  data-value="light"
-                  aria-pressed="false"
-                >
-                  Light
-                </button>
-
-                <button
-                  type="button"
-                  data-value="dark"
-                  aria-pressed="false"
-                >
-                  Dark
-                </button>
+              <div><strong>Theme</strong><small>Choose your preferred interface theme.</small></div>
+              <div class="settings-segmented-control" id="settingsThemeControl" role="group" aria-label="Theme">
+                <button type="button" data-value="system" class="active" aria-pressed="true">System</button>
+                <button type="button" data-value="light" aria-pressed="false">Light</button>
+                <button type="button" data-value="dark" aria-pressed="false">Dark</button>
               </div>
             </div>
-
-            <!-- Intelligence -->
             <div class="settings-row">
-              <div>
-                <strong>Intelligence</strong>
-                <small>Choose the default reasoning level.</small>
-              </div>
-
-              <div
-                class="settings-segmented-control"
-                id="settingsIntelligenceControl"
-                role="group"
-                aria-label="Intelligence"
-              >
-                <button
-                  type="button"
-                  data-value="standard"
-                  class="active"
-                  aria-pressed="true"
-                >
-                  Standard
-                </button>
-
-                <button
-                  type="button"
-                  data-value="maximum"
-                  aria-pressed="false"
-                >
-                  Maximum
-                </button>
+              <div><strong>Intelligence</strong><small>Choose the default reasoning level.</small></div>
+              <div class="settings-segmented-control" id="settingsIntelligenceControl" role="group" aria-label="Intelligence">
+                <button type="button" data-value="standard" class="active" aria-pressed="true">Standard</button>
+                <button type="button" data-value="maximum" aria-pressed="false">Maximum</button>
               </div>
             </div>
-
-            <!-- Private Chat -->
             <div class="settings-row">
-              <div>
-                <strong>Private Chat</strong>
-                <small>Keep new chats outside saved history and memory.</small>
-              </div>
-
-              <button
-                class="settings-toggle"
-                id="settingsPrivateChatToggle"
-                type="button"
-                role="switch"
-                aria-label="Private Chat"
-                aria-checked="false"
-              >
+              <div><strong>Private Chat</strong><small>Keep new chats outside saved history and memory.</small></div>
+              <button class="settings-toggle" id="settingsPrivateChatToggle" type="button" role="switch" aria-label="Private Chat" aria-checked="false">
                 <span aria-hidden="true"></span>
               </button>
             </div>
-
-            <!-- Interface -->
             <div class="settings-row">
-              <div>
-                <strong>Interface</strong>
-                <small>Choose the visual character of NEYO.</small>
-              </div>
-
-              <div
-                class="settings-segmented-control"
-                id="settingsInterfaceControl"
-                role="group"
-                aria-label="Interface style"
-              >
-                <button
-                  type="button"
-                  data-value="minimal"
-                  class="active"
-                  aria-pressed="true"
-                >
-                  Minimal
-                </button>
-
-                <button
-                  type="button"
-                  data-value="warm"
-                  aria-pressed="false"
-                >
-                  Warm
-                </button>
-
-                <button
-                  type="button"
-                  data-value="glass"
-                  aria-pressed="false"
-                >
-                  Glass
-                </button>
+              <div><strong>Interface</strong><small>Choose the visual character of NEYO.</small></div>
+              <div class="settings-segmented-control" id="settingsInterfaceControl" role="group" aria-label="Interface style">
+                <button type="button" data-value="minimal" class="active" aria-pressed="true">Minimal</button>
+                <button type="button" data-value="warm" aria-pressed="false">Warm</button>
+                <button type="button" data-value="glass" aria-pressed="false">Glass</button>
               </div>
             </div>
           </div>
-
-          <!-- GENERAL PREFERENCES -->
           <div class="neo-settings-section">
             <span class="neo-settings-section-title">General Preferences</span>
-
-            <!-- Language -->
             <div class="settings-row settings-select-row">
-              <div>
-                <strong>Language</strong>
-                <small>Choose how NEYO should respond by default.</small>
-              </div>
-
+              <div><strong>Language</strong><small>Choose how NEYO should respond by default.</small></div>
               <div class="settings-select-wrapper">
-                <button
-                  class="settings-value-btn"
-                  id="settingsLanguageBtn"
-                  type="button"
-                  aria-haspopup="listbox"
-                  aria-expanded="false"
-                  aria-controls="settingsLanguageMenu"
-                >
+                <button class="settings-value-btn" id="settingsLanguageBtn" type="button" aria-haspopup="listbox" aria-expanded="false" aria-controls="settingsLanguageMenu">
                   <span id="settingsLanguageValue">Auto-detect</span>
                   <i data-lucide="chevron-down" size="15"></i>
                 </button>
-
-                <div
-                  class="settings-select-menu"
-                  id="settingsLanguageMenu"
-                  role="listbox"
-                  aria-label="Language"
-                  hidden
-                >
-                  <button
-                    type="button"
-                    class="settings-select-option active"
-                    data-value="auto"
-                    role="option"
-                    aria-selected="true"
-                  >
-                    Auto-detect
-                  </button>
-
-                  <button
-                    type="button"
-                    class="settings-select-option"
-                    data-value="english"
-                    role="option"
-                    aria-selected="false"
-                  >
-                    English
-                  </button>
-
-                  <button
-                    type="button"
-                    class="settings-select-option"
-                    data-value="urdu"
-                    role="option"
-                    aria-selected="false"
-                  >
-                    Urdu
-                  </button>
-
-                  <button
-                    type="button"
-                    class="settings-select-option"
-                    data-value="roman-urdu"
-                    role="option"
-                    aria-selected="false"
-                  >
-                    Roman Urdu
-                  </button>
+                <div class="settings-select-menu" id="settingsLanguageMenu" role="listbox" aria-label="Language" hidden>
+                  <button type="button" class="settings-select-option active" data-value="auto" role="option" aria-selected="true">Auto-detect</button>
+                  <button type="button" class="settings-select-option" data-value="english" role="option" aria-selected="false">English</button>
+                  <button type="button" class="settings-select-option" data-value="urdu" role="option" aria-selected="false">Urdu</button>
+                  <button type="button" class="settings-select-option" data-value="roman-urdu" role="option" aria-selected="false">Roman Urdu</button>
                 </div>
               </div>
             </div>
-
-            <!-- Default Personality -->
             <div class="settings-row settings-select-row">
-              <div>
-                <strong>Default Personality</strong>
-                <small>Choose which NEYO personality starts new chats.</small>
-              </div>
-
+              <div><strong>Default Personality</strong><small>Choose which NEYO personality starts new chats.</small></div>
               <div class="settings-select-wrapper">
-                <button
-                  class="settings-value-btn"
-                  id="settingsDefaultPersonalityBtn"
-                  type="button"
-                  aria-haspopup="listbox"
-                  aria-expanded="false"
-                  aria-controls="settingsDefaultPersonalityMenu"
-                >
+                <button class="settings-value-btn" id="settingsDefaultPersonalityBtn" type="button" aria-haspopup="listbox" aria-expanded="false" aria-controls="settingsDefaultPersonalityMenu">
                   <span id="settingsDefaultPersonalityValue">Neyo</span>
                   <i data-lucide="chevron-down" size="15"></i>
                 </button>
-
-                <div
-                  class="settings-select-menu"
-                  id="settingsDefaultPersonalityMenu"
-                  role="listbox"
-                  aria-label="Default personality"
-                  hidden
-                >
-                  <button
-                    type="button"
-                    class="settings-select-option active"
-                    data-value="neyo"
-                    role="option"
-                    aria-selected="true"
-                  >
-                    Neyo
-                  </button>
-
-                  <button
-                    type="button"
-                    class="settings-select-option"
-                    data-value="zadi"
-                    role="option"
-                    aria-selected="false"
-                  >
-                    Zadi
-                  </button>
-
-                  <button
-                    type="button"
-                    class="settings-select-option"
-                    data-value="wizi"
-                    role="option"
-                    aria-selected="false"
-                  >
-                    Wizi
-                  </button>
+                <div class="settings-select-menu" id="settingsDefaultPersonalityMenu" role="listbox" aria-label="Default personality" hidden>
+                  <button type="button" class="settings-select-option active" data-value="neyo" role="option" aria-selected="true">Neyo</button>
+                  <button type="button" class="settings-select-option" data-value="zadi" role="option" aria-selected="false">Zadi</button>
+                  <button type="button" class="settings-select-option" data-value="wizi" role="option" aria-selected="false">Wizi</button>
                 </div>
               </div>
             </div>
-
-            <!-- Open NEYO On -->
             <div class="settings-row settings-select-row">
-              <div>
-                <strong>Open NEYO on</strong>
-                <small>Choose what appears when the app opens.</small>
-              </div>
-
+              <div><strong>Open NEYO on</strong><small>Choose what appears when the app opens.</small></div>
               <div class="settings-select-wrapper">
-                <button
-                  class="settings-value-btn"
-                  id="settingsOpenOnBtn"
-                  type="button"
-                  aria-haspopup="listbox"
-                  aria-expanded="false"
-                  aria-controls="settingsOpenOnMenu"
-                >
+                <button class="settings-value-btn" id="settingsOpenOnBtn" type="button" aria-haspopup="listbox" aria-expanded="false" aria-controls="settingsOpenOnMenu">
                   <span id="settingsOpenOnValue">New chat</span>
                   <i data-lucide="chevron-down" size="15"></i>
                 </button>
-
-                <div
-                  class="settings-select-menu"
-                  id="settingsOpenOnMenu"
-                  role="listbox"
-                  aria-label="Open NEYO on"
-                  hidden
-                >
-                  <button
-                    type="button"
-                    class="settings-select-option active"
-                    data-value="new-chat"
-                    role="option"
-                    aria-selected="true"
-                  >
-                    New chat
-                  </button>
-
-                  <button
-                    type="button"
-                    class="settings-select-option"
-                    data-value="last-chat"
-                    role="option"
-                    aria-selected="false"
-                  >
-                    Last chat
-                  </button>
+                <div class="settings-select-menu" id="settingsOpenOnMenu" role="listbox" aria-label="Open NEYO on" hidden>
+                  <button type="button" class="settings-select-option active" data-value="new-chat" role="option" aria-selected="true">New chat</button>
+                  <button type="button" class="settings-select-option" data-value="last-chat" role="option" aria-selected="false">Last chat</button>
                 </div>
               </div>
             </div>
-
-            <!-- Auto-save Drafts -->
             <div class="settings-row">
-              <div>
-                <strong>Auto-save drafts</strong>
-                <small>Preserve unfinished messages automatically.</small>
-              </div>
-
-              <button
-                class="settings-toggle active"
-                id="settingsAutoSaveToggle"
-                type="button"
-                role="switch"
-                aria-label="Auto-save drafts"
-                aria-checked="true"
-              >
+              <div><strong>Auto-save drafts</strong><small>Preserve unfinished messages automatically.</small></div>
+              <button class="settings-toggle active" id="settingsAutoSaveToggle" type="button" role="switch" aria-label="Auto-save drafts" aria-checked="true">
                 <span aria-hidden="true"></span>
               </button>
             </div>
           </div>
         </div>
 
-        <!-- ========================================================= -->
-        <!-- PANEL: PROFILE – EXISTING (UNCHANGED)                     -->
-        <!-- ========================================================= -->
+        <!-- PROFILE -->
         <div class="neo-settings-panel" id="settingsPanelProfile">
           <h2>Profile</h2>
           <div class="profile-editor-card">
@@ -689,14 +434,8 @@
                   </div>
                 </div>
               </div>
-              <label>
-                Display name
-                <input id="settingsDisplayNameInput" type="text" placeholder="Your NEYO name">
-              </label>
-              <label>
-                Bean ID
-                <input id="settingsUsernameInput" type="text" placeholder="@username" readonly>
-              </label>
+              <label>Display name <input id="settingsDisplayNameInput" type="text" placeholder="Your NEYO name"></label>
+              <label>Bean ID <input id="settingsUsernameInput" type="text" placeholder="@username" readonly></label>
               <div class="profile-editor-actions">
                 <button class="settings-primary-btn" id="saveProfileSettingsBtn" type="button">Save</button>
                 <button class="settings-ghost-btn" id="resetProfileSettingsBtn" type="button">Cancel</button>
@@ -705,9 +444,7 @@
           </div>
         </div>
 
-        <!-- ========================================================= -->
-        <!-- PANEL: NOTIFICATIONS – EXISTING                           -->
-        <!-- ========================================================= -->
+        <!-- NOTIFICATIONS -->
         <div class="neo-settings-panel" id="settingsPanelNotifications">
           <h2>Notifications</h2>
           <div class="notification-center" id="notificationCenter">
@@ -719,9 +456,7 @@
           </div>
         </div>
 
-        <!-- ========================================================= -->
-        <!-- PANEL: PERSONALITIES – EXISTING                           -->
-        <!-- ========================================================= -->
+        <!-- PERSONALITIES -->
         <div class="neo-settings-panel" id="settingsPanelPersonalities">
           <h2>NEYO Personalities</h2>
           <p class="settings-subtitle">Choose how NEYO should respond. Custom personality is Pro only.</p>
@@ -765,66 +500,41 @@
           </div>
         </div>
 
-        <!-- ========================================================= -->
-        <!-- PANEL: BILLING – EXISTING                                 -->
-        <!-- ========================================================= -->
+        <!-- BILLING -->
         <div class="neo-settings-panel" id="settingsPanelBilling">
           <h2>Billing</h2>
           <div class="settings-row">
-            <div>
-              <strong id="billingPlanText">Free Plan</strong>
-              <small>Upgrade to unlock more usage and advanced features.</small>
-            </div>
+            <div><strong id="billingPlanText">Free Plan</strong><small>Upgrade to unlock more usage and advanced features.</small></div>
             <button class="settings-primary-btn" id="settingsUpgradeBtn" type="button">Upgrade</button>
           </div>
         </div>
 
-        <!-- ========================================================= -->
-        <!-- PANEL: APPEARANCE – V1 (UPDATED)                          -->
-        <!-- ========================================================= -->
+        <!-- APPEARANCE -->
         <div class="neo-settings-panel" id="settingsPanelAppearance">
-
           <div class="neo-settings-panel-header">
             <h2>Appearance</h2>
             <p>Personalize how NEYO looks and feels.</p>
           </div>
-
-          <!-- LIVE PREVIEW BLOCK REMOVED -->
-
-          <!-- VISUAL STYLE -->
           <div class="neo-settings-section">
             <span class="neo-settings-section-title">Visual Style</span>
-
             <div class="settings-row">
-              <div>
-                <strong>Interface</strong>
-                <small>Choose the visual character of NEYO.</small>
-              </div>
+              <div><strong>Interface</strong><small>Choose the visual character of NEYO.</small></div>
               <div class="settings-segmented-control" id="appearanceInterfaceControl" role="group" aria-label="Interface style">
                 <button type="button" data-value="minimal" aria-pressed="false">Minimal</button>
                 <button type="button" data-value="warm" aria-pressed="false">Warm</button>
                 <button type="button" data-value="glass" aria-pressed="false">Glass</button>
               </div>
             </div>
-
             <div class="settings-row">
-              <div>
-                <strong>Theme</strong>
-                <small>Choose your preferred interface theme.</small>
-              </div>
+              <div><strong>Theme</strong><small>Choose your preferred interface theme.</small></div>
               <div class="settings-segmented-control" id="appearanceThemeControl" role="group" aria-label="Theme">
                 <button type="button" data-value="system" aria-pressed="false">System</button>
                 <button type="button" data-value="light" aria-pressed="false">Light</button>
                 <button type="button" data-value="dark" aria-pressed="false">Dark</button>
               </div>
             </div>
-
-            <!-- UPDATED ACCENT ROW WITH CUSTOM PICKER -->
             <div class="settings-row">
-              <div>
-                <strong>Accent</strong>
-                <small>Choose a subtle interface accent.</small>
-              </div>
+              <div><strong>Accent</strong><small>Choose a subtle interface accent.</small></div>
               <div class="settings-segmented" id="appearanceAccentControl" role="group" aria-label="Accent color">
                 <button type="button" class="settings-pill" data-value="neutral" aria-pressed="false">Neutral</button>
                 <button type="button" class="settings-pill" data-value="emerald" aria-pressed="false">Emerald</button>
@@ -835,174 +545,79 @@
               </div>
             </div>
           </div>
-
-          <!-- DISPLAY -->
           <div class="neo-settings-section">
             <span class="neo-settings-section-title">Display</span>
-
             <div class="settings-row">
-              <div>
-                <strong>Text Size</strong>
-                <small>Adjust conversation text size.</small>
-              </div>
+              <div><strong>Text Size</strong><small>Adjust conversation text size.</small></div>
               <div class="settings-segmented-control" id="appearanceTextSizeControl" role="group" aria-label="Text size">
                 <button type="button" data-value="small" aria-pressed="false">Small</button>
                 <button type="button" data-value="default" aria-pressed="false">Default</button>
                 <button type="button" data-value="large" aria-pressed="false">Large</button>
               </div>
             </div>
-
             <div class="settings-row">
-              <div>
-                <strong>Content Width</strong>
-                <small>Control the width of conversations.</small>
-              </div>
+              <div><strong>Content Width</strong><small>Control the width of conversations.</small></div>
               <div class="settings-segmented-control" id="appearanceContentWidthControl" role="group" aria-label="Content width">
                 <button type="button" data-value="compact" aria-pressed="false">Compact</button>
                 <button type="button" data-value="balanced" aria-pressed="false">Balanced</button>
                 <button type="button" data-value="wide" aria-pressed="false">Wide</button>
               </div>
             </div>
-
             <div class="settings-row">
-              <div>
-                <strong>Sidebar Density</strong>
-                <small>Adjust spacing in navigation and history.</small>
-              </div>
+              <div><strong>Sidebar Density</strong><small>Adjust spacing in navigation and history.</small></div>
               <div class="settings-segmented-control" id="appearanceSidebarDensityControl" role="group" aria-label="Sidebar density">
                 <button type="button" data-value="compact" aria-pressed="false">Compact</button>
                 <button type="button" data-value="comfortable" aria-pressed="false">Comfortable</button>
               </div>
             </div>
           </div>
-
-          <!-- MOTION -->
           <div class="neo-settings-section">
             <span class="neo-settings-section-title">Motion</span>
             <div class="settings-row">
-              <div>
-                <strong>Interface Motion</strong>
-                <small>Reduce non-essential animation across NEYO.</small>
-              </div>
+              <div><strong>Interface Motion</strong><small>Reduce non-essential animation across NEYO.</small></div>
               <div class="settings-segmented-control" id="appearanceMotionControl" role="group" aria-label="Interface motion">
                 <button type="button" data-value="on" aria-pressed="false">On</button>
                 <button type="button" data-value="reduced" aria-pressed="false">Reduced</button>
               </div>
             </div>
           </div>
-
         </div>
 
-        <!-- ========================================================= -->
-        <!-- PANEL: WORKSPACE – PLACEHOLDER                            -->
-        <!-- ========================================================= -->
+        <!-- PLACEHOLDERS -->
         <div class="neo-settings-panel" id="settingsPanelWorkspace">
-          <div class="neo-settings-panel-header">
-            <h2>Workspace</h2>
-            <p>Manage your workspace preferences.</p>
-          </div>
-          <div class="neo-settings-placeholder">
-            <i data-lucide="briefcase-business" size="28"></i>
-            <strong>Workspace settings</strong>
-            <small>Coming soon.</small>
-          </div>
+          <div class="neo-settings-panel-header"><h2>Workspace</h2><p>Manage your workspace preferences.</p></div>
+          <div class="neo-settings-placeholder"><i data-lucide="briefcase-business" size="28"></i><strong>Workspace settings</strong><small>Coming soon.</small></div>
         </div>
-
-        <!-- ========================================================= -->
-        <!-- PANEL: PRIVACY – PLACEHOLDER                              -->
-        <!-- ========================================================= -->
         <div class="neo-settings-panel" id="settingsPanelPrivacy">
-          <div class="neo-settings-panel-header">
-            <h2>Privacy</h2>
-            <p>Control your data and privacy preferences.</p>
-          </div>
-          <div class="neo-settings-placeholder">
-            <i data-lucide="shield-check" size="28"></i>
-            <strong>Privacy settings</strong>
-            <small>Coming soon.</small>
-          </div>
+          <div class="neo-settings-panel-header"><h2>Privacy</h2><p>Control your data and privacy preferences.</p></div>
+          <div class="neo-settings-placeholder"><i data-lucide="shield-check" size="28"></i><strong>Privacy settings</strong><small>Coming soon.</small></div>
         </div>
-
-        <!-- ========================================================= -->
-        <!-- PANEL: MEMORY – PLACEHOLDER                               -->
-        <!-- ========================================================= -->
         <div class="neo-settings-panel" id="settingsPanelMemory">
-          <div class="neo-settings-panel-header">
-            <h2>Memory</h2>
-            <p>Manage what NEYO remembers about you.</p>
-          </div>
-          <div class="neo-settings-placeholder">
-            <i data-lucide="brain" size="28"></i>
-            <strong>Memory settings</strong>
-            <small>Coming soon.</small>
-          </div>
+          <div class="neo-settings-panel-header"><h2>Memory</h2><p>Manage what NEYO remembers about you.</p></div>
+          <div class="neo-settings-placeholder"><i data-lucide="brain" size="28"></i><strong>Memory settings</strong><small>Coming soon.</small></div>
         </div>
-
-        <!-- ========================================================= -->
-        <!-- PANEL: FILES – PLACEHOLDER                                -->
-        <!-- ========================================================= -->
         <div class="neo-settings-panel" id="settingsPanelFiles">
-          <div class="neo-settings-panel-header">
-            <h2>Files</h2>
-            <p>Manage your uploaded files and attachments.</p>
-          </div>
-          <div class="neo-settings-placeholder">
-            <i data-lucide="folder" size="28"></i>
-            <strong>Files settings</strong>
-            <small>Coming soon.</small>
-          </div>
+          <div class="neo-settings-panel-header"><h2>Files</h2><p>Manage your uploaded files and attachments.</p></div>
+          <div class="neo-settings-placeholder"><i data-lucide="folder" size="28"></i><strong>Files settings</strong><small>Coming soon.</small></div>
         </div>
-
-        <!-- ========================================================= -->
-        <!-- PANEL: ACCESSIBILITY – PLACEHOLDER                        -->
-        <!-- ========================================================= -->
         <div class="neo-settings-panel" id="settingsPanelAccessibility">
-          <div class="neo-settings-panel-header">
-            <h2>Accessibility</h2>
-            <p>Make NEYO work better for you.</p>
-          </div>
-          <div class="neo-settings-placeholder">
-            <i data-lucide="accessibility" size="28"></i>
-            <strong>Accessibility settings</strong>
-            <small>Coming soon.</small>
-          </div>
+          <div class="neo-settings-panel-header"><h2>Accessibility</h2><p>Make NEYO work better for you.</p></div>
+          <div class="neo-settings-placeholder"><i data-lucide="accessibility" size="28"></i><strong>Accessibility settings</strong><small>Coming soon.</small></div>
         </div>
-
-        <!-- ========================================================= -->
-        <!-- PANEL: KEYBOARD – PLACEHOLDER                             -->
-        <!-- ========================================================= -->
         <div class="neo-settings-panel" id="settingsPanelKeyboard">
-          <div class="neo-settings-panel-header">
-            <h2>Keyboard</h2>
-            <p>Customize keyboard shortcuts and behavior.</p>
-          </div>
-          <div class="neo-settings-placeholder">
-            <i data-lucide="keyboard" size="28"></i>
-            <strong>Keyboard settings</strong>
-            <small>Coming soon.</small>
-          </div>
+          <div class="neo-settings-panel-header"><h2>Keyboard</h2><p>Customize keyboard shortcuts and behavior.</p></div>
+          <div class="neo-settings-placeholder"><i data-lucide="keyboard" size="28"></i><strong>Keyboard settings</strong><small>Coming soon.</small></div>
         </div>
-
-        <!-- ========================================================= -->
-        <!-- PANEL: ABOUT – PLACEHOLDER                                -->
-        <!-- ========================================================= -->
         <div class="neo-settings-panel" id="settingsPanelAbout">
-          <div class="neo-settings-panel-header">
-            <h2>About</h2>
-            <p>Version, credits, and legal information.</p>
-          </div>
-          <div class="neo-settings-placeholder">
-            <i data-lucide="circle-info" size="28"></i>
-            <strong>NEYO</strong>
-            <small>Version 1.0 · Built with ❤️</small>
-          </div>
+          <div class="neo-settings-panel-header"><h2>About</h2><p>Version, credits, and legal information.</p></div>
+          <div class="neo-settings-placeholder"><i data-lucide="circle-info" size="28"></i><strong>NEYO</strong><small>Version 1.0 · Built with ❤️</small></div>
         </div>
 
       </section>
     </div>
   </div>
 
-  <!-- Upgrade Modal (unchanged) -->
+  <!-- ====== UPGRADE MODAL ====== -->
   <div class="modal-overlay" id="upgradeModal">
     <div class="modal-card">
       <button class="modal-close-btn" id="modalCloseBtn" type="button">&times;</button>
@@ -1032,11 +647,16 @@
     </div>
   </div>
 
+  <!-- ====== SCRIPTS ====== -->
+  <!-- Legacy core -->
   <script src="/neo.js?v=86"></script>
 
-  <!-- Modular Settings -->
-  <script src="/js/settings/settings-popups.js"></script>
-  <!-- settings-appearance.js abhi load nahi karna (duplicate listeners se bachne ke liye) -->
+  <!-- Modular Settings JS — DISABLED FOR CLEAN BASELINE -->
+  <!-- <script src="/js/settings/settings-popups.js"></script> -->
+  <!-- <script src="/js/settings/settings-appearance.js"></script> -->
+
+  <!-- React bridge — DISABLED (will be used in separate test route) -->
+  <!-- <script type="module" src="/src/main.tsx"></script> -->
 
 </body>
 </html>

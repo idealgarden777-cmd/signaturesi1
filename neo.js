@@ -2253,9 +2253,7 @@
             });
             await loadHistoryFromSupabase();
             if (window.innerWidth < 768) {
-                sidebar?.classList.add("collapsed");
-                sidebarScrim?.classList.remove("visible");
-                updateBodySidebarState();
+                setSidebarCollapsed(true);
             }
         } catch (error) {
             console.error("Conversation loading failed:", error);
@@ -3224,25 +3222,25 @@
             if (files.length > 0) handleFileProcessing(files);
             event.target.value = "";
         });
+
+        // NEW sidebar toggle using setSidebarCollapsed
         const toggleSidebar = () => {
             if (!sidebar) return;
-            sidebar.classList.toggle("collapsed");
-            const isOpen = !sidebar.classList.contains("collapsed");
-            const mobile = window.matchMedia("(max-width: 767px)").matches;
-            sidebarScrim?.classList.toggle("visible", mobile && isOpen);
-            updateBodySidebarState();
+            const currentlyCollapsed = sidebar.classList.contains("collapsed");
+            setSidebarCollapsed(!currentlyCollapsed);
         };
+
         sidebarToggleBtn?.addEventListener("click", toggleSidebar);
         collapseSidebarBtn?.addEventListener("click", toggleSidebar);
         sidebarScrim?.addEventListener("click", toggleSidebar);
+
         newChatBtn?.addEventListener("click", () => {
             startNewConversation();
             if (window.innerWidth < 768) {
-                sidebar?.classList.add("collapsed");
-                sidebarScrim?.classList.remove("visible");
-                updateBodySidebarState();
+                setSidebarCollapsed(true);
             }
         });
+
         document.querySelectorAll("[data-prompt]").forEach(button => {
             button.addEventListener("click", () => {
                 if (!chatInput) return;
@@ -3251,6 +3249,7 @@
                 handleSend();
             });
         });
+
         hpRenameBtn?.addEventListener("click", async event => {
             event.stopPropagation();
             const conversationId = activePopupChatId;
@@ -3271,6 +3270,7 @@
                 showToast(error?.message || "Conversation could not be renamed.", "error");
             }
         });
+
         hpPinBtn?.addEventListener("click", async event => {
             event.stopPropagation();
             const conversationId = activePopupChatId;
@@ -3284,6 +3284,7 @@
                 showToast(error?.message || "Conversation pin could not be changed.", "error");
             }
         });
+
         hpShareBtn?.addEventListener("click", async event => {
             event.stopPropagation();
             const title = activePopupChatTitle || "NEO conversation";
@@ -3301,6 +3302,7 @@
                 }
             }
         });
+
         userProfileBtn?.addEventListener("click", event => {
             event.preventDefault();
             event.stopPropagation();
@@ -3310,10 +3312,13 @@
             userPopupMenu?.setAttribute("aria-hidden", String(!willOpen));
             userProfileBtn.setAttribute("aria-expanded", String(willOpen));
         });
+
         sidebarPersonalitiesBtn?.addEventListener("click", () => {
             openNeoSettings("personalities");
         });
+
         setupSettingsUI();
+
         document.addEventListener("click", event => {
             if (!historyPopupMenu?.contains(event.target) && !event.target.closest(".history-three-dot")) {
                 closeHistoryPopup();
@@ -3328,6 +3333,7 @@
                 modelDropdownMenu?.classList.remove("show");
             }
         });
+
         let lastResponsiveMode = window.matchMedia("(max-width: 767px)").matches;
         window.addEventListener("resize", () => {
             const mobile = window.matchMedia("(max-width: 767px)").matches;
@@ -3335,9 +3341,11 @@
             lastResponsiveMode = mobile;
             initializeSidebarState();
         }, { passive: true });
+
         document.getElementById("brandBtn")?.addEventListener("click", () => {
             window.location.href = "index.html";
         });
+
         document.getElementById("logoutBtn")?.addEventListener("click", logoutUser);
     }
 
@@ -3373,23 +3381,23 @@
         });
     }
 
-    function initializeSidebarState() {
-        const isMobile = window.matchMedia("(max-width: 767px)").matches;
-        if (isMobile) {
-            document.body.classList.add("sidebar-collapsed");
-            sidebar?.classList.add("collapsed");
-            sidebarScrim?.classList.remove("visible");
+    // ---- Sidebar state management (UPDATED) ----
+    function setSidebarCollapsed(collapsed) {
+        if (!sidebar) return;
+        const shouldCollapse = Boolean(collapsed);
+        sidebar.classList.toggle("collapsed", shouldCollapse);
+        document.body.classList.toggle("sidebar-collapsed", shouldCollapse);
+        const mobile = window.matchMedia("(max-width: 767px)").matches;
+        if (mobile) {
+            sidebarScrim?.classList.toggle("visible", !shouldCollapse);
         } else {
-            document.body.classList.remove("sidebar-collapsed");
-            sidebar?.classList.remove("collapsed");
             sidebarScrim?.classList.remove("visible");
         }
-        updateBodySidebarState();
     }
 
-    function updateBodySidebarState() {
-        const collapsed = sidebar?.classList.contains("collapsed");
-        document.body.classList.toggle("sidebar-collapsed", Boolean(collapsed));
+    function initializeSidebarState() {
+        const isMobile = window.matchMedia("(max-width: 767px)").matches;
+        setSidebarCollapsed(isMobile); // collapsed on mobile, open on desktop
     }
 
     function setupDragAndDrop() {

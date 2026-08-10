@@ -5933,3 +5933,78 @@ body.dark-mode
         flex: 0 0 auto !important;
     }
 }
+/* =========================================================
+   NEYO SIDEBAR — DESKTOP STATE SAFETY
+   Prevent an unrecoverable hidden-sidebar state.
+   ========================================================= */
+
+@media (min-width: 768px) {
+
+    /*
+     * Show recovery toggle whenever either source of truth
+     * says the sidebar is collapsed.
+     */
+    body.sidebar-collapsed #sidebarToggleBtn,
+    .sidebar.collapsed ~ .app-shell #sidebarToggleBtn {
+        display: inline-flex !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        pointer-events: auto !important;
+    }
+
+    /*
+     * Hide toggle only when BOTH body + sidebar agree
+     * that the sidebar is open.
+     */
+    body:not(.sidebar-collapsed)
+    .sidebar:not(.collapsed) ~ .app-shell
+    #sidebarToggleBtn {
+        display: none !important;
+    }
+
+    #sidebarToggleBtn svg {
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        width: 20px !important;
+        height: 20px !important;
+        stroke: currentColor !important;
+    }
+}/* =========================================================
+   NEYO SIDEBAR — DESKTOP STATE SAFETY
+   Prevent an unrecoverable hidden-sidebar state.
+   ========================================================= */
+
+@media (min-width: 768px) {
+
+    /*
+     * Show recovery toggle whenever either source of truth
+     * says the sidebar is collapsed.
+     */
+    body.sidebar-collapsed #sidebarToggleBtn,
+    .sidebar.collapsed ~ .app-shell #sidebarToggleBtn {
+        display: inline-flex !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        pointer-events: auto !important;
+    }
+
+    /*
+     * Hide toggle only when BOTH body + sidebar agree
+     * that the sidebar is open.
+     */
+    body:not(.sidebar-collapsed)
+    .sidebar:not(.collapsed) ~ .app-shell
+    #sidebarToggleBtn {
+        display: none !important;
+    }
+
+    #sidebarToggleBtn svg {
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        width: 20px !important;
+        height: 20px !important;
+        stroke: currentColor !important;
+    }
+}

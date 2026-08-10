@@ -112,7 +112,7 @@
         return stored;
     }
 
-    // ---- UPDATED: TARGETED SYNC INSTEAD OF syncAllControls() ----
+    // ---- UPDATED: TARGETED SYNC (v88) ----
     function setPreference(key, value) {
         const storageKey = PREFERENCE_STORAGE_KEYS[key];
         if (!storageKey) return;
@@ -1568,11 +1568,19 @@
     }
 
     // --------------------------------------------------------
-    //  INIT
+    //  INIT — UPDATED (v88)
     // --------------------------------------------------------
     async function init() {
+        // ---- CRITICAL: establish responsive shell first ----
+        try {
+            initializeSidebarState();
+        } catch (error) {
+            console.warn("Sidebar initialization failed:", error);
+        }
+
         composerInputRow?.classList.remove("is-transcribing");
         isListening = false;
+
         if (window.lucide) {
             window.lucide.createIcons();
         }
@@ -1595,7 +1603,7 @@
         // Appearance controls
         setupAppearanceThemeControl();
         setupAppearanceInterfaceControl();
-        setupAppearanceAccentControl();  // <-- updated
+        setupAppearanceAccentControl();
         setupAppearanceTextSizeControl();
         setupAppearanceContentWidthControl();
         setupAppearanceSidebarDensityControl();
@@ -1606,7 +1614,9 @@
         updateAppearancePreview();
 
         configureSecurityHooks();
-        initializeSidebarState();
+
+        // IMPORTANT: Do NOT call initializeSidebarState() again here.
+
         setupEventListeners();
         setupPremiumTooltips();
         setupFreemiumLogic();
@@ -1630,25 +1640,19 @@
         try {
             await loadHistoryFromSupabase();
 
-            const openOn =
-                getPreference("openOn");
+            const openOn = getPreference("openOn");
 
             if (
                 openOn === "last-chat" &&
                 !getPreference("privateChat")
             ) {
                 const firstHistoryItem =
-                    historyList?.querySelector(
-                        ".history-item"
-                    );
+                    historyList?.querySelector(".history-item");
 
                 firstHistoryItem?.click();
             }
         } catch (error) {
-            console.warn(
-                "History initialization failed:",
-                error
-            );
+            console.warn("History initialization failed:", error);
         }
 
         restoreCurrentDraft();

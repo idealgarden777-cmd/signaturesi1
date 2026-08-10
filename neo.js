@@ -112,6 +112,7 @@
         return stored;
     }
 
+    // ---- UPDATED: TARGETED SYNC INSTEAD OF syncAllControls() ----
     function setPreference(key, value) {
         const storageKey = PREFERENCE_STORAGE_KEYS[key];
         if (!storageKey) return;
@@ -157,9 +158,28 @@
             applyAccentVisual(value);
         }
 
-        // Sync all UI controls
-        syncAllControls();
-        updateAppearancePreview();
+        // ---- TARGETED SYNC ----
+        switch (key) {
+            case 'theme': syncThemeControls(); break;
+            case 'interface': syncInterfaceControls(); break;
+            case 'intelligence': syncIntelligenceControls(); break;
+            case 'privateChat': syncPrivateChatToggle(); break;
+            case 'language': syncLanguageSelect(); break;
+            case 'defaultPersonality': syncPersonalitySelect(); break;
+            case 'openOn': syncOpenOnSelect(); break;
+            case 'autoSaveDrafts': syncAutoSaveToggle(); break;
+            case 'accent': syncAccentControls(); break;
+            case 'textSize': syncTextSizeControls(); break;
+            case 'contentWidth': syncContentWidthControls(); break;
+            case 'sidebarDensity': syncSidebarDensityControls(); break;
+            case 'motion': syncMotionControls(); break;
+            default: break;
+        }
+
+        // Update appearance preview only if relevant
+        if (['theme','interface','accent','textSize','contentWidth','sidebarDensity','motion'].includes(key)) {
+            updateAppearancePreview();
+        }
     }
 
     function updatePreference(key, value) {

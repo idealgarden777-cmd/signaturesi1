@@ -8,12 +8,10 @@
     "dev:full": "vercel dev",
     "build": "vite build",
     "preview": "vite preview",
-    "check": "node --check neo.js"
+    "check": "node --check neo.js && node --check api/chat.js && node --check api/history.js && node --check api/profile.js && node --check api/profile/avatar.js && node --check api/upload.js && node --check lib/auth.js"
   },
   "dependencies": {
-    "@supabase/supabase-js": "2.48.1",
-    "bcryptjs": "3.0.2",
-    "jsonwebtoken": "9.0.2"
+    "@supabase/supabase-js": "2.48.1"
   },
   "devDependencies": {
     "vite": "6.1.0"

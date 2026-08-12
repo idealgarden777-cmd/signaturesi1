@@ -474,31 +474,24 @@ body[data-neyo-interface="glass"]
     }
 }
 /* =========================================================
-   FINAL COMPOSER ICON CENTERING
-   Preserve original visual alignment.
+   COMPOSER ICON — TRUE CENTER FIX
    ========================================================= */
 
 .composer-input-row {
+    display: flex !important;
     align-items: center !important;
 }
 
 .attach-btn,
 .mic-btn,
 .send-btn {
-    position: relative !important;
-    top: -2px !important;
+    position: static !important;
+    top: auto !important;
+
+    align-self: center !important;
+
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+
     transform: none !important;
-}
-
-@media (max-width: 767px) {
-
-    .composer-input-row {
-        align-items: center !important;
-    }
-
-    .attach-btn,
-    .mic-btn,
-    .send-btn {
-        top: -1px !important;
-    }
 }

@@ -473,3 +473,32 @@ body[data-neyo-interface="glass"]
         transition-duration: 0.01ms !important;
     }
 }
+/* =========================================================
+   FINAL COMPOSER ICON CENTERING
+   Preserve original visual alignment.
+   ========================================================= */
+
+.composer-input-row {
+    align-items: center !important;
+}
+
+.attach-btn,
+.mic-btn,
+.send-btn {
+    position: relative !important;
+    top: -2px !important;
+    transform: none !important;
+}
+
+@media (max-width: 767px) {
+
+    .composer-input-row {
+        align-items: center !important;
+    }
+
+    .attach-btn,
+    .mic-btn,
+    .send-btn {
+        top: -1px !important;
+    }
+}

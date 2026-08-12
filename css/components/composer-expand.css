@@ -1,14 +1,16 @@
 /*
 =========================================================
 NEYO — COMPOSER EXPAND
-Premium in-place writing mode
 
-Goals:
-- Normal composer remains unchanged
-- Expand appears only when useful
-- No modal / backdrop / blur
-- No layout jump
-- Collapse restores compact state
+Collision-safe writing mode.
+
+IMPORTANT:
+This file uses ONLY:
+
+.is-writing-expanded
+
+It never uses legacy:
+.is-expanded
 =========================================================
 */
 
@@ -41,6 +43,7 @@ Goals:
     min-height: 26px !important;
 
     display: inline-flex !important;
+
     align-items: center !important;
     justify-content: center !important;
 
@@ -73,12 +76,18 @@ Goals:
 }
 
 
+/* =========================================================
+   ICON
+   ========================================================= */
+
 .composer-expand-btn svg,
 .composer-expand-btn i {
     width: 15px !important;
     height: 15px !important;
 
     pointer-events: none !important;
+
+    color: inherit !important;
 
     stroke: currentColor !important;
 }
@@ -89,9 +98,9 @@ Goals:
    ========================================================= */
 
 .composer-expand-btn.is-visible,
-.glass-input-container.is-expanded
+.glass-input-container.is-writing-expanded
 .composer-expand-btn {
-    opacity: 0.62 !important;
+    opacity: 0.60 !important;
 
     visibility: visible !important;
 
@@ -103,7 +112,7 @@ Goals:
 
 
 .composer-expand-btn.is-visible:hover,
-.glass-input-container.is-expanded
+.glass-input-container.is-writing-expanded
 .composer-expand-btn:hover {
     opacity: 1 !important;
 
@@ -116,10 +125,12 @@ Goals:
 
 
 /* =========================================================
-   NORMAL COMPOSER GUARANTEE
+   NORMAL COMPOSER
    ========================================================= */
 
-.glass-input-container:not(.is-expanded) {
+.glass-input-container:not(
+    .is-writing-expanded
+) {
     position: relative !important;
 
     top: auto !important;
@@ -136,15 +147,26 @@ Goals:
 }
 
 
-.glass-input-container:not(.is-expanded)
+/* =========================================================
+   NORMAL INPUT ROW
+   ========================================================= */
+
+.glass-input-container:not(
+    .is-writing-expanded
+)
 .composer-input-row {
     min-height: 44px !important;
 }
 
 
-/* Empty composer must be compact */
+/* =========================================================
+   EMPTY COMPOSER
+   Critical compact-state guarantee
+   ========================================================= */
 
-.glass-input-container:not(.is-expanded)
+.glass-input-container:not(
+    .is-writing-expanded
+)
 textarea#chatInput:placeholder-shown {
     height: 38px !important;
 
@@ -154,10 +176,10 @@ textarea#chatInput:placeholder-shown {
 
 
 /* =========================================================
-   EXPANDED COMPOSER
+   WRITING EXPANDED STATE
    ========================================================= */
 
-.glass-input-container.is-expanded {
+.glass-input-container.is-writing-expanded {
     position: relative !important;
 
     top: auto !important;
@@ -180,6 +202,7 @@ textarea#chatInput:placeholder-shown {
     max-height: 460px !important;
 
     display: flex !important;
+
     flex-direction: column !important;
 
     box-sizing: border-box !important;
@@ -201,10 +224,10 @@ textarea#chatInput:placeholder-shown {
 
 
 /* =========================================================
-   ATTACHMENTS INSIDE EXPANDED MODE
+   ATTACHMENTS
    ========================================================= */
 
-.glass-input-container.is-expanded
+.glass-input-container.is-writing-expanded
 .attached-chips-wrapper {
     flex: 0 0 auto !important;
 
@@ -219,10 +242,10 @@ textarea#chatInput:placeholder-shown {
 
 
 /* =========================================================
-   MAIN INPUT ROW
+   EXPANDED INPUT ROW
    ========================================================= */
 
-.glass-input-container.is-expanded
+.glass-input-container.is-writing-expanded
 .composer-input-row {
     flex: 1 1 auto !important;
 
@@ -242,10 +265,10 @@ textarea#chatInput:placeholder-shown {
 
 
 /* =========================================================
-   TEXTAREA — EXPANDED
+   EXPANDED TEXTAREA
    ========================================================= */
 
-.glass-input-container.is-expanded
+.glass-input-container.is-writing-expanded
 textarea#chatInput {
     flex: 1 1 auto !important;
 
@@ -287,13 +310,13 @@ textarea#chatInput {
    BOTTOM CONTROLS
    ========================================================= */
 
-.glass-input-container.is-expanded
+.glass-input-container.is-writing-expanded
 .attach-btn,
 
-.glass-input-container.is-expanded
+.glass-input-container.is-writing-expanded
 .mic-btn,
 
-.glass-input-container.is-expanded
+.glass-input-container.is-writing-expanded
 .send-btn {
     flex: 0 0 auto !important;
 
@@ -311,10 +334,10 @@ textarea#chatInput {
 
 
 /* =========================================================
-   VOICE TRANSCRIPTION
+   VOICE
    ========================================================= */
 
-.glass-input-container.is-expanded
+.glass-input-container.is-writing-expanded
 .voice-transcribe-container {
     flex: 1 1 auto !important;
 
@@ -328,18 +351,22 @@ textarea#chatInput {
    COLLAPSE BUTTON
    ========================================================= */
 
-.glass-input-container.is-expanded
+.glass-input-container.is-writing-expanded
 .composer-expand-btn {
     top: 10px !important;
     right: 10px !important;
 
-    background: transparent !important;
+    visibility: visible !important;
 
     opacity: 0.72 !important;
+
+    pointer-events: auto !important;
+
+    background: transparent !important;
 }
 
 
-.glass-input-container.is-expanded
+.glass-input-container.is-writing-expanded
 .composer-expand-btn:hover {
     opacity: 1 !important;
 
@@ -363,7 +390,7 @@ body.dark-mode
 .composer-expand-btn.is-visible:hover,
 
 body.dark-mode
-.glass-input-container.is-expanded
+.glass-input-container.is-writing-expanded
 .composer-expand-btn:hover {
     background:
         rgba(255, 255, 255, 0.07) !important;
@@ -388,7 +415,7 @@ body.dark-mode
     }
 
 
-    .glass-input-container.is-expanded {
+    .glass-input-container.is-writing-expanded {
         height:
             min(
                 56dvh,
@@ -407,7 +434,7 @@ body.dark-mode
     }
 
 
-    .glass-input-container.is-expanded
+    .glass-input-container.is-writing-expanded
     textarea#chatInput {
         padding:
             34px
@@ -419,7 +446,7 @@ body.dark-mode
     }
 
 
-    .glass-input-container.is-expanded
+    .glass-input-container.is-writing-expanded
     .composer-expand-btn {
         top: 8px !important;
         right: 8px !important;

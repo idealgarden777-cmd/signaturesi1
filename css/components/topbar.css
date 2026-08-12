@@ -472,3 +472,20 @@ body.dark-mode
     }
 
 }
+/* =========================================================
+   DESKTOP SIDEBAR TOGGLE VISIBILITY
+   ========================================================= */
+
+@media (min-width: 768px) {
+
+    body:not(.sidebar-collapsed)
+    #sidebarToggleBtn {
+        display: none !important;
+    }
+
+    body.sidebar-collapsed
+    #sidebarToggleBtn {
+        display: inline-flex !important;
+    }
+
+}

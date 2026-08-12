@@ -43,18 +43,42 @@
     rel="stylesheet"
   >
 
-  <!-- Styles -->
+  <!-- Styles — Final Order (legacy temporarily disabled) -->
   <link rel="stylesheet" href="/neo.css?v=82">
   <link rel="stylesheet" href="/neo-ui-v2.css?v=2">
-  <link rel="stylesheet" href="/neo-v3.css?v=46">
+  <!-- <link rel="stylesheet" href="/neo-v3.css?v=46"> -->   <!-- ⛔️ DISABLED FOR MIGRATION TEST -->
+
+  <!-- Tokens & Foundation -->
+  <link rel="stylesheet" href="/css/components/tokens.css?v=1">
+  <link rel="stylesheet" href="/css/components/layout.css?v=1">
+
+  <!-- Composer Group -->
   <link rel="stylesheet" href="/css/components/tooltip.css?v=1">
   <link rel="stylesheet" href="/css/components/attachments.css?v=1">
   <link rel="stylesheet" href="/css/components/composer.css?v=1">
+  <link rel="stylesheet" href="/css/components/suggestions.css?v=1">
+  <link rel="stylesheet" href="/css/components/voice.css?v=1">
+  <link rel="stylesheet" href="/css/components/drag-drop.css?v=1">
+
+  <!-- Messages & Hero -->
   <link rel="stylesheet" href="/css/components/messages.css?v=1">
+  <link rel="stylesheet" href="/css/components/hero.css?v=1">
+
+  <!-- Sidebar & Topbar -->
   <link rel="stylesheet" href="/css/components/sidebar.css?v=1">
+  <link rel="stylesheet" href="/css/components/topbar.css?v=1">
+
+  <!-- Menus -->
   <link rel="stylesheet" href="/css/components/model-menu.css?v=1">
+  <link rel="stylesheet" href="/css/components/menus.css?v=1">
+
+  <!-- Settings & Modal -->
   <link rel="stylesheet" href="/css/components/settings.css?v=1">
-  <link rel="stylesheet" href="/css/components/modal.css?v=1">   <!-- ✅ LAST COMPONENT -->
+  <link rel="stylesheet" href="/css/components/modal.css?v=1">
+
+  <!-- Appearance Modes & Responsive (LAST) -->
+  <link rel="stylesheet" href="/css/components/interface-modes.css?v=1">
+  <link rel="stylesheet" href="/css/components/responsive.css?v=1">
 
   <!-- KaTeX -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css">
@@ -241,9 +265,7 @@
     <div class="history-popup-item danger" id="hpDeleteBtn"><i data-lucide="trash-2" size="16"></i>Delete</div>
   </div>
 
-  <!-- ========================================================= -->
-  <!-- NEYO SETTINGS V1 — WITH PROFILE RESTORED                  -->
-  <!-- ========================================================= -->
+  <!-- NEYO SETTINGS V1 — WITH PROFILE RESTORED -->
   <div class="neo-settings-overlay" id="neoSettingsOverlay" aria-hidden="true">
     <div class="neo-settings-modal" role="dialog" aria-modal="true" aria-label="NEYO Settings">
       <aside class="neo-settings-sidebar">
@@ -324,9 +346,7 @@
 
       <section class="neo-settings-content">
 
-        <!-- ========================================================= -->
-        <!-- PANEL: GENERAL — V1 FINAL                                 -->
-        <!-- ========================================================= -->
+        <!-- PANEL: GENERAL — V1 FINAL -->
         <div class="neo-settings-panel active" id="settingsPanelGeneral">
           <div class="neo-settings-panel-header">
             <h2>General</h2>
@@ -674,9 +694,7 @@
           </div>
         </div>
 
-        <!-- ========================================================= -->
-        <!-- PANEL: PROFILE – EXISTING (UNCHANGED)                     -->
-        <!-- ========================================================= -->
+        <!-- PANEL: PROFILE – EXISTING (UNCHANGED) -->
         <div class="neo-settings-panel" id="settingsPanelProfile">
           <h2>Profile</h2>
           <div class="profile-editor-card">
@@ -709,9 +727,7 @@
           </div>
         </div>
 
-        <!-- ========================================================= -->
-        <!-- PANEL: NOTIFICATIONS – EXISTING                           -->
-        <!-- ========================================================= -->
+        <!-- PANEL: NOTIFICATIONS – EXISTING -->
         <div class="neo-settings-panel" id="settingsPanelNotifications">
           <h2>Notifications</h2>
           <div class="notification-center" id="notificationCenter">
@@ -723,9 +739,7 @@
           </div>
         </div>
 
-        <!-- ========================================================= -->
-        <!-- PANEL: PERSONALITIES – EXISTING                           -->
-        <!-- ========================================================= -->
+        <!-- PANEL: PERSONALITIES – EXISTING -->
         <div class="neo-settings-panel" id="settingsPanelPersonalities">
           <h2>NEYO Personalities</h2>
           <p class="settings-subtitle">Choose how NEYO should respond. Custom personality is Pro only.</p>
@@ -769,9 +783,7 @@
           </div>
         </div>
 
-        <!-- ========================================================= -->
-        <!-- PANEL: BILLING – EXISTING                                 -->
-        <!-- ========================================================= -->
+        <!-- PANEL: BILLING – EXISTING -->
         <div class="neo-settings-panel" id="settingsPanelBilling">
           <h2>Billing</h2>
           <div class="settings-row">
@@ -783,9 +795,7 @@
           </div>
         </div>
 
-        <!-- ========================================================= -->
-        <!-- PANEL: APPEARANCE – V1 (NEW)                              -->
-        <!-- ========================================================= -->
+        <!-- PANEL: APPEARANCE – V1 (NEW) -->
         <div class="neo-settings-panel" id="settingsPanelAppearance">
 
           <div class="neo-settings-panel-header">
@@ -913,9 +923,7 @@
 
         </div>
 
-        <!-- ========================================================= -->
-        <!-- PANEL: WORKSPACE – PLACEHOLDER                            -->
-        <!-- ========================================================= -->
+        <!-- PANEL: WORKSPACE – PLACEHOLDER -->
         <div class="neo-settings-panel" id="settingsPanelWorkspace">
           <div class="neo-settings-panel-header">
             <h2>Workspace</h2>
@@ -928,9 +936,7 @@
           </div>
         </div>
 
-        <!-- ========================================================= -->
-        <!-- PANEL: PRIVACY – PLACEHOLDER                              -->
-        <!-- ========================================================= -->
+        <!-- PANEL: PRIVACY – PLACEHOLDER -->
         <div class="neo-settings-panel" id="settingsPanelPrivacy">
           <div class="neo-settings-panel-header">
             <h2>Privacy</h2>
@@ -943,9 +949,7 @@
           </div>
         </div>
 
-        <!-- ========================================================= -->
-        <!-- PANEL: MEMORY – PLACEHOLDER                               -->
-        <!-- ========================================================= -->
+        <!-- PANEL: MEMORY – PLACEHOLDER -->
         <div class="neo-settings-panel" id="settingsPanelMemory">
           <div class="neo-settings-panel-header">
             <h2>Memory</h2>
@@ -958,9 +962,7 @@
           </div>
         </div>
 
-        <!-- ========================================================= -->
-        <!-- PANEL: FILES – PLACEHOLDER                                -->
-        <!-- ========================================================= -->
+        <!-- PANEL: FILES – PLACEHOLDER -->
         <div class="neo-settings-panel" id="settingsPanelFiles">
           <div class="neo-settings-panel-header">
             <h2>Files</h2>
@@ -973,9 +975,7 @@
           </div>
         </div>
 
-        <!-- ========================================================= -->
-        <!-- PANEL: ACCESSIBILITY – PLACEHOLDER                        -->
-        <!-- ========================================================= -->
+        <!-- PANEL: ACCESSIBILITY – PLACEHOLDER -->
         <div class="neo-settings-panel" id="settingsPanelAccessibility">
           <div class="neo-settings-panel-header">
             <h2>Accessibility</h2>
@@ -988,9 +988,7 @@
           </div>
         </div>
 
-        <!-- ========================================================= -->
-        <!-- PANEL: KEYBOARD – PLACEHOLDER                             -->
-        <!-- ========================================================= -->
+        <!-- PANEL: KEYBOARD – PLACEHOLDER -->
         <div class="neo-settings-panel" id="settingsPanelKeyboard">
           <div class="neo-settings-panel-header">
             <h2>Keyboard</h2>
@@ -1003,9 +1001,7 @@
           </div>
         </div>
 
-        <!-- ========================================================= -->
-        <!-- PANEL: ABOUT – PLACEHOLDER                                -->
-        <!-- ========================================================= -->
+        <!-- PANEL: ABOUT – PLACEHOLDER -->
         <div class="neo-settings-panel" id="settingsPanelAbout">
           <div class="neo-settings-panel-header">
             <h2>About</h2>

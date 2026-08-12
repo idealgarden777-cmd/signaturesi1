@@ -91,11 +91,14 @@
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.8/purify.min.js"></script>
 </head>
-<body class="sidebar-collapsed">
+
+<!-- ✅ FIXED: Removed sidebar-collapsed class — stable baseline restored -->
+<body>
 
   <div class="sidebar-scrim" id="sidebarScrim"></div>
 
-  <aside class="sidebar collapsed" id="sidebar">
+  <!-- ✅ FIXED: Removed collapsed class — sidebar default open state -->
+  <aside class="sidebar" id="sidebar">
     <div class="sidebar-header">
       <button class="brand-button" id="brandBtn" type="button">
         <img src="/icon.png" alt="NEYO" class="brand-logo" width="24" height="24">
@@ -227,20 +230,10 @@
           </div>
         </div>
         <input type="file" id="hiddenFileInput" multiple style="display: none;">
-        
+
+        <!-- EXPAND BUTTON REMOVED — STABLE BASELINE RESTORED -->
         <div class="glass-input-container" id="glassInputContainer">
           <div class="attached-chips-wrapper" id="attachedChipsWrapper"></div>
-
-          <!-- 🆕 COMPOSER EXPAND BUTTON -->
-          <button
-            class="composer-expand-btn"
-            id="composerExpandBtn"
-            type="button"
-            title="Expand composer"
-            aria-label="Expand composer"
-          >
-            <i data-lucide="maximize-2" size="16"></i>
-          </button>
 
           <div class="composer-input-row">
             <button class="attach-btn" id="attachBtn" title="Add Attachments" type="button">
@@ -1066,7 +1059,7 @@
   <!-- SCRIPTS                                                  -->
   <!-- ========================================================= -->
   <script src="/neo.js?v=86"></script>
-  <script type="module" src="/js/components/composer-expand.js"></script>
+  <!-- <script type="module" src="/js/components/composer-expand.js"></script> -->   <!-- ⛔️ DISABLED - STABLE ROLLBACK -->
 
 </body>
 </html>

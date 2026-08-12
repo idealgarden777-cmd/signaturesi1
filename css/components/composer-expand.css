@@ -321,3 +321,46 @@ body.dark-mode
     }
 
 }
+/* Empty normal composer must always stay compact */
+
+.glass-input-container:not(.is-expanded)
+textarea#chatInput:placeholder-shown {
+    height: 38px !important;
+
+    min-height: 38px !important;
+    max-height: 38px !important;
+}
+
+
+/* Expand button should feel quieter */
+
+.composer-expand-btn {
+    width: 26px !important;
+    height: 26px !important;
+
+    background: transparent !important;
+
+    opacity: 0.58 !important;
+}
+
+.composer-expand-btn:hover {
+    background:
+        rgba(0, 0, 0, 0.045) !important;
+
+    opacity: 1 !important;
+}
+
+.glass-input-container.is-expanded
+.composer-expand-btn {
+    background: transparent !important;
+
+    opacity: 0.72 !important;
+}
+
+.glass-input-container.is-expanded
+.composer-expand-btn:hover {
+    background:
+        rgba(0, 0, 0, 0.045) !important;
+
+    opacity: 1 !important;
+}

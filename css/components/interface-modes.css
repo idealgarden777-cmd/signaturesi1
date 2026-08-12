@@ -1,0 +1,394 @@
+/*
+=========================================================
+NEYO — INTERFACE MODES
+
+Purpose:
+Appearance personality for the app shell.
+
+Modes:
+- Minimal
+- Warm
+- Glass
+
+This file changes visual character only.
+It must not change application architecture.
+=========================================================
+*/
+
+
+/* =========================================================
+   MINIMAL
+   ========================================================= */
+
+body[data-neyo-interface="minimal"] {
+    --neyo-interface-radius: 16px;
+    --neyo-interface-surface: #ffffff;
+    --neyo-interface-soft: #f5f5f5;
+}
+
+
+body[data-neyo-interface="minimal"]
+.glass-input-container {
+    background:
+        #ffffff !important;
+
+    border-color:
+        rgba(0, 0, 0, 0.09)
+        !important;
+
+    backdrop-filter:
+        none !important;
+
+    -webkit-backdrop-filter:
+        none !important;
+
+    box-shadow:
+        0 1px 2px
+        rgba(0, 0, 0, 0.03),
+        0 4px 14px
+        rgba(0, 0, 0, 0.035)
+        !important;
+}
+
+
+body[data-neyo-interface="minimal"]
+.sidebar {
+    backdrop-filter:
+        none !important;
+
+    -webkit-backdrop-filter:
+        none !important;
+}
+
+
+/* Dark Minimal */
+
+body.dark-mode[data-neyo-interface="minimal"]
+.glass-input-container {
+    background:
+        #212121 !important;
+
+    border-color:
+        rgba(255, 255, 255, 0.09)
+        !important;
+
+    backdrop-filter:
+        none !important;
+
+    -webkit-backdrop-filter:
+        none !important;
+}
+/* =========================================================
+   WARM
+   ========================================================= */
+
+body[data-neyo-interface="warm"] {
+    --neyo-interface-radius: 18px;
+    --neyo-interface-surface: #fbfaf8;
+    --neyo-interface-soft: #f2f1ee;
+}
+
+
+/* Main surfaces */
+
+body[data-neyo-interface="warm"]
+.app-shell,
+body[data-neyo-interface="warm"]
+.scroll-area {
+    background:
+        #fbfaf8 !important;
+}
+
+
+/* Composer */
+
+body[data-neyo-interface="warm"]
+.glass-input-container {
+    background:
+        #fdfcf9 !important;
+
+    border-color:
+        rgba(0, 0, 0, 0.08)
+        !important;
+
+    box-shadow:
+        0 1px 2px
+        rgba(70, 50, 30, 0.025),
+        0 8px 24px
+        rgba(70, 50, 30, 0.05)
+        !important;
+}
+
+
+/* Sidebar */
+
+body[data-neyo-interface="warm"]
+.sidebar {
+    background:
+        #f8f7f4 !important;
+}
+
+
+/* User bubble */
+
+body[data-neyo-interface="warm"]
+.message.user
+.message-wrapper
+> .message-content {
+    background:
+        #f2f1ee !important;
+}
+
+
+/* =========================================================
+   DARK WARM
+   ========================================================= */
+
+body.dark-mode[data-neyo-interface="warm"]
+.app-shell,
+body.dark-mode[data-neyo-interface="warm"]
+.scroll-area {
+    background:
+        #191918 !important;
+}
+
+
+body.dark-mode[data-neyo-interface="warm"]
+.sidebar {
+    background:
+        #1c1c1a !important;
+}
+
+
+body.dark-mode[data-neyo-interface="warm"]
+.glass-input-container {
+    background:
+        #232321 !important;
+
+    border-color:
+        rgba(255, 255, 255, 0.09)
+        !important;
+}
+
+
+body.dark-mode[data-neyo-interface="warm"]
+.message.user
+.message-wrapper
+> .message-content {
+    background:
+        #2b2b28 !important;
+}
+/* =========================================================
+   GLASS
+   ========================================================= */
+
+body[data-neyo-interface="glass"] {
+    --neyo-interface-radius: 18px;
+}
+
+
+/* Composer */
+
+body[data-neyo-interface="glass"]
+.glass-input-container {
+    background:
+        rgba(255, 255, 255, 0.72)
+        !important;
+
+    border-color:
+        rgba(0, 0, 0, 0.08)
+        !important;
+
+    backdrop-filter:
+        blur(22px)
+        saturate(130%)
+        !important;
+
+    -webkit-backdrop-filter:
+        blur(22px)
+        saturate(130%)
+        !important;
+
+    box-shadow:
+        0 1px 2px
+        rgba(0, 0, 0, 0.025),
+        0 12px 36px
+        rgba(0, 0, 0, 0.07)
+        !important;
+}
+
+
+/* Sidebar */
+
+body[data-neyo-interface="glass"]
+.sidebar {
+    background:
+        rgba(248, 248, 248, 0.88)
+        !important;
+
+    backdrop-filter:
+        blur(20px)
+        saturate(120%)
+        !important;
+
+    -webkit-backdrop-filter:
+        blur(20px)
+        saturate(120%)
+        !important;
+}
+
+
+/* Top bar */
+
+body[data-neyo-interface="glass"]
+.top-bar {
+    background:
+        rgba(255, 255, 255, 0.76)
+        !important;
+
+    backdrop-filter:
+        blur(18px)
+        saturate(125%)
+        !important;
+
+    -webkit-backdrop-filter:
+        blur(18px)
+        saturate(125%)
+        !important;
+}
+
+
+/* =========================================================
+   DARK GLASS
+   ========================================================= */
+
+body.dark-mode[data-neyo-interface="glass"]
+.glass-input-container {
+    background:
+        rgba(38, 38, 38, 0.72)
+        !important;
+
+    border-color:
+        rgba(255, 255, 255, 0.10)
+        !important;
+
+    backdrop-filter:
+        blur(22px)
+        saturate(120%)
+        !important;
+
+    -webkit-backdrop-filter:
+        blur(22px)
+        saturate(120%)
+        !important;
+
+    box-shadow:
+        0 10px 34px
+        rgba(0, 0, 0, 0.30)
+        !important;
+}
+
+
+body.dark-mode[data-neyo-interface="glass"]
+.sidebar {
+    background:
+        rgba(18, 18, 18, 0.88)
+        !important;
+}
+
+
+body.dark-mode[data-neyo-interface="glass"]
+.top-bar {
+    background:
+        rgba(23, 23, 23, 0.76)
+        !important;
+}
+/* =========================================================
+   MOBILE
+   ========================================================= */
+
+@media (max-width: 767px) {
+
+    body[data-neyo-interface="minimal"]
+    .sidebar {
+        background:
+            var(--mobile-surface)
+            !important;
+    }
+
+
+    body[data-neyo-interface="warm"]
+    .sidebar {
+        background:
+            #f8f7f4 !important;
+    }
+
+
+    body.dark-mode[data-neyo-interface="warm"]
+    .sidebar {
+        background:
+            #1c1c1a !important;
+    }
+
+
+    body[data-neyo-interface="glass"]
+    .sidebar {
+        background:
+            rgba(248, 248, 248, 0.88)
+            !important;
+
+        backdrop-filter:
+            blur(20px)
+            saturate(120%)
+            !important;
+
+        -webkit-backdrop-filter:
+            blur(20px)
+            saturate(120%)
+            !important;
+    }
+
+
+    body.dark-mode[data-neyo-interface="glass"]
+    .sidebar {
+        background:
+            rgba(18, 18, 18, 0.88)
+            !important;
+    }
+
+
+    body[data-neyo-interface="glass"]
+    .glass-input-container {
+        backdrop-filter:
+            blur(16px)
+            saturate(120%)
+            !important;
+
+        -webkit-backdrop-filter:
+            blur(16px)
+            saturate(120%)
+            !important;
+    }
+
+}
+
+
+/* =========================================================
+   REDUCED MOTION
+   ========================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+
+    body[data-neyo-interface]
+    .glass-input-container,
+
+    body[data-neyo-interface]
+    .sidebar,
+
+    body[data-neyo-interface]
+    .top-bar {
+        transition-duration:
+            0.01ms !important;
+    }
+
+}

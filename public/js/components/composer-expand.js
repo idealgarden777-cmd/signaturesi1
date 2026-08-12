@@ -3,18 +3,17 @@
 NEYO — COMPOSER EXPAND COMPONENT
 
 Purpose:
-Handles composer expand / collapse behavior.
+Handles composer expand / collapse state.
 
 Owns:
 - Expand button
 - Expanded state
 - Escape-to-collapse
-- Button accessibility state
+- Accessibility state
 - Lucide icon switching
 
-Does NOT own:
-- Textarea auto-resize
-- Sending messages
+Does not own:
+- Sending
 - Attachments
 - Voice
 - Suggestions
@@ -24,25 +23,19 @@ Does NOT own:
 (() => {
   "use strict";
 
-  const initComposerExpand = () => {
+  function initComposerExpand() {
     const expandBtn = document.getElementById("composerExpandBtn");
     const composer = document.getElementById("glassInputContainer");
     const composerWrapper = document.getElementById("composerWrapper");
     const textarea = document.getElementById("chatInput");
 
-    // Safe exit if this feature is not present.
     if (!expandBtn || !composer) {
       return;
     }
 
     let isExpanded = false;
 
-
-    /* =====================================================
-       ICON
-       ===================================================== */
-
-    const renderIcon = () => {
+    function renderIcon() {
       expandBtn.innerHTML = isExpanded
         ? '<i data-lucide="minimize-2" size="16"></i>'
         : '<i data-lucide="maximize-2" size="16"></i>';
@@ -53,14 +46,9 @@ Does NOT own:
       ) {
         window.lucide.createIcons();
       }
-    };
+    }
 
-
-    /* =====================================================
-       ACCESSIBILITY
-       ===================================================== */
-
-    const syncAccessibility = () => {
+    function syncAccessibility() {
       expandBtn.setAttribute(
         "aria-expanded",
         String(isExpanded)
@@ -76,23 +64,20 @@ Does NOT own:
       expandBtn.title = isExpanded
         ? "Collapse composer"
         : "Expand composer";
-    };
+    }
 
-
-    /* =====================================================
-       STATE
-       ===================================================== */
-
-    const applyState = () => {
+    function applyState() {
       composer.classList.toggle(
         "is-expanded",
         isExpanded
       );
 
-      composerWrapper?.classList.toggle(
-        "composer-expanded",
-        isExpanded
-      );
+      if (composerWrapper) {
+        composerWrapper.classList.toggle(
+          "composer-expanded",
+          isExpanded
+        );
+      }
 
       document.body.classList.toggle(
         "composer-expanded",
@@ -102,106 +87,68 @@ Does NOT own:
       syncAccessibility();
       renderIcon();
 
-      /*
-      Tell future modular components that
-      composer state changed.
-      */
-
       window.dispatchEvent(
-        new CustomEvent(
-          "neyo:composer-expand-change",
-          {
-            detail: {
-              expanded: isExpanded
-            }
+        new CustomEvent("neyo:composer-expand-change", {
+          detail: {
+            expanded: isExpanded
           }
-        )
+        })
       );
-    };
+    }
 
-
-    /* =====================================================
-       OPEN / CLOSE
-       ===================================================== */
-
-    const expand = () => {
+    function expandComposer() {
       if (isExpanded) return;
 
       isExpanded = true;
-
       applyState();
 
       requestAnimationFrame(() => {
-        textarea?.focus({
-          preventScroll: true
-        });
+        if (textarea) {
+          textarea.focus({
+            preventScroll: true
+          });
+        }
       });
-    };
+    }
 
-
-    const collapse = () => {
+    function collapseComposer() {
       if (!isExpanded) return;
 
       isExpanded = false;
-
       applyState();
 
       requestAnimationFrame(() => {
-        textarea?.focus({
-          preventScroll: true
-        });
-      });
-    };
-
-
-    const toggle = () => {
-      if (isExpanded) {
-        collapse();
-      } else {
-        expand();
-      }
-    };
-
-
-    /* =====================================================
-       EVENTS
-       ===================================================== */
-
-    expandBtn.addEventListener(
-      "click",
-      (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-
-        toggle();
-      }
-    );
-
-
-    document.addEventListener(
-      "keydown",
-      (event) => {
-        if (
-          event.key === "Escape" &&
-          isExpanded
-        ) {
-          collapse();
+        if (textarea) {
+          textarea.focus({
+            preventScroll: true
+          });
         }
+      });
+    }
+
+    function toggleComposer() {
+      if (isExpanded) {
+        collapseComposer();
+      } else {
+        expandComposer();
       }
-    );
+    }
 
+    expandBtn.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
 
-    /* =====================================================
-       INITIAL STATE
-       ===================================================== */
+      toggleComposer();
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && isExpanded) {
+        collapseComposer();
+      }
+    });
 
     applyState();
-  };
-
-
-  /* =======================================================
-     INIT
-     ======================================================= */
+  }
 
   if (document.readyState === "loading") {
     document.addEventListener(

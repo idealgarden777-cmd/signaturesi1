@@ -364,3 +364,53 @@ textarea#chatInput:placeholder-shown {
 
     opacity: 1 !important;
 }
+/* =========================================================
+   SMART EXPAND CONTROL
+   ========================================================= */
+
+.composer-expand-btn {
+    opacity: 0 !important;
+
+    pointer-events: none !important;
+
+    transform:
+        scale(0.94) !important;
+
+    transition:
+        opacity 140ms ease,
+        transform 140ms ease,
+        background-color 140ms ease,
+        color 140ms ease !important;
+}
+
+
+.composer-expand-btn.is-visible,
+.glass-input-container.is-expanded
+.composer-expand-btn {
+    opacity: 0.58 !important;
+
+    pointer-events: auto !important;
+
+    transform:
+        scale(1) !important;
+}
+
+
+.composer-expand-btn.is-visible:hover,
+.glass-input-container.is-expanded
+.composer-expand-btn:hover {
+    opacity: 1 !important;
+
+    background:
+        rgba(0, 0, 0, 0.045) !important;
+}
+
+
+body.dark-mode
+.composer-expand-btn.is-visible:hover,
+body.dark-mode
+.glass-input-container.is-expanded
+.composer-expand-btn:hover {
+    background:
+        rgba(255, 255, 255, 0.07) !important;
+}

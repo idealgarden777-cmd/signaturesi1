@@ -1793,3 +1793,198 @@ body.dark-mode
             rgba(23, 23, 23, 1)
         );
 }
+/*
+=========================================================
+NEYO — HISTORY DOM CORRECTION
+Actual structure:
+.history-item
+  .history-item-title
+  .history-item-actions
+=========================================================
+*/
+
+.history-item {
+    position: relative !important;
+
+    width: 100% !important;
+    min-width: 0 !important;
+
+    display: flex !important;
+    align-items: center !important;
+
+    padding:
+        7px
+        10px !important;
+
+    box-sizing: border-box !important;
+
+    overflow: hidden !important;
+}
+
+
+/* Actual title element */
+
+.history-item-title {
+    display: block !important;
+
+    flex:
+        1 1 auto !important;
+
+    min-width:
+        0 !important;
+
+    overflow:
+        hidden !important;
+
+    white-space:
+        nowrap !important;
+
+    text-overflow:
+        ellipsis !important;
+
+    padding-right:
+        4px !important;
+}
+
+
+/* Actions container */
+
+.history-item-actions {
+    flex:
+        0 0 auto !important;
+
+    display:
+        flex !important;
+
+    align-items:
+        center !important;
+
+    justify-content:
+        center !important;
+
+    margin-left:
+        4px !important;
+}
+
+
+/* Three dot button */
+
+.history-action-btn {
+    position:
+        static !important;
+
+    transform:
+        none !important;
+
+    width:
+        28px !important;
+
+    height:
+        28px !important;
+
+    min-width:
+        28px !important;
+
+    flex:
+        0 0 28px !important;
+
+    display:
+        inline-flex !important;
+
+    align-items:
+        center !important;
+
+    justify-content:
+        center !important;
+
+    padding:
+        0 !important;
+
+    border:
+        0 !important;
+
+    border-radius:
+        8px !important;
+
+    background:
+        transparent !important;
+
+    color:
+        #737373 !important;
+
+    opacity:
+        0 !important;
+
+    pointer-events:
+        none !important;
+
+    transition:
+        opacity 120ms ease,
+        background-color 120ms ease !important;
+}
+
+
+/* Show dots on hover or active chat */
+
+.history-item:hover
+.history-action-btn,
+.history-item.active
+.history-action-btn {
+    opacity:
+        1 !important;
+
+    pointer-events:
+        auto !important;
+}
+
+
+.history-action-btn:hover {
+    background:
+        rgba(0, 0, 0, 0.07) !important;
+}
+
+
+/* Active row */
+
+.history-item.active {
+    background:
+        rgba(0, 0, 0, 0.06) !important;
+}
+
+
+/* Dark */
+
+body.dark-mode
+.history-action-btn {
+    color:
+        rgba(255, 255, 255, 0.62) !important;
+}
+
+
+body.dark-mode
+.history-action-btn:hover {
+    background:
+        rgba(255, 255, 255, 0.09) !important;
+}
+
+
+body.dark-mode
+.history-item.active {
+    background:
+        rgba(255, 255, 255, 0.08) !important;
+}
+
+
+/* Touch devices */
+
+@media (hover: none) {
+
+    .history-action-btn {
+        opacity:
+            1 !important;
+
+        pointer-events:
+            auto !important;
+    }
+
+}

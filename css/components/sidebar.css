@@ -1141,3 +1141,38 @@ body[data-neyo-interface="warm"]
     }
 
 }
+/* =========================================================
+   HISTORY TITLE — THREE DOT COLLISION FIX
+   ========================================================= */
+
+.history-item-wrapper {
+    position: relative !important;
+    width: 100% !important;
+    min-width: 0 !important;
+}
+
+.history-item {
+    width: 100% !important;
+    min-width: 0 !important;
+
+    padding-right: 48px !important;
+
+    overflow: hidden !important;
+    white-space: nowrap !important;
+    text-overflow: ellipsis !important;
+
+    box-sizing: border-box !important;
+}
+
+.history-three-dot {
+    position: absolute !important;
+
+    top: 50% !important;
+    right: 7px !important;
+
+    transform: translateY(-50%) !important;
+
+    z-index: 2 !important;
+
+    flex: 0 0 30px !important;
+}

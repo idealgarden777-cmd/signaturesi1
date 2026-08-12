@@ -505,3 +505,65 @@ body[data-neyo-interface="glass"]
         bottom: 1px !important;
     }
 }
+/* =========================================================
+   COMPOSER TEXTAREA — THIN INTERNAL SCROLLBAR
+   Long text scrolls inside textarea.
+   Existing buttons/layout stay unchanged.
+   ========================================================= */
+
+textarea#chatInput {
+    max-height: 132px !important;
+
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+
+    scrollbar-width: thin;
+    scrollbar-color:
+        rgba(120, 120, 128, 0.28)
+        transparent;
+}
+
+
+/* Chrome / Edge / Safari */
+
+textarea#chatInput::-webkit-scrollbar {
+    width: 5px;
+}
+
+textarea#chatInput::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+textarea#chatInput::-webkit-scrollbar-thumb {
+    background:
+        rgba(120, 120, 128, 0.28);
+
+    border-radius: 999px;
+}
+
+textarea#chatInput::-webkit-scrollbar-thumb:hover {
+    background:
+        rgba(120, 120, 128, 0.42);
+}
+
+
+/* Dark mode */
+
+body.dark-mode
+textarea#chatInput {
+    scrollbar-color:
+        rgba(255, 255, 255, 0.22)
+        transparent;
+}
+
+body.dark-mode
+textarea#chatInput::-webkit-scrollbar-thumb {
+    background:
+        rgba(255, 255, 255, 0.22);
+}
+
+body.dark-mode
+textarea#chatInput::-webkit-scrollbar-thumb:hover {
+    background:
+        rgba(255, 255, 255, 0.34);
+}

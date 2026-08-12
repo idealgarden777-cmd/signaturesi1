@@ -474,21 +474,22 @@ body[data-neyo-interface="glass"]
     }
 }
 /* =========================================================
-   COMPOSER ICON — TRUE CENTER FIX
+   FINAL COMPOSER BUTTON ANCHOR
+   Buttons stay stable when textarea grows.
    ========================================================= */
 
 .composer-input-row {
     display: flex !important;
-    align-items: center !important;
+    align-items: flex-end !important;
 }
 
 .attach-btn,
 .mic-btn,
 .send-btn {
-    position: static !important;
-    top: auto !important;
+    align-self: flex-end !important;
 
-    align-self: center !important;
+    position: relative !important;
+    top: 0 !important;
 
     margin-top: 0 !important;
     margin-bottom: 0 !important;

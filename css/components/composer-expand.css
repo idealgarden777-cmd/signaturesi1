@@ -1,0 +1,280 @@
+/*
+=========================================================
+NEYO — COMPOSER EXPAND OVERLAY
+
+Purpose:
+Safe expanded writing mode.
+
+Rules:
+- Normal composer remains unchanged
+- Expanded mode uses fixed overlay positioning
+- Existing textarea, attach, mic and send buttons stay intact
+- Escape / button toggle handled by composer-expand.js
+=========================================================
+*/
+
+
+/* =========================================================
+   BASE EXPAND BUTTON
+   ========================================================= */
+
+.composer-expand-btn {
+    position: absolute !important;
+
+    top: 8px !important;
+    right: 10px !important;
+
+    z-index: 20 !important;
+
+    width: 28px !important;
+    height: 28px !important;
+
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+
+    padding: 0 !important;
+
+    border: 0 !important;
+    border-radius: 8px !important;
+
+    background: transparent !important;
+
+    color: rgba(23, 23, 23, 0.58) !important;
+
+    cursor: pointer !important;
+
+    opacity: 0.78 !important;
+
+    transition:
+        opacity 140ms ease,
+        background-color 140ms ease,
+        color 140ms ease !important;
+}
+
+.composer-expand-btn:hover {
+    opacity: 1 !important;
+
+    background: rgba(0, 0, 0, 0.05) !important;
+
+    color: #171717 !important;
+}
+
+.composer-expand-btn svg {
+    width: 16px !important;
+    height: 16px !important;
+
+    pointer-events: none !important;
+}
+
+
+/* =========================================================
+   EXPANDED OVERLAY
+   ========================================================= */
+
+.glass-input-container.is-expanded {
+    position: fixed !important;
+
+    left: 50% !important;
+    top: 50% !important;
+
+    transform: translate(-50%, -50%) !important;
+
+    width: min(820px, calc(100vw - 40px)) !important;
+    height: min(620px, calc(100dvh - 80px)) !important;
+
+    min-height: 420px !important;
+    max-height: none !important;
+
+    z-index: 1000 !important;
+
+    display: flex !important;
+    flex-direction: column !important;
+
+    padding: 16px !important;
+
+    border-radius: 24px !important;
+
+    background: #ffffff !important;
+
+    border: 1px solid rgba(0, 0, 0, 0.08) !important;
+
+    box-shadow:
+        0 24px 80px rgba(0, 0, 0, 0.16),
+        0 8px 24px rgba(0, 0, 0, 0.08) !important;
+}
+
+
+/* =========================================================
+   BACKDROP
+   ========================================================= */
+
+body.composer-expanded::before {
+    content: "";
+
+    position: fixed;
+    inset: 0;
+
+    z-index: 999;
+
+    background: rgba(0, 0, 0, 0.20);
+
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+}
+
+
+/* =========================================================
+   EXPANDED INPUT ROW
+   ========================================================= */
+
+.glass-input-container.is-expanded
+.composer-input-row {
+    flex: 1 1 auto !important;
+
+    width: 100% !important;
+    min-height: 0 !important;
+
+    display: flex !important;
+    align-items: flex-end !important;
+
+    gap: 8px !important;
+}
+
+
+/* =========================================================
+   EXPANDED TEXTAREA
+   ========================================================= */
+
+.glass-input-container.is-expanded
+textarea#chatInput {
+    flex: 1 1 auto !important;
+
+    width: 100% !important;
+
+    min-height: 320px !important;
+    max-height: none !important;
+
+    padding:
+        14px
+        44px
+        14px
+        10px !important;
+
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+
+    resize: none !important;
+}
+
+
+/* =========================================================
+   KEEP CONTROLS AT BOTTOM
+   ========================================================= */
+
+.glass-input-container.is-expanded
+.attach-btn,
+.glass-input-container.is-expanded
+.mic-btn,
+.glass-input-container.is-expanded
+.send-btn {
+    align-self: flex-end !important;
+
+    position: relative !important;
+
+    top: auto !important;
+    bottom: 0 !important;
+
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+}
+
+
+/* =========================================================
+   EXPAND BUTTON IN OVERLAY
+   ========================================================= */
+
+.glass-input-container.is-expanded
+.composer-expand-btn {
+    top: 12px !important;
+    right: 12px !important;
+
+    opacity: 1 !important;
+
+    background: rgba(0, 0, 0, 0.04) !important;
+}
+
+
+/* =========================================================
+   DARK MODE
+   ========================================================= */
+
+body.dark-mode
+.glass-input-container.is-expanded {
+    background: #171717 !important;
+
+    border-color: rgba(255, 255, 255, 0.10) !important;
+
+    box-shadow:
+        0 24px 80px rgba(0, 0, 0, 0.48),
+        0 8px 24px rgba(0, 0, 0, 0.26) !important;
+}
+
+body.dark-mode
+.composer-expand-btn {
+    color: rgba(255, 255, 255, 0.62) !important;
+}
+
+body.dark-mode
+.composer-expand-btn:hover,
+body.dark-mode
+.glass-input-container.is-expanded
+.composer-expand-btn {
+    background: rgba(255, 255, 255, 0.08) !important;
+
+    color: #f5f5f5 !important;
+}
+
+
+/* =========================================================
+   MOBILE
+   ========================================================= */
+
+@media (max-width: 767px) {
+
+    .glass-input-container.is-expanded {
+        left: 8px !important;
+        right: 8px !important;
+
+        top: 8px !important;
+        bottom: 8px !important;
+
+        transform: none !important;
+
+        width: auto !important;
+        height: auto !important;
+
+        min-height: 0 !important;
+
+        border-radius: 20px !important;
+
+        padding:
+            12px
+            10px
+            calc(12px + env(safe-area-inset-bottom)) !important;
+    }
+
+    .glass-input-container.is-expanded
+    textarea#chatInput {
+        min-height: 0 !important;
+
+        height: 100% !important;
+
+        padding:
+            12px
+            40px
+            12px
+            8px !important;
+    }
+
+}

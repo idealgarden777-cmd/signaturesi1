@@ -1,0 +1,474 @@
+/*
+=========================================================
+NEYO — TOP BAR COMPONENT
+
+Purpose:
+Primary app header.
+
+Includes:
+- Desktop header
+- Sidebar toggle
+- Model area alignment
+- Theme toggle
+- Dark mode
+- Mobile sticky header
+- Safe-area support
+- Reduced motion
+
+Legacy neo-v3.css remains loaded during migration.
+=========================================================
+*/
+
+
+/* =========================================================
+   BASE
+   ========================================================= */
+
+.top-bar {
+    width: 100%;
+
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    flex: 0 0 auto;
+
+    background:
+        var(--bg-main, #ffffff);
+
+    border-bottom:
+        1px solid rgba(0, 0, 0, 0.06);
+
+    box-shadow: none;
+
+    transition:
+        background-color 150ms ease,
+        border-color 150ms ease;
+}
+
+
+.top-left,
+.top-right {
+    display: flex;
+    align-items: center;
+
+    min-width: 0;
+}
+
+
+/* =========================================================
+   ICON BUTTONS
+   ========================================================= */
+
+.top-bar .icon-btn {
+    width: 40px;
+    height: 40px;
+
+    min-width: 40px;
+    min-height: 40px;
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    padding: 0;
+
+    border: 0;
+    border-radius: 10px;
+
+    background: transparent;
+
+    color: #303030;
+
+    cursor: pointer;
+
+    transform: none !important;
+
+    transition:
+        background-color 140ms ease,
+        color 140ms ease,
+        opacity 140ms ease;
+}
+
+
+.top-bar .icon-btn:hover {
+    background:
+        rgba(0, 0, 0, 0.055);
+}
+
+
+.top-bar .icon-btn:active {
+    transform: none !important;
+}
+
+
+/* =========================================================
+   SIDEBAR TOGGLE
+   ========================================================= */
+
+#sidebarToggleBtn {
+    flex: 0 0 40px;
+}
+
+
+/* =========================================================
+   MODEL AREA
+   ========================================================= */
+
+.model-dropdown-wrapper {
+    min-width: 0;
+}
+
+
+.top-bar .model-badge {
+    flex: 0 0 auto;
+
+    margin: 0 !important;
+
+    transform: none !important;
+}
+
+
+/* =========================================================
+   RIGHT SIDE
+   ========================================================= */
+
+.top-right {
+    justify-content: center;
+}
+
+
+/* =========================================================
+   DARK MODE
+   ========================================================= */
+
+body.dark-mode .top-bar {
+    background:
+        var(--bg-main, #212121);
+
+    border-bottom-color:
+        rgba(255, 255, 255, 0.06);
+}
+
+
+body.dark-mode
+.top-bar .icon-btn {
+    color: #ececec;
+}
+
+
+body.dark-mode
+.top-bar .icon-btn:hover,
+body.dark-mode
+.model-badge:hover {
+    background:
+        rgba(255, 255, 255, 0.06) !important;
+}
+
+
+/* =========================================================
+   DESKTOP
+   ========================================================= */
+
+@media (min-width: 768px) {
+
+    :root {
+        --neo-topbar-height: 56px;
+    }
+
+
+    .top-bar {
+        height:
+            var(--neo-topbar-height) !important;
+
+        min-height:
+            var(--neo-topbar-height) !important;
+
+        padding:
+            0
+            28px
+            0
+            24px !important;
+    }
+
+
+    .top-left {
+        height:
+            40px !important;
+
+        gap:
+            12px !important;
+
+        margin:
+            0 !important;
+
+        padding:
+            0 !important;
+    }
+
+
+    .top-right {
+        width:
+            40px !important;
+
+        height:
+            40px !important;
+
+        min-width:
+            40px !important;
+
+        margin:
+            0 !important;
+
+        padding:
+            0 !important;
+    }
+
+
+    #sidebarToggleBtn,
+    #topBarDarkModeToggle {
+        width:
+            40px !important;
+
+        height:
+            40px !important;
+
+        min-width:
+            40px !important;
+
+        min-height:
+            40px !important;
+
+        border-radius:
+            10px !important;
+    }
+
+
+    #sidebarToggleBtn:hover,
+    #topBarDarkModeToggle:hover {
+        background:
+            rgba(0, 0, 0, 0.055)
+            !important;
+    }
+
+
+    body.dark-mode
+    #sidebarToggleBtn:hover,
+    body.dark-mode
+    #topBarDarkModeToggle:hover,
+    body.dark-mode
+    .model-badge:hover {
+        background:
+            rgba(255, 255, 255, 0.06)
+            !important;
+    }
+
+}
+
+
+/* =========================================================
+   MOBILE
+   ========================================================= */
+
+@media (max-width: 767px) {
+
+    .top-bar {
+        position:
+            sticky !important;
+
+        top:
+            0 !important;
+
+        z-index:
+            60 !important;
+
+        width:
+            100% !important;
+
+        min-height:
+            calc(
+                56px +
+                env(safe-area-inset-top)
+            ) !important;
+
+        padding:
+            env(safe-area-inset-top)
+            12px
+            0 !important;
+
+        background:
+            var(--mobile-bg, #ffffff)
+            !important;
+
+        border-bottom:
+            1px solid transparent
+            !important;
+
+        box-shadow:
+            none !important;
+    }
+
+
+    .top-left,
+    .top-right {
+        min-width:
+            0 !important;
+
+        height:
+            56px;
+    }
+
+
+    .top-left {
+        flex:
+            1 1 auto;
+
+        gap:
+            6px;
+    }
+
+
+    .top-right {
+        flex:
+            0 0 40px;
+
+        width:
+            40px;
+    }
+
+
+    .top-toggle-btn {
+        display:
+            inline-flex !important;
+    }
+
+
+    #sidebarToggleBtn,
+    #topBarDarkModeToggle {
+        width:
+            40px !important;
+
+        height:
+            40px !important;
+
+        min-width:
+            40px !important;
+
+        min-height:
+            40px !important;
+
+        border-radius:
+            10px !important;
+    }
+
+
+    .top-bar .model-badge {
+        min-height:
+            40px !important;
+
+        max-width:
+            calc(100vw - 112px);
+
+        padding:
+            0
+            6px !important;
+
+        border:
+            0 !important;
+
+        border-radius:
+            8px !important;
+
+        background:
+            transparent !important;
+
+        box-shadow:
+            none !important;
+    }
+
+
+    .top-bar .model-name {
+        min-width:
+            0;
+
+        overflow:
+            hidden;
+
+        font-size:
+            14px !important;
+
+        font-weight:
+            600 !important;
+
+        line-height:
+            1 !important;
+
+        white-space:
+            nowrap;
+
+        text-overflow:
+            ellipsis;
+    }
+
+
+    .top-bar .model-chevron {
+        width:
+            16px !important;
+
+        height:
+            16px !important;
+
+        flex:
+            0 0 16px;
+
+        opacity:
+            0.65 !important;
+    }
+
+
+    .top-bar .icon-btn:hover,
+    .top-bar .model-badge:hover {
+        background:
+            rgba(0, 0, 0, 0.04)
+            !important;
+    }
+
+
+    body.dark-mode
+    .top-bar {
+        background:
+            var(--mobile-bg, #000000)
+            !important;
+
+        border-bottom-color:
+            rgba(255, 255, 255, 0.06)
+            !important;
+    }
+
+
+    body.dark-mode
+    .top-bar .icon-btn:hover,
+    body.dark-mode
+    .top-bar .model-badge:hover {
+        background:
+            rgba(255, 255, 255, 0.06)
+            !important;
+    }
+
+}
+
+
+/* =========================================================
+   REDUCED MOTION
+   ========================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+
+    .top-bar,
+    .top-bar .icon-btn,
+    .top-bar .model-badge {
+        transition-duration:
+            0.01ms !important;
+    }
+
+}

@@ -1,0 +1,439 @@
+/*
+=========================================================
+NEYO — VOICE COMPONENT
+
+Purpose:
+Voice input / recording UI.
+
+Includes:
+- Mic button
+- Recording container
+- Wave dots
+- Stop recording button
+- Recording animation
+- Dark mode
+- Mobile
+- Reduced motion
+
+Legacy neo-v3.css remains loaded during migration.
+=========================================================
+*/
+
+
+/* =========================================================
+   MIC BUTTON
+   ========================================================= */
+
+.mic-btn {
+    flex: 0 0 auto !important;
+
+    width: 40px;
+    height: 40px;
+
+    min-width: 40px;
+    min-height: 40px;
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    margin-right: 2px !important;
+
+    padding: 0;
+
+    border: 0;
+    border-radius: 999px;
+
+    background: transparent;
+
+    color:
+        var(--neyo-text-secondary, #5f5f5f);
+
+    cursor: pointer;
+
+    transform: none !important;
+
+    transition:
+        background-color 140ms ease,
+        color 140ms ease,
+        opacity 140ms ease;
+}
+
+
+.mic-btn:hover {
+    background:
+        rgba(0, 0, 0, 0.05);
+
+    color:
+        var(--neyo-text, #171717);
+}
+
+
+.mic-btn:active {
+    transform: none !important;
+}
+
+
+.mic-btn svg,
+.mic-btn i {
+    width: 17px;
+    height: 17px;
+
+    flex: 0 0 17px;
+}
+
+
+/* =========================================================
+   RECORDING CONTAINER
+   ========================================================= */
+
+.voice-transcribe-container {
+    min-width: 0;
+
+    display: none;
+
+    align-items: center;
+    justify-content: flex-end;
+
+    gap: 8px;
+
+    flex: 1 1 auto;
+
+    height: 40px;
+}
+
+
+/*
+Support common JS states without
+forcing any specific implementation.
+*/
+
+.voice-transcribe-container.active,
+.voice-transcribe-container.is-active,
+.voice-transcribe-container.recording {
+    display: flex;
+}
+
+
+/* =========================================================
+   WAVE DOTS
+   ========================================================= */
+
+.wave-dots-bar {
+    flex: 1 1 auto;
+
+    min-width: 0;
+
+    height: 30px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    gap: 3px;
+
+    overflow: hidden;
+}
+
+
+.wave-dots-bar span {
+    width: 3px;
+    height: 7px;
+
+    flex: 0 0 3px;
+
+    border-radius: 999px;
+
+    background:
+        currentColor;
+
+    color:
+        var(--neyo-text, #171717);
+
+    opacity: 0.48;
+
+    transform: scaleY(0.55);
+
+    transform-origin: center;
+
+    animation:
+        neyoVoiceWave
+        900ms
+        ease-in-out
+        infinite;
+}
+
+
+/* Stagger 24 waveform bars */
+
+.wave-dots-bar span:nth-child(2n) {
+    animation-delay: -120ms;
+}
+
+.wave-dots-bar span:nth-child(3n) {
+    animation-delay: -240ms;
+}
+
+.wave-dots-bar span:nth-child(4n) {
+    animation-delay: -360ms;
+}
+
+.wave-dots-bar span:nth-child(5n) {
+    animation-delay: -480ms;
+}
+
+
+@keyframes neyoVoiceWave {
+
+    0%,
+    100% {
+        transform: scaleY(0.45);
+        opacity: 0.36;
+    }
+
+    50% {
+        transform: scaleY(1.6);
+        opacity: 0.90;
+    }
+
+}
+
+
+/* =========================================================
+   STOP RECORDING BUTTON
+   ========================================================= */
+
+.stop-recording-btn {
+    width: 40px;
+    height: 40px;
+
+    min-width: 40px;
+    min-height: 40px;
+
+    flex: 0 0 40px;
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    padding: 0;
+
+    border: 0;
+    border-radius: 999px;
+
+    background:
+        #171717;
+
+    color:
+        #ffffff;
+
+    cursor: pointer;
+
+    transform: none !important;
+
+    box-shadow:
+        0 1px 2px rgba(0, 0, 0, 0.10);
+
+    transition:
+        background-color 140ms ease,
+        color 140ms ease,
+        opacity 140ms ease;
+}
+
+
+.stop-recording-btn:hover {
+    background:
+        #000000;
+}
+
+
+.stop-recording-btn:active {
+    transform: none !important;
+}
+
+
+.stop-recording-btn svg,
+.stop-recording-btn i {
+    width: 14px;
+    height: 14px;
+
+    flex: 0 0 14px;
+}
+
+
+/* =========================================================
+   RECORDING STATE
+   ========================================================= */
+
+.composer-input-row.is-recording textarea#chatInput,
+.glass-input-container.is-recording textarea#chatInput {
+    display: none;
+}
+
+
+.composer-input-row.is-recording .mic-btn,
+.glass-input-container.is-recording .mic-btn {
+    display: none;
+}
+
+
+.composer-input-row.is-recording
+.voice-transcribe-container,
+.glass-input-container.is-recording
+.voice-transcribe-container {
+    display: flex;
+}
+
+
+/* =========================================================
+   DARK MODE
+   ========================================================= */
+
+body.dark-mode
+.mic-btn {
+    color:
+        rgba(255, 255, 255, 0.72);
+}
+
+
+body.dark-mode
+.mic-btn:hover {
+    background:
+        rgba(255, 255, 255, 0.07);
+
+    color:
+        #ffffff;
+}
+
+
+body.dark-mode
+.wave-dots-bar span {
+    color:
+        #ececec;
+}
+
+
+body.dark-mode
+.stop-recording-btn {
+    background:
+        #f5f5f5;
+
+    color:
+        #171717;
+}
+
+
+body.dark-mode
+.stop-recording-btn:hover {
+    background:
+        #ffffff;
+}
+
+
+/* =========================================================
+   MOBILE
+   ========================================================= */
+
+@media (max-width: 767px) {
+
+    .mic-btn,
+    .stop-recording-btn {
+        width:
+            40px !important;
+
+        height:
+            40px !important;
+
+        min-width:
+            40px !important;
+
+        min-height:
+            40px !important;
+
+        flex:
+            0 0 40px !important;
+
+        border-radius:
+            999px !important;
+    }
+
+
+    .mic-btn {
+        margin-right:
+            0 !important;
+
+        background:
+            transparent !important;
+
+        color:
+            var(--mobile-text, #171717)
+            !important;
+    }
+
+
+    .voice-transcribe-container {
+        height:
+            40px;
+
+        gap:
+            6px;
+    }
+
+
+    .wave-dots-bar {
+        height:
+            28px;
+
+        gap:
+            2.5px;
+    }
+
+
+    .wave-dots-bar span {
+        width:
+            3px;
+
+        flex-basis:
+            3px;
+    }
+
+
+    body.dark-mode
+    .mic-btn {
+        color:
+            var(--mobile-text, #f5f5f5)
+            !important;
+    }
+
+}
+/* =========================================================
+   REDUCED MOTION
+   ========================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+
+    .wave-dots-bar span {
+        animation: none !important;
+
+        transform:
+            scaleY(0.8);
+    }
+
+
+    .mic-btn,
+    .stop-recording-btn {
+        transition-duration:
+            0.01ms !important;
+    }
+
+}
+
+
+body[data-neyo-motion="reduced"]
+.wave-dots-bar span {
+    animation:
+        none !important;
+
+    transform:
+        scaleY(0.8);
+}

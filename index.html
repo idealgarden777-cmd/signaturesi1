@@ -106,7 +106,14 @@
         <img src="/icon.png" alt="NEYO" class="brand-logo" width="24" height="24">
         <span class="brand-name">NEYO</span>
       </button>
-      <button class="icon-btn" id="collapseSidebarBtn" title="Close Sidebar" type="button">
+      <button
+        class="icon-btn"
+        id="collapseSidebarBtn"
+        title="Close Sidebar"
+        type="button"
+        data-tooltip="Close sidebar"
+        data-tooltip-position="right"
+      >
         <i data-lucide="columns-2" size="20"></i>
       </button>
     </div>
@@ -162,7 +169,14 @@
 
     <header class="top-bar">
       <div class="top-left">
-        <button class="icon-btn top-toggle-btn" id="sidebarToggleBtn" title="Toggle Sidebar" type="button">
+        <button
+          class="icon-btn top-toggle-btn"
+          id="sidebarToggleBtn"
+          title="Toggle Sidebar"
+          type="button"
+          data-tooltip="Toggle sidebar"
+          data-tooltip-position="right"
+        >
           <i data-lucide="columns-2" size="20"></i>
         </button>
         <div class="model-dropdown-wrapper">
@@ -183,7 +197,14 @@
         </div>
       </div>
       <div class="top-right">
-        <button class="icon-btn" id="topBarDarkModeToggle" title="Toggle Theme" type="button">
+        <button
+          class="icon-btn"
+          id="topBarDarkModeToggle"
+          title="Toggle Theme"
+          type="button"
+          data-tooltip="Change theme"
+          data-tooltip-position="bottom"
+        >
           <i data-lucide="sun" size="20"></i>
         </button>
       </div>
@@ -244,12 +265,21 @@
             title="Expand composer"
             aria-label="Expand composer"
             aria-expanded="false"
+            data-tooltip="Expand"
+            data-tooltip-position="top"
           >
             <i data-lucide="maximize-2" size="16"></i>
           </button>
 
           <div class="composer-input-row">
-            <button class="attach-btn" id="attachBtn" title="Add Attachments" type="button">
+            <button
+              class="attach-btn"
+              id="attachBtn"
+              title="Add Attachments"
+              type="button"
+              data-tooltip="Attach files"
+              data-tooltip-position="top"
+            >
               <i data-lucide="plus" size="20"></i>
             </button>
             <textarea id="chatInput" rows="1" placeholder="Message NEYO..."></textarea>
@@ -264,10 +294,22 @@
                 <i data-lucide="square" size="14"></i>
               </button>
             </div>
-            <button class="icon-btn mic-btn" id="micBtn" title="Voice Input" type="button">
+            <button
+              class="icon-btn mic-btn"
+              id="micBtn"
+              title="Voice Input"
+              type="button"
+              data-tooltip="Voice input"
+              data-tooltip-position="top"
+            >
               <i data-lucide="audio-lines" size="16"></i>
             </button>
-            <button class="send-btn" id="sendBtn" title="Send Message" type="button">
+            <button
+              class="send-btn"
+              id="sendBtn"
+              title="Send Message"
+              type="button"
+            >
               <i data-lucide="arrow-up" size="18"></i>
             </button>
           </div>
@@ -1086,7 +1128,7 @@
   <script
     type="module"
     src="/js/components/native-tooltips.js?v=1"
-  ></script>   <!-- ✅ NEW -->
+  ></script>
 
 </body>
 </html>

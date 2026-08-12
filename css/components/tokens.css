@@ -392,3 +392,11 @@ body[data-neyo-motion="reduced"] *::after {
     }
 
 }
+/* =========================================================
+   GLOBAL KEYBOARD FOCUS
+   ========================================================= */
+
+:focus-visible {
+    outline-color:
+        var(--neyo-accent, #171717) !important;
+}

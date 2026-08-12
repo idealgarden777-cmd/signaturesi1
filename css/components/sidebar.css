@@ -1552,3 +1552,211 @@ body.dark-mode .history-action-btn:hover {
     color:
         rgba(255, 255, 255, 0.92) !important;
 }
+/*
+=========================================================
+NEYO — SIDEBAR HEADER + PRIMARY NAV POLISH
+
+Scope:
+- Sidebar brand/header
+- New Conversation
+- NEYO Personalities
+
+Does NOT touch:
+- History
+- Footer
+- Composer
+=========================================================
+*/
+
+
+/* =====================================================
+   SIDEBAR HEADER
+   ===================================================== */
+
+.sidebar-header {
+    min-height: 58px !important;
+
+    display: flex !important;
+    align-items: center !important;
+
+    padding: 0 14px !important;
+
+    box-sizing: border-box !important;
+}
+
+
+/* Brand / NEYO area */
+
+.sidebar-brand,
+.sidebar-logo {
+    display: flex !important;
+    align-items: center !important;
+
+    min-width: 0 !important;
+}
+
+
+/* Sidebar collapse button */
+
+.sidebar-toggle,
+.sidebar-collapse-btn {
+    width: 32px !important;
+    height: 32px !important;
+
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+
+    margin-left: auto !important;
+    padding: 0 !important;
+
+    border: 0 !important;
+    border-radius: 8px !important;
+
+    background: transparent !important;
+
+    transition:
+        background-color 120ms ease,
+        color 120ms ease !important;
+}
+
+.sidebar-toggle:hover,
+.sidebar-collapse-btn:hover {
+    background: rgba(0, 0, 0, 0.055) !important;
+}
+
+
+/* =====================================================
+   PRIMARY NAVIGATION
+   ===================================================== */
+
+.sidebar-nav {
+    display: flex !important;
+    flex-direction: column !important;
+
+    gap: 3px !important;
+
+    padding: 8px 10px !important;
+}
+
+
+/* Individual navigation row */
+
+.sidebar-nav-item,
+.new-chat-btn,
+.personalities-btn {
+    width: 100% !important;
+    min-height: 40px !important;
+
+    display: flex !important;
+    align-items: center !important;
+
+    gap: 11px !important;
+
+    box-sizing: border-box !important;
+
+    padding: 8px 10px !important;
+
+    border: 0 !important;
+    border-radius: 10px !important;
+
+    background: transparent !important;
+
+    color: #202020 !important;
+
+    font-size: 14px !important;
+    font-weight: 500 !important;
+    line-height: 20px !important;
+
+    text-align: left !important;
+
+    cursor: pointer !important;
+
+    transition:
+        background-color 110ms ease,
+        color 110ms ease !important;
+}
+
+
+/* Hover */
+
+.sidebar-nav-item:hover,
+.new-chat-btn:hover,
+.personalities-btn:hover {
+    background:
+        rgba(0, 0, 0, 0.05) !important;
+}
+
+
+/* Icons */
+
+.sidebar-nav-item svg,
+.new-chat-btn svg,
+.personalities-btn svg {
+    width: 20px !important;
+    height: 20px !important;
+
+    flex: 0 0 20px !important;
+
+    stroke-width: 1.8 !important;
+}
+
+
+/* Keyboard accessibility */
+
+.sidebar-nav-item:focus-visible,
+.new-chat-btn:focus-visible,
+.personalities-btn:focus-visible,
+.sidebar-toggle:focus-visible,
+.sidebar-collapse-btn:focus-visible {
+    outline:
+        2px solid rgba(0, 0, 0, 0.22) !important;
+
+    outline-offset:
+        2px !important;
+}
+
+
+/* =====================================================
+   DARK MODE
+   ===================================================== */
+
+body.dark-mode
+.sidebar-nav-item,
+body.dark-mode
+.new-chat-btn,
+body.dark-mode
+.personalities-btn {
+    color:
+        rgba(255, 255, 255, 0.90) !important;
+}
+
+
+body.dark-mode
+.sidebar-nav-item:hover,
+body.dark-mode
+.new-chat-btn:hover,
+body.dark-mode
+.personalities-btn:hover,
+body.dark-mode
+.sidebar-toggle:hover,
+body.dark-mode
+.sidebar-collapse-btn:hover {
+    background:
+        rgba(255, 255, 255, 0.065) !important;
+}
+
+
+body.dark-mode
+.sidebar-nav-item:focus-visible,
+body.dark-mode
+.new-chat-btn:focus-visible,
+body.dark-mode
+.personalities-btn:focus-visible,
+body.dark-mode
+.sidebar-toggle:focus-visible,
+body.dark-mode
+.sidebar-collapse-btn:focus-visible {
+    outline-color:
+        rgba(255, 255, 255, 0.30) !important;
+}

@@ -1,0 +1,796 @@
+/*
+=========================================================
+NEYO — MODAL COMPONENT
+
+Purpose:
+Upgrade / Pro modal.
+
+Includes:
+- Overlay
+- Modal card
+- Close button
+- Header
+- Feature list
+- CTA buttons
+- Dark mode
+- Mobile
+- Reduced motion
+
+Legacy neo-v3.css remains loaded during migration.
+=========================================================
+*/
+
+
+/* =========================================================
+   OVERLAY
+   ========================================================= */
+
+#upgradeModal {
+    position: fixed;
+
+    inset: 0;
+
+    z-index: 600;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    padding: 18px;
+
+    background:
+        rgba(0, 0, 0, 0.42);
+
+    backdrop-filter:
+        blur(6px);
+
+    -webkit-backdrop-filter:
+        blur(6px);
+
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+
+    transition:
+        opacity 180ms ease,
+        visibility 180ms ease;
+}
+
+
+/*
+Support common open states.
+Existing JS can keep whichever one it already uses.
+*/
+
+#upgradeModal.show,
+#upgradeModal.active,
+#upgradeModal[aria-hidden="false"] {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+}
+
+
+/* =========================================================
+   MODAL CARD
+   ========================================================= */
+
+#upgradeModal .modal-card {
+    position: relative;
+
+    width:
+        min(
+            440px,
+            calc(100vw - 28px)
+        ) !important;
+
+    max-height:
+        min(
+            720px,
+            calc(100dvh - 32px)
+        ) !important;
+
+    padding:
+        28px !important;
+
+    overflow-y:
+        auto !important;
+
+    border:
+        1px solid
+        rgba(0, 0, 0, 0.08)
+        !important;
+
+    border-radius:
+        22px !important;
+
+    background:
+        #ffffff !important;
+
+    color:
+        #111111;
+
+    box-shadow:
+        0 2px 6px
+            rgba(0, 0, 0, 0.08),
+        0 24px 70px
+            rgba(0, 0, 0, 0.18)
+        !important;
+
+    transform:
+        none !important;
+
+    transition:
+        opacity 180ms ease,
+        box-shadow 180ms ease !important;
+}
+
+
+/* =========================================================
+   CLOSE BUTTON
+   ========================================================= */
+
+#upgradeModal .modal-close-btn {
+    position:
+        absolute !important;
+
+    top:
+        16px !important;
+
+    right:
+        16px !important;
+
+    width:
+        34px !important;
+
+    height:
+        34px !important;
+
+    display:
+        inline-flex !important;
+
+    align-items:
+        center !important;
+
+    justify-content:
+        center !important;
+
+    padding:
+        0 !important;
+
+    border:
+        0 !important;
+
+    border-radius:
+        999px !important;
+
+    background:
+        transparent !important;
+
+    color:
+        #707070 !important;
+
+    font-size:
+        24px !important;
+
+    line-height:
+        1 !important;
+
+    cursor:
+        pointer !important;
+
+    transform:
+        none !important;
+
+    transition:
+        background-color 140ms ease,
+        color 140ms ease !important;
+}
+
+
+#upgradeModal
+.modal-close-btn:hover {
+    background:
+        #f2f2f2 !important;
+
+    color:
+        #111111 !important;
+
+    transform:
+        none !important;
+}
+
+
+/* =========================================================
+   HEADER
+   ========================================================= */
+
+#upgradeModal .modal-header {
+    margin-bottom:
+        22px !important;
+
+    padding-right:
+        36px;
+
+    text-align:
+        left !important;
+}
+
+
+/* Premium icon */
+
+#upgradeModal .pro-sparkle-badge {
+    width:
+        44px !important;
+
+    height:
+        44px !important;
+
+    display:
+        flex !important;
+
+    align-items:
+        center !important;
+
+    justify-content:
+        center !important;
+
+    margin:
+        0
+        0
+        18px !important;
+
+    border:
+        1px solid
+        rgba(0, 0, 0, 0.08)
+        !important;
+
+    border-radius:
+        14px !important;
+
+    background:
+        #111111 !important;
+
+    color:
+        #ffffff !important;
+}
+
+
+/* Heading */
+
+#upgradeModal .modal-header h2 {
+    margin:
+        0
+        0
+        8px !important;
+
+    color:
+        #111111 !important;
+
+    font-family:
+        "Sora",
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        sans-serif !important;
+
+    font-size:
+        24px !important;
+
+    font-weight:
+        600 !important;
+
+    line-height:
+        1.2 !important;
+
+    letter-spacing:
+        -0.03em !important;
+}
+
+
+/* Subtitle */
+
+#upgradeModal .modal-header p {
+    margin:
+        0 !important;
+
+    color:
+        #707070 !important;
+
+    font-family:
+        "Inter",
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        sans-serif !important;
+
+    font-size:
+        14px !important;
+
+    line-height:
+        1.5 !important;
+}
+
+
+/* =========================================================
+   FEATURES
+   ========================================================= */
+
+#upgradeModal .modal-features-list {
+    display:
+        flex !important;
+
+    flex-direction:
+        column !important;
+
+    gap:
+        6px !important;
+
+    margin:
+        0
+        0
+        22px !important;
+}
+
+
+#upgradeModal .feature-item {
+    min-height:
+        64px !important;
+
+    display:
+        grid !important;
+
+    grid-template-columns:
+        38px
+        minmax(0, 1fr)
+        !important;
+
+    align-items:
+        start !important;
+
+    gap:
+        12px !important;
+
+    padding:
+        10px
+        0 !important;
+
+    border-bottom:
+        1px solid
+        rgba(0, 0, 0, 0.07)
+        !important;
+
+    background:
+        transparent !important;
+}
+
+
+#upgradeModal
+.feature-item:last-child {
+    border-bottom:
+        0 !important;
+}
+
+
+/* Feature icon */
+
+#upgradeModal .feature-icon {
+    width:
+        38px !important;
+
+    height:
+        38px !important;
+
+    display:
+        flex !important;
+
+    align-items:
+        center !important;
+
+    justify-content:
+        center !important;
+
+    border:
+        1px solid
+        rgba(0, 0, 0, 0.07)
+        !important;
+
+    border-radius:
+        11px !important;
+
+    background:
+        #f7f7f8 !important;
+
+    color:
+        #111111 !important;
+}
+
+
+/* Feature copy */
+
+#upgradeModal .feature-text {
+    min-width:
+        0 !important;
+
+    padding-top:
+        1px;
+}
+
+
+#upgradeModal .feature-text strong {
+    display:
+        block !important;
+
+    margin-bottom:
+        4px !important;
+
+    color:
+        #111111 !important;
+
+    font-size:
+        14px !important;
+
+    font-weight:
+        600 !important;
+
+    line-height:
+        1.35 !important;
+}
+
+
+#upgradeModal .feature-text small {
+    display:
+        block !important;
+
+    color:
+        #767676 !important;
+
+    font-size:
+        12.5px !important;
+
+    line-height:
+        1.45 !important;
+}
+
+
+/* =========================================================
+   FOOTER ACTIONS
+   ========================================================= */
+
+#upgradeModal
+.modal-footer-actions {
+    display:
+        flex !important;
+
+    flex-direction:
+        column !important;
+
+    gap:
+        8px !important;
+
+    margin-top:
+        4px !important;
+}
+
+
+/* Primary CTA */
+
+#upgradeModal
+.upgrade-btn-primary {
+    width:
+        100% !important;
+
+    min-height:
+        48px !important;
+
+    border:
+        1px solid
+        #111111 !important;
+
+    border-radius:
+        14px !important;
+
+    background:
+        #111111 !important;
+
+    color:
+        #ffffff !important;
+
+    box-shadow:
+        none !important;
+
+    font-size:
+        14px !important;
+
+    font-weight:
+        600 !important;
+
+    cursor:
+        pointer !important;
+
+    transform:
+        none !important;
+
+    transition:
+        background-color 140ms ease,
+        color 140ms ease,
+        border-color 140ms ease !important;
+}
+
+
+#upgradeModal
+.upgrade-btn-primary:hover {
+    background:
+        #000000 !important;
+
+    transform:
+        none !important;
+}
+
+
+/* Secondary CTA */
+
+#upgradeModal
+.upgrade-btn-secondary {
+    width:
+        100% !important;
+
+    min-height:
+        42px !important;
+
+    border:
+        0 !important;
+
+    border-radius:
+        12px !important;
+
+    background:
+        transparent !important;
+
+    color:
+        #666666 !important;
+
+    font-size:
+        13px !important;
+
+    font-weight:
+        500 !important;
+
+    cursor:
+        pointer !important;
+
+    transform:
+        none !important;
+
+    transition:
+        background-color 140ms ease,
+        color 140ms ease !important;
+}
+
+
+#upgradeModal
+.upgrade-btn-secondary:hover {
+    background:
+        #f4f4f4 !important;
+
+    color:
+        #111111 !important;
+
+    transform:
+        none !important;
+}
+
+
+/* =========================================================
+   DARK MODE
+   ========================================================= */
+
+body.dark-mode
+#upgradeModal .modal-card {
+    border-color:
+        rgba(255, 255, 255, 0.09)
+        !important;
+
+    background:
+        #171717 !important;
+
+    box-shadow:
+        0 2px 8px
+            rgba(0, 0, 0, 0.34),
+        0 28px 80px
+            rgba(0, 0, 0, 0.58)
+        !important;
+}
+
+
+body.dark-mode
+#upgradeModal .modal-header h2,
+body.dark-mode
+#upgradeModal .feature-text strong {
+    color:
+        #f5f5f5 !important;
+}
+
+
+body.dark-mode
+#upgradeModal .modal-header p,
+body.dark-mode
+#upgradeModal .feature-text small {
+    color:
+        #a0a0a0 !important;
+}
+
+
+body.dark-mode
+#upgradeModal .pro-sparkle-badge {
+    border-color:
+        rgba(255, 255, 255, 0.10)
+        !important;
+
+    background:
+        #f5f5f5 !important;
+
+    color:
+        #111111 !important;
+}
+
+
+body.dark-mode
+#upgradeModal .feature-item {
+    border-bottom-color:
+        rgba(255, 255, 255, 0.08)
+        !important;
+}
+
+
+body.dark-mode
+#upgradeModal .feature-icon {
+    border-color:
+        rgba(255, 255, 255, 0.09)
+        !important;
+
+    background:
+        #232323 !important;
+
+    color:
+        #f5f5f5 !important;
+}
+
+
+body.dark-mode
+#upgradeModal .modal-close-btn {
+    color:
+        #a0a0a0 !important;
+}
+
+
+body.dark-mode
+#upgradeModal .modal-close-btn:hover {
+    background:
+        #242424 !important;
+
+    color:
+        #ffffff !important;
+}
+
+
+body.dark-mode
+#upgradeModal .upgrade-btn-primary {
+    border-color:
+        #f5f5f5 !important;
+
+    background:
+        #f5f5f5 !important;
+
+    color:
+        #111111 !important;
+}
+
+
+body.dark-mode
+#upgradeModal .upgrade-btn-primary:hover {
+    background:
+        #ffffff !important;
+}
+
+
+body.dark-mode
+#upgradeModal .upgrade-btn-secondary {
+    color:
+        #b3b3b3 !important;
+}
+
+
+body.dark-mode
+#upgradeModal .upgrade-btn-secondary:hover {
+    background:
+        #242424 !important;
+
+    color:
+        #ffffff !important;
+}
+
+
+/* =========================================================
+   MOBILE
+   ========================================================= */
+
+@media (max-width: 767px) {
+
+    #upgradeModal {
+        padding:
+            14px !important;
+    }
+
+
+    #upgradeModal .modal-card {
+        width:
+            100% !important;
+
+        max-height:
+            calc(
+                100dvh - 28px
+            ) !important;
+
+        padding:
+            22px
+            18px
+            18px !important;
+
+        border-radius:
+            20px !important;
+    }
+
+
+    #upgradeModal .modal-header {
+        margin-bottom:
+            18px !important;
+    }
+
+
+    #upgradeModal
+    .modal-header h2 {
+        font-size:
+            21px !important;
+    }
+
+
+    #upgradeModal
+    .modal-features-list {
+        margin-bottom:
+            18px !important;
+    }
+
+
+    #upgradeModal
+    .upgrade-btn-primary {
+        min-height:
+            48px !important;
+    }
+
+
+    #upgradeModal
+    .upgrade-btn-secondary {
+        min-height:
+            44px !important;
+    }
+
+}
+
+
+/* =========================================================
+   REDUCED MOTION
+   ========================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+
+    #upgradeModal,
+    #upgradeModal .modal-card,
+    #upgradeModal .modal-close-btn,
+    #upgradeModal .upgrade-btn-primary,
+    #upgradeModal .upgrade-btn-secondary {
+        transition-duration:
+            0.01ms !important;
+    }
+
+}

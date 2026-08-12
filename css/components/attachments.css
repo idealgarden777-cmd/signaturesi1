@@ -364,3 +364,237 @@ body.dark-mode
     outline-offset:
         2px !important;
 }
+/* =========================================================
+   NEYO — ATTACHMENTS PREMIUM COMPACT PASS
+   ========================================================= */
+
+
+/* Cleaner attachment rail */
+
+.attached-chips-wrapper {
+    gap: 6px !important;
+
+    padding:
+        6px
+        4px
+        4px !important;
+
+    min-height: 0 !important;
+
+    scrollbar-width: thin !important;
+
+    scrollbar-color:
+        rgba(120, 120, 128, 0.18)
+        transparent !important;
+}
+
+.attached-chips-wrapper::-webkit-scrollbar {
+    height: 3px !important;
+}
+
+.attached-chips-wrapper::-webkit-scrollbar-thumb {
+    background:
+        rgba(120, 120, 128, 0.18) !important;
+
+    border-radius: 999px !important;
+}
+
+
+/* Compact cards */
+
+.attachment-preview-card {
+    position: relative !important;
+
+    width: 144px !important;
+    height: 68px !important;
+
+    flex:
+        0
+        0
+        144px !important;
+
+    border-radius: 12px !important;
+
+    border:
+        1px solid
+        rgba(0, 0, 0, 0.08) !important;
+
+    background: #ffffff !important;
+
+    overflow: hidden !important;
+
+    box-shadow:
+        0 1px 2px
+        rgba(0, 0, 0, 0.03) !important;
+
+    transform: none !important;
+}
+
+.attachment-preview-card:hover {
+    transform: none !important;
+
+    border-color:
+        rgba(0, 0, 0, 0.13) !important;
+}
+
+
+/* Image previews */
+
+.attachment-preview-card img {
+    display: block !important;
+
+    width: 100% !important;
+    height: 100% !important;
+
+    object-fit: cover !important;
+
+    border-radius: inherit !important;
+}
+
+
+/* Normal file card */
+
+.attachment-preview-file {
+    width: 100% !important;
+    height: 100% !important;
+
+    display: flex !important;
+    align-items: center !important;
+
+    gap: 8px !important;
+
+    box-sizing: border-box !important;
+
+    padding:
+        0
+        30px
+        0
+        10px !important;
+
+    overflow: hidden !important;
+}
+
+.attachment-preview-file span {
+    min-width: 0 !important;
+
+    overflow: hidden !important;
+
+    white-space: nowrap !important;
+
+    text-overflow: ellipsis !important;
+
+    font-size: 13px !important;
+}
+
+
+/* =========================================================
+   REMOVE BUTTON — NEUTRAL, NEVER RED
+   ========================================================= */
+
+.attachment-remove-btn {
+    position: absolute !important;
+
+    top: 5px !important;
+    right: 5px !important;
+
+    width: 19px !important;
+    height: 19px !important;
+
+    min-width: 19px !important;
+    min-height: 19px !important;
+
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+
+    padding: 0 !important;
+
+    border:
+        1px solid
+        rgba(255, 255, 255, 0.22) !important;
+
+    border-radius: 999px !important;
+
+    background:
+        rgba(30, 30, 30, 0.72) !important;
+
+    color:
+        rgba(255, 255, 255, 0.92) !important;
+
+    box-shadow:
+        0 1px 3px
+        rgba(0, 0, 0, 0.12) !important;
+
+    opacity: 0.92 !important;
+
+    transform: none !important;
+}
+
+.attachment-remove-btn:hover,
+.attachment-remove-btn:focus-visible,
+.attachment-remove-btn:active {
+    background:
+        rgba(20, 20, 20, 0.90) !important;
+
+    color: #ffffff !important;
+
+    border-color:
+        rgba(255, 255, 255, 0.26) !important;
+
+    opacity: 1 !important;
+
+    transform: none !important;
+}
+
+
+/* Force Lucide X to inherit neutral color */
+
+.attachment-remove-btn svg,
+.attachment-remove-btn i {
+    width: 12px !important;
+    height: 12px !important;
+
+    color: inherit !important;
+
+    stroke: currentColor !important;
+
+    fill: none !important;
+}
+
+
+/* Dark mode */
+
+body.dark-mode
+.attachment-preview-card {
+    background: #212121 !important;
+
+    border-color:
+        rgba(255, 255, 255, 0.10) !important;
+}
+
+body.dark-mode
+.attachment-remove-btn {
+    background:
+        rgba(255, 255, 255, 0.14) !important;
+
+    color:
+        rgba(255, 255, 255, 0.90) !important;
+}
+
+body.dark-mode
+.attachment-remove-btn:hover {
+    background:
+        rgba(255, 255, 255, 0.20) !important;
+
+    color: #ffffff !important;
+}
+
+
+/* When files exist, remove unnecessary suggestion clutter */
+
+.composer-wrapper:has(
+    .attached-chips-wrapper:not(:empty)
+)
+.live-suggestions {
+    display: none !important;
+}

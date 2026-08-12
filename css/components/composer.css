@@ -474,8 +474,8 @@ body[data-neyo-interface="glass"]
     }
 }
 /* =========================================================
-   FINAL COMPOSER BUTTON ANCHOR
-   Buttons stay stable when textarea grows.
+   FINAL COMPOSER BUTTON POSITION
+   Bottom anchored + slight visual lift.
    ========================================================= */
 
 .composer-input-row {
@@ -489,10 +489,19 @@ body[data-neyo-interface="glass"]
     align-self: flex-end !important;
 
     position: relative !important;
-    top: 0 !important;
+    top: auto !important;
+    bottom: 2px !important;
 
     margin-top: 0 !important;
     margin-bottom: 0 !important;
 
     transform: none !important;
+}
+
+@media (max-width: 767px) {
+    .attach-btn,
+    .mic-btn,
+    .send-btn {
+        bottom: 1px !important;
+    }
 }

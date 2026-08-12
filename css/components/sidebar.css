@@ -1722,86 +1722,43 @@ body.dark-mode
     }
 
 }
-/* =========================================================
-   HISTORY TEXT — CLEAN SINGLE LINE ELLIPSIS
-   ========================================================= */
-
-.history-item {
-    position: relative !important;
-    min-width: 0 !important;
-
-    overflow: hidden !important;
-    white-space: nowrap !important;
-    text-overflow: ellipsis !important;
-
-    padding-right: 34px !important;
-}
-
-
-/* Better fade before action button */
-.history-item::after {
-    content: "";
-
-    position: absolute;
-    top: 0;
-    right: 30px;
-
-    width: 24px;
-    height: 100%;
-
-    pointer-events: none;
-
-    background:
-        linear-gradient(
-            to right,
-            rgba(249, 249, 249, 0),
-            rgba(249, 249, 249, 1)
-        );
-
-    opacity: 0;
-
-    transition:
-        opacity 120ms ease;
-}
-
-
-.history-item-wrapper:hover
-.history-item::after,
-.history-item-wrapper.active
-.history-item::after,
-.history-item-wrapper.is-active
-.history-item::after {
-    opacity: 1;
-}
-
-
-/* Action stays above fade */
-.history-action-btn,
-.history-three-dot {
-    right: 5px !important;
-    z-index: 5 !important;
-}
-
-
-/* Dark mode fade */
-body.dark-mode
-.history-item::after {
-    background:
-        linear-gradient(
-            to right,
-            rgba(23, 23, 23, 0),
-            rgba(23, 23, 23, 1)
-        );
-}
 /*
 =========================================================
-NEYO — HISTORY DOM CORRECTION
-Actual structure:
+NEYO — HISTORY FINAL V3
+
+Actual DOM:
 .history-item
-  .history-item-title
-  .history-item-actions
+    .history-item-title
+    .history-item-actions
+        .history-action-btn
+
+Purpose:
+- True single-line ellipsis
+- No text/action overlap
+- No grey action block
+- No layout shift on hover
+- ChatGPT-style action reveal
 =========================================================
 */
+
+
+/* =====================================================
+   LIST
+   ===================================================== */
+
+.history-list {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 2px !important;
+
+    width: 100% !important;
+    min-width: 0 !important;
+}
+
+
+/* =====================================================
+   ROW
+   ===================================================== */
 
 .history-item {
     position: relative !important;
@@ -1809,49 +1766,120 @@ Actual structure:
     width: 100% !important;
     min-width: 0 !important;
 
+    height: 38px !important;
+    min-height: 38px !important;
+
     display: flex !important;
     align-items: center !important;
 
-    padding:
-        7px
-        10px !important;
-
     box-sizing: border-box !important;
 
-    overflow: hidden !important;
+    margin: 0 !important;
+
+    padding:
+        0
+        7px
+        0
+        10px !important;
+
+    border: 0 !important;
+    outline: 0 !important;
+
+    border-radius: 10px !important;
+
+    background: transparent !important;
+
+    color: #262626 !important;
+
+    font-family:
+        "Inter",
+        system-ui,
+        sans-serif !important;
+
+    font-size: 13.5px !important;
+    font-weight: 400 !important;
+    line-height: 20px !important;
+
+    /*
+    Reset legacy parent's text clipping.
+    Clipping belongs ONLY to title.
+    */
+    white-space: normal !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+
+    cursor: pointer !important;
+
+    transition:
+        background-color 120ms ease !important;
 }
 
 
-/* Actual title element */
+/* =====================================================
+   TITLE
+
+   THIS is the element that must ellipsis.
+   ===================================================== */
 
 .history-item-title {
     display: block !important;
 
-    flex:
-        1 1 auto !important;
+    flex: 1 1 0% !important;
 
-    min-width:
-        0 !important;
+    width: 0 !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
 
-    overflow:
-        hidden !important;
+    margin: 0 !important;
+    padding: 0 !important;
 
-    white-space:
-        nowrap !important;
+    overflow: hidden !important;
 
-    text-overflow:
-        ellipsis !important;
+    white-space: nowrap !important;
 
-    padding-right:
-        4px !important;
+    text-overflow: ellipsis !important;
+
+    color: inherit !important;
+
+    line-height: 20px !important;
 }
 
 
-/* Actions container */
+/* =====================================================
+   ACTION CONTAINER
+
+   Always reserves 28px.
+   Therefore title NEVER moves when dots appear.
+   ===================================================== */
 
 .history-item-actions {
+    position: static !important;
+
+    top: auto !important;
+    right: auto !important;
+    bottom: auto !important;
+    left: auto !important;
+
     flex:
-        0 0 auto !important;
+        0 0 28px !important;
+
+    width:
+        28px !important;
+
+    min-width:
+        28px !important;
+
+    height:
+        28px !important;
+
+    margin:
+        0
+        0
+        0
+        4px !important;
+
+    padding:
+        0 !important;
 
     display:
         flex !important;
@@ -1862,19 +1890,49 @@ Actual structure:
     justify-content:
         center !important;
 
-    margin-left:
-        4px !important;
+    /*
+    Kill legacy grey gradient.
+    */
+    background:
+        transparent !important;
+
+    border:
+        0 !important;
+
+    border-radius:
+        0 !important;
+
+    opacity:
+        0 !important;
+
+    visibility:
+        hidden !important;
+
+    pointer-events:
+        none !important;
+
+    transition:
+        opacity 100ms ease,
+        visibility 100ms ease !important;
 }
 
 
-/* Three dot button */
+/* =====================================================
+   THREE DOT BUTTON
+   ===================================================== */
 
 .history-action-btn {
     position:
         static !important;
 
+    inset:
+        auto !important;
+
     transform:
         none !important;
+
+    flex:
+        0 0 28px !important;
 
     width:
         28px !important;
@@ -1885,8 +1943,14 @@ Actual structure:
     min-width:
         28px !important;
 
-    flex:
-        0 0 28px !important;
+    min-height:
+        28px !important;
+
+    margin:
+        0 !important;
+
+    padding:
+        0 !important;
 
     display:
         inline-flex !important;
@@ -1897,67 +1961,169 @@ Actual structure:
     justify-content:
         center !important;
 
-    padding:
-        0 !important;
-
     border:
         0 !important;
 
+    outline:
+        0 !important;
+
     border-radius:
-        8px !important;
+        7px !important;
 
     background:
         transparent !important;
+
+    box-shadow:
+        none !important;
 
     color:
         #737373 !important;
 
     opacity:
-        0 !important;
+        1 !important;
 
-    pointer-events:
+    visibility:
+        visible !important;
+
+    cursor:
+        pointer !important;
+
+    appearance:
+        none !important;
+
+    -webkit-appearance:
         none !important;
 
     transition:
-        opacity 120ms ease,
-        background-color 120ms ease !important;
+        background-color 120ms ease,
+        color 120ms ease !important;
 }
 
 
-/* Show dots on hover or active chat */
+/* Lucide icon */
+
+.history-action-btn svg,
+.history-action-btn i {
+    width:
+        16px !important;
+
+    height:
+        16px !important;
+
+    min-width:
+        16px !important;
+
+    min-height:
+        16px !important;
+
+    display:
+        block !important;
+
+    pointer-events:
+        none !important;
+}
+
+
+/* =====================================================
+   HOVER
+   ===================================================== */
+
+.history-item:hover {
+    background:
+        rgba(0, 0, 0, 0.055) !important;
+}
+
+
+/* Reveal options */
 
 .history-item:hover
-.history-action-btn,
+.history-item-actions,
 .history-item.active
-.history-action-btn {
+.history-item-actions,
+.history-item:focus-within
+.history-item-actions {
     opacity:
         1 !important;
+
+    visibility:
+        visible !important;
 
     pointer-events:
         auto !important;
 }
 
 
+/* Button hover */
+
 .history-action-btn:hover {
     background:
-        rgba(0, 0, 0, 0.07) !important;
+        rgba(0, 0, 0, 0.065) !important;
+
+    color:
+        #171717 !important;
+
+    transform:
+        none !important;
 }
 
 
-/* Active row */
+.history-action-btn:active {
+    background:
+        rgba(0, 0, 0, 0.09) !important;
+
+    transform:
+        scale(0.96) !important;
+}
+
+
+/* =====================================================
+   ACTIVE CONVERSATION
+   ===================================================== */
 
 .history-item.active {
     background:
         rgba(0, 0, 0, 0.06) !important;
+
+    color:
+        #171717 !important;
+
+    font-weight:
+        400 !important;
 }
 
 
-/* Dark */
+/* =====================================================
+   DARK MODE
+   ===================================================== */
+
+body.dark-mode
+.history-item {
+    color:
+        rgba(255, 255, 255, 0.90) !important;
+}
+
+
+body.dark-mode
+.history-item:hover {
+    background:
+        rgba(255, 255, 255, 0.065) !important;
+}
+
+
+body.dark-mode
+.history-item.active {
+    background:
+        rgba(255, 255, 255, 0.085) !important;
+
+    color:
+        #ffffff !important;
+}
+
 
 body.dark-mode
 .history-action-btn {
     color:
-        rgba(255, 255, 255, 0.62) !important;
+        rgba(255, 255, 255, 0.58) !important;
 }
 
 
@@ -1965,26 +2131,85 @@ body.dark-mode
 .history-action-btn:hover {
     background:
         rgba(255, 255, 255, 0.09) !important;
+
+    color:
+        #ffffff !important;
 }
 
 
-body.dark-mode
-.history-item.active {
-    background:
-        rgba(255, 255, 255, 0.08) !important;
-}
-
-
-/* Touch devices */
+/* =====================================================
+   TOUCH
+   No hover available.
+   ===================================================== */
 
 @media (hover: none) {
 
-    .history-action-btn {
+    .history-item-actions {
         opacity:
             1 !important;
 
+        visibility:
+            visible !important;
+
         pointer-events:
             auto !important;
+    }
+
+}
+
+
+/* =====================================================
+   MOBILE
+   ===================================================== */
+
+@media (max-width: 767px) {
+
+    .history-item {
+        height:
+            40px !important;
+
+        min-height:
+            40px !important;
+
+        padding:
+            0
+            7px
+            0
+            10px !important;
+
+        font-size:
+            13.5px !important;
+    }
+
+    .history-item-actions {
+        flex-basis:
+            30px !important;
+
+        width:
+            30px !important;
+
+        min-width:
+            30px !important;
+
+        height:
+            30px !important;
+    }
+
+    .history-action-btn {
+        flex-basis:
+            30px !important;
+
+        width:
+            30px !important;
+
+        height:
+            30px !important;
+
+        min-width:
+            30px !important;
+
+        min-height:
+            30px !important;
     }
 
 }

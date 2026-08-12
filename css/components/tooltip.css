@@ -1,0 +1,96 @@
+/*
+=========================================================
+NEYO — TOOLTIP COMPONENT
+
+Purpose:
+Reusable tooltip styling.
+
+Rules:
+- Pure pill shape
+- No arrow
+- Fade animation only
+- Light + dark mode
+- No layout dependencies
+=========================================================
+*/
+
+.neo-tooltip {
+    position: fixed;
+    z-index: 70000;
+
+    max-width: min(280px, calc(100vw - 20px));
+    min-height: 30px;
+
+    padding: 7px 14px;
+
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: var(--neyo-radius-pill, 999px);
+
+    background: rgba(22, 22, 22, 0.96);
+    color: #ffffff;
+
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.4;
+
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+
+    box-shadow:
+        0 4px 12px rgba(0, 0, 0, 0.14),
+        0 12px 32px rgba(0, 0, 0, 0.16);
+
+    pointer-events: none;
+
+    opacity: 0;
+    visibility: hidden;
+
+    transform: none;
+
+    transition:
+        opacity 150ms ease,
+        visibility 150ms ease;
+}
+
+
+/* Visible state */
+
+.neo-tooltip.is-visible {
+    opacity: 1;
+    visibility: visible;
+    transform: none;
+}
+
+
+/* No tooltip arrows */
+
+.neo-tooltip::before,
+.neo-tooltip::after,
+.neo-tooltip-arrow {
+    display: none !important;
+    content: none !important;
+}
+
+
+/* Dark mode */
+
+body.dark-mode .neo-tooltip {
+    background: rgba(244, 244, 244, 0.97);
+    color: #171717;
+    border-color: rgba(0, 0, 0, 0.08);
+
+    box-shadow:
+        0 4px 12px rgba(0, 0, 0, 0.20),
+        0 12px 32px rgba(0, 0, 0, 0.24);
+}
+
+
+/* Small screens */
+
+@media (max-width: 640px) {
+    .neo-tooltip {
+        max-width: calc(100vw - 16px);
+        padding: 6px 12px;
+        font-size: 11.5px;
+    }
+}

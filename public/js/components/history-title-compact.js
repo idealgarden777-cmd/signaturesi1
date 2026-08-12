@@ -17,7 +17,7 @@ Purpose:
   const TITLE_SELECTOR =
     ".history-item-title";
 
-  const MAX_LENGTH = 34;
+  const MAX_LENGTH = 23;
 
 
   /* =====================================================

@@ -1,0 +1,314 @@
+/*
+=========================================================
+NEYO — SUGGESTIONS COMPONENT
+
+Purpose:
+Live suggestion chips above composer.
+
+Includes:
+- Suggestion strip
+- Suggestion chips
+- Hover states
+- Dark mode
+- Mobile horizontal scrolling
+- Small-height keyboard behavior
+- Reduced motion
+=========================================================
+*/
+
+
+/* =========================================================
+   LIVE SUGGESTIONS STRIP
+   ========================================================= */
+
+.live-suggestions {
+    width: 100%;
+
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+
+    gap: 8px !important;
+
+    margin:
+        0
+        0
+        12px !important;
+
+    padding: 0;
+
+    min-width: 0;
+}
+
+
+/* Hide automatically when empty */
+
+.live-suggestions:empty {
+    display: none !important;
+}
+
+
+/* =========================================================
+   SUGGESTION CHIP
+   ========================================================= */
+
+.suggestion-chip {
+    min-height:
+        36px !important;
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    gap: 7px;
+
+    padding:
+        7px
+        14px !important;
+
+    border:
+        1px solid
+        var(--neyo-border, rgba(0, 0, 0, 0.08));
+
+    border-radius:
+        var(--neyo-radius-pill, 999px);
+
+    background:
+        var(--neyo-surface, #ffffff);
+
+    color:
+        var(--neyo-text, #171717);
+
+    font-family:
+        var(
+            --neyo-font-text,
+            "Inter",
+            -apple-system,
+            BlinkMacSystemFont,
+            "Segoe UI",
+            sans-serif
+        );
+
+    font-size: 13.5px;
+    font-weight: 500;
+    line-height: 1.2;
+
+    white-space: nowrap;
+
+    cursor: pointer;
+
+    transform: none !important;
+
+    box-shadow: none;
+
+    transition:
+        background-color var(--neyo-motion-fast, 150ms ease),
+        color var(--neyo-motion-fast, 150ms ease),
+        border-color var(--neyo-motion-fast, 150ms ease),
+        opacity var(--neyo-motion-fast, 150ms ease),
+        box-shadow var(--neyo-motion-fast, 150ms ease)
+        !important;
+}
+
+
+.suggestion-chip:hover {
+    background:
+        var(--neyo-surface-hover, #f1f1f1);
+
+    border-color:
+        var(--neyo-border-strong, rgba(0, 0, 0, 0.14));
+
+    transform: none !important;
+}
+
+
+.suggestion-chip:active {
+    transform: none !important;
+}
+
+
+/* =========================================================
+   ICON SUPPORT
+   ========================================================= */
+
+.suggestion-chip svg,
+.suggestion-chip i {
+    width: 16px;
+    height: 16px;
+
+    flex: 0 0 16px;
+
+    color:
+        var(--neyo-text-secondary, #737373);
+}
+
+
+/* =========================================================
+   DARK MODE
+   ========================================================= */
+
+body.dark-mode
+.suggestion-chip {
+    background:
+        var(--neyo-surface, #171717);
+
+    color:
+        var(--neyo-text, #f5f5f5);
+
+    border-color:
+        var(--neyo-border, rgba(255, 255, 255, 0.08));
+}
+
+
+body.dark-mode
+.suggestion-chip:hover {
+    background:
+        var(--neyo-surface-hover, #2b2b2b);
+
+    border-color:
+        var(--neyo-border-strong, rgba(255, 255, 255, 0.15));
+}
+
+
+body.dark-mode
+.suggestion-chip svg,
+body.dark-mode
+.suggestion-chip i {
+    color:
+        var(--neyo-text-secondary, #b5b5b5);
+}
+
+
+/* =========================================================
+   MOBILE
+   ========================================================= */
+
+@media (max-width: 767px) {
+
+    .live-suggestions {
+        width:
+            100% !important;
+
+        display:
+            flex !important;
+
+        flex-wrap:
+            nowrap !important;
+
+        gap:
+            8px !important;
+
+        margin:
+            0
+            0
+            8px !important;
+
+        padding:
+            0
+            2px !important;
+
+        overflow-x:
+            auto !important;
+
+        overflow-y:
+            hidden !important;
+
+        scrollbar-width:
+            none;
+
+        -webkit-overflow-scrolling:
+            touch;
+
+        overscroll-behavior-x:
+            contain;
+    }
+
+
+    .live-suggestions:empty {
+        display:
+            none !important;
+    }
+
+
+    .live-suggestions::-webkit-scrollbar {
+        display:
+            none;
+    }
+
+
+    .suggestion-chip {
+        flex:
+            0 0 auto !important;
+
+        min-height:
+            34px !important;
+
+        padding:
+            6px
+            12px !important;
+
+        border:
+            1px solid
+            var(--mobile-border)
+            !important;
+
+        border-radius:
+            999px !important;
+
+        background:
+            var(--mobile-surface)
+            !important;
+
+        color:
+            var(--mobile-text)
+            !important;
+
+        font-size:
+            13px !important;
+
+        white-space:
+            nowrap !important;
+    }
+} 
+/* =========================================================
+   MOBILE KEYBOARD / SHORT HEIGHT
+   ========================================================= */
+
+@media
+(max-width: 767px)
+and
+(max-height: 560px) {
+
+    .live-suggestions {
+        display:
+            none !important;
+    }
+
+}
+
+
+/* =========================================================
+   REDUCED MOTION
+   ========================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+
+    .suggestion-chip {
+        transition-duration:
+            0.01ms !important;
+
+        transform:
+            none !important;
+    }
+
+}
+
+
+body[data-neyo-motion="reduced"]
+.suggestion-chip {
+    transition-duration:
+        0.01ms !important;
+
+    transform:
+        none !important;
+}

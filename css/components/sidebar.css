@@ -1142,6 +1142,7 @@ body[data-neyo-interface="warm"]
 
 }
 
+
 /* =========================================================
    SIDEBAR CONTENT SCROLLBAR
    ========================================================= */
@@ -1217,24 +1218,9 @@ body.dark-mode
 }
 
 
-/*
-=========================================================
-NEYO — HISTORY FINAL
-
-Explicit width-based approach.
-Ellipsis works deterministically.
-Three-dot overlay does not affect title width.
-=========================================================
-*/
-
-.history-list {
-    display: flex !important;
-    flex-direction: column !important;
-    gap: 2px !important;
-
-    width: 100% !important;
-    min-width: 0 !important;
-}
+/* =========================================================
+   FINAL HISTORY ROW — STABLE ELLIPSIS
+   ========================================================= */
 
 .history-item {
     position: relative !important;
@@ -1246,21 +1232,20 @@ Three-dot overlay does not affect title width.
     min-height: 38px !important;
     max-height: 38px !important;
 
-    display: flex !important;
-    align-items: center !important;
+    display: block !important;
 
     box-sizing: border-box !important;
 
-    padding: 0 40px 0 10px !important;
+    /* right side permanently reserved for ⋯ */
+    padding: 9px 42px 9px 10px !important;
+
     margin: 0 !important;
 
-    border: 0 !important;
-    outline: 0 !important;
     border-radius: 10px !important;
 
-    background: transparent !important;
-
     overflow: hidden !important;
+
+    background: transparent !important;
 
     color: #262626 !important;
 
@@ -1276,41 +1261,40 @@ Three-dot overlay does not affect title width.
         color 120ms ease !important;
 }
 
-/* ✅ Title — explicit width, no flex ambiguity */
+
+/* TEXT */
 
 .history-item-title {
     display: block !important;
 
-    width: calc(100% - 34px) !important;
-    max-width: calc(100% - 34px) !important;
+    width: 100% !important;
+    max-width: 100% !important;
     min-width: 0 !important;
-
-    flex: 0 1 auto !important;
 
     margin: 0 !important;
     padding: 0 !important;
 
-    overflow: hidden !important;
     white-space: nowrap !important;
+
+    overflow: hidden !important;
     text-overflow: ellipsis !important;
 
     line-height: 20px !important;
 }
 
-/* ✅ Actions — absolute overlay, fixed position */
+
+/* THREE DOT AREA */
 
 .history-item-actions {
     position: absolute !important;
 
     top: 50% !important;
-    right: 5px !important;
+    right: 6px !important;
 
     transform: translateY(-50%) !important;
 
     width: 28px !important;
     height: 28px !important;
-
-    min-width: 28px !important;
 
     margin: 0 !important;
     padding: 0 !important;
@@ -1319,7 +1303,7 @@ Three-dot overlay does not affect title width.
     align-items: center !important;
     justify-content: center !important;
 
-    background: transparent !important;
+    background: inherit !important;
 
     opacity: 0 !important;
     visibility: hidden !important;
@@ -1330,6 +1314,7 @@ Three-dot overlay does not affect title width.
         opacity 100ms ease,
         visibility 100ms ease !important;
 }
+
 
 .history-action-btn {
     position: static !important;
@@ -1362,6 +1347,7 @@ Three-dot overlay does not affect title width.
     transform: none !important;
 }
 
+
 .history-action-btn svg,
 .history-action-btn i {
     width: 16px !important;
@@ -1369,6 +1355,9 @@ Three-dot overlay does not affect title width.
 
     pointer-events: none !important;
 }
+
+
+/* HOVER / ACTIVE / FOCUS */
 
 .history-item:hover {
     background:
@@ -1380,16 +1369,15 @@ Three-dot overlay does not affect title width.
         rgba(0, 0, 0, 0.065) !important;
 }
 
-.history-item:hover
-.history-item-actions,
-.history-item.active
-.history-item-actions,
-.history-item:focus-within
-.history-item-actions {
+
+.history-item:hover .history-item-actions,
+.history-item.active .history-item-actions,
+.history-item:focus-within .history-item-actions {
     opacity: 1 !important;
     visibility: visible !important;
     pointer-events: auto !important;
 }
+
 
 .history-action-btn:hover {
     background:
@@ -1398,42 +1386,80 @@ Three-dot overlay does not affect title width.
     color: #171717 !important;
 }
 
-body.dark-mode
-.history-item {
+
+/* =========================================================
+   DARK MODE — FINAL HISTORY
+   ========================================================= */
+
+body.dark-mode .history-item {
     color:
         rgba(255, 255, 255, 0.90) !important;
 }
 
-body.dark-mode
-.history-item:hover {
+body.dark-mode .history-item:hover {
     background:
         rgba(255, 255, 255, 0.065) !important;
 }
 
-body.dark-mode
-.history-item.active {
+body.dark-mode .history-item.active {
     background:
         rgba(255, 255, 255, 0.085) !important;
 }
 
-body.dark-mode
-.history-action-btn {
+body.dark-mode .history-action-btn {
     color:
         rgba(255, 255, 255, 0.58) !important;
 }
 
-body.dark-mode
-.history-action-btn:hover {
+body.dark-mode .history-action-btn:hover {
     background:
         rgba(255, 255, 255, 0.09) !important;
 
     color: #ffffff !important;
 }
 
+
+/* =========================================================
+   TOUCH — always show actions
+   ========================================================= */
+
 @media (hover: none) {
     .history-item-actions {
         opacity: 1 !important;
         visibility: visible !important;
         pointer-events: auto !important;
+    }
+}
+
+
+/* =========================================================
+   MOBILE OVERRIDE — FINAL HISTORY
+   ========================================================= */
+
+@media (max-width: 767px) {
+
+    .history-item {
+        height: 40px !important;
+        min-height: 40px !important;
+        max-height: 40px !important;
+
+        padding: 9px 42px 9px 10px !important;
+
+        font-size: 13.5px !important;
+    }
+
+    .history-item-actions {
+        width: 30px !important;
+        height: 30px !important;
+
+        right: 5px !important;
+    }
+
+    .history-action-btn {
+        width: 30px !important;
+        height: 30px !important;
+
+        min-width: 30px !important;
+        min-height: 30px !important;
     }
 }

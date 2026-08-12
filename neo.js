@@ -112,7 +112,6 @@
         return stored;
     }
 
-    // ---- UPDATED: TARGETED SYNC (v88) ----
     function setPreference(key, value) {
         const storageKey = PREFERENCE_STORAGE_KEYS[key];
         if (!storageKey) return;
@@ -158,28 +157,9 @@
             applyAccentVisual(value);
         }
 
-        // ---- TARGETED SYNC ----
-        switch (key) {
-            case 'theme': syncThemeControls(); break;
-            case 'interface': syncInterfaceControls(); break;
-            case 'intelligence': syncIntelligenceControls(); break;
-            case 'privateChat': syncPrivateChatToggle(); break;
-            case 'language': syncLanguageSelect(); break;
-            case 'defaultPersonality': syncPersonalitySelect(); break;
-            case 'openOn': syncOpenOnSelect(); break;
-            case 'autoSaveDrafts': syncAutoSaveToggle(); break;
-            case 'accent': syncAccentControls(); break;
-            case 'textSize': syncTextSizeControls(); break;
-            case 'contentWidth': syncContentWidthControls(); break;
-            case 'sidebarDensity': syncSidebarDensityControls(); break;
-            case 'motion': syncMotionControls(); break;
-            default: break;
-        }
-
-        // Update appearance preview only if relevant
-        if (['theme','interface','accent','textSize','contentWidth','sidebarDensity','motion'].includes(key)) {
-            updateAppearancePreview();
-        }
+        // Sync all UI controls
+        syncAllControls();
+        updateAppearancePreview();
     }
 
     function updatePreference(key, value) {
@@ -1568,19 +1548,11 @@
     }
 
     // --------------------------------------------------------
-    //  INIT — UPDATED (v88)
+    //  INIT
     // --------------------------------------------------------
     async function init() {
-        // ---- CRITICAL: establish responsive shell first ----
-        try {
-            initializeSidebarState();
-        } catch (error) {
-            console.warn("Sidebar initialization failed:", error);
-        }
-
         composerInputRow?.classList.remove("is-transcribing");
         isListening = false;
-
         if (window.lucide) {
             window.lucide.createIcons();
         }
@@ -1603,7 +1575,7 @@
         // Appearance controls
         setupAppearanceThemeControl();
         setupAppearanceInterfaceControl();
-        setupAppearanceAccentControl();
+        setupAppearanceAccentControl();  // <-- updated
         setupAppearanceTextSizeControl();
         setupAppearanceContentWidthControl();
         setupAppearanceSidebarDensityControl();
@@ -1614,9 +1586,7 @@
         updateAppearancePreview();
 
         configureSecurityHooks();
-
-        // IMPORTANT: Do NOT call initializeSidebarState() again here.
-
+        initializeSidebarState();
         setupEventListeners();
         setupPremiumTooltips();
         setupFreemiumLogic();
@@ -1640,19 +1610,25 @@
         try {
             await loadHistoryFromSupabase();
 
-            const openOn = getPreference("openOn");
+            const openOn =
+                getPreference("openOn");
 
             if (
                 openOn === "last-chat" &&
                 !getPreference("privateChat")
             ) {
                 const firstHistoryItem =
-                    historyList?.querySelector(".history-item");
+                    historyList?.querySelector(
+                        ".history-item"
+                    );
 
                 firstHistoryItem?.click();
             }
         } catch (error) {
-            console.warn("History initialization failed:", error);
+            console.warn(
+                "History initialization failed:",
+                error
+            );
         }
 
         restoreCurrentDraft();
@@ -2253,7 +2229,9 @@
             });
             await loadHistoryFromSupabase();
             if (window.innerWidth < 768) {
-                setSidebarCollapsed(true);
+                sidebar?.classList.add("collapsed");
+                sidebarScrim?.classList.remove("visible");
+                updateBodySidebarState();
             }
         } catch (error) {
             console.error("Conversation loading failed:", error);
@@ -3222,25 +3200,25 @@
             if (files.length > 0) handleFileProcessing(files);
             event.target.value = "";
         });
-
-        // NEW sidebar toggle using setSidebarCollapsed
         const toggleSidebar = () => {
             if (!sidebar) return;
-            const currentlyCollapsed = sidebar.classList.contains("collapsed");
-            setSidebarCollapsed(!currentlyCollapsed);
+            sidebar.classList.toggle("collapsed");
+            const isOpen = !sidebar.classList.contains("collapsed");
+            const mobile = window.matchMedia("(max-width: 767px)").matches;
+            sidebarScrim?.classList.toggle("visible", mobile && isOpen);
+            updateBodySidebarState();
         };
-
         sidebarToggleBtn?.addEventListener("click", toggleSidebar);
         collapseSidebarBtn?.addEventListener("click", toggleSidebar);
         sidebarScrim?.addEventListener("click", toggleSidebar);
-
         newChatBtn?.addEventListener("click", () => {
             startNewConversation();
             if (window.innerWidth < 768) {
-                setSidebarCollapsed(true);
+                sidebar?.classList.add("collapsed");
+                sidebarScrim?.classList.remove("visible");
+                updateBodySidebarState();
             }
         });
-
         document.querySelectorAll("[data-prompt]").forEach(button => {
             button.addEventListener("click", () => {
                 if (!chatInput) return;
@@ -3249,7 +3227,6 @@
                 handleSend();
             });
         });
-
         hpRenameBtn?.addEventListener("click", async event => {
             event.stopPropagation();
             const conversationId = activePopupChatId;
@@ -3270,7 +3247,6 @@
                 showToast(error?.message || "Conversation could not be renamed.", "error");
             }
         });
-
         hpPinBtn?.addEventListener("click", async event => {
             event.stopPropagation();
             const conversationId = activePopupChatId;
@@ -3284,7 +3260,6 @@
                 showToast(error?.message || "Conversation pin could not be changed.", "error");
             }
         });
-
         hpShareBtn?.addEventListener("click", async event => {
             event.stopPropagation();
             const title = activePopupChatTitle || "NEO conversation";
@@ -3302,7 +3277,6 @@
                 }
             }
         });
-
         userProfileBtn?.addEventListener("click", event => {
             event.preventDefault();
             event.stopPropagation();
@@ -3312,13 +3286,10 @@
             userPopupMenu?.setAttribute("aria-hidden", String(!willOpen));
             userProfileBtn.setAttribute("aria-expanded", String(willOpen));
         });
-
         sidebarPersonalitiesBtn?.addEventListener("click", () => {
             openNeoSettings("personalities");
         });
-
         setupSettingsUI();
-
         document.addEventListener("click", event => {
             if (!historyPopupMenu?.contains(event.target) && !event.target.closest(".history-three-dot")) {
                 closeHistoryPopup();
@@ -3333,7 +3304,6 @@
                 modelDropdownMenu?.classList.remove("show");
             }
         });
-
         let lastResponsiveMode = window.matchMedia("(max-width: 767px)").matches;
         window.addEventListener("resize", () => {
             const mobile = window.matchMedia("(max-width: 767px)").matches;
@@ -3341,11 +3311,9 @@
             lastResponsiveMode = mobile;
             initializeSidebarState();
         }, { passive: true });
-
         document.getElementById("brandBtn")?.addEventListener("click", () => {
             window.location.href = "index.html";
         });
-
         document.getElementById("logoutBtn")?.addEventListener("click", logoutUser);
     }
 
@@ -3381,23 +3349,23 @@
         });
     }
 
-    // ---- Sidebar state management (UPDATED) ----
-    function setSidebarCollapsed(collapsed) {
-        if (!sidebar) return;
-        const shouldCollapse = Boolean(collapsed);
-        sidebar.classList.toggle("collapsed", shouldCollapse);
-        document.body.classList.toggle("sidebar-collapsed", shouldCollapse);
-        const mobile = window.matchMedia("(max-width: 767px)").matches;
-        if (mobile) {
-            sidebarScrim?.classList.toggle("visible", !shouldCollapse);
-        } else {
-            sidebarScrim?.classList.remove("visible");
-        }
-    }
-
     function initializeSidebarState() {
         const isMobile = window.matchMedia("(max-width: 767px)").matches;
-        setSidebarCollapsed(isMobile); // collapsed on mobile, open on desktop
+        if (isMobile) {
+            document.body.classList.add("sidebar-collapsed");
+            sidebar?.classList.add("collapsed");
+            sidebarScrim?.classList.remove("visible");
+        } else {
+            document.body.classList.remove("sidebar-collapsed");
+            sidebar?.classList.remove("collapsed");
+            sidebarScrim?.classList.remove("visible");
+        }
+        updateBodySidebarState();
+    }
+
+    function updateBodySidebarState() {
+        const collapsed = sidebar?.classList.contains("collapsed");
+        document.body.classList.toggle("sidebar-collapsed", Boolean(collapsed));
     }
 
     function setupDragAndDrop() {

@@ -1,0 +1,715 @@
+/*
+=========================================================
+NEYO — MESSAGES COMPONENT
+
+Purpose:
+Conversation message presentation.
+
+Includes:
+- User message bubble
+- Assistant response typography
+- Sent image previews
+- Message actions
+- Edit message mode
+- Dark mode
+- Mobile behavior
+- Appearance text sizing
+
+Legacy neo-v3.css remains loaded during migration.
+=========================================================
+*/
+
+
+/* =========================================================
+   USER MESSAGE
+   ========================================================= */
+
+.message.user {
+    width: 100% !important;
+    align-items: flex-end !important;
+}
+
+
+.message.user .message-wrapper {
+    width: fit-content !important;
+    max-width: min(560px, 78%) !important;
+
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-end !important;
+
+    gap: 5px !important;
+
+    margin-left: auto !important;
+}
+
+
+/* User text bubble */
+
+.message.user
+.message-wrapper
+> .message-content {
+    width: fit-content !important;
+    max-width: 100% !important;
+
+    margin: 0 !important;
+    padding: 10px 14px !important;
+
+    border-radius: 18px !important;
+
+    background: #f4f4f4 !important;
+    color: #171717 !important;
+
+    font-family:
+        "Inter",
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        sans-serif !important;
+
+    font-size: 15px !important;
+    font-weight: 400 !important;
+    line-height: 1.5 !important;
+
+    overflow-wrap: anywhere !important;
+}
+
+
+/* =========================================================
+   USER MESSAGE ACTIONS
+   ========================================================= */
+
+.message.user .user-msg-actions {
+    width: auto !important;
+
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+
+    gap: 4px !important;
+
+    margin:
+        2px
+        4px
+        0
+        0 !important;
+}
+
+
+/* =========================================================
+   SENT MEDIA
+   ========================================================= */
+
+.message.user .message-media-grid {
+    width: auto !important;
+    max-width: 100% !important;
+
+    display: flex !important;
+    flex-wrap: wrap !important;
+    justify-content: flex-end !important;
+
+    gap: 6px !important;
+
+    margin: 0 !important;
+    padding: 0 !important;
+
+    overflow: visible !important;
+}
+
+
+/* Single image */
+
+.message.user
+.message-media-grid img {
+    display: block !important;
+
+    width: auto !important;
+    height: auto !important;
+
+    max-width: 160px !important;
+    max-height: 118px !important;
+
+    margin: 0 !important;
+
+    object-fit: contain !important;
+    object-position: center !important;
+
+    border:
+        1px solid rgba(0, 0, 0, 0.06) !important;
+
+    border-radius: 12px !important;
+
+    background: #f7f7f8 !important;
+
+    box-shadow:
+        0 1px 4px rgba(0, 0, 0, 0.035) !important;
+}
+
+
+/* Multiple images */
+
+.message.user
+.message-media-grid:has(img:nth-child(2)) {
+    width: auto !important;
+}
+
+
+.message.user
+.message-media-grid:has(img:nth-child(2)) img {
+    width: 140px !important;
+    height: 100px !important;
+
+    object-fit: cover !important;
+}
+
+
+/* =========================================================
+   ASSISTANT RESPONSE
+   ========================================================= */
+
+.message.assistant .message-content {
+    color: #262626 !important;
+
+    font-family:
+        "Inter",
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        sans-serif !important;
+
+    font-size: 16px !important;
+    font-weight: 400 !important;
+    line-height: 1.65 !important;
+
+    letter-spacing: -0.005em !important;
+}
+
+
+.message.assistant
+.message-content p {
+    margin:
+        0
+        0
+        13px !important;
+}
+
+
+.message.assistant
+.message-content p:last-child {
+    margin-bottom: 0 !important;
+}
+
+
+.message.assistant
+.message-content strong {
+    color: #171717 !important;
+
+    font-weight: 600 !important;
+}
+
+
+/* Inline code */
+
+.message.assistant
+.message-content
+code:not(pre code) {
+    padding:
+        2px
+        6px !important;
+
+    border:
+        1px solid rgba(0, 0, 0, 0.07) !important;
+
+    border-radius: 6px !important;
+
+    background: #f7f7f8 !important;
+    color: #303030 !important;
+
+    font-family:
+        "IBM Plex Mono",
+        ui-monospace,
+        SFMono-Regular,
+        monospace !important;
+
+    font-size: 0.88em !important;
+    font-weight: 400 !important;
+}
+/* =========================================================
+   EDIT MESSAGE MODE
+   ========================================================= */
+
+.message.user:has(.edit-message-box) {
+    width: 100% !important;
+
+    align-items: flex-end !important;
+}
+
+
+.message.user .edit-message-box {
+    width: min(100%, 680px) !important;
+
+    margin-left: auto !important;
+
+    display: flex !important;
+    flex-direction: column !important;
+
+    gap: 10px !important;
+
+    padding:
+        12px
+        14px
+        10px !important;
+
+    border:
+        1px solid rgba(0, 0, 0, 0.08) !important;
+
+    border-radius: 18px !important;
+
+    background: #f7f7f8 !important;
+
+    box-shadow:
+        0 1px 2px rgba(0, 0, 0, 0.025),
+        0 8px 24px rgba(0, 0, 0, 0.045) !important;
+
+    overflow: hidden !important;
+}
+
+
+/* Edit media */
+
+.message.user .edit-message-media {
+    width: 100% !important;
+
+    display: flex !important;
+
+    justify-content: flex-end !important;
+    align-items: flex-start !important;
+
+    flex-wrap: wrap !important;
+
+    gap: 8px !important;
+
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+
+.message.user
+.edit-message-media:empty {
+    display: none !important;
+}
+
+
+.message.user
+.edit-message-media img {
+    display: block !important;
+
+    width: auto !important;
+    height: auto !important;
+
+    max-width: min(300px, 100%) !important;
+    max-height: 190px !important;
+
+    margin: 0 !important;
+
+    object-fit: cover !important;
+    object-position: center !important;
+
+    border:
+        1px solid rgba(0, 0, 0, 0.08) !important;
+
+    border-radius: 13px !important;
+
+    background: #ffffff !important;
+
+    box-shadow:
+        0 1px 2px rgba(0, 0, 0, 0.03),
+        0 6px 18px rgba(0, 0, 0, 0.05) !important;
+}
+
+
+/* Edit textarea */
+
+.message.user .edit-textarea {
+    width: 100% !important;
+
+    min-height: 44px !important;
+    max-height: 150px !important;
+
+    margin: 0 !important;
+    padding: 4px 2px !important;
+
+    resize: none !important;
+
+    border: 0 !important;
+    outline: 0 !important;
+
+    background: transparent !important;
+    color: #171717 !important;
+
+    font-family:
+        "Inter",
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        sans-serif !important;
+
+    font-size: 15px !important;
+    font-weight: 400 !important;
+    line-height: 1.5 !important;
+
+    box-shadow: none !important;
+}
+
+
+.message.user
+.edit-textarea:focus {
+    border: 0 !important;
+    outline: 0 !important;
+
+    box-shadow: none !important;
+}
+
+
+/* Edit actions */
+
+.message.user .edit-actions {
+    width: 100% !important;
+
+    display: flex !important;
+
+    align-items: center !important;
+    justify-content: flex-end !important;
+
+    gap: 6px !important;
+
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+
+/* Edit buttons */
+
+.message.user .edit-btn-cancel,
+.message.user .edit-btn-save {
+    min-height: 34px !important;
+
+    display: inline-flex !important;
+
+    align-items: center !important;
+    justify-content: center !important;
+
+    padding:
+        0
+        13px !important;
+
+    border-radius: 999px !important;
+
+    font: inherit !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    line-height: 1 !important;
+
+    cursor: pointer !important;
+
+    transform: none !important;
+
+    transition:
+        background-color 140ms ease,
+        color 140ms ease,
+        opacity 140ms ease !important;
+}
+
+
+/* Cancel */
+
+.message.user .edit-btn-cancel {
+    border: 0 !important;
+
+    background: transparent !important;
+    color: #303030 !important;
+}
+
+
+.message.user
+.edit-btn-cancel:hover {
+    background:
+        rgba(0, 0, 0, 0.055) !important;
+}
+
+
+/* Save */
+
+.message.user .edit-btn-save {
+    border: 0 !important;
+
+    background: #171717 !important;
+    color: #ffffff !important;
+
+    box-shadow:
+        0 1px 2px rgba(0, 0, 0, 0.12) !important;
+}
+
+
+.message.user
+.edit-btn-save:hover {
+    background: #000000 !important;
+}
+
+
+.message.user .edit-btn-cancel:active,
+.message.user .edit-btn-save:active {
+    transform: none !important;
+}
+
+
+/* =========================================================
+   DARK MODE
+   ========================================================= */
+
+body.dark-mode
+.message.user
+.message-wrapper
+> .message-content {
+    background: #303030 !important;
+    color: #ececec !important;
+}
+
+
+body.dark-mode
+.message.user
+.message-media-grid img {
+    border-color:
+        rgba(255, 255, 255, 0.10) !important;
+
+    background: #292929 !important;
+
+    box-shadow:
+        0 1px 2px rgba(0, 0, 0, 0.18),
+        0 10px 28px rgba(0, 0, 0, 0.22) !important;
+}
+
+
+body.dark-mode
+.message.assistant
+.message-content {
+    color: #ececec !important;
+}
+
+
+body.dark-mode
+.message.assistant
+.message-content strong {
+    color: #f5f5f5 !important;
+}
+
+
+body.dark-mode
+.message.assistant
+.message-content
+code:not(pre code) {
+    background: #252525 !important;
+
+    border-color:
+        rgba(255, 255, 255, 0.09) !important;
+
+    color: #e8e8e8 !important;
+}
+
+
+/* Edit dark mode */
+
+body.dark-mode
+.message.user
+.edit-message-box {
+    border-color:
+        rgba(255, 255, 255, 0.10) !important;
+
+    background: #2a2a2a !important;
+
+    box-shadow:
+        0 1px 2px rgba(0, 0, 0, 0.18),
+        0 10px 28px rgba(0, 0, 0, 0.22) !important;
+}
+
+
+body.dark-mode
+.message.user
+.edit-textarea {
+    color: #f1f1f1 !important;
+}
+
+
+body.dark-mode
+.message.user
+.edit-message-media img {
+    border-color:
+        rgba(255, 255, 255, 0.10) !important;
+
+    background: #212121 !important;
+}
+
+
+body.dark-mode
+.message.user
+.edit-btn-cancel {
+    color: #ececec !important;
+}
+
+
+body.dark-mode
+.message.user
+.edit-btn-cancel:hover {
+    background:
+        rgba(255, 255, 255, 0.08) !important;
+}
+
+
+body.dark-mode
+.message.user
+.edit-btn-save {
+    background: #f1f1f1 !important;
+    color: #171717 !important;
+}
+
+
+/* =========================================================
+   APPEARANCE — TEXT SIZE
+   ========================================================= */
+
+body[data-neyo-text-size="small"]
+.message.assistant .message-content,
+body[data-neyo-text-size="small"]
+.message.user .message-content {
+    font-size: 14px !important;
+}
+
+
+body[data-neyo-text-size="default"]
+.message.assistant .message-content,
+body[data-neyo-text-size="default"]
+.message.user .message-content {
+    font-size: 15px !important;
+}
+
+
+body[data-neyo-text-size="large"]
+.message.assistant .message-content,
+body[data-neyo-text-size="large"]
+.message.user .message-content {
+    font-size: 17px !important;
+}
+
+
+/* =========================================================
+   MOBILE
+   ========================================================= */
+
+@media (max-width: 767px) {
+
+    .message.user .message-wrapper {
+        max-width: 88% !important;
+    }
+
+
+    .message.user
+    .message-media-grid,
+    .message.user
+    .message-media-grid img {
+        max-width: 100% !important;
+    }
+
+
+    .message.user
+    .message-media-grid img {
+        max-width: 132px !important;
+        max-height: 100px !important;
+
+        border-radius: 12px !important;
+    }
+
+
+    .message.assistant
+    .message-content {
+        font-size: 16px !important;
+        line-height: 1.6 !important;
+    }
+
+
+    .message.assistant
+    .message-content p {
+        margin-bottom: 12px !important;
+    }
+
+
+    /* Edit mode */
+
+    .message.user
+    .edit-message-box {
+        width: 100% !important;
+
+        gap: 9px !important;
+
+        padding:
+            11px
+            12px
+            9px !important;
+
+        border-radius: 16px !important;
+    }
+
+
+    .message.user
+    .edit-message-media img {
+        max-width:
+            min(240px, 100%) !important;
+
+        max-height: 165px !important;
+
+        border-radius: 12px !important;
+    }
+
+
+    .message.user
+    .edit-textarea {
+        min-height: 42px !important;
+        max-height: 130px !important;
+
+        font-size: 16px !important;
+    }
+
+
+    .message.user
+    .edit-btn-cancel,
+    .message.user
+    .edit-btn-save {
+        min-height: 36px !important;
+
+        padding-inline: 14px !important;
+    }
+}
+
+
+/* Extra-small phones */
+
+@media (max-width: 390px) {
+
+    .message.user .message-wrapper {
+        max-width: 92% !important;
+    }
+
+}
+
+
+/* =========================================================
+   REDUCED MOTION
+   ========================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+
+    .message.user .edit-btn-cancel,
+    .message.user .edit-btn-save {
+        transition-duration:
+            0.01ms !important;
+    }
+}

@@ -1219,11 +1219,11 @@ body.dark-mode
 
 /*
 =========================================================
-NEYO — HISTORY FINAL CLEAN
+NEYO — HISTORY FINAL
 
-Single authoritative block.
-All previous duplicate/experimental history blocks
-have been removed to fix ellipsis & action overlap.
+Explicit width-based approach.
+Ellipsis works deterministically.
+Three-dot overlay does not affect title width.
 =========================================================
 */
 
@@ -1251,7 +1251,7 @@ have been removed to fix ellipsis & action overlap.
 
     box-sizing: border-box !important;
 
-    padding: 0 7px 0 10px !important;
+    padding: 0 40px 0 10px !important;
     margin: 0 !important;
 
     border: 0 !important;
@@ -1276,36 +1276,43 @@ have been removed to fix ellipsis & action overlap.
         color 120ms ease !important;
 }
 
-/* ✅ MICRO-CHANGE: flex: 1 1 0% + width: 0 for stronger shrink */
+/* ✅ Title — explicit width, no flex ambiguity */
+
 .history-item-title {
     display: block !important;
 
-    flex: 1 1 0% !important;
-
-    width: 0 !important;
+    width: calc(100% - 34px) !important;
+    max-width: calc(100% - 34px) !important;
     min-width: 0 !important;
+
+    flex: 0 1 auto !important;
 
     margin: 0 !important;
     padding: 0 !important;
 
     overflow: hidden !important;
-
     white-space: nowrap !important;
     text-overflow: ellipsis !important;
 
     line-height: 20px !important;
 }
 
+/* ✅ Actions — absolute overlay, fixed position */
+
 .history-item-actions {
-    position: static !important;
+    position: absolute !important;
 
-    flex: 0 0 30px !important;
+    top: 50% !important;
+    right: 5px !important;
 
-    width: 30px !important;
-    min-width: 30px !important;
-    height: 30px !important;
+    transform: translateY(-50%) !important;
 
-    margin-left: 4px !important;
+    width: 28px !important;
+    height: 28px !important;
+
+    min-width: 28px !important;
+
+    margin: 0 !important;
     padding: 0 !important;
 
     display: flex !important;

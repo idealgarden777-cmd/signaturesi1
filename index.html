@@ -92,12 +92,10 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.8/purify.min.js"></script>
 </head>
 
-<!-- ✅ FIXED: Removed sidebar-collapsed class — stable baseline restored -->
 <body>
 
   <div class="sidebar-scrim" id="sidebarScrim"></div>
 
-  <!-- ✅ FIXED: Removed collapsed class — sidebar default open state -->
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-header">
       <button class="brand-button" id="brandBtn" type="button">
@@ -231,9 +229,20 @@
         </div>
         <input type="file" id="hiddenFileInput" multiple style="display: none;">
 
-        <!-- EXPAND BUTTON REMOVED — STABLE BASELINE RESTORED -->
         <div class="glass-input-container" id="glassInputContainer">
           <div class="attached-chips-wrapper" id="attachedChipsWrapper"></div>
+
+          <!-- ✅ EXPAND BUTTON — Safe position, no height CSS yet -->
+          <button
+            class="composer-expand-btn"
+            id="composerExpandBtn"
+            type="button"
+            title="Expand composer"
+            aria-label="Expand composer"
+            aria-expanded="false"
+          >
+            <i data-lucide="maximize-2" size="16"></i>
+          </button>
 
           <div class="composer-input-row">
             <button class="attach-btn" id="attachBtn" title="Add Attachments" type="button">
@@ -1059,7 +1068,7 @@
   <!-- SCRIPTS                                                  -->
   <!-- ========================================================= -->
   <script src="/neo.js?v=86"></script>
-  <!-- <script type="module" src="/js/components/composer-expand.js"></script> -->   <!-- ⛔️ DISABLED - STABLE ROLLBACK -->
+  <script type="module" src="/js/components/composer-expand.js"></script>   <!-- ✅ ENABLED — Safe overlay mode -->
 
 </body>
 </html>

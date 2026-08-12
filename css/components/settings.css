@@ -1,0 +1,1740 @@
+/*
+=========================================================
+NEYO — SETTINGS COMPONENT
+
+Purpose:
+Complete settings interface.
+
+Includes:
+- Overlay + modal
+- Settings navigation
+- General controls
+- Select menus
+- Toggles
+- Profile
+- Notifications
+- Personalities
+- Billing
+- Appearance
+- Placeholder panels
+- Dark mode
+- Mobile
+- Reduced motion
+
+Legacy neo-v3.css remains loaded during migration.
+=========================================================
+*/
+
+
+/* =========================================================
+   ROOT TOKENS
+   ========================================================= */
+
+:root {
+    --neyo-accent: #171717;
+    --neyo-accent-soft: rgba(23, 23, 23, 0.08);
+
+    --neyo-settings-bg: #ffffff;
+    --neyo-settings-sidebar: #f7f7f8;
+    --neyo-settings-soft: #f5f5f5;
+
+    --neyo-settings-text: #171717;
+    --neyo-settings-secondary: #737373;
+    --neyo-settings-muted: #9b9b9b;
+
+    --neyo-settings-border: rgba(0, 0, 0, 0.08);
+
+    --neyo-radius-sm: 10px;
+    --neyo-radius-md: 14px;
+    --neyo-radius-lg: 20px;
+    --neyo-radius-pill: 999px;
+
+    --neyo-shadow-sm:
+        0 1px 3px rgba(0, 0, 0, 0.04);
+
+    --neyo-shadow-md:
+        0 10px 32px rgba(0, 0, 0, 0.08);
+}
+
+
+body.dark-mode {
+    --neyo-settings-bg: #171717;
+    --neyo-settings-sidebar: #1d1d1d;
+    --neyo-settings-soft: #252525;
+
+    --neyo-settings-text: #f5f5f5;
+    --neyo-settings-secondary: #b5b5b5;
+    --neyo-settings-muted: #8f8f8f;
+
+    --neyo-settings-border:
+        rgba(255, 255, 255, 0.08);
+}
+
+
+/* =========================================================
+   OVERLAY
+   ========================================================= */
+
+.neo-settings-overlay {
+    position: fixed;
+
+    inset: 0;
+
+    z-index: 500;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    padding: 20px;
+
+    background:
+        rgba(0, 0, 0, 0.42) !important;
+
+    backdrop-filter:
+        blur(6px);
+
+    -webkit-backdrop-filter:
+        blur(6px);
+
+    opacity: 0;
+
+    visibility: hidden;
+    pointer-events: none;
+
+    transition:
+        opacity 200ms ease,
+        visibility 200ms ease;
+}
+
+
+.neo-settings-overlay.show {
+    opacity: 1;
+
+    visibility: visible;
+    pointer-events: auto;
+}
+
+
+/* =========================================================
+   MODAL
+   ========================================================= */
+
+.neo-settings-modal {
+    width: min(960px, 90vw);
+
+    max-height: 85vh;
+
+    display: flex;
+
+    overflow: hidden;
+
+    border:
+        1px solid var(--neyo-settings-border);
+
+    border-radius:
+        var(--neyo-radius-lg);
+
+    background:
+        var(--neyo-settings-bg) !important;
+
+    color:
+        var(--neyo-settings-text);
+
+    box-shadow:
+        0 20px 60px rgba(0, 0, 0, 0.18);
+
+    opacity: 1;
+
+    transform: none !important;
+
+    transition:
+        opacity 200ms ease !important;
+}
+
+
+/* =========================================================
+   SETTINGS SIDEBAR
+   ========================================================= */
+
+.neo-settings-sidebar {
+    width: 240px;
+
+    flex: 0 0 240px;
+
+    display: flex;
+    flex-direction: column;
+
+    gap: 2px;
+
+    padding:
+        20px
+        12px
+        16px;
+
+    overflow-y: auto;
+    overflow-x: hidden;
+
+    background:
+        var(--neyo-settings-sidebar);
+
+    border-right:
+        1px solid var(--neyo-settings-border);
+}
+
+
+/* Close button */
+
+.neo-settings-close {
+    width: 40px;
+    height: 40px;
+
+    flex: 0 0 40px;
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    margin-bottom: 12px;
+
+    border: 0;
+    border-radius:
+        var(--neyo-radius-sm);
+
+    background: transparent;
+
+    color:
+        var(--neyo-settings-muted);
+
+    cursor: pointer;
+
+    transform: none !important;
+
+    transition:
+        background-color 150ms ease,
+        color 150ms ease;
+}
+
+
+.neo-settings-close:hover {
+    background:
+        var(--neyo-settings-bg);
+
+    color:
+        var(--neyo-settings-text);
+}
+
+
+/* =========================================================
+   SETTINGS TABS
+   ========================================================= */
+
+.neo-settings-tab {
+    width: 100%;
+
+    min-height: 40px;
+
+    display: flex;
+    align-items: center;
+
+    gap: 12px;
+
+    padding:
+        9px
+        12px;
+
+    border: 0;
+
+    border-radius:
+        var(--neyo-radius-sm);
+
+    background: transparent;
+
+    color:
+        var(--neyo-settings-secondary);
+
+    font-family:
+        "Inter",
+        sans-serif;
+
+    font-size: 13.5px;
+    font-weight: 500;
+
+    text-align: left;
+
+    cursor: pointer;
+
+    transform: none !important;
+
+    transition:
+        background-color 150ms ease,
+        color 150ms ease,
+        box-shadow 150ms ease;
+}
+
+
+.neo-settings-tab:hover {
+    background:
+        rgba(0, 0, 0, 0.04);
+
+    color:
+        var(--neyo-settings-text);
+}
+
+
+.neo-settings-tab.active {
+    background:
+        var(--neyo-settings-bg);
+
+    color:
+        var(--neyo-settings-text);
+
+    box-shadow:
+        var(--neyo-shadow-sm);
+}
+
+
+body.dark-mode
+.neo-settings-tab:hover {
+    background:
+        rgba(255, 255, 255, 0.06);
+}
+
+
+body.dark-mode
+.neo-settings-tab.active {
+    background:
+        #252525;
+}
+
+
+.neo-settings-tab svg,
+.neo-settings-tab i {
+    flex: 0 0 auto;
+}
+
+
+.neo-settings-nav-divider {
+    height: 1px;
+
+    margin:
+        7px
+        8px;
+
+    background:
+        var(--neyo-settings-border);
+}
+
+
+/* =========================================================
+   CONTENT AREA
+   ========================================================= */
+
+.neo-settings-content {
+    flex: 1 1 auto;
+
+    min-width: 0;
+
+    padding:
+        28px
+        32px
+        34px;
+
+    overflow-y: auto;
+    overflow-x: hidden;
+
+    background:
+        var(--neyo-settings-bg);
+}
+
+
+.neo-settings-panel {
+    display: none;
+
+    width: 100%;
+}
+
+
+.neo-settings-panel.active {
+    display: block;
+}
+
+
+.neo-settings-panel-header {
+    margin-bottom: 26px;
+}
+
+
+.neo-settings-panel-header h2,
+.neo-settings-panel > h2 {
+    margin:
+        0
+        0
+        7px;
+
+    color:
+        var(--neyo-settings-text);
+
+    font-family:
+        "Sora",
+        "Inter",
+        sans-serif;
+
+    font-size: 22px;
+    font-weight: 600;
+
+    letter-spacing: -0.02em;
+}
+
+
+.neo-settings-panel-header p,
+.settings-subtitle {
+    margin: 0;
+
+    color:
+        var(--neyo-settings-secondary);
+
+    font-size: 13.5px;
+    line-height: 1.5;
+}
+
+
+/* =========================================================
+   SETTINGS SECTIONS
+   ========================================================= */
+
+.neo-settings-section {
+    margin-bottom: 28px;
+}
+
+
+.neo-settings-section:last-child {
+    margin-bottom: 0;
+}
+
+
+.neo-settings-section-title {
+    display: block;
+
+    margin-bottom: 8px;
+
+    color:
+        var(--neyo-settings-muted);
+
+    font-size: 11px;
+    font-weight: 600;
+
+    letter-spacing: 0.04em;
+
+    text-transform: uppercase;
+}
+
+
+/* =========================================================
+   SETTINGS ROW
+   ========================================================= */
+
+.settings-row {
+    min-height: 58px;
+
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    gap: 18px;
+
+    padding:
+        13px
+        0;
+
+    border-bottom:
+        1px solid var(--neyo-settings-border);
+}
+
+
+.settings-row:last-child {
+    border-bottom: 0;
+}
+
+
+.settings-row > div:first-child {
+    min-width: 0;
+
+    display: flex;
+    flex-direction: column;
+
+    gap: 3px;
+}
+
+
+.settings-row strong {
+    color:
+        var(--neyo-settings-text);
+
+    font-size: 14px;
+    font-weight: 600;
+
+    line-height: 1.3;
+}
+
+
+.settings-row small {
+    max-width: 410px;
+
+    color:
+        var(--neyo-settings-secondary);
+
+    font-size: 12.5px;
+    line-height: 1.45;
+}
+/* =========================================================
+   SEGMENTED / PILL CONTROLS
+   ========================================================= */
+
+.settings-segmented-control,
+.settings-segmented {
+    display: inline-flex !important;
+    align-items: center !important;
+    flex-wrap: wrap !important;
+
+    gap: 8px !important;
+
+    padding: 0 !important;
+
+    border: 0 !important;
+    border-radius: 0 !important;
+
+    background: transparent !important;
+
+    box-shadow: none !important;
+}
+
+
+.settings-segmented-control button,
+.settings-pill {
+    min-height: 40px !important;
+
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+
+    padding:
+        0
+        16px !important;
+
+    border:
+        1px solid var(--neyo-settings-border)
+        !important;
+
+    border-radius:
+        var(--neyo-radius-pill) !important;
+
+    background:
+        var(--neyo-settings-bg) !important;
+
+    color:
+        var(--neyo-settings-text) !important;
+
+    font-size:
+        14px !important;
+
+    font-weight:
+        500 !important;
+
+    line-height:
+        1 !important;
+
+    cursor: pointer !important;
+
+    transform: none !important;
+
+    box-shadow: none !important;
+
+    transition:
+        background-color 140ms ease,
+        border-color 140ms ease,
+        color 140ms ease,
+        box-shadow 140ms ease !important;
+}
+
+
+.settings-segmented-control button:hover,
+.settings-pill:hover {
+    background:
+        var(--neyo-settings-soft) !important;
+}
+
+
+.settings-segmented-control button.active,
+.settings-pill.active {
+    background:
+        var(--neyo-accent-soft) !important;
+
+    border-color:
+        var(--neyo-accent) !important;
+
+    color:
+        var(--neyo-accent) !important;
+
+    box-shadow:
+        inset 0 0 0 1px
+        var(--neyo-accent) !important;
+}
+
+
+body.dark-mode
+.settings-segmented-control button.active,
+body.dark-mode
+.settings-pill.active {
+    color:
+        #ffffff !important;
+}
+
+
+/* =========================================================
+   TOGGLE
+   ========================================================= */
+
+.settings-toggle {
+    position: relative;
+
+    width: 44px;
+    height: 24px;
+
+    flex: 0 0 44px;
+
+    padding: 0;
+
+    border: 0;
+    border-radius: 999px;
+
+    background: #dddddd;
+
+    cursor: pointer;
+
+    transition:
+        background-color 150ms ease;
+}
+
+
+.settings-toggle span {
+    position: absolute;
+
+    top: 3px;
+    left: 3px;
+
+    width: 18px;
+    height: 18px;
+
+    border-radius: 999px;
+
+    background: #ffffff;
+
+    box-shadow:
+        0 1px 3px rgba(0, 0, 0, 0.16);
+
+    transition:
+        transform 150ms ease;
+}
+
+
+.settings-toggle.active {
+    background:
+        #171717 !important;
+}
+
+
+.settings-toggle.active span {
+    transform:
+        translateX(20px);
+
+    background:
+        #ffffff !important;
+}
+
+
+body.dark-mode
+.settings-toggle {
+    background: #3a3a3a;
+}
+
+
+body.dark-mode
+.settings-toggle.active {
+    background:
+        #f5f5f5 !important;
+}
+
+
+body.dark-mode
+.settings-toggle.active span {
+    background:
+        #171717 !important;
+}
+
+
+/* =========================================================
+   SELECT DROPDOWNS
+   ========================================================= */
+
+.settings-select-wrapper {
+    position: relative;
+
+    flex: 0 0 auto;
+
+    min-width: 145px;
+}
+
+
+.settings-value-btn {
+    min-height: 40px;
+
+    max-width: 190px;
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: space-between;
+
+    gap: 10px;
+
+    padding:
+        0
+        13px;
+
+    border:
+        1px solid var(--neyo-settings-border);
+
+    border-radius:
+        var(--neyo-radius-sm);
+
+    background:
+        var(--neyo-settings-bg);
+
+    color:
+        #555555;
+
+    font-size: 13.5px;
+    font-weight: 500;
+
+    cursor: pointer;
+
+    transform: none !important;
+
+    transition:
+        background-color 150ms ease,
+        border-color 150ms ease,
+        color 150ms ease;
+}
+
+
+.settings-value-btn:hover,
+.settings-value-btn[aria-expanded="true"] {
+    border-color:
+        rgba(0, 0, 0, 0.18) !important;
+
+    color:
+        var(--neyo-settings-text) !important;
+}
+
+
+.settings-value-btn i,
+.settings-value-btn svg {
+    flex: 0 0 auto;
+
+    color:
+        var(--neyo-settings-muted);
+
+    transition:
+        transform 150ms ease;
+}
+
+
+.settings-value-btn[aria-expanded="true"] i,
+.settings-value-btn[aria-expanded="true"] svg {
+    transform:
+        rotate(180deg);
+}
+
+
+.settings-select-menu {
+    position: absolute;
+
+    top:
+        calc(100% + 7px);
+
+    right: 0;
+
+    z-index: 1000;
+
+    width: max-content;
+
+    min-width: 172px;
+
+    padding: 5px;
+
+    border:
+        1px solid var(--neyo-settings-border);
+
+    border-radius:
+        11px;
+
+    background:
+        rgba(255, 255, 255, 0.98);
+
+    box-shadow:
+        0 12px 32px rgba(0, 0, 0, 0.10),
+        0 2px 8px rgba(0, 0, 0, 0.04);
+
+    backdrop-filter:
+        blur(18px);
+
+    -webkit-backdrop-filter:
+        blur(18px);
+}
+
+
+.settings-select-menu[hidden] {
+    display: none !important;
+}
+
+
+.settings-select-option {
+    width: 100%;
+
+    min-height: 34px;
+
+    display: flex;
+    align-items: center;
+
+    padding:
+        7px
+        10px;
+
+    border: 0;
+    border-radius: 7px;
+
+    background: transparent;
+
+    color: #525252;
+
+    font-size: 13.5px;
+    font-weight: 500;
+
+    text-align: left;
+
+    cursor: pointer;
+
+    transform: none !important;
+}
+
+
+.settings-select-option:hover {
+    background:
+        rgba(0, 0, 0, 0.045);
+
+    color:
+        #171717;
+}
+
+
+.settings-select-option.active {
+    background:
+        rgba(0, 0, 0, 0.065);
+
+    color:
+        #171717;
+
+    font-weight: 600;
+}
+
+
+/* Dark select */
+
+body.dark-mode
+.settings-value-btn {
+    background: #252525;
+
+    border-color:
+        rgba(255, 255, 255, 0.08);
+
+    color: #b5b5b5;
+}
+
+
+body.dark-mode
+.settings-value-btn:hover,
+body.dark-mode
+.settings-value-btn[aria-expanded="true"] {
+    background:
+        #2b2b2b !important;
+
+    border-color:
+        rgba(255, 255, 255, 0.16)
+        !important;
+
+    color:
+        #f5f5f5 !important;
+}
+
+
+body.dark-mode
+.settings-select-menu {
+    background:
+        rgba(35, 35, 35, 0.98);
+
+    border-color:
+        rgba(255, 255, 255, 0.09);
+
+    box-shadow:
+        0 14px 38px rgba(0, 0, 0, 0.42),
+        0 2px 8px rgba(0, 0, 0, 0.20);
+}
+
+
+body.dark-mode
+.settings-select-option {
+    color: #bdbdbd;
+}
+
+
+body.dark-mode
+.settings-select-option:hover {
+    background:
+        rgba(255, 255, 255, 0.07);
+
+    color: #ffffff;
+}
+
+
+body.dark-mode
+.settings-select-option.active {
+    background:
+        rgba(255, 255, 255, 0.10);
+
+    color: #ffffff;
+}
+
+
+/* =========================================================
+   PROFILE
+   ========================================================= */
+
+#settingsPanelProfile {
+    color:
+        var(--neyo-settings-text);
+}
+
+
+.profile-editor-card {
+    max-width: 680px;
+}
+
+
+.profile-editor-main {
+    display: flex;
+    flex-direction: column;
+
+    gap: 18px;
+}
+
+
+.profile-avatar-upload {
+    display: flex;
+    flex-direction: column;
+
+    gap: 8px;
+}
+
+
+.profile-upload-label {
+    color:
+        var(--neyo-settings-text);
+
+    font-size: 13px;
+    font-weight: 600;
+}
+
+
+.profile-upload-row {
+    display: flex;
+    align-items: center;
+
+    gap: 16px;
+
+    padding-bottom: 18px;
+
+    border-bottom:
+        1px solid var(--neyo-settings-border);
+}
+
+
+.profile-editor-avatar {
+    width: 64px;
+    height: 64px;
+
+    flex: 0 0 64px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    overflow: hidden;
+
+    border:
+        1px solid var(--neyo-settings-border);
+
+    border-radius: 999px;
+
+    background:
+        var(--neyo-settings-soft);
+
+    color:
+        var(--neyo-settings-text);
+
+    font-size: 20px;
+    font-weight: 600;
+}
+
+
+.profile-editor-avatar img {
+    width: 100%;
+    height: 100%;
+
+    object-fit: cover;
+}
+
+
+.profile-upload-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+
+    gap: 8px;
+}
+
+
+.settings-helper-text {
+    width: 100%;
+
+    color:
+        var(--neyo-settings-muted);
+
+    font-size: 11.5px;
+}
+
+
+.profile-editor-main label {
+    display: flex;
+    flex-direction: column;
+
+    gap: 7px;
+
+    color:
+        var(--neyo-settings-text);
+
+    font-size: 13px;
+    font-weight: 600;
+}
+
+
+#settingsPanelProfile input {
+    min-height: 42px;
+
+    padding:
+        0
+        12px;
+
+    border:
+        1px solid var(--neyo-settings-border);
+
+    border-radius:
+        var(--neyo-radius-md);
+
+    background:
+        var(--neyo-settings-bg);
+
+    color:
+        var(--neyo-settings-text);
+
+    font-family: inherit;
+
+    font-size: 14px;
+
+    outline: none;
+}
+
+
+#settingsPanelProfile input:focus {
+    border-color:
+        rgba(0, 0, 0, 0.20);
+}
+
+
+#settingsPanelProfile input[readonly] {
+    background:
+        var(--neyo-settings-soft);
+
+    color:
+        var(--neyo-settings-secondary);
+}
+
+
+.profile-editor-actions {
+    display: flex;
+
+    gap: 8px;
+}
+
+
+/* Buttons */
+
+.settings-primary-btn,
+.settings-ghost-btn {
+    min-height: 38px;
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    padding:
+        0
+        14px;
+
+    border-radius:
+        var(--neyo-radius-sm);
+
+    font-size: 13px;
+    font-weight: 600;
+
+    cursor: pointer;
+
+    transform: none !important;
+}
+
+
+.settings-primary-btn {
+    border:
+        1px solid #171717;
+
+    background: #171717;
+
+    color: #ffffff;
+}
+
+
+.settings-ghost-btn {
+    border:
+        1px solid var(--neyo-settings-border);
+
+    background:
+        var(--neyo-settings-bg);
+
+    color:
+        var(--neyo-settings-text);
+}
+
+
+body.dark-mode
+.settings-primary-btn {
+    border-color: #f1f1f1;
+
+    background: #f1f1f1;
+
+    color: #171717;
+}
+
+
+body.dark-mode
+.settings-ghost-btn {
+    background: #292929;
+
+    color: #f1f1f1;
+} 
+/* =========================================================
+   PERSONALITIES
+   ========================================================= */
+
+.personality-grid {
+    display: grid;
+
+    grid-template-columns:
+        repeat(2, minmax(0, 1fr));
+
+    gap: 10px;
+
+    margin-top: 18px;
+}
+
+
+.personality-card {
+    position: relative;
+
+    min-height: 82px;
+
+    display: grid;
+
+    grid-template-columns:
+        38px 1fr;
+
+    align-items: center;
+
+    column-gap: 11px;
+
+    padding: 13px;
+
+    border:
+        1px solid var(--neyo-settings-border);
+
+    border-radius:
+        var(--neyo-radius-md);
+
+    background:
+        var(--neyo-settings-bg);
+
+    color:
+        var(--neyo-settings-text);
+
+    text-align: left;
+
+    cursor: pointer;
+
+    transform: none !important;
+
+    transition:
+        background-color 150ms ease,
+        border-color 150ms ease,
+        box-shadow 150ms ease;
+}
+
+
+.personality-card:hover {
+    background:
+        var(--neyo-settings-soft);
+}
+
+
+.personality-card.active {
+    border-color:
+        rgba(0, 0, 0, 0.18);
+
+    box-shadow:
+        inset 0 0 0 1px
+        rgba(0, 0, 0, 0.05);
+}
+
+
+.personality-avatar {
+    grid-row:
+        1 / span 2;
+
+    width: 38px;
+    height: 38px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    border-radius: 12px;
+
+    background:
+        var(--neyo-settings-soft);
+}
+
+
+.personality-card strong {
+    align-self: end;
+
+    font-size: 13.5px;
+    font-weight: 600;
+}
+
+
+.personality-card small {
+    align-self: start;
+
+    color:
+        var(--neyo-settings-secondary);
+
+    font-size: 11.5px;
+}
+
+
+.pro-personality::after {
+    content: "PRO";
+
+    position: absolute;
+
+    top: 9px;
+    right: 9px;
+
+    padding:
+        4px
+        6px;
+
+    border-radius: 999px;
+
+    background: #171717;
+
+    color: #ffffff;
+
+    font-family:
+        "IBM Plex Mono",
+        monospace;
+
+    font-size: 8px;
+    font-weight: 600;
+}
+
+
+/* =========================================================
+   NOTIFICATIONS
+   ========================================================= */
+
+.notification-center {
+    margin-top: 16px;
+}
+
+
+.notification-empty-state,
+.neo-settings-placeholder {
+    min-height: 240px;
+
+    display: flex;
+    flex-direction: column;
+
+    align-items: center;
+    justify-content: center;
+
+    padding:
+        40px
+        20px;
+
+    text-align: center;
+
+    color:
+        var(--neyo-settings-muted);
+}
+
+
+.notification-empty-state i,
+.notification-empty-state svg,
+.neo-settings-placeholder i,
+.neo-settings-placeholder svg {
+    margin-bottom: 12px;
+
+    color:
+        var(--neyo-settings-muted);
+}
+
+
+.notification-empty-state strong,
+.neo-settings-placeholder strong {
+    margin-bottom: 4px;
+
+    color:
+        var(--neyo-settings-secondary);
+
+    font-size: 17px;
+    font-weight: 600;
+}
+
+
+.notification-empty-state small,
+.neo-settings-placeholder small {
+    max-width: 360px;
+
+    color:
+        var(--neyo-settings-muted);
+
+    font-size: 13px;
+    line-height: 1.45;
+}
+
+
+/* =========================================================
+   BILLING
+   ========================================================= */
+
+#settingsPanelBilling {
+    max-width: 680px;
+}
+
+
+#settingsPanelBilling .settings-row {
+    margin-top: 18px;
+
+    padding: 18px;
+
+    border:
+        1px solid var(--neyo-settings-border);
+
+    border-radius:
+        var(--neyo-radius-md);
+
+    background:
+        var(--neyo-settings-soft);
+}
+
+
+#settingsPanelBilling
+#settingsUpgradeBtn {
+    flex: 0 0 auto;
+}
+
+
+/* =========================================================
+   APPEARANCE
+   ========================================================= */
+
+#settingsPanelAppearance {
+    max-width: 760px;
+
+    margin:
+        0
+        auto;
+}
+
+
+#settingsPanelAppearance
+.neo-settings-panel-header {
+    margin-bottom: 26px;
+}
+
+
+#settingsPanelAppearance
+.neo-settings-section {
+    margin-bottom: 30px;
+}
+
+
+/*
+Current final neo-v3.css hides the old preview.
+Keep that behavior during migration.
+*/
+
+.appearance-preview,
+.appearance-preview-card,
+.appearance-preview-shell,
+.appearance-preview-window {
+    display:
+        none !important;
+}
+
+
+/* Accent values */
+
+body[data-neyo-accent="neutral"] {
+    --neyo-accent: #171717;
+    --neyo-accent-soft:
+        rgba(23, 23, 23, 0.08);
+}
+
+
+body[data-neyo-accent="emerald"] {
+    --neyo-accent: #0f8f66;
+    --neyo-accent-soft:
+        rgba(15, 143, 102, 0.10);
+}
+
+
+body[data-neyo-accent="violet"] {
+    --neyo-accent: #7660e8;
+    --neyo-accent-soft:
+        rgba(118, 96, 232, 0.10);
+}
+
+
+body[data-neyo-accent="blue"] {
+    --neyo-accent: #3377e8;
+    --neyo-accent-soft:
+        rgba(51, 119, 232, 0.10);
+}
+
+
+/* =========================================================
+   ACCESSIBILITY
+   ========================================================= */
+
+.neo-settings-modal
+button:focus-visible,
+.neo-settings-modal
+input:focus-visible {
+    outline:
+        2px solid
+        var(--neyo-accent);
+
+    outline-offset:
+        2px;
+}
+
+
+/* =========================================================
+   MOBILE
+   ========================================================= */
+
+@media (max-width: 767px) {
+
+    .neo-settings-overlay {
+        padding: 10px;
+    }
+
+
+    .neo-settings-modal {
+        width: 100%;
+
+        max-height:
+            calc(100dvh - 20px);
+
+        flex-direction:
+            column;
+
+        border-radius: 18px;
+    }
+
+
+    .neo-settings-sidebar {
+        width: 100%;
+
+        flex:
+            0 0 auto;
+
+        flex-direction: row;
+
+        align-items: center;
+
+        gap: 4px;
+
+        padding:
+            10px
+            12px;
+
+        border-right: 0;
+
+        border-bottom:
+            1px solid
+            var(--neyo-settings-border);
+
+        overflow-x: auto;
+        overflow-y: hidden;
+
+        scrollbar-width: none;
+    }
+
+
+    .neo-settings-sidebar::-webkit-scrollbar {
+        display: none;
+    }
+
+
+    .neo-settings-close {
+        flex:
+            0 0 38px;
+
+        width: 38px;
+        height: 38px;
+
+        margin:
+            0
+            4px
+            0
+            0;
+    }
+
+
+    .neo-settings-tab {
+        width: auto;
+
+        flex:
+            0 0 auto;
+
+        padding:
+            7px
+            11px;
+
+        white-space: nowrap;
+    }
+
+
+    .neo-settings-tab span {
+        display: none;
+    }
+
+
+    .neo-settings-tab i,
+    .neo-settings-tab svg {
+        margin: 0;
+    }
+
+
+    .neo-settings-nav-divider {
+        display: none;
+    }
+
+
+    .neo-settings-content {
+        padding:
+            20px
+            16px
+            24px;
+    }
+
+
+    .neo-settings-panel-header {
+        margin-bottom: 20px;
+    }
+
+
+    .settings-row {
+        min-height: 0;
+
+        gap: 10px;
+
+        padding:
+            13px
+            0;
+    }
+
+
+    .settings-segmented-control {
+        width: 100%;
+    }
+
+
+    .settings-segmented-control button {
+        flex:
+            1 1 auto;
+
+        min-height:
+            38px !important;
+
+        padding:
+            0
+            10px !important;
+
+        text-align: center;
+    }
+
+
+    .settings-select-row {
+        align-items: center;
+
+        flex-wrap: nowrap;
+    }
+
+
+    .settings-select-wrapper {
+        min-width: 128px;
+
+        margin-left: auto;
+    }
+
+
+    .settings-value-btn {
+        max-width: 150px;
+
+        overflow: hidden;
+    }
+
+
+    .settings-value-btn span {
+        overflow: hidden;
+
+        white-space: nowrap;
+        text-overflow: ellipsis;
+    }
+
+
+    .settings-select-menu {
+        min-width: 170px;
+
+        max-width:
+            calc(100vw - 36px);
+    }
+
+
+    .profile-upload-row {
+        align-items: flex-start;
+    }
+
+
+    .personality-grid {
+        grid-template-columns:
+            1fr;
+    }
+
+
+    #settingsPanelBilling
+    .settings-row {
+        flex-direction: column;
+
+        align-items: stretch;
+
+        gap: 16px;
+
+        padding: 16px;
+    }
+
+
+    #settingsPanelBilling
+    #settingsUpgradeBtn {
+        width: 100%;
+
+        min-height: 44px;
+    }
+
+}
+
+
+/* =========================================================
+   EXTRA SMALL
+   ========================================================= */
+
+@media (max-width: 420px) {
+
+    .neo-settings-content {
+        padding:
+            18px
+            13px
+            22px;
+    }
+
+
+    .settings-row {
+        flex-wrap: wrap;
+    }
+
+
+    .settings-select-row {
+        flex-wrap: nowrap;
+    }
+
+
+    .settings-segmented-control button {
+        font-size:
+            12.5px !important;
+    }
+
+}
+
+
+/* =========================================================
+   REDUCED MOTION
+   ========================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+
+    .neo-settings-overlay,
+    .neo-settings-modal,
+    .neo-settings-tab,
+    .neo-settings-close,
+    .settings-toggle,
+    .settings-toggle span,
+    .settings-value-btn,
+    .settings-select-option,
+    .settings-segmented-control button,
+    .personality-card {
+        transition-duration:
+            0.01ms !important;
+    }
+
+} 

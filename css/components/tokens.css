@@ -1,0 +1,394 @@
+/*
+=========================================================
+NEYO — DESIGN TOKENS
+
+Purpose:
+Single source of truth for the NEYO visual system.
+
+Includes:
+- Colors
+- Surfaces
+- Text
+- Borders
+- Radius
+- Shadows
+- Motion
+- Typography
+- Layout values
+- Mobile values
+- Dark mode
+
+Keep component-specific styling out of this file.
+=========================================================
+*/
+
+
+/* =========================================================
+   CORE TOKENS — LIGHT
+   ========================================================= */
+
+:root {
+
+    /* -----------------------------------------------------
+       BACKGROUNDS
+       ----------------------------------------------------- */
+
+    --neyo-bg: #ffffff;
+
+    --neyo-surface: #ffffff;
+
+    --neyo-surface-soft: #f5f5f5;
+
+    --neyo-surface-hover: #f1f1f1;
+
+
+    /* -----------------------------------------------------
+       TEXT
+       ----------------------------------------------------- */
+
+    --neyo-text: #171717;
+
+    --neyo-text-secondary: #737373;
+
+    --neyo-text-muted: #9b9b9b;
+
+
+    /* -----------------------------------------------------
+       BORDERS
+       ----------------------------------------------------- */
+
+    --neyo-border:
+        rgba(0, 0, 0, 0.08);
+
+    --neyo-border-strong:
+        rgba(0, 0, 0, 0.14);
+
+
+    /* -----------------------------------------------------
+       RADIUS
+       ----------------------------------------------------- */
+
+    --neyo-radius-sm: 10px;
+
+    --neyo-radius-md: 14px;
+
+    --neyo-radius-lg: 20px;
+
+    --neyo-radius-pill: 999px;
+
+
+    /* -----------------------------------------------------
+       SHADOWS
+       ----------------------------------------------------- */
+
+    --neyo-shadow-sm:
+        0 1px 3px
+        rgba(0, 0, 0, 0.04);
+
+    --neyo-shadow-md:
+        0 10px 32px
+        rgba(0, 0, 0, 0.08);
+
+
+    /* -----------------------------------------------------
+       MOTION
+       ----------------------------------------------------- */
+
+    --neyo-motion-fast:
+        150ms ease;
+
+    --neyo-motion-medium:
+        200ms ease;
+
+
+    /* -----------------------------------------------------
+       TYPOGRAPHY
+       ----------------------------------------------------- */
+
+    --neyo-font-display:
+        "Sora",
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        sans-serif;
+
+    --neyo-font-text:
+        "Inter",
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        sans-serif;
+
+    --neyo-font-code:
+        "IBM Plex Mono",
+        ui-monospace,
+        SFMono-Regular,
+        Menlo,
+        Monaco,
+        Consolas,
+        monospace;
+
+
+    /* -----------------------------------------------------
+       COMMON CONTROL SIZES
+       ----------------------------------------------------- */
+
+    --neyo-control-sm: 34px;
+
+    --neyo-control-md: 40px;
+
+    --neyo-control-lg: 44px;
+
+
+    /* -----------------------------------------------------
+       APP LAYOUT
+       ----------------------------------------------------- */
+
+    --neo-topbar-height: 56px;
+
+    --neo-sidebar-width: 304px;
+
+    --neyo-content-compact: 640px;
+
+    --neyo-content-balanced: 760px;
+
+    --neyo-content-wide: 900px;
+
+
+    /* -----------------------------------------------------
+       MOBILE
+       ----------------------------------------------------- */
+
+    --mobile-drawer-width:
+        min(82vw, 292px);
+
+    --mobile-bg: #ffffff;
+
+    --mobile-surface: #ffffff;
+
+    --mobile-soft: #f4f4f4;
+
+    --mobile-border:
+        rgba(0, 0, 0, 0.09);
+
+    --mobile-text: #171717;
+
+    --mobile-muted: #737373;
+
+
+    /* -----------------------------------------------------
+       POPUPS
+       ----------------------------------------------------- */
+
+    --neo-popup-bg: #ffffff;
+
+    --neo-popup-border:
+        rgba(0, 0, 0, 0.08);
+
+    --neo-popup-radius: 16px;
+
+    --neo-popup-padding: 7px;
+
+    --neo-popup-row-height: 44px;
+
+    --neo-popup-row-radius: 10px;
+
+    --neo-popup-text: #171717;
+
+    --neo-popup-muted: #737373;
+
+    --neo-popup-hover: #f5f5f5;
+
+    --neo-popup-shadow:
+        0 1px 2px
+        rgba(0, 0, 0, 0.03),
+        0 12px 32px
+        rgba(0, 0, 0, 0.10);
+
+
+    /* -----------------------------------------------------
+       ACCENT
+       ----------------------------------------------------- */
+
+    --neyo-accent: #171717;
+
+    --neyo-accent-soft:
+        rgba(23, 23, 23, 0.08);
+}
+/* =========================================================
+   DARK MODE TOKENS
+   ========================================================= */
+
+body.dark-mode {
+
+    /* Core surfaces */
+
+    --neyo-bg: #171717;
+
+    --neyo-surface: #171717;
+
+    --neyo-surface-soft: #252525;
+
+    --neyo-surface-hover: #2b2b2b;
+
+
+    /* Text */
+
+    --neyo-text: #f5f5f5;
+
+    --neyo-text-secondary: #b5b5b5;
+
+    --neyo-text-muted: #8f8f8f;
+
+
+    /* Borders */
+
+    --neyo-border:
+        rgba(255, 255, 255, 0.08);
+
+    --neyo-border-strong:
+        rgba(255, 255, 255, 0.15);
+
+
+    /* Shadows */
+
+    --neyo-shadow-sm:
+        0 1px 4px
+        rgba(0, 0, 0, 0.26);
+
+    --neyo-shadow-md:
+        0 14px 38px
+        rgba(0, 0, 0, 0.38);
+
+
+    /* Mobile */
+
+    --mobile-bg: #000000;
+
+    --mobile-surface: #171717;
+
+    --mobile-soft: #212121;
+
+    --mobile-border:
+        rgba(255, 255, 255, 0.10);
+
+    --mobile-text: #f5f5f5;
+
+    --mobile-muted:
+        rgba(255, 255, 255, 0.58);
+
+
+    /* Popup */
+
+    --neo-popup-bg: #1b1b1b;
+
+    --neo-popup-border:
+        rgba(255, 255, 255, 0.09);
+
+    --neo-popup-text: #f2f2f2;
+
+    --neo-popup-muted: #9b9b9b;
+
+    --neo-popup-hover: #252525;
+
+    --neo-popup-shadow:
+        0 1px 2px
+        rgba(0, 0, 0, 0.24),
+        0 14px 36px
+        rgba(0, 0, 0, 0.38);
+} 
+/* =========================================================
+   ACCENT PRESETS
+   ========================================================= */
+
+body[data-neyo-accent="neutral"] {
+    --neyo-accent: #171717;
+
+    --neyo-accent-soft:
+        rgba(23, 23, 23, 0.08);
+}
+
+
+body[data-neyo-accent="emerald"] {
+    --neyo-accent: #0f8f66;
+
+    --neyo-accent-soft:
+        rgba(15, 143, 102, 0.10);
+}
+
+
+body[data-neyo-accent="violet"] {
+    --neyo-accent: #7660e8;
+
+    --neyo-accent-soft:
+        rgba(118, 96, 232, 0.10);
+}
+
+
+body[data-neyo-accent="blue"] {
+    --neyo-accent: #3377e8;
+
+    --neyo-accent-soft:
+        rgba(51, 119, 232, 0.10);
+}
+/* =========================================================
+   GLOBAL BOX MODEL
+   ========================================================= */
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+
+/* =========================================================
+   SELECTION
+   ========================================================= */
+
+::selection {
+    background:
+        rgba(23, 23, 23, 0.14);
+
+    color:
+        inherit;
+}
+
+
+body.dark-mode ::selection {
+    background:
+        rgba(255, 255, 255, 0.18);
+}
+
+
+/* =========================================================
+   MOTION PREFERENCE
+   ========================================================= */
+
+body[data-neyo-motion="reduced"] *,
+body[data-neyo-motion="reduced"] *::before,
+body[data-neyo-motion="reduced"] *::after {
+    scroll-behavior:
+        auto !important;
+
+    transition-duration:
+        0.01ms !important;
+
+    animation-duration:
+        0.01ms !important;
+
+    animation-iteration-count:
+        1 !important;
+}
+
+
+@media (prefers-reduced-motion: reduce) {
+
+    *,
+    *::before,
+    *::after {
+        scroll-behavior:
+            auto !important;
+    }
+
+}

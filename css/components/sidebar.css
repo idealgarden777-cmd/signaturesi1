@@ -2213,3 +2213,46 @@ body.dark-mode
     }
 
 }
+/*
+=========================================================
+NEYO — HISTORY TITLE SINGLE-LINE CONTROL
+=========================================================
+*/
+
+.history-item {
+    height: 38px !important;
+    min-height: 38px !important;
+
+    display: flex !important;
+    align-items: center !important;
+
+    overflow: hidden !important;
+}
+
+.history-item-title {
+    display: block !important;
+
+    flex: 1 1 auto !important;
+
+    min-width: 0 !important;
+    width: 0 !important;
+
+    white-space: nowrap !important;
+
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+
+    line-height: 20px !important;
+
+    padding: 0 !important;
+    margin: 0 !important;
+}
+
+.history-item-actions {
+    flex: 0 0 28px !important;
+
+    width: 28px !important;
+    min-width: 28px !important;
+
+    margin-left: 4px !important;
+}

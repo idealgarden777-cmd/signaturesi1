@@ -1,7 +1,14 @@
 /*
 =========================================================
 NEYO — SMART COMPOSER EXPAND
-Final stable UX behavior
+Collision-safe final version
+
+Important:
+Uses ONLY:
+.is-writing-expanded
+
+It does NOT use legacy:
+.is-expanded
 =========================================================
 */
 
@@ -27,30 +34,27 @@ Final stable UX behavior
 
 
     /* =====================================================
-       COMPACT RESET
+       COMPACT TEXTAREA
        ===================================================== */
 
-    function restoreCompactState() {
-      expanded = false;
-
-      composer.classList.remove("is-expanded");
-
+    function restoreCompactTextarea() {
       textarea.style.height = "auto";
 
       if (!textarea.value.trim()) {
         textarea.style.height = "38px";
-      } else {
-        textarea.style.height =
-          `${Math.min(
-            textarea.scrollHeight,
-            132
-          )}px`;
+        return;
       }
+
+      textarea.style.height =
+        `${Math.min(
+          textarea.scrollHeight,
+          132
+        )}px`;
     }
 
 
     /* =====================================================
-       SMART VISIBILITY
+       SMART BUTTON VISIBILITY
        ===================================================== */
 
     function shouldShowExpand() {
@@ -99,7 +103,7 @@ Final stable UX behavior
 
     /* =====================================================
        BUTTON STATE
-       Single source of truth
+       Icon + Tooltip + ARIA
        ===================================================== */
 
     function syncButtonState() {
@@ -118,35 +122,41 @@ Final stable UX behavior
         `${label} composer`
       );
 
+      /*
+      Native browser tooltip
+      */
       button.title = label;
 
       /*
-      Keep custom tooltip system
-      synchronized with native title.
+      NEYO custom tooltip system
       */
       button.dataset.tooltip = label;
 
-      button.innerHTML = expanded
-        ? '<i data-lucide="minimize-2" size="16"></i>'
-        : '<i data-lucide="maximize-2" size="16"></i>';
+      button.innerHTML =
+        expanded
+          ? '<i data-lucide="minimize-2" size="16"></i>'
+          : '<i data-lucide="maximize-2" size="16"></i>';
 
       if (
         window.lucide &&
-        typeof window.lucide.createIcons ===
-          "function"
+        typeof window.lucide.createIcons === "function"
       ) {
-        window.lucide.createIcons();
+        try {
+          window.lucide.createIcons();
+        } catch {
+          // Safe fallback.
+        }
       }
     }
 
 
     /* =====================================================
-       STATE RENDER
+       RENDER
        ===================================================== */
 
     function renderState() {
       composer.classList.toggle(
-        "is-expanded",
+        "is-writing-expanded",
         expanded
       );
 
@@ -162,7 +172,7 @@ Final stable UX behavior
 
 
     /* =====================================================
-       ACTIONS
+       EXPAND
        ===================================================== */
 
     function expandComposer() {
@@ -172,16 +182,9 @@ Final stable UX behavior
 
       expanded = true;
 
-      renderState();
-    }
-
-
-    function collapseComposer() {
-      if (!expanded) {
-        return;
-      }
-
-      restoreCompactState();
+      composer.classList.add(
+        "is-writing-expanded"
+      );
 
       syncButtonState();
       syncVisibility();
@@ -193,6 +196,38 @@ Final stable UX behavior
       });
     }
 
+
+    /* =====================================================
+       COLLAPSE
+       ===================================================== */
+
+    function collapseComposer() {
+      if (!expanded) {
+        return;
+      }
+
+      expanded = false;
+
+      composer.classList.remove(
+        "is-writing-expanded"
+      );
+
+      restoreCompactTextarea();
+
+      syncButtonState();
+      syncVisibility();
+
+      requestAnimationFrame(() => {
+        textarea.focus({
+          preventScroll: true
+        });
+      });
+    }
+
+
+    /* =====================================================
+       TOGGLE
+       ===================================================== */
 
     function toggleComposer() {
       if (expanded) {
@@ -208,11 +243,22 @@ Final stable UX behavior
        ===================================================== */
 
     function syncAfterInput() {
-      const empty =
+      const isEmpty =
         !textarea.value.trim();
 
-      if (empty) {
-        restoreCompactState();
+      /*
+      Empty composer must always return
+      to compact mode.
+      */
+
+      if (isEmpty) {
+        expanded = false;
+
+        composer.classList.remove(
+          "is-writing-expanded"
+        );
+
+        restoreCompactTextarea();
 
         syncButtonState();
         syncVisibility();
@@ -220,12 +266,17 @@ Final stable UX behavior
         return;
       }
 
+      /*
+      Do not interfere with legacy
+      textarea resizing while user types.
+      */
+
       syncVisibility();
     }
 
 
     /* =====================================================
-       EVENTS
+       BUTTON CLICK
        ===================================================== */
 
     button.addEventListener(
@@ -239,12 +290,16 @@ Final stable UX behavior
     );
 
 
+    /* =====================================================
+       TEXTAREA INPUT
+       ===================================================== */
+
     textarea.addEventListener(
       "input",
       () => {
         /*
-        Wait one frame so legacy neo.js
-        finishes its own textarea resize.
+        Allow neo.js to finish its own
+        resize logic first.
         */
 
         requestAnimationFrame(
@@ -253,6 +308,10 @@ Final stable UX behavior
       }
     );
 
+
+    /* =====================================================
+       ESCAPE
+       ===================================================== */
 
     document.addEventListener(
       "keydown",
@@ -268,25 +327,27 @@ Final stable UX behavior
 
 
     /* =====================================================
-       PROGRAMMATIC TEXT CHANGES
-
+       PROGRAMMATIC CHANGES
        Covers:
-       - send
-       - new conversation
-       - draft restore
-       - programmatic clear
+       - Send
+       - New chat
+       - Clear
+       - Draft restore
        ===================================================== */
 
     window.setInterval(() => {
+      const currentValue =
+        textarea.value;
+
       if (
-        textarea.value ===
+        currentValue ===
         previousValue
       ) {
         return;
       }
 
       previousValue =
-        textarea.value;
+        currentValue;
 
       syncAfterInput();
     }, 180);
@@ -296,7 +357,13 @@ Final stable UX behavior
        INITIAL STATE
        ===================================================== */
 
-    restoreCompactState();
+    expanded = false;
+
+    composer.classList.remove(
+      "is-writing-expanded"
+    );
+
+    restoreCompactTextarea();
 
     syncButtonState();
     syncVisibility();

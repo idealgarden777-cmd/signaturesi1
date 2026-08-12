@@ -569,3 +569,70 @@ textarea#chatInput::-webkit-scrollbar-thumb:hover {
     background:
         rgba(255, 255, 255, 0.34);
 }
+/* =========================================================
+   COMPOSER EXPAND BUTTON — SAFE VISUAL ONLY
+   No composer resize.
+   ========================================================= */
+
+.glass-input-container {
+    position: relative !important;
+}
+
+.composer-expand-btn {
+    position: absolute !important;
+
+    top: 8px !important;
+    right: 10px !important;
+
+    z-index: 6 !important;
+
+    width: 28px !important;
+    height: 28px !important;
+
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+
+    padding: 0 !important;
+
+    border: 0 !important;
+    border-radius: 8px !important;
+
+    background: transparent !important;
+
+    color:
+        var(--neyo-text-secondary, #737373) !important;
+
+    cursor: pointer !important;
+
+    opacity: 0.72 !important;
+
+    pointer-events: auto !important;
+
+    transition:
+        opacity 140ms ease,
+        background-color 140ms ease,
+        color 140ms ease !important;
+}
+
+.composer-expand-btn:hover {
+    opacity: 1 !important;
+
+    background:
+        rgba(0, 0, 0, 0.05) !important;
+
+    color:
+        var(--neyo-text, #171717) !important;
+}
+
+body.dark-mode
+.composer-expand-btn:hover {
+    background:
+        rgba(255, 255, 255, 0.07) !important;
+}
+
+.composer-expand-btn svg {
+    width: 16px !important;
+    height: 16px !important;
+    pointer-events: none !important;
+}

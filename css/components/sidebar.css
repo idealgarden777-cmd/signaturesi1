@@ -1176,3 +1176,549 @@ body[data-neyo-interface="warm"]
 
     flex: 0 0 30px !important;
 }
+/*
+=========================================================
+NEYO — PREMIUM HISTORY UI V2
+
+Goal:
+- ChatGPT-like compact history
+- Clean active / hover state
+- Actions appear only when useful
+- No text clipping
+- Thin scrollbar
+- No layout shift
+=========================================================
+*/
+
+
+/* =====================================================
+   SIDEBAR CONTENT SCROLLBAR
+   ===================================================== */
+
+.sidebar-content {
+    scrollbar-width: thin;
+    scrollbar-color:
+        rgba(0, 0, 0, 0.20)
+        transparent;
+}
+
+.sidebar-content::-webkit-scrollbar {
+    width: 6px;
+}
+
+.sidebar-content::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.sidebar-content::-webkit-scrollbar-thumb {
+    background:
+        rgba(0, 0, 0, 0.18);
+
+    border-radius: 999px;
+
+    border:
+        2px solid transparent;
+
+    background-clip:
+        padding-box;
+}
+
+.sidebar-content::-webkit-scrollbar-thumb:hover {
+    background:
+        rgba(0, 0, 0, 0.28);
+
+    border:
+        2px solid transparent;
+
+    background-clip:
+        padding-box;
+}
+
+
+/* =====================================================
+   HISTORY SECTION
+   ===================================================== */
+
+.history-section {
+    margin-top: 14px !important;
+}
+
+.section-title {
+    padding:
+        0
+        8px
+        6px !important;
+
+    font-size:
+        12px !important;
+
+    font-weight:
+        500 !important;
+
+    color:
+        rgba(0, 0, 0, 0.52) !important;
+}
+
+
+/* =====================================================
+   HISTORY LIST
+   ===================================================== */
+
+.history-list {
+    gap:
+        1px !important;
+}
+
+
+/* =====================================================
+   HISTORY WRAPPER
+   ===================================================== */
+
+.history-item-wrapper {
+    position:
+        relative !important;
+
+    width:
+        100% !important;
+
+    min-width:
+        0 !important;
+
+    min-height:
+        36px !important;
+
+    border-radius:
+        10px !important;
+
+    overflow:
+        visible !important;
+}
+
+
+/* =====================================================
+   HISTORY ITEM
+   ===================================================== */
+
+.history-item {
+    width:
+        100% !important;
+
+    min-width:
+        0 !important;
+
+    min-height:
+        36px !important;
+
+    display:
+        flex !important;
+
+    align-items:
+        center !important;
+
+    box-sizing:
+        border-box !important;
+
+    padding:
+        7px
+        36px
+        7px
+        10px !important;
+
+    border-radius:
+        10px !important;
+
+    overflow:
+        hidden !important;
+
+    white-space:
+        nowrap !important;
+
+    text-overflow:
+        ellipsis !important;
+
+    color:
+        #202020 !important;
+
+    font-size:
+        14px !important;
+
+    font-weight:
+        400 !important;
+
+    line-height:
+        20px !important;
+
+    background:
+        transparent !important;
+
+    transition:
+        background-color 120ms ease,
+        color 120ms ease !important;
+}
+
+
+/* =====================================================
+   HOVER
+   ===================================================== */
+
+.history-item-wrapper:hover
+.history-item {
+    background:
+        rgba(0, 0, 0, 0.055) !important;
+}
+
+
+/* =====================================================
+   ACTIVE CHAT
+   Supports common active class patterns
+   ===================================================== */
+
+.history-item.active,
+.history-item.is-active,
+.history-item-wrapper.active
+.history-item,
+.history-item-wrapper.is-active
+.history-item {
+    background:
+        rgba(0, 0, 0, 0.07) !important;
+
+    color:
+        #171717 !important;
+}
+
+
+/* =====================================================
+   THREE DOT ACTION
+   ===================================================== */
+
+.history-three-dot,
+.history-action-btn {
+    position:
+        absolute !important;
+
+    top:
+        50% !important;
+
+    right:
+        6px !important;
+
+    transform:
+        translateY(-50%) !important;
+
+    z-index:
+        3 !important;
+
+    width:
+        28px !important;
+
+    height:
+        28px !important;
+
+    min-width:
+        28px !important;
+
+    min-height:
+        28px !important;
+
+    display:
+        inline-flex !important;
+
+    align-items:
+        center !important;
+
+    justify-content:
+        center !important;
+
+    padding:
+        0 !important;
+
+    margin:
+        0 !important;
+
+    border:
+        0 !important;
+
+    border-radius:
+        8px !important;
+
+    background:
+        transparent !important;
+
+    color:
+        #6f6f6f !important;
+
+    opacity:
+        0 !important;
+
+    pointer-events:
+        none !important;
+
+    cursor:
+        pointer !important;
+
+    transition:
+        opacity 100ms ease,
+        background-color 120ms ease,
+        color 120ms ease !important;
+}
+
+
+/* Show action only when row is relevant */
+
+.history-item-wrapper:hover
+.history-three-dot,
+.history-item-wrapper:hover
+.history-action-btn,
+.history-item-wrapper.active
+.history-three-dot,
+.history-item-wrapper.active
+.history-action-btn,
+.history-item-wrapper.is-active
+.history-three-dot,
+.history-item-wrapper.is-active
+.history-action-btn {
+    opacity:
+        1 !important;
+
+    pointer-events:
+        auto !important;
+}
+
+
+.history-three-dot:hover,
+.history-action-btn:hover {
+    background:
+        rgba(0, 0, 0, 0.07) !important;
+
+    color:
+        #222222 !important;
+
+    transform:
+        translateY(-50%) !important;
+}
+
+
+.history-three-dot:active,
+.history-action-btn:active {
+    transform:
+        translateY(-50%)
+        scale(0.96) !important;
+}
+
+
+/* =====================================================
+   PIN / SECONDARY ICON SUPPORT
+   ===================================================== */
+
+.history-item-wrapper
+[data-lucide="pin"],
+.history-item-wrapper
+.pin-icon {
+    opacity:
+        0.55;
+
+    flex:
+        0 0 auto;
+}
+
+
+/* =====================================================
+   PRIMARY NAV — PREMIUM COMPACT
+   ===================================================== */
+
+.new-chat-btn,
+.sidebar-personality-btn {
+    min-height:
+        40px !important;
+
+    padding:
+        0
+        10px !important;
+
+    border-radius:
+        10px !important;
+
+    font-size:
+        14px !important;
+}
+
+
+.new-chat-btn:hover,
+.sidebar-personality-btn:hover {
+    background:
+        rgba(0, 0, 0, 0.055) !important;
+}
+
+
+/* Optional selected-like New Chat feel */
+
+.new-chat-btn:active,
+.sidebar-personality-btn:active {
+    background:
+        rgba(0, 0, 0, 0.075) !important;
+}
+
+
+/* =====================================================
+   DARK MODE
+   ===================================================== */
+
+body.dark-mode
+.sidebar-content {
+    scrollbar-color:
+        rgba(255, 255, 255, 0.20)
+        transparent;
+}
+
+
+body.dark-mode
+.sidebar-content::-webkit-scrollbar-thumb {
+    background:
+        rgba(255, 255, 255, 0.16);
+
+    border:
+        2px solid transparent;
+
+    background-clip:
+        padding-box;
+}
+
+
+body.dark-mode
+.sidebar-content::-webkit-scrollbar-thumb:hover {
+    background:
+        rgba(255, 255, 255, 0.26);
+
+    border:
+        2px solid transparent;
+
+    background-clip:
+        padding-box;
+}
+
+
+body.dark-mode
+.section-title {
+    color:
+        rgba(255, 255, 255, 0.50) !important;
+}
+
+
+body.dark-mode
+.history-item {
+    color:
+        rgba(255, 255, 255, 0.90) !important;
+}
+
+
+body.dark-mode
+.history-item-wrapper:hover
+.history-item {
+    background:
+        rgba(255, 255, 255, 0.065) !important;
+}
+
+
+body.dark-mode
+.history-item.active,
+body.dark-mode
+.history-item.is-active,
+body.dark-mode
+.history-item-wrapper.active
+.history-item,
+body.dark-mode
+.history-item-wrapper.is-active
+.history-item {
+    background:
+        rgba(255, 255, 255, 0.09) !important;
+
+    color:
+        #ffffff !important;
+}
+
+
+body.dark-mode
+.history-three-dot,
+body.dark-mode
+.history-action-btn {
+    color:
+        rgba(255, 255, 255, 0.62) !important;
+}
+
+
+body.dark-mode
+.history-three-dot:hover,
+body.dark-mode
+.history-action-btn:hover {
+    background:
+        rgba(255, 255, 255, 0.09) !important;
+
+    color:
+        #ffffff !important;
+}
+
+
+/* =====================================================
+   MOBILE
+   ===================================================== */
+
+@media (max-width: 767px) {
+
+    .history-item-wrapper {
+        min-height:
+            38px !important;
+    }
+
+    .history-item {
+        min-height:
+            38px !important;
+
+        padding:
+            8px
+            38px
+            8px
+            10px !important;
+
+        font-size:
+            14px !important;
+    }
+
+    .history-three-dot,
+    .history-action-btn {
+        width:
+            30px !important;
+
+        height:
+            30px !important;
+
+        min-width:
+            30px !important;
+
+        min-height:
+            30px !important;
+
+        right:
+            6px !important;
+    }
+
+}
+
+
+/* =====================================================
+   TOUCH DEVICES
+   Always expose conversation options
+   because hover does not exist
+   ===================================================== */
+
+@media (hover: none) {
+
+    .history-three-dot,
+    .history-action-btn {
+        opacity:
+            1 !important;
+
+        pointer-events:
+            auto !important;
+    }
+
+}

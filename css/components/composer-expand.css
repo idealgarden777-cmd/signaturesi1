@@ -1,17 +1,24 @@
 /*
 =========================================================
 NEYO — COMPOSER EXPAND
-Stable writing overlay
+Premium in-place writing mode
+
+Normal composer remains completely unchanged.
 =========================================================
 */
 
 
-/* ---------------------------------------------------------
-   EXPAND BUTTON — NORMAL MODE
---------------------------------------------------------- */
+/* =========================================================
+   NORMAL EXPAND BUTTON
+   ========================================================= */
+
+.glass-input-container {
+    position: relative !important;
+}
 
 .composer-expand-btn {
     position: absolute !important;
+
     top: 8px !important;
     right: 10px !important;
 
@@ -30,11 +37,12 @@ Stable writing overlay
     border-radius: 8px !important;
 
     background: transparent !important;
-    color: rgba(23, 23, 23, 0.55) !important;
+
+    color: rgba(23, 23, 23, 0.52) !important;
 
     cursor: pointer !important;
 
-    opacity: 0.78 !important;
+    opacity: 0.8 !important;
 
     transition:
         background-color 140ms ease,
@@ -43,88 +51,76 @@ Stable writing overlay
 }
 
 .composer-expand-btn:hover {
-    opacity: 1 !important;
     background: rgba(0, 0, 0, 0.045) !important;
+
     color: #171717 !important;
+
+    opacity: 1 !important;
 }
 
 .composer-expand-btn svg {
     width: 16px !important;
     height: 16px !important;
+
     pointer-events: none !important;
 }
 
 
-/* ---------------------------------------------------------
-   BACKDROP
---------------------------------------------------------- */
+/* =========================================================
+   EXPANDED COMPOSER
 
-body.composer-expanded {
-    overflow: hidden !important;
-}
-
-body.composer-expanded::before {
-    content: "";
-
-    position: fixed;
-    inset: 0;
-
-    z-index: 999;
-
-    background: rgba(20, 20, 20, 0.18);
-
-    backdrop-filter: blur(2px);
-    -webkit-backdrop-filter: blur(2px);
-}
-
-
-/* ---------------------------------------------------------
-   EXPANDED COMPOSER SURFACE
---------------------------------------------------------- */
+   IMPORTANT:
+   No fixed positioning
+   No backdrop
+   No blur
+   No full-screen overlay
+   ========================================================= */
 
 .glass-input-container.is-expanded {
-    position: fixed !important;
+    position: relative !important;
 
-    top: 50% !important;
-    left: 50% !important;
+    top: auto !important;
+    right: auto !important;
+    bottom: auto !important;
+    left: auto !important;
 
-    transform: translate(-50%, -50%) !important;
+    transform: none !important;
 
-    width: min(900px, calc(100vw - 64px)) !important;
-    height: min(680px, calc(100dvh - 96px)) !important;
+    width: 100% !important;
 
-    min-width: 0 !important;
-    min-height: 420px !important;
+    height: clamp(
+        300px,
+        46vh,
+        460px
+    ) !important;
 
-    max-width: none !important;
-    max-height: none !important;
-
-    z-index: 1000 !important;
+    min-height: 300px !important;
+    max-height: 460px !important;
 
     display: flex !important;
     flex-direction: column !important;
 
+    padding:
+        10px
+        8px
+        6px !important;
+
     box-sizing: border-box !important;
-
-    padding: 14px 14px 12px !important;
-
-    border-radius: 24px !important;
-
-    border: 1px solid rgba(0, 0, 0, 0.08) !important;
-
-    background: #ffffff !important;
 
     overflow: hidden !important;
 
-    box-shadow:
-        0 24px 70px rgba(0, 0, 0, 0.14),
-        0 8px 24px rgba(0, 0, 0, 0.06) !important;
+    border-radius: 24px !important;
+
+    transition:
+        height 180ms ease,
+        border-radius 180ms ease,
+        box-shadow 180ms ease !important;
 }
 
 
-/* ---------------------------------------------------------
-   ATTACHMENT CHIPS
---------------------------------------------------------- */
+/* =========================================================
+   ATTACHMENTS
+   ========================================================= */
 
 .glass-input-container.is-expanded
 .attached-chips-wrapper {
@@ -133,62 +129,62 @@ body.composer-expanded::before {
     width: 100% !important;
 
     padding:
-        2px
+        4px
         38px
-        8px
-        2px !important;
+        6px
+        4px !important;
 }
 
 
-/* ---------------------------------------------------------
-   MAIN WRITING AREA
-
-   Critical fix:
-   normal composer uses align-items:flex-end.
-   Expanded mode must stretch vertically.
---------------------------------------------------------- */
+/* =========================================================
+   MAIN ROW
+   ========================================================= */
 
 .glass-input-container.is-expanded
 .composer-input-row {
     flex: 1 1 auto !important;
 
     width: 100% !important;
+
     min-width: 0 !important;
     min-height: 0 !important;
 
     display: flex !important;
 
-    align-items: stretch !important;
+    align-items: flex-end !important;
 
-    gap: 8px !important;
+    gap: 6px !important;
 
     overflow: hidden !important;
 }
 
 
-/* ---------------------------------------------------------
+/* =========================================================
    TEXTAREA
---------------------------------------------------------- */
+   ========================================================= */
 
 .glass-input-container.is-expanded
 textarea#chatInput {
     flex: 1 1 auto !important;
 
+    align-self: stretch !important;
+
     width: 100% !important;
 
     height: 100% !important;
+
     min-height: 0 !important;
     max-height: none !important;
 
-    box-sizing: border-box !important;
+    margin: 0 !important;
 
     padding:
-        44px
+        36px
+        8px
         10px
-        64px
-        10px !important;
+        8px !important;
 
-    margin: 0 !important;
+    box-sizing: border-box !important;
 
     border: 0 !important;
     outline: 0 !important;
@@ -200,33 +196,31 @@ textarea#chatInput {
 
     resize: none !important;
 
-    font-size: 16px !important;
-    line-height: 1.55 !important;
-
-    align-self: stretch !important;
+    font-size: 15.5px !important;
+    line-height: 1.5 !important;
 }
 
 
-/* ---------------------------------------------------------
-   BOTTOM CONTROLS
-
-   Existing DOM stays unchanged.
---------------------------------------------------------- */
+/* =========================================================
+   BOTTOM BUTTONS
+   ========================================================= */
 
 .glass-input-container.is-expanded
 .attach-btn,
+
 .glass-input-container.is-expanded
 .mic-btn,
+
 .glass-input-container.is-expanded
 .send-btn {
+    flex: 0 0 auto !important;
+
+    align-self: flex-end !important;
+
     position: relative !important;
 
     top: auto !important;
     bottom: 0 !important;
-
-    align-self: flex-end !important;
-
-    flex: 0 0 auto !important;
 
     margin: 0 !important;
 
@@ -234,118 +228,87 @@ textarea#chatInput {
 }
 
 
-/* ---------------------------------------------------------
-   VOICE MODE
---------------------------------------------------------- */
+/* =========================================================
+   VOICE TRANSCRIPTION
+   ========================================================= */
 
 .glass-input-container.is-expanded
 .voice-transcribe-container {
-    align-self: flex-end !important;
-
     flex: 1 1 auto !important;
 
     min-width: 0 !important;
+
+    align-self: flex-end !important;
 }
 
 
-/* ---------------------------------------------------------
-   COLLAPSE BUTTON — EXPANDED STATE
---------------------------------------------------------- */
+/* =========================================================
+   COLLAPSE BUTTON
+   ========================================================= */
 
 .glass-input-container.is-expanded
 .composer-expand-btn {
-    top: 12px !important;
-    right: 12px !important;
+    top: 10px !important;
+    right: 10px !important;
+
+    background: rgba(0, 0, 0, 0.04) !important;
 
     opacity: 1 !important;
-
-    background: rgba(0, 0, 0, 0.045) !important;
 }
 
 
-/* ---------------------------------------------------------
+/* =========================================================
    DARK MODE
---------------------------------------------------------- */
-
-body.dark-mode
-.glass-input-container.is-expanded {
-    background: #181818 !important;
-
-    border-color: rgba(255, 255, 255, 0.09) !important;
-
-    box-shadow:
-        0 24px 80px rgba(0, 0, 0, 0.44),
-        0 8px 26px rgba(0, 0, 0, 0.24) !important;
-}
+   ========================================================= */
 
 body.dark-mode
 .composer-expand-btn {
-    color: rgba(255, 255, 255, 0.62) !important;
+    color: rgba(255, 255, 255, 0.58) !important;
 }
 
 body.dark-mode
 .composer-expand-btn:hover,
+
 body.dark-mode
 .glass-input-container.is-expanded
 .composer-expand-btn {
-    background: rgba(255, 255, 255, 0.075) !important;
+    background: rgba(255, 255, 255, 0.07) !important;
+
     color: #ffffff !important;
 }
 
 
-/* ---------------------------------------------------------
-   TABLET
---------------------------------------------------------- */
-
-@media (max-width: 1024px) {
-
-    .glass-input-container.is-expanded {
-        width: calc(100vw - 40px) !important;
-        height: calc(100dvh - 72px) !important;
-    }
-
-}
-
-
-/* ---------------------------------------------------------
+/* =========================================================
    MOBILE
---------------------------------------------------------- */
+   ========================================================= */
 
 @media (max-width: 767px) {
 
     .glass-input-container.is-expanded {
-        top: 8px !important;
-        right: 8px !important;
-        bottom: 8px !important;
-        left: 8px !important;
+        height: min(
+            56dvh,
+            420px
+        ) !important;
 
-        transform: none !important;
+        min-height: 260px !important;
+        max-height: 420px !important;
 
-        width: auto !important;
-        height: auto !important;
-
-        min-height: 0 !important;
+        border-radius: 22px !important;
 
         padding:
-            10px
-            10px
-            calc(10px + env(safe-area-inset-bottom)) !important;
-
-        border-radius: 20px !important;
+            8px
+            7px
+            6px !important;
     }
 
 
     .glass-input-container.is-expanded
     textarea#chatInput {
-        height: 100% !important;
-
-        min-height: 0 !important;
-
         padding:
-            42px
+            34px
+            7px
             8px
-            58px
-            8px !important;
+            7px !important;
 
         font-size: 16px !important;
     }
@@ -353,8 +316,8 @@ body.dark-mode
 
     .glass-input-container.is-expanded
     .composer-expand-btn {
-        top: 10px !important;
-        right: 10px !important;
+        top: 8px !important;
+        right: 8px !important;
     }
 
 }

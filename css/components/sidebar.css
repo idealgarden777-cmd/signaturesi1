@@ -1463,3 +1463,92 @@ body.dark-mode .history-action-btn:hover {
         min-height: 30px !important;
     }
 }
+/*
+=========================================================
+NEYO — HISTORY PREMIUM POLISH
+Visual only. Does not change ellipsis geometry.
+=========================================================
+*/
+
+.history-section {
+    margin-top: 16px !important;
+}
+
+.section-title {
+    padding: 0 10px 6px !important;
+
+    color: rgba(0, 0, 0, 0.50) !important;
+
+    font-size: 11.5px !important;
+    font-weight: 500 !important;
+}
+
+.history-list {
+    gap: 1px !important;
+}
+
+.history-item {
+    border-radius: 9px !important;
+
+    background: transparent !important;
+
+    transition:
+        background-color 110ms ease,
+        color 110ms ease !important;
+}
+
+.history-item:hover {
+    background:
+        rgba(0, 0, 0, 0.045) !important;
+}
+
+.history-item.active {
+    background:
+        rgba(0, 0, 0, 0.055) !important;
+}
+
+.history-action-btn {
+    border-radius: 7px !important;
+
+    color:
+        rgba(0, 0, 0, 0.48) !important;
+}
+
+.history-action-btn:hover {
+    background:
+        rgba(0, 0, 0, 0.055) !important;
+
+    color:
+        rgba(0, 0, 0, 0.82) !important;
+}
+
+
+/* Dark mode */
+
+body.dark-mode .section-title {
+    color:
+        rgba(255, 255, 255, 0.46) !important;
+}
+
+body.dark-mode .history-item:hover {
+    background:
+        rgba(255, 255, 255, 0.055) !important;
+}
+
+body.dark-mode .history-item.active {
+    background:
+        rgba(255, 255, 255, 0.075) !important;
+}
+
+body.dark-mode .history-action-btn {
+    color:
+        rgba(255, 255, 255, 0.50) !important;
+}
+
+body.dark-mode .history-action-btn:hover {
+    background:
+        rgba(255, 255, 255, 0.08) !important;
+
+    color:
+        rgba(255, 255, 255, 0.92) !important;
+}

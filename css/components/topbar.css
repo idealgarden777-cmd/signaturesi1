@@ -489,3 +489,12 @@ body.dark-mode
     }
 
 }
+/* =========================================================
+   DESKTOP TOPBAR — LEFT EDGE BREATHING
+   ========================================================= */
+
+@media (min-width: 768px) {
+    .top-bar {
+        padding-left: 32px !important;
+    }
+}

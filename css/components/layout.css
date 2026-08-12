@@ -114,3 +114,269 @@ body[data-neyo-content-width="wide"]
 .conversation-column {
     max-width: 900px !important;
 }
+/* =========================================================
+   INTERFACE BACKGROUNDS
+   ========================================================= */
+
+body[data-neyo-interface="minimal"]
+.app-shell,
+body[data-neyo-interface="minimal"]
+.scroll-area {
+    background:
+        var(--neyo-bg, #ffffff) !important;
+}
+
+
+/* Warm — final neutral version */
+
+body[data-neyo-interface="warm"]
+.app-shell,
+body[data-neyo-interface="warm"]
+.scroll-area {
+    background:
+        #fbfaf8 !important;
+}
+
+
+body.dark-mode[data-neyo-interface="warm"]
+.app-shell,
+body.dark-mode[data-neyo-interface="warm"]
+.scroll-area {
+    background:
+        #191918 !important;
+}
+
+
+/* Dark default */
+
+body.dark-mode
+.app-shell,
+body.dark-mode
+.scroll-area {
+    background:
+        var(--neyo-bg, #171717);
+}
+
+
+/* =========================================================
+   DESKTOP
+   ========================================================= */
+
+@media (min-width: 768px) {
+
+    .app-shell {
+        flex:
+            1 1 auto !important;
+
+        width:
+            auto !important;
+
+        max-width:
+            none !important;
+
+        min-width:
+            0 !important;
+
+        margin-left:
+            0 !important;
+
+        transform:
+            none !important;
+    }
+
+
+    .scroll-area {
+        padding-top:
+            24px !important;
+
+        padding-left:
+            24px;
+
+        padding-right:
+            24px;
+    }
+
+
+    .chat-messages {
+        padding-top:
+            12px !important;
+    }
+
+}
+
+
+/* =========================================================
+   MOBILE
+   ========================================================= */
+
+@media (max-width: 767px) {
+
+    html,
+    body {
+        width:
+            100%;
+
+        max-width:
+            100%;
+
+        min-height:
+            100%;
+
+        overflow-x:
+            hidden !important;
+    }
+
+
+    body {
+        position:
+            relative !important;
+    }
+
+
+    .app-shell {
+        width:
+            100% !important;
+
+        max-width:
+            100% !important;
+
+        min-width:
+            0 !important;
+
+        min-height:
+            100dvh !important;
+
+        background:
+            var(--mobile-bg, #ffffff)
+            !important;
+
+        overflow-x:
+            hidden !important;
+    }
+
+
+    /*
+    Main app must never shift
+    when mobile sidebar opens.
+    */
+
+    body.sidebar-collapsed
+    .app-shell,
+    body:not(.sidebar-collapsed)
+    .app-shell {
+        width:
+            100% !important;
+
+        margin-left:
+            0 !important;
+
+        transform:
+            none !important;
+    }
+
+
+    .scroll-area {
+        width:
+            100% !important;
+
+        max-width:
+            100% !important;
+
+        min-width:
+            0 !important;
+
+        padding:
+            16px
+            14px
+            164px !important;
+
+        overflow-x:
+            hidden !important;
+
+        overflow-y:
+            auto !important;
+
+        scroll-padding-bottom:
+            164px !important;
+    }
+
+
+    .conversation-column,
+    .chat-messages {
+        width:
+            100% !important;
+
+        max-width:
+            100% !important;
+
+        min-width:
+            0 !important;
+    }
+
+
+    /*
+    Content-width setting must not
+    make phone layout narrower.
+    */
+
+    body[data-neyo-content-width="compact"]
+    .conversation-column,
+    body[data-neyo-content-width="balanced"]
+    .conversation-column,
+    body[data-neyo-content-width="wide"]
+    .conversation-column {
+        max-width:
+            100% !important;
+    }
+
+}
+/* =========================================================
+   SMALL HEIGHT / MOBILE KEYBOARD
+   ========================================================= */
+
+@media (max-width: 767px) and (max-height: 560px) {
+
+    .scroll-area {
+        padding-bottom:
+            92px !important;
+
+        scroll-padding-bottom:
+            92px !important;
+    }
+
+}
+
+
+/* =========================================================
+   MOTION SETTING
+   ========================================================= */
+
+body[data-neyo-motion="reduced"] *,
+body[data-neyo-motion="reduced"] *::before,
+body[data-neyo-motion="reduced"] *::after {
+    scroll-behavior:
+        auto !important;
+
+    transition-duration:
+        0.01ms !important;
+
+    animation-duration:
+        0.01ms !important;
+}
+
+
+/* =========================================================
+   REDUCED MOTION
+   ========================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+
+    .app-shell,
+    .scroll-area,
+    .conversation-column,
+    .chat-messages {
+        scroll-behavior:
+            auto !important;
+    }
+
+}

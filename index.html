@@ -56,7 +56,7 @@
   <link rel="stylesheet" href="/css/components/tooltip.css?v=1">
   <link rel="stylesheet" href="/css/components/attachments.css?v=1">
   <link rel="stylesheet" href="/css/components/composer.css?v=1">
-  <link rel="stylesheet" href="/css/components/composer-expand.css?v=2">   <!-- ✅ CACHE-BUSTED -->
+  <link rel="stylesheet" href="/css/components/composer-expand.css?v=2">
   <link rel="stylesheet" href="/css/components/suggestions.css?v=1">
   <link rel="stylesheet" href="/css/components/voice.css?v=1">
   <link rel="stylesheet" href="/css/components/drag-drop.css?v=1">
@@ -80,6 +80,9 @@
   <!-- Appearance Modes & Responsive (LAST) -->
   <link rel="stylesheet" href="/css/components/interface-modes.css?v=1">
   <link rel="stylesheet" href="/css/components/responsive.css?v=1">
+
+  <!-- Send State Component -->
+  <link rel="stylesheet" href="/css/components/send-state.css?v=1">
 
   <!-- KaTeX -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css">
@@ -233,7 +236,7 @@
         <div class="glass-input-container" id="glassInputContainer">
           <div class="attached-chips-wrapper" id="attachedChipsWrapper"></div>
 
-          <!-- ✅ EXPAND BUTTON — Safe position -->
+          <!-- EXPAND BUTTON -->
           <button
             class="composer-expand-btn"
             id="composerExpandBtn"
@@ -1069,7 +1072,21 @@
   <!-- SCRIPTS                                                  -->
   <!-- ========================================================= -->
   <script src="/neo.js?v=86"></script>
-  <script type="module" src="/js/components/composer-expand.js?v=2"></script>   <!-- ✅ CACHE-BUSTED -->
+
+  <script
+    type="module"
+    src="/js/components/composer-expand.js?v=2"
+  ></script>
+
+  <script
+    type="module"
+    src="/js/components/send-state.js?v=1"
+  ></script>
+
+  <script
+    type="module"
+    src="/js/components/native-tooltips.js?v=1"
+  ></script>   <!-- ✅ NEW -->
 
 </body>
 </html>

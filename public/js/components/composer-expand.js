@@ -1,7 +1,7 @@
 /*
 =========================================================
 NEYO — SMART COMPOSER EXPAND
-UX-first behavior
+Final stable UX behavior
 =========================================================
 */
 
@@ -23,25 +23,29 @@ UX-first behavior
     }
 
     let expanded = false;
+    let previousValue = textarea.value;
 
 
     /* =====================================================
-       COMPACT TEXTAREA RESTORE
+       COMPACT RESET
        ===================================================== */
 
-    function restoreCompactTextarea() {
+    function restoreCompactState() {
+      expanded = false;
+
+      composer.classList.remove("is-expanded");
+
       textarea.style.height = "auto";
 
       if (!textarea.value.trim()) {
         textarea.style.height = "38px";
-        return;
+      } else {
+        textarea.style.height =
+          `${Math.min(
+            textarea.scrollHeight,
+            132
+          )}px`;
       }
-
-      textarea.style.height =
-        `${Math.min(
-          textarea.scrollHeight,
-          132
-        )}px`;
     }
 
 
@@ -74,7 +78,7 @@ UX-first behavior
     }
 
 
-    function syncExpandVisibility() {
+    function syncVisibility() {
       const visible =
         shouldShowExpand();
 
@@ -94,24 +98,16 @@ UX-first behavior
 
 
     /* =====================================================
-       ICON + ACCESSIBILITY
+       BUTTON STATE
+       Single source of truth
        ===================================================== */
 
-    function renderIcon() {
-      button.innerHTML = expanded
-        ? '<i data-lucide="minimize-2" size="16"></i>'
-        : '<i data-lucide="maximize-2" size="16"></i>';
+    function syncButtonState() {
+      const label =
+        expanded
+          ? "Collapse"
+          : "Expand";
 
-      if (
-        window.lucide &&
-        typeof window.lucide.createIcons === "function"
-      ) {
-        window.lucide.createIcons();
-      }
-    }
-
-
-    function syncAccessibility() {
       button.setAttribute(
         "aria-expanded",
         String(expanded)
@@ -119,26 +115,33 @@ UX-first behavior
 
       button.setAttribute(
         "aria-label",
-        expanded
-          ? "Collapse composer"
-          : "Expand composer"
+        `${label} composer`
       );
 
-      /*
-      Keep native title short.
-      Custom tooltip system can handle
-      delayed tooltip later.
-      */
+      button.title = label;
 
-      button.title =
-        expanded
-          ? "Collapse"
-          : "Expand";
+      /*
+      Keep custom tooltip system
+      synchronized with native title.
+      */
+      button.dataset.tooltip = label;
+
+      button.innerHTML = expanded
+        ? '<i data-lucide="minimize-2" size="16"></i>'
+        : '<i data-lucide="maximize-2" size="16"></i>';
+
+      if (
+        window.lucide &&
+        typeof window.lucide.createIcons ===
+          "function"
+      ) {
+        window.lucide.createIcons();
+      }
     }
 
 
     /* =====================================================
-       STATE
+       STATE RENDER
        ===================================================== */
 
     function renderState() {
@@ -147,15 +150,8 @@ UX-first behavior
         expanded
       );
 
-      syncAccessibility();
-      renderIcon();
-      syncExpandVisibility();
-
-      if (!expanded) {
-        requestAnimationFrame(() => {
-          restoreCompactTextarea();
-        });
-      }
+      syncButtonState();
+      syncVisibility();
 
       requestAnimationFrame(() => {
         textarea.focus({
@@ -166,7 +162,7 @@ UX-first behavior
 
 
     /* =====================================================
-       EXPAND / COLLAPSE
+       ACTIONS
        ===================================================== */
 
     function expandComposer() {
@@ -185,9 +181,16 @@ UX-first behavior
         return;
       }
 
-      expanded = false;
+      restoreCompactState();
 
-      renderState();
+      syncButtonState();
+      syncVisibility();
+
+      requestAnimationFrame(() => {
+        textarea.focus({
+          preventScroll: true
+        });
+      });
     }
 
 
@@ -201,19 +204,23 @@ UX-first behavior
 
 
     /* =====================================================
-       TEXT INPUT UX
+       INPUT SYNC
        ===================================================== */
 
-    function handleTextareaInput() {
-      /*
-      Existing neo.js still owns normal
-      textarea auto-resize.
+    function syncAfterInput() {
+      const empty =
+        !textarea.value.trim();
 
-      This component only controls
-      expand button visibility.
-      */
+      if (empty) {
+        restoreCompactState();
 
-      syncExpandVisibility();
+        syncButtonState();
+        syncVisibility();
+
+        return;
+      }
+
+      syncVisibility();
     }
 
 
@@ -234,7 +241,16 @@ UX-first behavior
 
     textarea.addEventListener(
       "input",
-      handleTextareaInput
+      () => {
+        /*
+        Wait one frame so legacy neo.js
+        finishes its own textarea resize.
+        */
+
+        requestAnimationFrame(
+          syncAfterInput
+        );
+      }
     );
 
 
@@ -251,35 +267,15 @@ UX-first behavior
     );
 
 
-    /*
-    If message is sent and textarea
-    becomes empty, return to compact
-    state automatically.
-    */
+    /* =====================================================
+       PROGRAMMATIC TEXT CHANGES
 
-    const textareaObserver =
-      new MutationObserver(() => {
-        syncExpandVisibility();
-      });
-
-    textareaObserver.observe(
-      textarea,
-      {
-        attributes: true,
-        attributeFilter: [
-          "style"
-        ]
-      }
-    );
-
-
-    /*
-    Detect programmatic clearing such as
-    send/new conversation.
-    */
-
-    let previousValue =
-      textarea.value;
+       Covers:
+       - send
+       - new conversation
+       - draft restore
+       - programmatic clear
+       ===================================================== */
 
     window.setInterval(() => {
       if (
@@ -292,32 +288,18 @@ UX-first behavior
       previousValue =
         textarea.value;
 
-      if (
-        expanded &&
-        !textarea.value.trim()
-      ) {
-        expanded = false;
-
-        renderState();
-
-        return;
-      }
-
-      syncExpandVisibility();
-    }, 250);
+      syncAfterInput();
+    }, 180);
 
 
     /* =====================================================
        INITIAL STATE
        ===================================================== */
 
-    expanded = false;
+    restoreCompactState();
 
-    restoreCompactTextarea();
-
-    syncAccessibility();
-    renderIcon();
-    syncExpandVisibility();
+    syncButtonState();
+    syncVisibility();
   }
 
 

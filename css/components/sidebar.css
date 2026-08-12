@@ -1722,3 +1722,74 @@ body.dark-mode
     }
 
 }
+/* =========================================================
+   HISTORY TEXT — CLEAN SINGLE LINE ELLIPSIS
+   ========================================================= */
+
+.history-item {
+    position: relative !important;
+    min-width: 0 !important;
+
+    overflow: hidden !important;
+    white-space: nowrap !important;
+    text-overflow: ellipsis !important;
+
+    padding-right: 34px !important;
+}
+
+
+/* Better fade before action button */
+.history-item::after {
+    content: "";
+
+    position: absolute;
+    top: 0;
+    right: 30px;
+
+    width: 24px;
+    height: 100%;
+
+    pointer-events: none;
+
+    background:
+        linear-gradient(
+            to right,
+            rgba(249, 249, 249, 0),
+            rgba(249, 249, 249, 1)
+        );
+
+    opacity: 0;
+
+    transition:
+        opacity 120ms ease;
+}
+
+
+.history-item-wrapper:hover
+.history-item::after,
+.history-item-wrapper.active
+.history-item::after,
+.history-item-wrapper.is-active
+.history-item::after {
+    opacity: 1;
+}
+
+
+/* Action stays above fade */
+.history-action-btn,
+.history-three-dot {
+    right: 5px !important;
+    z-index: 5 !important;
+}
+
+
+/* Dark mode fade */
+body.dark-mode
+.history-item::after {
+    background:
+        linear-gradient(
+            to right,
+            rgba(23, 23, 23, 0),
+            rgba(23, 23, 23, 1)
+        );
+}

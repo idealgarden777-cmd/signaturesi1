@@ -1738,3 +1738,50 @@ input:focus-visible {
     }
 
 } 
+/* =========================================================
+   SETTINGS SEGMENTED WRAP
+   ========================================================= */
+
+.settings-segmented-wrap {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+
+    gap: 8px;
+}
+/* =========================================================
+   PRIVATE CHAT VISUAL STATE
+   ========================================================= */
+
+body.neo-private-chat
+#settingsPanelGeneral
+#settingsPrivateChatToggle {
+    background:
+        #171717 !important;
+}
+
+
+body.neo-private-chat
+#settingsPanelGeneral
+#settingsPrivateChatToggle span {
+    background:
+        #ffffff !important;
+}
+
+
+/* Dark mode */
+
+body.dark-mode.neo-private-chat
+#settingsPanelGeneral
+#settingsPrivateChatToggle {
+    background:
+        #f5f5f5 !important;
+}
+
+
+body.dark-mode.neo-private-chat
+#settingsPanelGeneral
+#settingsPrivateChatToggle span {
+    background:
+        #171717 !important;
+}

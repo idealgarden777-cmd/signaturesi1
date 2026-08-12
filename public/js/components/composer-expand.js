@@ -1,7 +1,7 @@
 /*
 =========================================================
-NEYO — COMPOSER EXPAND
-Stable in-place expand / collapse
+NEYO — SMART COMPOSER EXPAND
+UX-first behavior
 =========================================================
 */
 
@@ -18,13 +18,18 @@ Stable in-place expand / collapse
     const textarea =
       document.getElementById("chatInput");
 
-    if (!button || !composer) return;
+    if (!button || !composer || !textarea) {
+      return;
+    }
 
     let expanded = false;
 
-    function restoreCompactTextarea() {
-      if (!textarea) return;
 
+    /* =====================================================
+       COMPACT TEXTAREA RESTORE
+       ===================================================== */
+
+    function restoreCompactTextarea() {
       textarea.style.height = "auto";
 
       if (!textarea.value.trim()) {
@@ -33,8 +38,64 @@ Stable in-place expand / collapse
       }
 
       textarea.style.height =
-        `${Math.min(textarea.scrollHeight, 132)}px`;
+        `${Math.min(
+          textarea.scrollHeight,
+          132
+        )}px`;
     }
+
+
+    /* =====================================================
+       SMART VISIBILITY
+       ===================================================== */
+
+    function shouldShowExpand() {
+      if (expanded) {
+        return true;
+      }
+
+      const value =
+        textarea.value || "";
+
+      if (!value.trim()) {
+        return false;
+      }
+
+      const explicitLines =
+        value.split("\n").length;
+
+      const visuallyLong =
+        textarea.scrollHeight > 108;
+
+      return (
+        explicitLines >= 4 ||
+        visuallyLong
+      );
+    }
+
+
+    function syncExpandVisibility() {
+      const visible =
+        shouldShowExpand();
+
+      button.classList.toggle(
+        "is-visible",
+        visible
+      );
+
+      button.tabIndex =
+        visible ? 0 : -1;
+
+      button.setAttribute(
+        "aria-hidden",
+        String(!visible)
+      );
+    }
+
+
+    /* =====================================================
+       ICON + ACCESSIBILITY
+       ===================================================== */
 
     function renderIcon() {
       button.innerHTML = expanded
@@ -49,12 +110,8 @@ Stable in-place expand / collapse
       }
     }
 
-    function render() {
-      composer.classList.toggle(
-        "is-expanded",
-        expanded
-      );
 
+    function syncAccessibility() {
       button.setAttribute(
         "aria-expanded",
         String(expanded)
@@ -67,11 +124,32 @@ Stable in-place expand / collapse
           : "Expand composer"
       );
 
-      /* shorter premium tooltip */
-      button.title =
-        expanded ? "Collapse" : "Expand";
+      /*
+      Keep native title short.
+      Custom tooltip system can handle
+      delayed tooltip later.
+      */
 
+      button.title =
+        expanded
+          ? "Collapse"
+          : "Expand";
+    }
+
+
+    /* =====================================================
+       STATE
+       ===================================================== */
+
+    function renderState() {
+      composer.classList.toggle(
+        "is-expanded",
+        expanded
+      );
+
+      syncAccessibility();
       renderIcon();
+      syncExpandVisibility();
 
       if (!expanded) {
         requestAnimationFrame(() => {
@@ -80,11 +158,68 @@ Stable in-place expand / collapse
       }
 
       requestAnimationFrame(() => {
-        textarea?.focus({
+        textarea.focus({
           preventScroll: true
         });
       });
     }
+
+
+    /* =====================================================
+       EXPAND / COLLAPSE
+       ===================================================== */
+
+    function expandComposer() {
+      if (expanded) {
+        return;
+      }
+
+      expanded = true;
+
+      renderState();
+    }
+
+
+    function collapseComposer() {
+      if (!expanded) {
+        return;
+      }
+
+      expanded = false;
+
+      renderState();
+    }
+
+
+    function toggleComposer() {
+      if (expanded) {
+        collapseComposer();
+      } else {
+        expandComposer();
+      }
+    }
+
+
+    /* =====================================================
+       TEXT INPUT UX
+       ===================================================== */
+
+    function handleTextareaInput() {
+      /*
+      Existing neo.js still owns normal
+      textarea auto-resize.
+
+      This component only controls
+      expand button visibility.
+      */
+
+      syncExpandVisibility();
+    }
+
+
+    /* =====================================================
+       EVENTS
+       ===================================================== */
 
     button.addEventListener(
       "click",
@@ -92,10 +227,16 @@ Stable in-place expand / collapse
         event.preventDefault();
         event.stopPropagation();
 
-        expanded = !expanded;
-        render();
+        toggleComposer();
       }
     );
+
+
+    textarea.addEventListener(
+      "input",
+      handleTextareaInput
+    );
+
 
     document.addEventListener(
       "keydown",
@@ -104,21 +245,96 @@ Stable in-place expand / collapse
           event.key === "Escape" &&
           expanded
         ) {
-          expanded = false;
-          render();
+          collapseComposer();
         }
       }
     );
 
+
+    /*
+    If message is sent and textarea
+    becomes empty, return to compact
+    state automatically.
+    */
+
+    const textareaObserver =
+      new MutationObserver(() => {
+        syncExpandVisibility();
+      });
+
+    textareaObserver.observe(
+      textarea,
+      {
+        attributes: true,
+        attributeFilter: [
+          "style"
+        ]
+      }
+    );
+
+
+    /*
+    Detect programmatic clearing such as
+    send/new conversation.
+    */
+
+    let previousValue =
+      textarea.value;
+
+    window.setInterval(() => {
+      if (
+        textarea.value ===
+        previousValue
+      ) {
+        return;
+      }
+
+      previousValue =
+        textarea.value;
+
+      if (
+        expanded &&
+        !textarea.value.trim()
+      ) {
+        expanded = false;
+
+        renderState();
+
+        return;
+      }
+
+      syncExpandVisibility();
+    }, 250);
+
+
+    /* =====================================================
+       INITIAL STATE
+       ===================================================== */
+
+    expanded = false;
+
     restoreCompactTextarea();
+
+    syncAccessibility();
     renderIcon();
+    syncExpandVisibility();
   }
 
-  if (document.readyState === "loading") {
+
+  /* =======================================================
+     INIT
+     ======================================================= */
+
+  if (
+    document.readyState ===
+    "loading"
+  ) {
     document.addEventListener(
       "DOMContentLoaded",
       initComposerExpand,
-      { once: true }
+      {
+        once: true
+      }
     );
   } else {
     initComposerExpand();

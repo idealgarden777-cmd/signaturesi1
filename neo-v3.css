@@ -1,3 +1,17 @@
+/*
+=========================================================
+NEYO V3 — LEGACY UI PATCH LAYER
+
+STATUS:
+Working production styles.
+
+RULES:
+1. Do not add new unrelated features here.
+2. Existing styles will be migrated gradually.
+3. New features should use isolated feature CSS files.
+4. Do not delete blocks without regression testing.
+=========================================================
+*/
 /* =========================================================
    NEO V3 — COMPOSER TOOLTIPS & ATTACHMENT PREVIEWS
    ========================================================= */

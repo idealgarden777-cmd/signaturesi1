@@ -1,0 +1,190 @@
+/*
+=========================================================
+NEYO — SEND / STOP STATE
+
+Purpose:
+- Send arrow → stop square while generating
+- Keep exact same button size
+- No layout shift
+- Premium compact visual
+- Light + dark mode safe
+=========================================================
+*/
+
+
+/* =========================================================
+   BASE SAFETY
+   ========================================================= */
+
+.send-btn {
+    position: relative !important;
+
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+
+    overflow: hidden !important;
+
+    transform: none !important;
+}
+
+
+/* =========================================================
+   GENERATING STATE
+   ========================================================= */
+
+.send-btn.is-generating {
+    cursor: pointer !important;
+
+    transform: none !important;
+}
+
+
+/* Keep button dimensions exactly unchanged */
+
+.send-btn.is-generating,
+.send-btn.is-generating:hover,
+.send-btn.is-generating:active {
+    width: 40px !important;
+    height: 40px !important;
+
+    min-width: 40px !important;
+    min-height: 40px !important;
+
+    flex: 0 0 40px !important;
+
+    border-radius: 999px !important;
+
+    transform: none !important;
+}
+
+
+/* =========================================================
+   STOP SQUARE
+   ========================================================= */
+
+.send-stop-square {
+    display: block !important;
+
+    width: 10px !important;
+    height: 10px !important;
+
+    min-width: 10px !important;
+    min-height: 10px !important;
+
+    flex: 0 0 10px !important;
+
+    border-radius: 2px !important;
+
+    background: currentColor !important;
+
+    color: inherit !important;
+
+    pointer-events: none !important;
+
+    transform: none !important;
+
+    transition:
+        transform 120ms ease,
+        opacity 120ms ease !important;
+}
+
+
+/* =========================================================
+   HOVER
+   ========================================================= */
+
+.send-btn.is-generating:hover
+.send-stop-square {
+    transform: scale(1.04) !important;
+}
+
+
+/* =========================================================
+   ACTIVE
+   ========================================================= */
+
+.send-btn.is-generating:active
+.send-stop-square {
+    transform: scale(0.92) !important;
+}
+
+
+/* =========================================================
+   FOCUS
+   ========================================================= */
+
+.send-btn.is-generating:focus-visible {
+    outline:
+        2px solid
+        var(--focus-ring, rgba(59, 130, 246, 0.45)) !important;
+
+    outline-offset: 2px !important;
+}
+
+
+/* =========================================================
+   DISABLE ICON INTERFERENCE
+   ========================================================= */
+
+.send-btn.is-generating svg,
+.send-btn.is-generating i {
+    pointer-events: none !important;
+}
+
+
+/* =========================================================
+   DARK MODE
+   ========================================================= */
+
+body.dark-mode
+.send-btn.is-generating {
+    color: #ffffff !important;
+}
+
+
+/* =========================================================
+   MOBILE
+   ========================================================= */
+
+@media (max-width: 767px) {
+
+    .send-btn.is-generating,
+    .send-btn.is-generating:hover,
+    .send-btn.is-generating:active {
+        width: 40px !important;
+        height: 40px !important;
+
+        min-width: 40px !important;
+        min-height: 40px !important;
+
+        flex: 0 0 40px !important;
+    }
+
+
+    .send-stop-square {
+        width: 9px !important;
+        height: 9px !important;
+
+        min-width: 9px !important;
+        min-height: 9px !important;
+
+        flex: 0 0 9px !important;
+
+        border-radius: 2px !important;
+    }
+
+}
+
+
+/* =========================================================
+   REDUCED MOTION
+   ========================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+
+    .send-stop-square {
+        transition: none !important;
+    }
+
+}

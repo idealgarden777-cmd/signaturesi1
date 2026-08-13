@@ -937,3 +937,79 @@ body.dark-mode .sidebar-content::-webkit-scrollbar-thumb:hover {
     top: auto !important;
     bottom: auto !important;
 }
+/* =========================================================
+   SIDEBAR — LOCK BUTTON POSITION
+   NO VERTICAL JUMP / NO PRESS SHIFT / NO SCALE
+   ========================================================= */
+
+.sidebar button,
+.sidebar .history-item,
+.sidebar .history-three-dot,
+.sidebar .popup-item {
+    position: relative !important;
+
+    top: 0 !important;
+    bottom: auto !important;
+
+    transform: none !important;
+    translate: none !important;
+    scale: 1 !important;
+
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+
+    box-sizing: border-box !important;
+}
+
+/* Keep exact same geometry in every interaction state */
+.sidebar button:hover,
+.sidebar button:focus,
+.sidebar button:focus-visible,
+.sidebar button:active,
+
+.sidebar .history-item:hover,
+.sidebar .history-item:focus,
+.sidebar .history-item:active,
+
+.sidebar .history-three-dot:hover,
+.sidebar .history-three-dot:focus,
+.sidebar .history-three-dot:active,
+
+.sidebar .popup-item:hover,
+.sidebar .popup-item:focus,
+.sidebar .popup-item:active {
+    top: 0 !important;
+    bottom: auto !important;
+
+    transform: none !important;
+    translate: none !important;
+    scale: 1 !important;
+
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+}
+
+/* Lock icons too */
+.sidebar button svg,
+.sidebar button i,
+.sidebar .history-item svg,
+.sidebar .history-item i,
+.sidebar .history-three-dot svg,
+.sidebar .history-three-dot i,
+.sidebar .popup-item svg,
+.sidebar .popup-item i {
+    transform: none !important;
+    translate: none !important;
+    vertical-align: middle !important;
+}
+
+/* Remove press animation transitions */
+.sidebar button,
+.sidebar .history-item,
+.sidebar .history-three-dot,
+.sidebar .popup-item {
+    transition:
+        background-color 140ms ease,
+        color 140ms ease,
+        opacity 140ms ease !important;
+}

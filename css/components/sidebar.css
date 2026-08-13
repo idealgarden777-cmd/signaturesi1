@@ -845,3 +845,51 @@ body.dark-mode .sidebar-content::-webkit-scrollbar-thumb:hover {
     border: 2px solid transparent;
     background-clip: padding-box;
 }
+/* =========================================================
+   NEYO SIDEBAR — NO ZOOM / SCALE INTERACTIONS
+   ========================================================= */
+
+.sidebar .brand-button,
+.sidebar .icon-btn,
+.sidebar .new-chat-btn,
+.sidebar .sidebar-personality-btn,
+.sidebar .history-item,
+.sidebar .history-three-dot,
+.sidebar .user-profile-btn,
+.sidebar .popup-item {
+    transform: none !important;
+    scale: 1 !important;
+}
+
+.sidebar .brand-button:hover,
+.sidebar .brand-button:active,
+.sidebar .icon-btn:hover,
+.sidebar .icon-btn:active,
+.sidebar .new-chat-btn:hover,
+.sidebar .new-chat-btn:active,
+.sidebar .sidebar-personality-btn:hover,
+.sidebar .sidebar-personality-btn:active,
+.sidebar .history-item:hover,
+.sidebar .history-item:active,
+.sidebar .history-three-dot:hover,
+.sidebar .history-three-dot:active,
+.sidebar .user-profile-btn:hover,
+.sidebar .user-profile-btn:active,
+.sidebar .popup-item:hover,
+.sidebar .popup-item:active {
+    transform: none !important;
+    scale: 1 !important;
+}
+
+/* Keep premium hover feedback without movement */
+.sidebar .new-chat-btn,
+.sidebar .sidebar-personality-btn,
+.sidebar .history-item,
+.sidebar .history-three-dot,
+.sidebar .user-profile-btn,
+.sidebar .popup-item {
+    transition:
+        background-color 140ms ease,
+        color 140ms ease,
+        opacity 140ms ease !important;
+}

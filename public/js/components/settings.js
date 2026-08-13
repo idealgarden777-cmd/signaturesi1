@@ -7,15 +7,16 @@ Owns:
 - Settings tab switching
 - Active tab state
 - Escape key close
-- Click outside close
+- Backdrop close
+- Focus restore
 - Public settings events
 
 Does NOT own:
 - Theme logic
+- Intelligence logic
 - Memory logic
-- Notification settings
-- Accessibility settings
-- Account/profile saving
+- Language logic
+- Profile saving
 =========================================================
 */
 
@@ -27,28 +28,35 @@ Does NOT own:
        ELEMENTS
        ===================================================== */
 
-    const settingsModal =
-        document.getElementById("settingsModal");
+    const settingsOverlay =
+        document.getElementById(
+            "neoSettingsOverlay"
+        );
 
-    if (!settingsModal) {
+
+    if (!settingsOverlay) {
         return;
     }
 
 
     const settingsCloseBtn =
-        document.getElementById("settingsCloseBtn");
+        document.getElementById(
+            "neoSettingsCloseBtn"
+        );
+
 
     const settingsTabs =
         Array.from(
             document.querySelectorAll(
-                "[data-settings-tab]"
+                ".neo-settings-tab[data-settings-tab]"
             )
         );
+
 
     const settingsPanels =
         Array.from(
             document.querySelectorAll(
-                "[data-settings-panel]"
+                ".neo-settings-panel"
             )
         );
 
@@ -57,22 +65,22 @@ Does NOT own:
        STATE
        ===================================================== */
 
-    let activeTab = null;
+    let activeTab =
+        null;
+
+    let previousFocusedElement =
+        null;
 
 
     /* =====================================================
        HELPERS
        ===================================================== */
 
-    const isOpen = () =>
-        settingsModal.classList.contains("show") ||
-        settingsModal.classList.contains("open");
-
-
     const emit = (
         name,
         detail = {}
     ) => {
+
         window.dispatchEvent(
             new CustomEvent(
                 name,
@@ -81,124 +89,298 @@ Does NOT own:
                 }
             )
         );
+
     };
+
+
+    const isOpen = () => {
+
+        return (
+            settingsOverlay.classList
+                .contains("show") ||
+            settingsOverlay.classList
+                .contains("open") ||
+            settingsOverlay.classList
+                .contains("active") ||
+            settingsOverlay.getAttribute(
+                "aria-hidden"
+            ) === "false"
+        );
+
+    };
+
+
+    const normalizeTabName =
+        value => {
+
+            if (!value) {
+                return null;
+            }
+
+
+            return String(value)
+                .trim()
+                .toLowerCase();
+
+        };
+
+
+    const getPanelForTab =
+        tabName => {
+
+            const normalized =
+                normalizeTabName(
+                    tabName
+                );
+
+
+            if (!normalized) {
+                return null;
+            }
+
+
+            return settingsPanels.find(
+                panel => {
+
+                    const panelName =
+                        panel.id
+                            .replace(
+                                /^settingsPanel/,
+                                ""
+                            )
+                            .toLowerCase();
+
+
+                    return (
+                        panelName ===
+                        normalized
+                    );
+
+                }
+            ) || null;
+
+        };
 
 
     /* =====================================================
        TAB SWITCHING
        ===================================================== */
 
-    const activateTab = tabName => {
+    const activateTab =
+        tabName => {
 
-        if (!tabName) {
-            return;
-        }
-
-
-        activeTab = tabName;
-
-
-        settingsTabs.forEach(
-            tab => {
-
-                const selected =
-                    tab.dataset.settingsTab ===
-                    tabName;
-
-                tab.classList.toggle(
-                    "active",
-                    selected
-                );
-
-                tab.setAttribute(
-                    "aria-selected",
-                    String(selected)
-                );
-            }
-        );
-
-
-        settingsPanels.forEach(
-            panel => {
-
-                const selected =
-                    panel.dataset.settingsPanel ===
-                    tabName;
-
-                panel.classList.toggle(
-                    "active",
-                    selected
-                );
-
-                panel.hidden =
-                    !selected;
-            }
-        );
-
-
-        emit(
-            "neyo:settings-tab-change",
-            {
-                tab:
+            const normalized =
+                normalizeTabName(
                     tabName
+                );
+
+
+            if (!normalized) {
+                return false;
             }
+
+
+            const panel =
+                getPanelForTab(
+                    normalized
+                );
+
+
+            if (!panel) {
+
+                console.warn(
+                    `[NEYO Settings] Panel not found: ${normalized}`
+                );
+
+                return false;
+
+            }
+
+
+            activeTab =
+                normalized;
+
+
+            /* -----------------------------------------
+               TAB BUTTONS
+               ----------------------------------------- */
+
+            settingsTabs.forEach(
+                tab => {
+
+                    const selected =
+                        tab.dataset
+                            .settingsTab ===
+                        normalized;
+
+
+                    tab.classList.toggle(
+                        "active",
+                        selected
+                    );
+
+
+                    tab.setAttribute(
+                        "aria-selected",
+                        String(selected)
+                    );
+
+
+                    tab.setAttribute(
+                        "aria-current",
+                        selected
+                            ? "page"
+                            : "false"
+                    );
+
+                }
+            );
+
+
+            /* -----------------------------------------
+               PANELS
+               ----------------------------------------- */
+
+            settingsPanels.forEach(
+                item => {
+
+                    const selected =
+                        item === panel;
+
+
+                    item.classList.toggle(
+                        "active",
+                        selected
+                    );
+
+
+                    item.hidden =
+                        !selected;
+
+
+                    item.setAttribute(
+                        "aria-hidden",
+                        String(!selected)
+                    );
+
+                }
+            );
+
+
+            /* -----------------------------------------
+               CONTENT SCROLL RESET
+               ----------------------------------------- */
+
+            const content =
+                settingsOverlay.querySelector(
+                    ".neo-settings-content"
+                );
+
+
+            if (content) {
+
+                content.scrollTop =
+                    0;
+
+            }
+
+
+            emit(
+                "neyo:settings-tab-change",
+                {
+                    tab:
+                        activeTab,
+
+                    panelId:
+                        panel.id
+                }
+            );
+
+
+            return true;
+
+        };
+
+
+    /* =====================================================
+       DEFAULT TAB
+       ===================================================== */
+
+    const getDefaultTab = () => {
+
+        const current =
+            settingsTabs.find(
+                tab =>
+                    tab.classList
+                        .contains(
+                            "active"
+                        )
+            );
+
+
+        return (
+            current?.dataset
+                ?.settingsTab ||
+            settingsTabs[0]
+                ?.dataset
+                ?.settingsTab ||
+            "general"
         );
+
     };
 
 
     /* =====================================================
-       OPEN
+       OPEN SETTINGS
        ===================================================== */
 
     const openSettings = (
         tabName = null
     ) => {
 
-        settingsModal.classList.add(
-            "show"
+        previousFocusedElement =
+            document.activeElement;
+
+
+        settingsOverlay.classList.add(
+            "show",
+            "open",
+            "active"
         );
 
-        settingsModal.classList.add(
-            "open"
-        );
 
-        settingsModal.setAttribute(
+        settingsOverlay.setAttribute(
             "aria-hidden",
             "false"
         );
+
 
         document.body.classList.add(
             "settings-open"
         );
 
 
-        if (tabName) {
-            activateTab(
+        const requestedTab =
+            normalizeTabName(
                 tabName
-            );
-        }
+            ) ||
+            activeTab ||
+            getDefaultTab();
 
-        else if (!activeTab) {
 
-            const currentTab =
-                settingsTabs.find(
-                    tab =>
-                        tab.classList.contains(
-                            "active"
-                        )
-                );
+        activateTab(
+            requestedTab
+        );
 
-            const fallback =
-                currentTab?.dataset.settingsTab ||
-                settingsTabs[0]
-                    ?.dataset.settingsTab;
 
-            if (fallback) {
-                activateTab(
-                    fallback
-                );
+        requestAnimationFrame(
+            () => {
+
+                settingsCloseBtn
+                    ?.focus?.();
+
             }
-        }
+        );
 
 
         emit(
@@ -208,27 +390,36 @@ Does NOT own:
                     activeTab
             }
         );
+
+
+        return true;
+
     };
 
 
     /* =====================================================
-       CLOSE
+       CLOSE SETTINGS
        ===================================================== */
 
     const closeSettings = () => {
 
-        settingsModal.classList.remove(
-            "show"
+        if (!isOpen()) {
+            return false;
+        }
+
+
+        settingsOverlay.classList.remove(
+            "show",
+            "open",
+            "active"
         );
 
-        settingsModal.classList.remove(
-            "open"
-        );
 
-        settingsModal.setAttribute(
+        settingsOverlay.setAttribute(
             "aria-hidden",
             "true"
         );
+
 
         document.body.classList.remove(
             "settings-open"
@@ -242,6 +433,33 @@ Does NOT own:
                     activeTab
             }
         );
+
+
+        if (
+            previousFocusedElement &&
+            document.contains(
+                previousFocusedElement
+            )
+        ) {
+
+            requestAnimationFrame(
+                () => {
+
+                    previousFocusedElement
+                        ?.focus?.();
+
+                }
+            );
+
+        }
+
+
+        previousFocusedElement =
+            null;
+
+
+        return true;
+
     };
 
 
@@ -254,12 +472,16 @@ Does NOT own:
     ) => {
 
         if (isOpen()) {
-            closeSettings();
-        } else {
-            openSettings(
-                tabName
-            );
+
+            return closeSettings();
+
         }
+
+
+        return openSettings(
+            tabName
+        );
+
     };
 
 
@@ -272,13 +494,19 @@ Does NOT own:
 
             tab.addEventListener(
                 "click",
-                () => {
+                event => {
+
+                    event.preventDefault();
+
 
                     activateTab(
-                        tab.dataset.settingsTab
+                        tab.dataset
+                            .settingsTab
                     );
+
                 }
             );
+
         }
     );
 
@@ -287,14 +515,22 @@ Does NOT own:
        CLOSE BUTTON
        ===================================================== */
 
-    settingsCloseBtn?.addEventListener(
-        "click",
-        closeSettings
-    );
+    settingsCloseBtn
+        ?.addEventListener(
+            "click",
+            event => {
+
+                event.preventDefault();
+
+
+                closeSettings();
+
+            }
+        );
 
 
     /* =====================================================
-       ESCAPE KEY
+       ESCAPE
        ===================================================== */
 
     document.addEventListener(
@@ -302,35 +538,47 @@ Does NOT own:
         event => {
 
             if (
-                event.key === "Escape" &&
-                isOpen()
+                event.key !==
+                    "Escape" ||
+                !isOpen()
             ) {
-                closeSettings();
+                return;
             }
+
+
+            event.preventDefault();
+
+
+            closeSettings();
+
         }
     );
 
 
     /* =====================================================
-       CLICK BACKDROP
+       BACKDROP CLICK
        ===================================================== */
 
-    settingsModal.addEventListener(
+    settingsOverlay.addEventListener(
         "click",
         event => {
 
             if (
-                event.target ===
-                settingsModal
+                event.target !==
+                settingsOverlay
             ) {
-                closeSettings();
+                return;
             }
+
+
+            closeSettings();
+
         }
     );
 
 
     /* =====================================================
-       PUBLIC EVENTS
+       SETTINGS OPEN REQUEST
        ===================================================== */
 
     window.addEventListener(
@@ -341,15 +589,24 @@ Does NOT own:
                 event.detail?.tab ||
                 null
             );
+
         }
     );
 
+
+    /* =====================================================
+       SETTINGS CLOSE REQUEST
+       ===================================================== */
 
     window.addEventListener(
         "neyo:settings-close-request",
         closeSettings
     );
 
+
+    /* =====================================================
+       SETTINGS TOGGLE REQUEST
+       ===================================================== */
 
     window.addEventListener(
         "neyo:settings-toggle-request",
@@ -359,9 +616,14 @@ Does NOT own:
                 event.detail?.tab ||
                 null
             );
+
         }
     );
 
+
+    /* =====================================================
+       TAB REQUEST
+       ===================================================== */
 
     window.addEventListener(
         "neyo:settings-tab-request",
@@ -370,7 +632,27 @@ Does NOT own:
             activateTab(
                 event.detail?.tab
             );
+
         }
+    );
+
+
+    /* =====================================================
+       INITIAL STATE
+       ===================================================== */
+
+    settingsOverlay.setAttribute(
+        "aria-hidden",
+        "true"
+    );
+
+
+    const initialTab =
+        getDefaultTab();
+
+
+    activateTab(
+        initialTab
     );
 
 
@@ -395,7 +677,21 @@ Does NOT own:
             isOpen,
 
             getActiveTab:
-                () => activeTab
+                () =>
+                    activeTab,
+
+            getAvailableTabs:
+                () =>
+                    settingsTabs
+                        .map(
+                            tab =>
+                                tab.dataset
+                                    .settingsTab
+                        )
+                        .filter(
+                            Boolean
+                        )
+
         });
 
 })();

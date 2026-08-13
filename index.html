@@ -82,7 +82,7 @@
   <link rel="stylesheet" href="/css/components/responsive.css?v=1">
 
   <!-- Send State Component -->
-  <link rel="stylesheet" href="/css/components/send-state.css?v=1">
+  <!-- <link rel="stylesheet" href="/css/components/send-state.css?v=1"> -->
   <link rel="stylesheet" href="/css/components/mobile-shell.css?v=2">
 
   <!-- KaTeX -->
@@ -1112,59 +1112,15 @@
   </div>
 
   <!-- ========================================================= -->
-  <!-- SCRIPTS — FINAL ORDER                                     -->
+  <!-- SCRIPTS — CLEAN WORKING BASELINE                           -->
   <!-- ========================================================= -->
-  <!-- Full modular loader: neo.js disabled -->
-  <script type="module" src="/js/components/responsive.js?v=1"></script>
-  <script type="module" src="/js/components/mobile-viewport.js?v=1"></script>
-  <script type="module" src="/js/components/theme.js?v=1"></script>
-  <script type="module" src="/js/components/modal.js?v=1"></script>
-  <script type="module" src="/js/components/notifications.js?v=1"></script>
-  <script type="module" src="/js/components/app-state.js?v=1"></script>
-  <script type="module" src="/js/components/sidebar.js?v=1"></script>
-  <script type="module" src="/js/components/topbar.js?v=1"></script>
-  <script type="module" src="/js/components/composer.js?v=1"></script>
-  <script type="module" src="/js/components/composer-expand.js?v=1"></script>
-  <script type="module" src="/js/components/attachments.js?v=1"></script>
-  <script type="module" src="/js/components/suggestions.js?v=1"></script>
-  <script type="module" src="/js/components/voice.js?v=1"></script>
-  <script type="module" src="/js/components/model-menu.js?v=1"></script>
-  <script type="module" src="/js/components/search.js?v=1"></script>
-  <script type="module" src="/js/components/account-menu.js?v=1"></script>
-  <script type="module" src="/js/components/settings.js?v=1"></script>
-  <script type="module" src="/js/components/language.js?v=1"></script>
-  <script type="module" src="/js/components/personality.js?v=1"></script>
-  <script type="module" src="/js/components/intelligence.js?v=1"></script>
-  <script type="module" src="/js/components/private-chat.js?v=1"></script>
-  <script type="module" src="/js/components/deep-research.js?v=1"></script>
-  <script type="module" src="/js/components/memory.js?v=1"></script>
-  <script type="module" src="/js/components/auth.js?v=1"></script>
-  <script type="module" src="/js/components/profile.js?v=1"></script>
-  <script type="module" src="/js/components/history.js?v=1"></script>
-  <script type="module" src="/js/components/upload.js?v=1"></script>
-  <script type="module" src="/js/components/chat.js?v=1"></script>
-  <script type="module" src="/js/components/messages.js?v=1"></script>
-  <script type="module" src="/js/components/message-renderer.js?v=1"></script>
-  <script type="module" src="/js/components/message-actions.js?v=1"></script>
-  <script type="module" src="/js/components/message-edit.js?v=1"></script>
-  <script type="module" src="/js/components/share.js?v=1"></script>
-  <script type="module" src="/js/components/regenerate.js?v=1"></script>
-  <script type="module" src="/js/components/send.js?v=1"></script>
-  <script type="module" src="/js/components/new-chat.js?v=1"></script>
-  <script type="module" src="/js/components/upgrade.js?v=1"></script>
-  <script type="module" src="/js/components/checkout.js?v=1"></script>
-  <script type="module" src="/js/components/send-state.js?v=1"></script>
-  <script type="module" src="/js/components/native-tooltips.js?v=1"></script>
-  <script type="module" src="/js/components/tooltip-registry.js?v=1"></script>
-  <script type="module" src="/js/components/hero-state.js?v=1"></script>
-  <script type="module" src="/js/components/history-menu.js?v=2"></script>   <!-- ✅ v2 with fixed JS -->
-  <script type="module" src="/js/components/mobile-keyboard.js?v=1"></script>
-  <script type="module" src="/js/components/app-init.js?v=1"></script>
 
-  <!-- Start the modular NEYO app after every module above has loaded -->
-  <script type="module">
-    window.NeyoApp?.init?.();
-  </script>
+  <!-- Main working app -->
+  <script src="/neo.js?v=86"></script>
+
+  <!-- Mobile viewport fixes only -->
+  <script type="module" src="/js/components/mobile-viewport.js?v=1"></script>
+  <script type="module" src="/js/components/mobile-keyboard.js?v=1"></script>
 
 </body>
 </html>

@@ -4,16 +4,15 @@ NEYO — INTELLIGENCE COMPONENT
 
 Owns:
 - Intelligence mode state
-- Intelligence UI sync
+- Settings segmented control
 - Chat preference sync
-- Intelligence lifecycle events
-- Public intelligence API
+- Public events / API
 
 Does NOT own:
 - Model selection
 - Deep Research
+- Billing enforcement
 - Chat API implementation
-- Billing / Pro enforcement
 =========================================================
 */
 
@@ -22,88 +21,50 @@ Does NOT own:
 
 
     /* =====================================================
+       ELEMENTS
+       ===================================================== */
+
+    const intelligenceControl =
+        document.getElementById(
+            "settingsIntelligenceControl"
+        );
+
+
+    const intelligenceButtons =
+        intelligenceControl
+            ? Array.from(
+                intelligenceControl.querySelectorAll(
+                    "button[data-value]"
+                )
+            )
+            : [];
+
+
+    /* =====================================================
        MODES
        ===================================================== */
 
-    const INTELLIGENCE_MODES =
+    const MODES =
         Object.freeze({
 
             standard: {
-                id:
-                    "standard",
-
-                name:
-                    "Standard",
-
-                label:
-                    "Balanced",
-
-                description:
-                    "Fast, capable reasoning for everyday tasks."
+                id: "standard",
+                name: "Standard"
             },
 
-
-            thoughtful: {
-                id:
-                    "thoughtful",
-
-                name:
-                    "Thoughtful",
-
-                label:
-                    "Deeper thinking",
-
-                description:
-                    "More deliberate reasoning for complex tasks."
-            },
-
-
-            fast: {
-                id:
-                    "fast",
-
-                name:
-                    "Fast",
-
-                label:
-                    "Quick response",
-
-                description:
-                    "Optimized for speed and simple tasks."
+            maximum: {
+                id: "maximum",
+                name: "Maximum"
             }
 
         });
 
 
     /* =====================================================
-       ELEMENTS
-       ===================================================== */
-
-    const intelligenceButtons =
-        Array.from(
-            document.querySelectorAll(
-                "[data-intelligence]"
-            )
-        );
-
-
-    const intelligenceSelect =
-        document.getElementById(
-            "intelligenceSelect"
-        );
-
-
-    const intelligenceDisplay =
-        document.getElementById(
-            "intelligenceDisplay"
-        );
-
-
-    /* =====================================================
        STATE
        ===================================================== */
 
-    let selectedMode =
+    let currentMode =
         "standard";
 
 
@@ -139,27 +100,9 @@ Does NOT own:
                     .toLowerCase();
 
 
-            return INTELLIGENCE_MODES[
-                mode
-            ]
+            return MODES[mode]
                 ? mode
                 : "standard";
-
-        };
-
-
-    const getModeInfo =
-        value => {
-
-            const mode =
-                normalizeMode(
-                    value
-                );
-
-
-            return INTELLIGENCE_MODES[
-                mode
-            ];
 
         };
 
@@ -173,55 +116,24 @@ Does NOT own:
         intelligenceButtons.forEach(
             button => {
 
-                const active =
-                    button.dataset
-                        .intelligence ===
-                    selectedMode;
+                const selected =
+                    button.dataset.value ===
+                    currentMode;
 
 
                 button.classList.toggle(
                     "active",
-                    active
-                );
-
-
-                button.setAttribute(
-                    "aria-selected",
-                    String(active)
+                    selected
                 );
 
 
                 button.setAttribute(
                     "aria-pressed",
-                    String(active)
+                    String(selected)
                 );
 
             }
         );
-
-
-        if (intelligenceSelect) {
-
-            intelligenceSelect.value =
-                selectedMode;
-
-        }
-
-
-        if (intelligenceDisplay) {
-
-            intelligenceDisplay
-                .textContent =
-                getModeInfo(
-                    selectedMode
-                ).name;
-
-        }
-
-
-        document.documentElement
-            .dataset.intelligence =
-            selectedMode;
 
     };
 
@@ -235,7 +147,7 @@ Does NOT own:
         window.NeyoChat
             ?.setPreferences?.({
                 intelligence:
-                    selectedMode
+                    currentMode
             });
 
     };
@@ -257,14 +169,18 @@ Does NOT own:
 
 
         if (
-            selectedMode === next &&
+            currentMode === next &&
             options.force !== true
         ) {
-            return selectedMode;
+
+            updateUi();
+
+            return currentMode;
+
         }
 
 
-        selectedMode =
+        currentMode =
             next;
 
 
@@ -281,13 +197,13 @@ Does NOT own:
                 "neyo:intelligence-change",
                 {
                     intelligence:
-                        selectedMode,
+                        currentMode,
 
                     info:
                         {
-                            ...getModeInfo(
-                                selectedMode
-                            )
+                            ...MODES[
+                                currentMode
+                            ]
                         }
                 }
             );
@@ -295,7 +211,7 @@ Does NOT own:
         }
 
 
-        return selectedMode;
+        return currentMode;
 
     };
 
@@ -315,8 +231,7 @@ Does NOT own:
 
 
                     setMode(
-                        button.dataset
-                            .intelligence
+                        button.dataset.value
                     );
 
                 }
@@ -327,50 +242,7 @@ Does NOT own:
 
 
     /* =====================================================
-       SELECT EVENT
-       ===================================================== */
-
-    intelligenceSelect
-        ?.addEventListener(
-            "change",
-            event => {
-
-                setMode(
-                    event.target.value
-                );
-
-            }
-        );
-
-
-    /* =====================================================
-       PROFILE SYNC
-       ===================================================== */
-
-    window.addEventListener(
-        "neyo:profile-loaded",
-        event => {
-
-            const preferred =
-                event.detail
-                    ?.profile
-                    ?.intelligence;
-
-
-            if (preferred) {
-
-                setMode(
-                    preferred
-                );
-
-            }
-
-        }
-    );
-
-
-    /* =====================================================
-       EXTERNAL EVENTS
+       EXTERNAL SET
        ===================================================== */
 
     window.addEventListener(
@@ -393,13 +265,31 @@ Does NOT own:
     );
 
 
-    window.addEventListener(
-        "neyo:intelligence-reset",
-        () => {
+    /* =====================================================
+       CHAT PREFERENCE RESTORE
+       ===================================================== */
 
-            setMode(
-                "standard"
-            );
+    window.addEventListener(
+        "neyo:chat-preferences-change",
+        event => {
+
+            const mode =
+                event.detail
+                    ?.preferences
+                    ?.intelligence;
+
+
+            if (mode) {
+
+                setMode(
+                    mode,
+                    {
+                        silent:
+                            true
+                    }
+                );
+
+            }
 
         }
     );
@@ -409,7 +299,7 @@ Does NOT own:
        INITIAL STATE
        ===================================================== */
 
-    const initialActive =
+    const initialButton =
         intelligenceButtons.find(
             button =>
                 button.classList
@@ -419,33 +309,13 @@ Does NOT own:
         );
 
 
-    if (
-        initialActive
-            ?.dataset
-            ?.intelligence
-    ) {
-
-        selectedMode =
-            normalizeMode(
-                initialActive
-                    .dataset
-                    .intelligence
-            );
-
-    }
-
-    else if (
-        intelligenceSelect
-            ?.value
-    ) {
-
-        selectedMode =
-            normalizeMode(
-                intelligenceSelect
-                    .value
-            );
-
-    }
+    currentMode =
+        normalizeMode(
+            initialButton
+                ?.dataset
+                ?.value ||
+            "standard"
+        );
 
 
     updateUi();
@@ -468,20 +338,19 @@ Does NOT own:
 
             get:
                 () =>
-                    selectedMode,
+                    currentMode,
 
             getCurrent:
-                () =>
-                    ({
-                        ...getModeInfo(
-                            selectedMode
-                        )
-                    }),
+                () => ({
+                    ...MODES[
+                        currentMode
+                    ]
+                }),
 
             getAll:
                 () =>
                     Object.values(
-                        INTELLIGENCE_MODES
+                        MODES
                     ).map(
                         mode => ({
                             ...mode

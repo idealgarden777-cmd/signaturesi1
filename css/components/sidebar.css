@@ -1,43 +1,75 @@
-/*
-=========================================================
-NEYO — SIDEBAR COMPONENT
+/* =========================================================
+   NEYO — SIDEBAR COMPONENT
+   =========================================================
 
-Purpose:
-Primary navigation + chat history sidebar.
+   Purpose:
+   Primary navigation + chat history sidebar.
 
-Includes:
-- Desktop sidebar
-- Brand/header
-- Primary navigation
-- History list
-- Three-dot actions
-- Loading shimmer
-- Footer/profile area
-- Dark mode
-- Mobile off-canvas drawer
-- Sidebar scrim
-- Density modes
+   Architecture:
+   01 Tokens / Variables
+   02 Sidebar Shell
+   03 Header
+   04 Primary Navigation
+   05 History
+   06 History Actions
+   07 Loading State
+   08 Footer / Profile
+   09 User Popup
+   10 Dark Mode
+   11 Density
+   12 Mobile Drawer
+   13 Reduced Motion
 
-Legacy neo-v3.css stays loaded during migration.
-=========================================================
-*/
+   Legacy neo-v3.css remains disabled during migration.
+   ========================================================= */
 
 
 /* =========================================================
-   SIDEBAR BASE
+   01 — TOKENS / VARIABLES
+   ========================================================= */
+
+:root {
+    --sidebar-bg: #f9f9f9;
+    --sidebar-border: rgba(0, 0, 0, 0.06);
+    --sidebar-text: #262626;
+    --sidebar-muted: #8a8a8a;
+    --sidebar-hover: rgba(0, 0, 0, 0.045);
+    --sidebar-active: rgba(0, 0, 0, 0.065);
+    --sidebar-surface: #ffffff;
+
+    --sidebar-radius: 10px;
+    --sidebar-radius-sm: 8px;
+    --sidebar-radius-lg: 14px;
+
+    --sidebar-transition: 140ms ease;
+    --sidebar-transition-slow: 220ms ease;
+
+    --history-item-height: 38px;
+    --history-item-padding: 9px 42px 9px 10px;
+    --history-action-size: 28px;
+}
+
+body.dark-mode {
+    --sidebar-bg: #171717;
+    --sidebar-border: rgba(255, 255, 255, 0.07);
+    --sidebar-text: #f1f1f1;
+    --sidebar-muted: rgba(255, 255, 255, 0.56);
+    --sidebar-hover: rgba(255, 255, 255, 0.065);
+    --sidebar-active: rgba(255, 255, 255, 0.085);
+    --sidebar-surface: #0d0d0d;
+}
+
+
+/* =========================================================
+   02 — SIDEBAR SHELL
    ========================================================= */
 
 .sidebar {
     display: flex;
     flex-direction: column;
-
     min-height: 100vh;
-
-    background: var(--sidebar-bg, #f9f9f9);
-
-    border-right:
-        1px solid rgba(0, 0, 0, 0.06);
-
+    background: var(--sidebar-bg);
+    border-right: 1px solid var(--sidebar-border);
     transition:
         width 220ms ease,
         transform 220ms ease,
@@ -47,1099 +79,724 @@ Legacy neo-v3.css stays loaded during migration.
 
 
 /* =========================================================
-   HEADER
+   03 — HEADER
    ========================================================= */
 
 .sidebar-header {
     flex: 0 0 auto;
-
     display: flex;
     align-items: center;
-    justify-content: space-between;
-
     min-height: 58px;
-
-    padding: 8px 12px;
+    padding: 0 14px;
+    box-sizing: border-box;
 }
 
-
-.brand-button {
-    min-width: 0;
-
+.sidebar-header .brand-button {
     display: flex;
     align-items: center;
-
     gap: 9px;
-
+    min-width: 0;
     border: 0;
-
     background: transparent;
-
     cursor: pointer;
 }
-
 
 .brand-logo {
     flex: 0 0 auto;
 }
 
-
 .brand-name {
-    font-family:
-        "Sora",
-        "Inter",
-        sans-serif;
-
+    font-family: "Sora", "Inter", sans-serif;
     font-size: 14px;
     font-weight: 600;
-
     white-space: nowrap;
+    color: var(--sidebar-text);
+}
+
+/* Collapse button — matched to actual DOM */
+.sidebar-header #collapseSidebarBtn {
+    width: 32px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: auto;
+    padding: 0;
+    border: 0;
+    border-radius: var(--sidebar-radius-sm);
+    background: transparent;
+    color: var(--sidebar-text);
+    cursor: pointer;
+    transition: background-color var(--sidebar-transition), color var(--sidebar-transition);
+}
+
+.sidebar-header #collapseSidebarBtn:hover {
+    background: var(--sidebar-hover);
+}
+
+.sidebar-header #collapseSidebarBtn:focus-visible {
+    outline: 2px solid rgba(0, 0, 0, 0.22);
+    outline-offset: 2px;
+}
+
+body.dark-mode .sidebar-header #collapseSidebarBtn:focus-visible {
+    outline-color: rgba(255, 255, 255, 0.30);
 }
 
 
 /* =========================================================
-   CONTENT
+   04 — PRIMARY NAVIGATION
    ========================================================= */
 
 .sidebar-content {
     flex: 1 1 auto;
-
     min-height: 0;
-
-    padding:
-        4px
-        10px
-        14px;
-
+    padding: 4px 10px 14px;
     overflow-y: auto;
     overflow-x: hidden;
 }
 
-
-/* =========================================================
-   PRIMARY NAV
-   ========================================================= */
-
 .sidebar-primary-nav {
     display: flex;
     flex-direction: column;
-
-    gap: 4px;
+    gap: 3px;
+    padding: 8px 0;
 }
-
 
 .new-chat-btn,
 .sidebar-personality-btn {
     width: 100%;
-
-    min-height: 42px;
-
+    min-height: 40px;
     display: flex;
     align-items: center;
-
-    gap: 10px;
-
-    padding:
-        0
-        10px;
-
+    gap: 11px;
+    padding: 8px 10px;
     border: 0;
-    border-radius: 10px;
-
+    border-radius: var(--sidebar-radius);
     background: transparent;
-    color: #262626;
-
-    font-family:
-        "Inter",
-        sans-serif;
-
+    color: var(--sidebar-text);
+    font-family: "Inter", system-ui, sans-serif;
     font-size: 14px;
     font-weight: 500;
-
+    line-height: 20px;
     text-align: left;
-
     cursor: pointer;
-
-    transition:
-        background-color 140ms ease,
-        color 140ms ease;
+    transition: background-color var(--sidebar-transition), color var(--sidebar-transition);
 }
-
 
 .new-chat-btn:hover,
 .sidebar-personality-btn:hover {
-    background:
-        rgba(0, 0, 0, 0.045);
+    background: var(--sidebar-hover);
 }
 
+.new-chat-btn:focus-visible,
+.sidebar-personality-btn:focus-visible {
+    outline: 2px solid rgba(0, 0, 0, 0.22);
+    outline-offset: 2px;
+}
+
+body.dark-mode .new-chat-btn:focus-visible,
+body.dark-mode .sidebar-personality-btn:focus-visible {
+    outline-color: rgba(255, 255, 255, 0.30);
+}
 
 .sidebar-nav-icon {
     flex: 0 0 auto;
-
     display: inline-flex;
     align-items: center;
     justify-content: center;
-
-    width: 22px;
-    height: 22px;
+    width: 20px;
+    height: 20px;
+    stroke-width: 1.8;
 }
 
 
 /* =========================================================
-   HISTORY
+   05 — HISTORY
    ========================================================= */
 
 .history-section {
-    margin-top: 18px;
+    margin-top: 16px;
 }
-
 
 .section-title {
     display: block;
-
-    padding:
-        0
-        6px
-        7px;
-
-    color: #8a8a8a;
-
-    font-family:
-        "Inter",
-        sans-serif;
-
+    padding: 0 10px 6px;
+    color: var(--sidebar-muted);
+    font-family: "Inter", system-ui, sans-serif;
     font-size: 11.5px;
     font-weight: 500;
 }
-
 
 .history-list {
     display: flex;
     flex-direction: column;
-
-    gap: 2px;
+    gap: 1px;
 }
 
-
-.history-item-wrapper {
-    position: relative !important;
-
-    min-height: 40px;
-
-    border-radius: 10px;
-}
-
-
+/* History item — stable ellipsis */
 .history-item {
-    min-height: 38px;
-
-    display: flex;
-    align-items: center;
-
-    padding:
-        8px
-        38px
-        8px
-        9px;
-
-    border-radius: 10px;
-
-    color: #303030;
-
-    font-family:
-        "Inter",
-        sans-serif;
-
+    position: relative;
+    width: 100%;
+    min-width: 0;
+    height: var(--history-item-height);
+    min-height: var(--history-item-height);
+    max-height: var(--history-item-height);
+    display: block;
+    box-sizing: border-box;
+    padding: var(--history-item-padding);
+    margin: 0;
+    border-radius: var(--sidebar-radius);
+    overflow: hidden;
+    background: transparent;
+    color: var(--sidebar-text);
+    font-family: "Inter", system-ui, sans-serif;
     font-size: 13.5px;
+    font-weight: 400;
     line-height: 20px;
-
     cursor: pointer;
-
-    transition:
-        background-color 140ms ease,
-        color 140ms ease;
+    transition: background-color 120ms ease, color 120ms ease;
 }
-
 
 .history-item:hover {
-    background:
-        rgba(0, 0, 0, 0.045);
+    background: var(--sidebar-hover);
+}
+
+.history-item.active {
+    background: var(--sidebar-active);
+}
+
+.history-item-title {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 20px;
 }
 
 
 /* =========================================================
-   HISTORY THREE DOT
+   06 — HISTORY ACTIONS (Three-dot)
    ========================================================= */
 
-.history-three-dot {
-    position: absolute !important;
+.history-item-actions {
+    position: absolute;
+    top: 50%;
+    right: 6px;
+    transform: translateY(-50%);
+    width: var(--history-action-size);
+    height: var(--history-action-size);
+    margin: 0;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: inherit;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 100ms ease, visibility 100ms ease;
+}
 
-    top: 50% !important;
-    right: 8px !important;
+.history-item:hover .history-item-actions,
+.history-item.active .history-item-actions,
+.history-item:focus-within .history-item-actions {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+}
 
-    transform:
-        translateY(-50%) !important;
+.history-action-btn {
+    position: static;
+    width: var(--history-action-size);
+    height: var(--history-action-size);
+    min-width: var(--history-action-size);
+    min-height: var(--history-action-size);
+    padding: 0;
+    margin: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    outline: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: rgba(0, 0, 0, 0.48);
+    box-shadow: none;
+    cursor: pointer;
+    transform: none;
+}
 
-    width: 30px !important;
-    height: 30px !important;
+.history-action-btn svg,
+.history-action-btn i {
+    width: 16px;
+    height: 16px;
+    pointer-events: none;
+}
 
-    display: inline-flex !important;
-    align-items: center !important;
-    justify-content: center !important;
+.history-action-btn:hover {
+    background: rgba(0, 0, 0, 0.055);
+    color: rgba(0, 0, 0, 0.82);
+}
 
-    margin: 0 !important;
-
-    border-radius: 999px;
-
-    transition:
-        background-color 140ms ease,
-        opacity 140ms ease;
+/* Touch devices: always show actions */
+@media (hover: none) {
+    .history-item-actions {
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
+    }
 }
 
 
-.history-three-dot:hover {
-    background:
-        rgba(0, 0, 0, 0.055);
-}
-
-
-.history-three-dot:hover,
-.history-three-dot:active {
-    transform:
-        translateY(-50%) !important;
-}
 /* =========================================================
-   HISTORY LOADING SHIMMER
+   07 — LOADING STATE (Shimmer)
    ========================================================= */
 
 @keyframes neyoHistoryShimmer {
-
-    0% {
-        background-position: 200% 0;
-    }
-
-    100% {
-        background-position: -200% 0;
-    }
-
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
 }
-
 
 .history-loading {
     display: flex;
     flex-direction: column;
-
     gap: 2px;
 }
 
-
 .history-skeleton-row {
     min-height: 40px;
-
     display: flex;
     align-items: center;
-
-    padding:
-        8px
-        9px;
-
-    border-radius: 10px;
+    padding: 8px 9px;
+    border-radius: var(--sidebar-radius);
 }
-
 
 .history-skeleton-line {
     width: 62%;
     height: 12px;
-
     border-radius: 999px;
-
-    background:
-        linear-gradient(
-            90deg,
-            #eeeeef 25%,
-            #f7f7f8 50%,
-            #eeeeef 75%
-        );
-
-    background-size:
-        200%
-        100%;
-
-    animation:
-        neyoHistoryShimmer
-        1.35s
-        ease-in-out
-        infinite;
+    background: linear-gradient(90deg, #eeeeef 25%, #f7f7f8 50%, #eeeeef 75%);
+    background-size: 200% 100%;
+    animation: neyoHistoryShimmer 1.35s ease-in-out infinite;
 }
 
-
-.history-skeleton-row:nth-child(2)
-.history-skeleton-line {
-    width: 48%;
-}
-
-
-.history-skeleton-row:nth-child(3)
-.history-skeleton-line {
-    width: 57%;
-}
+.history-skeleton-row:nth-child(2) .history-skeleton-line { width: 48%; }
+.history-skeleton-row:nth-child(3) .history-skeleton-line { width: 57%; }
 
 
 /* =========================================================
-   FOOTER
+   08 — FOOTER / PROFILE
    ========================================================= */
 
 .sidebar-footer {
     flex: 0 0 auto;
-
     position: relative;
-
-    padding:
-        8px
-        10px;
-
-    border-top:
-        1px solid rgba(0, 0, 0, 0.06);
-
+    padding: 8px 10px;
+    border-top: 1px solid var(--sidebar-border);
     background: inherit;
 }
 
-
-/* =========================================================
-   USER PROFILE BUTTON
-   ========================================================= */
-
 .user-profile-btn {
     width: 100%;
-
     display: flex;
     align-items: center;
-
     gap: 10px;
-
     min-height: 48px;
-
-    padding:
-        6px
-        8px;
-
+    padding: 6px 8px;
     border: 0;
     border-radius: 12px;
-
     background: transparent;
-
     cursor: pointer;
-
-    transition:
-        background-color 140ms ease;
+    transition: background-color var(--sidebar-transition);
 }
-
 
 .user-profile-btn:hover {
-    background:
-        rgba(0, 0, 0, 0.045);
+    background: var(--sidebar-hover);
 }
-
 
 #userAvatar {
     flex: 0 0 auto;
-
     display: flex;
     align-items: center;
     justify-content: center;
-
     width: 32px;
     height: 32px;
-
     border-radius: 999px;
-
     background: #e9e9e9;
     color: #171717;
-
     font-size: 13px;
     font-weight: 600;
-
     overflow: hidden;
 }
 
+body.dark-mode #userAvatar {
+    background: #292929;
+    color: #f1f1f1;
+}
 
 .user-info {
     flex: 1 1 auto;
-
     min-width: 0;
-
     display: flex;
     flex-direction: column;
-
     align-items: flex-start;
-
     gap: 1px;
 }
 
-
 .user-name {
     max-width: 100%;
-
     overflow: hidden;
-
-    color: #262626;
-
+    color: var(--sidebar-text);
     font-size: 13.5px;
     font-weight: 500;
-
     white-space: nowrap;
     text-overflow: ellipsis;
 }
 
-
 .user-badge {
-    color: #8a8a8a;
-
+    color: var(--sidebar-muted);
     font-size: 11.5px;
 }
 
-
 .more-icon {
     flex: 0 0 auto;
-
     opacity: 0.65;
+    color: var(--sidebar-text);
 }
 
 
 /* =========================================================
-   USER POPUP
+   09 — USER POPUP
    ========================================================= */
 
 .user-popup-menu {
     z-index: 200;
-
-    border:
-        1px solid rgba(0, 0, 0, 0.08);
-
-    border-radius: 14px;
-
-    background:
-        rgba(255, 255, 255, 0.98);
-
-    box-shadow:
-        0 10px 30px rgba(0, 0, 0, 0.10);
-
-    backdrop-filter:
-        blur(16px);
-
-    -webkit-backdrop-filter:
-        blur(16px);
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: var(--sidebar-radius-lg);
+    background: rgba(255, 255, 255, 0.98);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.10);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
 }
-
 
 .popup-item {
     min-height: 38px;
-
     display: flex;
     align-items: center;
-
     gap: 10px;
-
     border-radius: 9px;
-
     font-size: 13.5px;
-
-    transition:
-        background-color 140ms ease;
+    color: var(--sidebar-text);
+    transition: background-color var(--sidebar-transition);
 }
-
 
 .popup-item:hover {
-    background:
-        rgba(0, 0, 0, 0.045);
+    background: var(--sidebar-hover);
 }
-
 
 .popup-item.danger {
     color: #c43c3c;
 }
 
+body.dark-mode .user-popup-menu {
+    border-color: rgba(255, 255, 255, 0.09);
+    background: rgba(28, 28, 28, 0.98);
+    box-shadow: 0 14px 38px rgba(0, 0, 0, 0.38);
+}
+
+body.dark-mode .popup-item {
+    color: #ececec;
+}
+
+body.dark-mode .popup-item:hover {
+    background: rgba(255, 255, 255, 0.07);
+}
+
 
 /* =========================================================
-   DARK MODE
+   10 — DARK MODE
    ========================================================= */
 
 body.dark-mode .sidebar {
-    background:
-        var(--sidebar-bg-dark, #171717);
-
-    border-right-color:
-        rgba(255, 255, 255, 0.07);
+    background: var(--sidebar-bg);
+    border-right-color: var(--sidebar-border);
 }
-
 
 body.dark-mode .brand-name,
 body.dark-mode .new-chat-btn,
 body.dark-mode .sidebar-personality-btn,
 body.dark-mode .history-item,
 body.dark-mode .user-name {
-    color: #f1f1f1;
+    color: var(--sidebar-text);
 }
-
 
 body.dark-mode .section-title,
 body.dark-mode .user-badge {
-    color:
-        rgba(255, 255, 255, 0.56);
+    color: var(--sidebar-muted);
+}
+
+body.dark-mode .new-chat-btn:hover,
+body.dark-mode .sidebar-personality-btn:hover,
+body.dark-mode .history-item:hover,
+body.dark-mode .user-profile-btn:hover,
+body.dark-mode .history-action-btn:hover {
+    background: var(--sidebar-hover);
+}
+
+body.dark-mode .history-item.active {
+    background: var(--sidebar-active);
+}
+
+body.dark-mode .history-action-btn {
+    color: rgba(255, 255, 255, 0.58);
+}
+
+body.dark-mode .history-action-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.92);
+}
+
+body.dark-mode .sidebar-footer {
+    border-top-color: var(--sidebar-border);
+}
+
+body.dark-mode .history-skeleton-line {
+    background: linear-gradient(90deg, #242424 25%, #303030 50%, #242424 75%);
+    background-size: 200% 100%;
 }
 
 
-body.dark-mode
-.new-chat-btn:hover,
-body.dark-mode
-.sidebar-personality-btn:hover,
-body.dark-mode
-.history-item:hover,
-body.dark-mode
-.user-profile-btn:hover,
-body.dark-mode
-.history-three-dot:hover {
-    background:
-        rgba(255, 255, 255, 0.07);
-}
-
-
-body.dark-mode
-.sidebar-footer {
-    border-top-color:
-        rgba(255, 255, 255, 0.07);
-}
-
-
-body.dark-mode
-#userAvatar {
-    background: #292929;
-    color: #f1f1f1;
-}
-
-
-body.dark-mode
-.user-popup-menu {
-    border-color:
-        rgba(255, 255, 255, 0.09);
-
-    background:
-        rgba(28, 28, 28, 0.98);
-
-    box-shadow:
-        0 14px 38px rgba(0, 0, 0, 0.38);
-}
-
-
-body.dark-mode
-.popup-item {
-    color: #ececec;
-}
-
-
-body.dark-mode
-.popup-item:hover {
-    background:
-        rgba(255, 255, 255, 0.07);
-}
-
-
-/* Loading shimmer dark */
-
-body.dark-mode
-.history-skeleton-line {
-    background:
-        linear-gradient(
-            90deg,
-            #242424 25%,
-            #303030 50%,
-            #242424 75%
-        );
-
-    background-size:
-        200%
-        100%;
-}
 /* =========================================================
-   SIDEBAR DENSITY
+   11 — DENSITY
    ========================================================= */
 
-body[data-neyo-sidebar-density="compact"]
-.history-item {
+body[data-neyo-sidebar-density="compact"] .history-item {
+    height: 34px !important;
     min-height: 34px !important;
-
-    padding-block:
-        6px !important;
+    max-height: 34px !important;
+    padding-block: 6px !important;
 }
 
-
-body[data-neyo-sidebar-density="comfortable"]
-.history-item {
+body[data-neyo-sidebar-density="comfortable"] .history-item {
+    height: 40px !important;
     min-height: 40px !important;
+    max-height: 40px !important;
 }
 
 
 /* =========================================================
-   INTERFACE MODES
-   ========================================================= */
-
-body[data-neyo-interface="minimal"]
-.sidebar {
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
-}
-
-
-body[data-neyo-interface="warm"]
-.sidebar {
-    background:
-        #faf7f1 !important;
-}
-
-
-/* =========================================================
-   MOBILE OFF-CANVAS DRAWER
+   12 — MOBILE DRAWER
    ========================================================= */
 
 @media (max-width: 767px) {
-
     :root {
-        --mobile-drawer-width:
-            min(82vw, 292px);
-
-        --mobile-bg:
-            #ffffff;
-
-        --mobile-surface:
-            #ffffff;
-
-        --mobile-soft:
-            #f4f4f4;
-
-        --mobile-border:
-            rgba(0, 0, 0, 0.09);
-
-        --mobile-text:
-            #171717;
-
-        --mobile-muted:
-            #737373;
+        --mobile-drawer-width: min(82vw, 292px);
+        --mobile-bg: #ffffff;
+        --mobile-surface: #ffffff;
+        --mobile-soft: #f4f4f4;
+        --mobile-border: rgba(0, 0, 0, 0.09);
+        --mobile-text: #171717;
+        --mobile-muted: #737373;
     }
-
 
     body.dark-mode {
-        --mobile-bg:
-            #000000;
-
-        --mobile-surface:
-            #171717;
-
-        --mobile-soft:
-            #212121;
-
-        --mobile-border:
-            rgba(255, 255, 255, 0.10);
-
-        --mobile-text:
-            #f5f5f5;
-
-        --mobile-muted:
-            rgba(255, 255, 255, 0.58);
+        --mobile-bg: #000000;
+        --mobile-surface: #171717;
+        --mobile-soft: #212121;
+        --mobile-border: rgba(255, 255, 255, 0.10);
+        --mobile-text: #f5f5f5;
+        --mobile-muted: rgba(255, 255, 255, 0.58);
     }
 
-
     /* Drawer */
-
     .sidebar {
         position: fixed !important;
-
         top: 0 !important;
         left: 0 !important;
         bottom: 0 !important;
-
         z-index: 100 !important;
-
-        width:
-            var(--mobile-drawer-width) !important;
-
-        max-width:
-            var(--mobile-drawer-width) !important;
-
-        height:
-            100dvh !important;
-
+        width: var(--mobile-drawer-width) !important;
+        max-width: var(--mobile-drawer-width) !important;
+        height: 100dvh !important;
         display: flex !important;
         flex-direction: column !important;
-
-        background:
-            #ffffff !important;
-
-        border-right:
-            1px solid rgba(0, 0, 0, 0.08) !important;
-
-        transform:
-            translate3d(0, 0, 0) !important;
-
+        background: var(--mobile-bg) !important;
+        border-right: 1px solid var(--mobile-border) !important;
+        transform: translate3d(0, 0, 0) !important;
         opacity: 1 !important;
         visibility: visible !important;
-
-        box-shadow:
-            18px
-            0
-            46px
-            rgba(0, 0, 0, 0.16) !important;
-
-        transition:
-            transform
-            220ms
-            cubic-bezier(0.22, 1, 0.36, 1),
-            visibility
-            220ms
-            ease !important;
-
+        box-shadow: 18px 0 46px rgba(0, 0, 0, 0.16) !important;
+        transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1), visibility 220ms ease !important;
         will-change: transform;
     }
 
-
-    body.dark-mode
-    .sidebar {
-        background:
-            #0d0d0d !important;
-
-        border-right-color:
-            rgba(255, 255, 255, 0.08) !important;
-
-        box-shadow:
-            20px
-            0
-            52px
-            rgba(0, 0, 0, 0.62) !important;
+    body.dark-mode .sidebar {
+        background: var(--mobile-bg) !important;
+        border-right-color: var(--mobile-border) !important;
+        box-shadow: 20px 0 52px rgba(0, 0, 0, 0.62) !important;
     }
-
 
     .sidebar.collapsed {
-        transform:
-            translate3d(-102%, 0, 0) !important;
-
-        visibility:
-            hidden !important;
-
-        pointer-events:
-            none !important;
+        transform: translate3d(-102%, 0, 0) !important;
+        visibility: hidden !important;
+        pointer-events: none !important;
     }
-
 
     .sidebar:not(.collapsed) {
-        transform:
-            translate3d(0, 0, 0) !important;
-
-        visibility:
-            visible !important;
-
-        pointer-events:
-            auto !important;
+        transform: translate3d(0, 0, 0) !important;
+        visibility: visible !important;
+        pointer-events: auto !important;
     }
-
 
     /* Scrim */
-
     .sidebar-scrim {
-        position:
-            fixed !important;
-
-        inset:
-            0 !important;
-
-        z-index:
-            90 !important;
-
-        display:
-            block !important;
-
-        background:
-            rgba(0, 0, 0, 0.38) !important;
-
-        opacity:
-            0 !important;
-
-        visibility:
-            hidden !important;
-
-        pointer-events:
-            none !important;
-
-        transition:
-            opacity
-            180ms
-            ease,
-            visibility
-            180ms
-            ease !important;
-
-        backdrop-filter:
-            blur(1.5px);
-
-        -webkit-backdrop-filter:
-            blur(1.5px);
+        position: fixed !important;
+        inset: 0 !important;
+        z-index: 90 !important;
+        display: block !important;
+        background: rgba(0, 0, 0, 0.38) !important;
+        opacity: 0 !important;
+        visibility: hidden !important;
+        pointer-events: none !important;
+        transition: opacity 180ms ease, visibility 180ms ease !important;
+        backdrop-filter: blur(1.5px);
+        -webkit-backdrop-filter: blur(1.5px);
     }
-
 
     .sidebar-scrim.visible {
-        opacity:
-            1 !important;
-
-        visibility:
-            visible !important;
-
-        pointer-events:
-            auto !important;
+        opacity: 1 !important;
+        visibility: visible !important;
+        pointer-events: auto !important;
     }
 
-
-    body.dark-mode
-    .sidebar-scrim {
-        background:
-            rgba(0, 0, 0, 0.56) !important;
+    body.dark-mode .sidebar-scrim {
+        background: rgba(0, 0, 0, 0.56) !important;
     }
-
 
     /* Header */
-
     .sidebar-header {
-        min-height:
-            calc(
-                58px +
-                env(safe-area-inset-top)
-            ) !important;
-
-        padding:
-            calc(
-                8px +
-                env(safe-area-inset-top)
-            )
-            12px
-            8px !important;
+        min-height: calc(58px + env(safe-area-inset-top)) !important;
+        padding: calc(8px + env(safe-area-inset-top)) 12px 8px !important;
     }
 
-
-    .brand-button {
-        min-width:
-            0 !important;
+    .sidebar-header .brand-button {
+        min-width: 0 !important;
     }
-
 
     /* Content */
-
     .sidebar-content {
-        flex:
-            1 1 auto !important;
-
-        min-height:
-            0 !important;
-
-        padding:
-            4px
-            10px
-            14px !important;
-
-        overflow-y:
-            auto !important;
-
-        overflow-x:
-            hidden !important;
+        flex: 1 1 auto !important;
+        min-height: 0 !important;
+        padding: 4px 10px 14px !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
     }
-
 
     .sidebar-primary-nav {
-        display:
-            flex !important;
-
-        flex-direction:
-            column !important;
-
-        gap:
-            4px !important;
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 4px !important;
     }
-
 
     .new-chat-btn,
     .sidebar-personality-btn {
-        width:
-            100% !important;
-
-        min-height:
-            44px !important;
-
-        padding:
-            0
-            11px !important;
-
-        display:
-            flex !important;
-
-        align-items:
-            center !important;
-
-        gap:
-            10px !important;
-
-        border-radius:
-            11px !important;
-
-        background:
-            transparent !important;
-
-        color:
-            var(--mobile-text) !important;
-
-        font-size:
-            14px !important;
-
-        font-weight:
-            500 !important;
+        width: 100% !important;
+        min-height: 44px !important;
+        padding: 0 11px !important;
+        display: flex !important;
+        align-items: center !important;
+        gap: 10px !important;
+        border-radius: 11px !important;
+        background: transparent !important;
+        color: var(--mobile-text) !important;
+        font-size: 14px !important;
+        font-weight: 500 !important;
     }
-
 
     .new-chat-btn:active,
     .sidebar-personality-btn:active {
-        background:
-            var(--mobile-soft) !important;
+        background: var(--mobile-soft) !important;
     }
 
-
-    body.dark-mode
-    .new-chat-btn:active,
-    body.dark-mode
-    .sidebar-personality-btn:active {
-        background:
-            rgba(255, 255, 255, 0.08) !important;
+    body.dark-mode .new-chat-btn:active,
+    body.dark-mode .sidebar-personality-btn:active {
+        background: rgba(255, 255, 255, 0.08) !important;
     }
-
 
     .history-section {
-        margin-top:
-            18px !important;
+        margin-top: 18px !important;
     }
-
 
     .section-title {
-        display:
-            block !important;
-
-        padding:
-            0
-            6px
-            7px !important;
-
-        color:
-            var(--mobile-muted) !important;
-
-        font-size:
-            11.5px !important;
-
-        font-weight:
-            500 !important;
+        display: block !important;
+        padding: 0 6px 7px !important;
+        color: var(--mobile-muted) !important;
+        font-size: 11.5px !important;
+        font-weight: 500 !important;
     }
-
 
     .history-list {
-        display:
-            flex !important;
-
-        flex-direction:
-            column !important;
-
-        gap:
-            2px !important;
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 2px !important;
     }
-
-
-    .history-item-wrapper {
-        min-height:
-            40px !important;
-
-        border-radius:
-            10px !important;
-    }
-
 
     .history-item {
-        min-height:
-            38px !important;
-
-        padding:
-            8px
-            9px !important;
-
-        color:
-            var(--mobile-text) !important;
-
-        font-size:
-            13.5px !important;
-
-        line-height:
-            20px !important;
+        height: 40px !important;
+        min-height: 40px !important;
+        max-height: 40px !important;
+        padding: 9px 42px 9px 10px !important;
+        font-size: 13.5px !important;
+        color: var(--mobile-text) !important;
     }
 
-
-    .history-three-dot {
-        width:
-            32px !important;
-
-        height:
-            32px !important;
-
-        border-radius:
-            999px !important;
+    .history-item-actions {
+        width: 30px !important;
+        height: 30px !important;
+        right: 5px !important;
     }
 
+    .history-action-btn {
+        width: 30px !important;
+        height: 30px !important;
+        min-width: 30px !important;
+        min-height: 30px !important;
+    }
 
     .sidebar-footer {
-        flex:
-            0 0 auto !important;
-
-        padding:
-            8px
-            10px
-            calc(
-                8px +
-                env(safe-area-inset-bottom)
-            ) !important;
-
-        border-top:
-            1px solid
-            var(--mobile-border) !important;
-
-        background:
-            inherit !important;
+        flex: 0 0 auto !important;
+        padding: 8px 10px calc(8px + env(safe-area-inset-bottom)) !important;
+        border-top: 1px solid var(--mobile-border) !important;
+        background: inherit !important;
     }
-
 }
 
 
 /* =========================================================
-   REDUCED MOTION
+   13 — REDUCED MOTION
    ========================================================= */
 
 @media (prefers-reduced-motion: reduce) {
-
     .sidebar,
     .sidebar-scrim,
     .history-item,
     .new-chat-btn,
     .sidebar-personality-btn,
     .user-profile-btn,
-    .history-three-dot {
-        transition-duration:
-            0.01ms !important;
+    .history-item-actions,
+    .history-action-btn {
+        transition-duration: 0.01ms !important;
     }
-
 
     .history-skeleton-line {
-        animation:
-            none !important;
+        animation: none !important;
     }
-
 }
 
 
@@ -1149,9 +806,7 @@ body[data-neyo-interface="warm"]
 
 .sidebar-content {
     scrollbar-width: thin;
-    scrollbar-color:
-        rgba(0, 0, 0, 0.20)
-        transparent;
+    scrollbar-color: rgba(0, 0, 0, 0.20) transparent;
 }
 
 .sidebar-content::-webkit-scrollbar {
@@ -1163,600 +818,30 @@ body[data-neyo-interface="warm"]
 }
 
 .sidebar-content::-webkit-scrollbar-thumb {
-    background:
-        rgba(0, 0, 0, 0.18);
-
+    background: rgba(0, 0, 0, 0.18);
     border-radius: 999px;
-
-    border:
-        2px solid transparent;
-
-    background-clip:
-        padding-box;
+    border: 2px solid transparent;
+    background-clip: padding-box;
 }
 
 .sidebar-content::-webkit-scrollbar-thumb:hover {
-    background:
-        rgba(0, 0, 0, 0.28);
-
-    border:
-        2px solid transparent;
-
-    background-clip:
-        padding-box;
+    background: rgba(0, 0, 0, 0.28);
+    border: 2px solid transparent;
+    background-clip: padding-box;
 }
 
-body.dark-mode
-.sidebar-content {
-    scrollbar-color:
-        rgba(255, 255, 255, 0.20)
-        transparent;
+body.dark-mode .sidebar-content {
+    scrollbar-color: rgba(255, 255, 255, 0.20) transparent;
 }
 
-body.dark-mode
-.sidebar-content::-webkit-scrollbar-thumb {
-    background:
-        rgba(255, 255, 255, 0.16);
-
-    border:
-        2px solid transparent;
-
-    background-clip:
-        padding-box;
+body.dark-mode .sidebar-content::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.16);
+    border: 2px solid transparent;
+    background-clip: padding-box;
 }
 
-body.dark-mode
-.sidebar-content::-webkit-scrollbar-thumb:hover {
-    background:
-        rgba(255, 255, 255, 0.26);
-
-    border:
-        2px solid transparent;
-
-    background-clip:
-        padding-box;
-}
-
-
-/* =========================================================
-   FINAL HISTORY ROW — STABLE ELLIPSIS
-   ========================================================= */
-
-.history-item {
-    position: relative !important;
-
-    width: 100% !important;
-    min-width: 0 !important;
-
-    height: 38px !important;
-    min-height: 38px !important;
-    max-height: 38px !important;
-
-    display: block !important;
-
-    box-sizing: border-box !important;
-
-    /* right side permanently reserved for ⋯ */
-    padding: 9px 42px 9px 10px !important;
-
-    margin: 0 !important;
-
-    border-radius: 10px !important;
-
-    overflow: hidden !important;
-
-    background: transparent !important;
-
-    color: #262626 !important;
-
-    font-family: "Inter", system-ui, sans-serif !important;
-    font-size: 13.5px !important;
-    font-weight: 400 !important;
-    line-height: 20px !important;
-
-    cursor: pointer !important;
-
-    transition:
-        background-color 120ms ease,
-        color 120ms ease !important;
-}
-
-
-/* TEXT */
-
-.history-item-title {
-    display: block !important;
-
-    width: 100% !important;
-    max-width: 100% !important;
-    min-width: 0 !important;
-
-    margin: 0 !important;
-    padding: 0 !important;
-
-    white-space: nowrap !important;
-
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
-
-    line-height: 20px !important;
-}
-
-
-/* THREE DOT AREA */
-
-.history-item-actions {
-    position: absolute !important;
-
-    top: 50% !important;
-    right: 6px !important;
-
-    transform: translateY(-50%) !important;
-
-    width: 28px !important;
-    height: 28px !important;
-
-    margin: 0 !important;
-    padding: 0 !important;
-
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-
-    background: inherit !important;
-
-    opacity: 0 !important;
-    visibility: hidden !important;
-
-    pointer-events: none !important;
-
-    transition:
-        opacity 100ms ease,
-        visibility 100ms ease !important;
-}
-
-
-.history-action-btn {
-    position: static !important;
-
-    width: 28px !important;
-    height: 28px !important;
-
-    min-width: 28px !important;
-    min-height: 28px !important;
-
-    padding: 0 !important;
-    margin: 0 !important;
-
-    display: inline-flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-
-    border: 0 !important;
-    outline: 0 !important;
-
-    border-radius: 7px !important;
-
-    background: transparent !important;
-    color: #737373 !important;
-
-    box-shadow: none !important;
-
-    cursor: pointer !important;
-
-    transform: none !important;
-}
-
-
-.history-action-btn svg,
-.history-action-btn i {
-    width: 16px !important;
-    height: 16px !important;
-
-    pointer-events: none !important;
-}
-
-
-/* HOVER / ACTIVE / FOCUS */
-
-.history-item:hover {
-    background:
-        rgba(0, 0, 0, 0.055) !important;
-}
-
-.history-item.active {
-    background:
-        rgba(0, 0, 0, 0.065) !important;
-}
-
-
-.history-item:hover .history-item-actions,
-.history-item.active .history-item-actions,
-.history-item:focus-within .history-item-actions {
-    opacity: 1 !important;
-    visibility: visible !important;
-    pointer-events: auto !important;
-}
-
-
-.history-action-btn:hover {
-    background:
-        rgba(0, 0, 0, 0.065) !important;
-
-    color: #171717 !important;
-}
-
-
-/* =========================================================
-   DARK MODE — FINAL HISTORY
-   ========================================================= */
-
-body.dark-mode .history-item {
-    color:
-        rgba(255, 255, 255, 0.90) !important;
-}
-
-body.dark-mode .history-item:hover {
-    background:
-        rgba(255, 255, 255, 0.065) !important;
-}
-
-body.dark-mode .history-item.active {
-    background:
-        rgba(255, 255, 255, 0.085) !important;
-}
-
-body.dark-mode .history-action-btn {
-    color:
-        rgba(255, 255, 255, 0.58) !important;
-}
-
-body.dark-mode .history-action-btn:hover {
-    background:
-        rgba(255, 255, 255, 0.09) !important;
-
-    color: #ffffff !important;
-}
-
-
-/* =========================================================
-   TOUCH — always show actions
-   ========================================================= */
-
-@media (hover: none) {
-    .history-item-actions {
-        opacity: 1 !important;
-        visibility: visible !important;
-        pointer-events: auto !important;
-    }
-}
-
-
-/* =========================================================
-   MOBILE OVERRIDE — FINAL HISTORY
-   ========================================================= */
-
-@media (max-width: 767px) {
-
-    .history-item {
-        height: 40px !important;
-        min-height: 40px !important;
-        max-height: 40px !important;
-
-        padding: 9px 42px 9px 10px !important;
-
-        font-size: 13.5px !important;
-    }
-
-    .history-item-actions {
-        width: 30px !important;
-        height: 30px !important;
-
-        right: 5px !important;
-    }
-
-    .history-action-btn {
-        width: 30px !important;
-        height: 30px !important;
-
-        min-width: 30px !important;
-        min-height: 30px !important;
-    }
-}
-/*
-=========================================================
-NEYO — HISTORY PREMIUM POLISH
-Visual only. Does not change ellipsis geometry.
-=========================================================
-*/
-
-.history-section {
-    margin-top: 16px !important;
-}
-
-.section-title {
-    padding: 0 10px 6px !important;
-
-    color: rgba(0, 0, 0, 0.50) !important;
-
-    font-size: 11.5px !important;
-    font-weight: 500 !important;
-}
-
-.history-list {
-    gap: 1px !important;
-}
-
-.history-item {
-    border-radius: 9px !important;
-
-    background: transparent !important;
-
-    transition:
-        background-color 110ms ease,
-        color 110ms ease !important;
-}
-
-.history-item:hover {
-    background:
-        rgba(0, 0, 0, 0.045) !important;
-}
-
-.history-item.active {
-    background:
-        rgba(0, 0, 0, 0.055) !important;
-}
-
-.history-action-btn {
-    border-radius: 7px !important;
-
-    color:
-        rgba(0, 0, 0, 0.48) !important;
-}
-
-.history-action-btn:hover {
-    background:
-        rgba(0, 0, 0, 0.055) !important;
-
-    color:
-        rgba(0, 0, 0, 0.82) !important;
-}
-
-
-/* Dark mode */
-
-body.dark-mode .section-title {
-    color:
-        rgba(255, 255, 255, 0.46) !important;
-}
-
-body.dark-mode .history-item:hover {
-    background:
-        rgba(255, 255, 255, 0.055) !important;
-}
-
-body.dark-mode .history-item.active {
-    background:
-        rgba(255, 255, 255, 0.075) !important;
-}
-
-body.dark-mode .history-action-btn {
-    color:
-        rgba(255, 255, 255, 0.50) !important;
-}
-
-body.dark-mode .history-action-btn:hover {
-    background:
-        rgba(255, 255, 255, 0.08) !important;
-
-    color:
-        rgba(255, 255, 255, 0.92) !important;
-}
-/*
-=========================================================
-NEYO — SIDEBAR HEADER + PRIMARY NAV POLISH
-
-Scope:
-- Sidebar brand/header
-- New Conversation
-- NEYO Personalities
-
-Does NOT touch:
-- History
-- Footer
-- Composer
-=========================================================
-*/
-
-
-/* =====================================================
-   SIDEBAR HEADER
-   ===================================================== */
-
-.sidebar-header {
-    min-height: 58px !important;
-
-    display: flex !important;
-    align-items: center !important;
-
-    padding: 0 14px !important;
-
-    box-sizing: border-box !important;
-}
-
-
-/* Brand / NEYO area */
-
-.sidebar-brand,
-.sidebar-logo {
-    display: flex !important;
-    align-items: center !important;
-
-    min-width: 0 !important;
-}
-
-
-/* Sidebar collapse button */
-
-.sidebar-toggle,
-.sidebar-collapse-btn {
-    width: 32px !important;
-    height: 32px !important;
-
-    display: inline-flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-
-    margin-left: auto !important;
-    padding: 0 !important;
-
-    border: 0 !important;
-    border-radius: 8px !important;
-
-    background: transparent !important;
-
-    transition:
-        background-color 120ms ease,
-        color 120ms ease !important;
-}
-
-.sidebar-toggle:hover,
-.sidebar-collapse-btn:hover {
-    background: rgba(0, 0, 0, 0.055) !important;
-}
-
-
-/* =====================================================
-   PRIMARY NAVIGATION
-   ===================================================== */
-
-.sidebar-nav {
-    display: flex !important;
-    flex-direction: column !important;
-
-    gap: 3px !important;
-
-    padding: 8px 10px !important;
-}
-
-
-/* Individual navigation row */
-
-.sidebar-nav-item,
-.new-chat-btn,
-.personalities-btn {
-    width: 100% !important;
-    min-height: 40px !important;
-
-    display: flex !important;
-    align-items: center !important;
-
-    gap: 11px !important;
-
-    box-sizing: border-box !important;
-
-    padding: 8px 10px !important;
-
-    border: 0 !important;
-    border-radius: 10px !important;
-
-    background: transparent !important;
-
-    color: #202020 !important;
-
-    font-size: 14px !important;
-    font-weight: 500 !important;
-    line-height: 20px !important;
-
-    text-align: left !important;
-
-    cursor: pointer !important;
-
-    transition:
-        background-color 110ms ease,
-        color 110ms ease !important;
-}
-
-
-/* Hover */
-
-.sidebar-nav-item:hover,
-.new-chat-btn:hover,
-.personalities-btn:hover {
-    background:
-        rgba(0, 0, 0, 0.05) !important;
-}
-
-
-/* Icons */
-
-.sidebar-nav-item svg,
-.new-chat-btn svg,
-.personalities-btn svg {
-    width: 20px !important;
-    height: 20px !important;
-
-    flex: 0 0 20px !important;
-
-    stroke-width: 1.8 !important;
-}
-
-
-/* Keyboard accessibility */
-
-.sidebar-nav-item:focus-visible,
-.new-chat-btn:focus-visible,
-.personalities-btn:focus-visible,
-.sidebar-toggle:focus-visible,
-.sidebar-collapse-btn:focus-visible {
-    outline:
-        2px solid rgba(0, 0, 0, 0.22) !important;
-
-    outline-offset:
-        2px !important;
-}
-
-
-/* =====================================================
-   DARK MODE
-   ===================================================== */
-
-body.dark-mode
-.sidebar-nav-item,
-body.dark-mode
-.new-chat-btn,
-body.dark-mode
-.personalities-btn {
-    color:
-        rgba(255, 255, 255, 0.90) !important;
-}
-
-
-body.dark-mode
-.sidebar-nav-item:hover,
-body.dark-mode
-.new-chat-btn:hover,
-body.dark-mode
-.personalities-btn:hover,
-body.dark-mode
-.sidebar-toggle:hover,
-body.dark-mode
-.sidebar-collapse-btn:hover {
-    background:
-        rgba(255, 255, 255, 0.065) !important;
-}
-
-
-body.dark-mode
-.sidebar-nav-item:focus-visible,
-body.dark-mode
-.new-chat-btn:focus-visible,
-body.dark-mode
-.personalities-btn:focus-visible,
-body.dark-mode
-.sidebar-toggle:focus-visible,
-body.dark-mode
-.sidebar-collapse-btn:focus-visible {
-    outline-color:
-        rgba(255, 255, 255, 0.30) !important;
+body.dark-mode .sidebar-content::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.26);
+    border: 2px solid transparent;
+    background-clip: padding-box;
 }

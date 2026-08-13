@@ -27,26 +27,15 @@ This module only controls menu UI behavior.
 (() => {
   "use strict";
 
-  const MENU_ID =
-    "historyPopupMenu";
+  const MENU_ID = "historyPopupMenu";
+  const BUTTON_SELECTOR = ".history-action-btn";
+  const BOUND_ATTR = "data-neyo-history-menu-bound";
 
-  const BUTTON_SELECTOR =
-    ".history-action-btn";
+  const VIEWPORT_GAP = 10;
+  const BUTTON_MENU_GAP = 6;
 
-  const BOUND_ATTR =
-    "data-neyo-history-menu-bound";
-
-  const VIEWPORT_GAP =
-    10;
-
-  const BUTTON_MENU_GAP =
-    6;
-
-  let activeButton =
-    null;
-
-  let wasOpenBeforeClick =
-    false;
+  let activeButton = null;
+  let wasOpenBeforeClick = false;
 
 
   /* =====================================================
@@ -54,26 +43,19 @@ This module only controls menu UI behavior.
      ===================================================== */
 
   function getMenu() {
-    return document.getElementById(
-      MENU_ID
-    );
+    return document.getElementById(MENU_ID);
   }
 
-
   function isMenuVisible() {
-    const menu =
-      getMenu();
+    const menu = getMenu();
 
     if (!menu) {
       return false;
     }
 
     return (
-      menu.classList.contains(
-        "show"
-      ) &&
-      menu.style.display !==
-        "none"
+      menu.classList.contains("show") &&
+      menu.style.display !== "none"
     );
   }
 
@@ -83,37 +65,22 @@ This module only controls menu UI behavior.
      ===================================================== */
 
   function closeMenu() {
-    const menu =
-      getMenu();
+    const menu = getMenu();
 
     if (!menu) {
       return;
     }
 
-    menu.classList.remove(
-      "show"
-    );
+    menu.classList.remove("show");
 
-    menu.style.display =
-      "none";
+    menu.style.display = "none";
+    menu.style.left = "";
+    menu.style.top = "";
+    menu.style.right = "";
+    menu.style.visibility = "";
 
-    menu.style.left =
-      "";
-
-    menu.style.top =
-      "";
-
-    menu.style.right =
-      "";
-
-    menu.style.visibility =
-      "";
-
-    activeButton =
-      null;
-
-    wasOpenBeforeClick =
-      false;
+    activeButton = null;
+    wasOpenBeforeClick = false;
   }
 
 
@@ -121,37 +88,20 @@ This module only controls menu UI behavior.
      POSITION
      ===================================================== */
 
-  function positionMenu(
-    button
-  ) {
-    const menu =
-      getMenu();
+  function positionMenu(button) {
+    const menu = getMenu();
 
-    if (
-      !menu ||
-      !button
-    ) {
+    if (!menu || !button) {
       return;
     }
 
-
     /*
-    Legacy outside-click code can leave
-    display:none inline.
-
-    Explicitly restore it before measuring.
+    Legacy code may leave inline display:none.
+    Restore it before measuring.
     */
-
-    menu.style.display =
-      "block";
-
-    menu.style.visibility =
-      "hidden";
-
-    menu.classList.add(
-      "show"
-    );
-
+    menu.style.display = "block";
+    menu.style.visibility = "hidden";
+    menu.classList.add("show");
 
     const buttonRect =
       button.getBoundingClientRect();
@@ -161,15 +111,11 @@ This module only controls menu UI behavior.
 
 
     /*
-    Preferred:
-    menu right edge aligns with
-    trigger right edge.
+    Align menu right edge with trigger.
     */
-
     let left =
       buttonRect.right -
       menuRect.width;
-
 
     let top =
       buttonRect.bottom +
@@ -179,38 +125,28 @@ This module only controls menu UI behavior.
     /*
     Horizontal viewport protection.
     */
-
     const maxLeft =
       window.innerWidth -
       menuRect.width -
       VIEWPORT_GAP;
 
-
-    left =
-      Math.max(
-        VIEWPORT_GAP,
-        Math.min(
-          left,
-          maxLeft
-        )
-      );
+    left = Math.max(
+      VIEWPORT_GAP,
+      Math.min(left, maxLeft)
+    );
 
 
     /*
-    If there isn't enough room below,
-    open above the button.
+    Open above if there isn't enough
+    room below.
     */
-
     const wouldOverflowBottom =
       top +
         menuRect.height +
         VIEWPORT_GAP >
       window.innerHeight;
 
-
-    if (
-      wouldOverflowBottom
-    ) {
+    if (wouldOverflowBottom) {
       top =
         buttonRect.top -
         menuRect.height -
@@ -221,30 +157,16 @@ This module only controls menu UI behavior.
     /*
     Vertical viewport protection.
     */
-
     const maxTop =
       window.innerHeight -
       menuRect.height -
       VIEWPORT_GAP;
 
+    top = Math.max(
+      VIEWPORT_GAP,
+      Math.min(top, maxTop)
+    );
 
-    top =
-      Math.max(
-        VIEWPORT_GAP,
-        Math.min(
-          top,
-          maxTop
-        )
-      );
-
-
-    /*
-    Menu is attached to body,
-    so viewport coordinates are appropriate
-    for a fixed-position popup.
-
-    Existing menu CSS remains untouched.
-    */
 
     menu.style.left =
       `${Math.round(left)}px`;
@@ -252,11 +174,8 @@ This module only controls menu UI behavior.
     menu.style.top =
       `${Math.round(top)}px`;
 
-    menu.style.right =
-      "auto";
-
-    menu.style.visibility =
-      "visible";
+    menu.style.right = "auto";
+    menu.style.visibility = "visible";
   }
 
 
@@ -264,18 +183,13 @@ This module only controls menu UI behavior.
      BEFORE LEGACY CLICK
      ===================================================== */
 
-  function handlePointerDown(
-    event
-  ) {
-    const button =
-      event.currentTarget;
+  function handlePointerDown(event) {
+    const button = event.currentTarget;
 
     /*
-    Capture whether THIS SAME button's
-    menu was already open before legacy
-    onclick runs.
+    Remember whether this exact button
+    already owns the open menu.
     */
-
     wasOpenBeforeClick =
       activeButton === button &&
       isMenuVisible();
@@ -286,63 +200,39 @@ This module only controls menu UI behavior.
      AFTER LEGACY CLICK
      ===================================================== */
 
-  function handleButtonClick(
-    event
-  ) {
-    const button =
-      event.currentTarget;
-
+  function handleButtonClick(event) {
+    const button = event.currentTarget;
 
     /*
-    Do NOT stop propagation here.
-
-    Legacy neo.js onclick must execute first
-    so activePopupChatId remains correct.
+    Do not stop propagation here.
+    Legacy neo.js must still run so that
+    activePopupChatId remains correct.
     */
-
 
     if (
       wasOpenBeforeClick &&
       activeButton === button
     ) {
-      /*
-      Same three-dot clicked again:
-      close instead of reopening.
-      */
-
       closeMenu();
       return;
     }
 
-
-    activeButton =
-      button;
-
-    wasOpenBeforeClick =
-      false;
-
+    activeButton = button;
+    wasOpenBeforeClick = false;
 
     /*
-    Run after legacy onclick has:
-    - selected chat ID
-    - added .show
-    - attempted positioning
+    Run after legacy onclick:
+    - chat ID selected
+    - .show applied
+    - legacy position attempted
     */
-
-    window.requestAnimationFrame(
-      () => {
-        if (
-          activeButton !==
-          button
-        ) {
-          return;
-        }
-
-        positionMenu(
-          button
-        );
+    window.requestAnimationFrame(() => {
+      if (activeButton !== button) {
+        return;
       }
-    );
+
+      positionMenu(button);
+    });
   }
 
 
@@ -350,19 +240,14 @@ This module only controls menu UI behavior.
      BIND BUTTON
      ===================================================== */
 
-  function bindButton(
-    button
-  ) {
-    if (
-      !(button instanceof HTMLElement)
-    ) {
+  function bindButton(button) {
+    if (!(button instanceof HTMLElement)) {
       return;
     }
 
     if (
-      button.getAttribute(
-        BOUND_ATTR
-      ) === "true"
+      button.getAttribute(BOUND_ATTR) ===
+      "true"
     ) {
       return;
     }
@@ -372,24 +257,10 @@ This module only controls menu UI behavior.
       "true"
     );
 
-
-    /*
-    pointerdown runs before legacy onclick,
-    allowing us to know whether menu
-    was already open.
-    */
-
     button.addEventListener(
       "pointerdown",
       handlePointerDown
     );
-
-
-    /*
-    This listener is registered after
-    dynamically-created legacy onclick,
-    therefore it can normalize UI after it.
-    */
 
     button.addEventListener(
       "click",
@@ -407,22 +278,16 @@ This module only controls menu UI behavior.
   ) {
     if (
       root instanceof Element &&
-      root.matches(
-        BUTTON_SELECTOR
-      )
+      root.matches(BUTTON_SELECTOR)
     ) {
-      bindButton(
-        root
-      );
+      bindButton(root);
     }
 
     root
       .querySelectorAll?.(
         BUTTON_SELECTOR
       )
-      .forEach(
-        bindButton
-      );
+      .forEach(bindButton);
   }
 
 
@@ -440,31 +305,23 @@ This module only controls menu UI behavior.
       return;
     }
 
-
     const observer =
       new MutationObserver(
         mutations => {
-          for (
-            const mutation
-            of mutations
-          ) {
+          for (const mutation of mutations) {
             for (
               const node
               of mutation.addedNodes
             ) {
               if (
-                node instanceof
-                Element
+                node instanceof Element
               ) {
-                bindExistingButtons(
-                  node
-                );
+                bindExistingButtons(node);
               }
             }
           }
         }
       );
-
 
     observer.observe(
       historyList,
@@ -478,48 +335,32 @@ This module only controls menu UI behavior.
 
   /* =====================================================
      MENU STATE OBSERVER
-
-     Legacy code may remove .show and apply
-     inline display:none.
-
-     Keep our internal active button state
-     synchronized with that.
      ===================================================== */
 
   function observeMenuState() {
-    const menu =
-      getMenu();
+    const menu = getMenu();
 
     if (!menu) {
       return;
     }
 
-
     const observer =
-      new MutationObserver(
-        () => {
-          if (
-            !menu.classList.contains(
-              "show"
-            )
-          ) {
-            activeButton =
-              null;
-
-            wasOpenBeforeClick =
-              false;
-          }
+      new MutationObserver(() => {
+        if (
+          !menu.classList.contains(
+            "show"
+          )
+        ) {
+          activeButton = null;
+          wasOpenBeforeClick = false;
         }
-      );
-
+      });
 
     observer.observe(
       menu,
       {
         attributes: true,
-        attributeFilter: [
-          "class"
-        ]
+        attributeFilter: ["class"]
       }
     );
   }
@@ -529,25 +370,20 @@ This module only controls menu UI behavior.
      ESCAPE
      ===================================================== */
 
-  function handleKeyboard(
-    event
-  ) {
-    if (
-      event.key !==
-      "Escape"
-    ) {
+  function handleKeyboard(event) {
+    if (event.key !== "Escape") {
       return;
     }
 
-    if (
-      !isMenuVisible()
-    ) {
+    if (!isMenuVisible()) {
       return;
     }
+
+    const button = activeButton;
 
     closeMenu();
 
-    activeButton?.focus?.();
+    button?.focus?.();
   }
 
 
@@ -563,9 +399,7 @@ This module only controls menu UI behavior.
       return;
     }
 
-    positionMenu(
-      activeButton
-    );
+    positionMenu(activeButton);
   }
 
 
@@ -580,12 +414,10 @@ This module only controls menu UI behavior.
 
     observeMenuState();
 
-
     document.addEventListener(
       "keydown",
       handleKeyboard
     );
-
 
     window.addEventListener(
       "resize",
@@ -594,7 +426,6 @@ This module only controls menu UI behavior.
         passive: true
       }
     );
-
 
     window.addEventListener(
       "scroll",
@@ -621,5 +452,4 @@ This module only controls menu UI behavior.
   } else {
     init();
   }
-
 })();

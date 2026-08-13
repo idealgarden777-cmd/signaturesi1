@@ -3,17 +3,17 @@
 NEYO — PRIVATE CHAT COMPONENT
 
 Owns:
-- Private chat mode state
-- Toggle UI
+- Private Chat state
+- Settings toggle UI sync
 - Chat preference sync
-- Private mode lifecycle events
-- Public private-chat API
+- App-state sync
+- Public events / API
 
 Does NOT own:
 - Chat API implementation
-- History persistence
-- Message rendering
-- Settings modal internals
+- History deletion
+- Memory deletion
+- Settings modal layout
 =========================================================
 */
 
@@ -27,12 +27,7 @@ Does NOT own:
 
     const privateChatToggle =
         document.getElementById(
-            "privateChatToggle"
-        );
-
-    const privateChatBtn =
-        document.getElementById(
-            "privateChatBtn"
+            "settingsPrivateChatToggle"
         );
 
 
@@ -40,8 +35,7 @@ Does NOT own:
        STATE
        ===================================================== */
 
-    let enabled =
-        false;
+    let enabled = false;
 
 
     /* =====================================================
@@ -71,51 +65,36 @@ Does NOT own:
 
     const updateUi = () => {
 
-        privateChatToggle
-            ?.classList
-            .toggle(
-                "active",
-                enabled
-            );
+        if (!privateChatToggle) {
+            return;
+        }
 
 
-        privateChatBtn
-            ?.classList
-            .toggle(
-                "active",
-                enabled
-            );
+        privateChatToggle.classList.toggle(
+            "active",
+            enabled
+        );
 
 
-        privateChatToggle
-            ?.setAttribute(
-                "aria-pressed",
-                String(enabled)
-            );
+        privateChatToggle.setAttribute(
+            "aria-checked",
+            String(enabled)
+        );
 
 
-        privateChatBtn
-            ?.setAttribute(
-                "aria-pressed",
-                String(enabled)
-            );
-
-
-        document.body
-            .classList
-            .toggle(
-                "private-chat-active",
-                enabled
-            );
+        privateChatToggle.setAttribute(
+            "aria-pressed",
+            String(enabled)
+        );
 
     };
 
 
     /* =====================================================
-       SYNC CHAT PREFERENCES
+       CHAT / APP STATE SYNC
        ===================================================== */
 
-    const syncChatPreferences = () => {
+    const syncState = () => {
 
         window.NeyoChat
             ?.setPreferences?.({
@@ -134,7 +113,7 @@ Does NOT own:
 
 
     /* =====================================================
-       SET
+       SET PRIVATE CHAT
        ===================================================== */
 
     const setPrivateChat = (
@@ -160,7 +139,7 @@ Does NOT own:
 
         updateUi();
 
-        syncChatPreferences();
+        syncState();
 
 
         if (
@@ -196,7 +175,7 @@ Does NOT own:
 
 
     /* =====================================================
-       BUTTON EVENTS
+       SETTINGS TOGGLE
        ===================================================== */
 
     privateChatToggle
@@ -213,43 +192,22 @@ Does NOT own:
         );
 
 
-    privateChatBtn
-        ?.addEventListener(
-            "click",
-            event => {
-
-                event.preventDefault();
-
-
-                togglePrivateChat();
-
-            }
-        );
-
-
     /* =====================================================
-       NEW CHAT BEHAVIOR
+       SETTINGS OPEN SYNC
        ===================================================== */
 
     window.addEventListener(
-        "neyo:new-chat-success",
+        "neyo:settings-open",
         () => {
 
-            /*
-            Keep current private-chat preference
-            when starting a new chat.
-
-            We only re-sync the chat state.
-            */
-
-            syncChatPreferences();
+            updateUi();
 
         }
     );
 
 
     /* =====================================================
-       SETTINGS / EXTERNAL REQUESTS
+       EXTERNAL SET
        ===================================================== */
 
     window.addEventListener(
@@ -271,6 +229,10 @@ Does NOT own:
     );
 
 
+    /* =====================================================
+       EXTERNAL TOGGLE
+       ===================================================== */
+
     window.addEventListener(
         "neyo:private-chat-toggle-request",
         togglePrivateChat
@@ -278,12 +240,70 @@ Does NOT own:
 
 
     /* =====================================================
+       CHAT PREFERENCE RESTORE
+       ===================================================== */
+
+    window.addEventListener(
+        "neyo:chat-preferences-change",
+        event => {
+
+            const value =
+                event.detail
+                    ?.preferences
+                    ?.privateChat;
+
+
+            if (
+                typeof value ===
+                "boolean"
+            ) {
+
+                setPrivateChat(
+                    value,
+                    {
+                        silent:
+                            true
+                    }
+                );
+
+            }
+
+        }
+    );
+
+
+    /* =====================================================
+       NEW CHAT
+       ===================================================== */
+
+    window.addEventListener(
+        "neyo:new-chat-success",
+        () => {
+
+            syncState();
+
+        }
+    );
+
+
+    /* =====================================================
        INITIAL STATE
        ===================================================== */
 
+    const initialState =
+        privateChatToggle
+            ?.getAttribute(
+                "aria-checked"
+            ) === "true";
+
+
+    enabled =
+        initialState;
+
+
     updateUi();
 
-    syncChatPreferences();
+    syncState();
 
 
     /* =====================================================

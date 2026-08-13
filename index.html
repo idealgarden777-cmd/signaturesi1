@@ -103,7 +103,13 @@
 
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-header">
-      <button class="brand-button" id="brandBtn" type="button">
+      <button
+        class="brand-button"
+        id="brandBtn"
+        type="button"
+        data-tooltip="NEYO home"
+        data-tooltip-position="right"
+      >
         <img src="/icon.png" alt="NEYO" class="brand-logo" width="24" height="24">
         <span class="brand-name">NEYO</span>
       </button>
@@ -121,11 +127,25 @@
 
     <div class="sidebar-content">
       <nav class="sidebar-primary-nav" aria-label="Primary navigation">
-        <button class="new-chat-btn" id="newChatBtn" type="button" title="New conversation">
+        <button
+          class="new-chat-btn"
+          id="newChatBtn"
+          type="button"
+          title="New conversation"
+          data-tooltip="New conversation"
+          data-tooltip-position="right"
+        >
           <span class="sidebar-nav-icon"><i data-lucide="square-pen" size="18"></i></span>
           <span>New Conversation</span>
         </button>
-        <button class="sidebar-personality-btn" id="sidebarPersonalitiesBtn" type="button" title="NEYO Personalities">
+        <button
+          class="sidebar-personality-btn"
+          id="sidebarPersonalitiesBtn"
+          type="button"
+          title="NEYO Personalities"
+          data-tooltip="NEYO Personalities"
+          data-tooltip-position="right"
+        >
           <span class="sidebar-nav-icon"><i data-lucide="sparkles" size="18"></i></span>
           <span>NEYO Personalities</span>
         </button>
@@ -138,21 +158,50 @@
 
     <div class="sidebar-footer">
       <div class="user-popup-menu" id="userPopupMenu" role="menu" aria-hidden="true">
-        <button class="popup-item" id="settingsBtn" type="button" role="menuitem">
+        <button
+          class="popup-item"
+          id="settingsBtn"
+          type="button"
+          role="menuitem"
+          data-tooltip="Settings"
+          data-tooltip-position="right"
+        >
           <span class="popup-icon-wrapper"><i data-lucide="settings-2" size="18"></i></span>
           <span>Settings</span>
         </button>
-        <button class="popup-item" id="sidebarDarkModeToggle" type="button" role="menuitem">
+        <button
+          class="popup-item"
+          id="sidebarDarkModeToggle"
+          type="button"
+          role="menuitem"
+          data-tooltip="Appearance"
+          data-tooltip-position="right"
+        >
           <span class="popup-icon-wrapper"><i data-lucide="sun-moon" size="18"></i></span>
           <span>Appearance</span>
         </button>
         <div class="popup-divider"></div>
-        <button class="popup-item danger" id="logoutBtn" type="button" role="menuitem">
+        <button
+          class="popup-item danger"
+          id="logoutBtn"
+          type="button"
+          role="menuitem"
+          data-tooltip="Log out"
+          data-tooltip-position="right"
+        >
           <span class="popup-icon-wrapper"><i data-lucide="log-out" size="18"></i></span>
           <span>Log out</span>
         </button>
       </div>
-      <button class="user-profile-btn" id="userProfileBtn" type="button" aria-haspopup="menu" aria-expanded="false">
+      <button
+        class="user-profile-btn"
+        id="userProfileBtn"
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded="false"
+        data-tooltip="Account"
+        data-tooltip-position="right"
+      >
         <div id="userAvatar">U</div>
         <div class="user-info">
           <span class="user-name" id="userNameDisplay">@user</span>
@@ -181,7 +230,12 @@
           <i data-lucide="columns-2" size="20"></i>
         </button>
         <div class="model-dropdown-wrapper">
-          <div class="model-badge" id="modelBadgeBtn">
+          <div
+            class="model-badge"
+            id="modelBadgeBtn"
+            data-tooltip="Choose model"
+            data-tooltip-position="bottom"
+          >
             <span class="model-name" id="currentModelDisplay">NEYO L1.0</span>
             <i data-lucide="chevron-down" size="16" class="model-chevron"></i>
           </div>
@@ -243,13 +297,28 @@
         </div>
         <div class="live-suggestions" id="liveSuggestions"></div>
         <div class="attachment-popup-menu" id="attachPopupMenu">
-          <div class="attachment-popup-item" id="addFilesMenuBtn">
+          <div
+            class="attachment-popup-item"
+            id="addFilesMenuBtn"
+            data-tooltip="Add files"
+            data-tooltip-position="right"
+          >
             <i data-lucide="paperclip" size="16"></i><span>Add Files</span>
           </div>
-          <div class="attachment-popup-item" id="deepResearchToggleBtn">
+          <div
+            class="attachment-popup-item"
+            id="deepResearchToggleBtn"
+            data-tooltip="Deep Research"
+            data-tooltip-position="right"
+          >
             <i data-lucide="search-code" size="16"></i><span>Deep Research</span>
           </div>
-          <div class="attachment-popup-item" id="personalMemoryBtn">
+          <div
+            class="attachment-popup-item"
+            id="personalMemoryBtn"
+            data-tooltip="NEYO Personalities"
+            data-tooltip-position="right"
+          >
             <i data-lucide="brain-circuit" size="16"></i><span>NEYO Personalities</span>
           </div>
         </div>
@@ -291,7 +360,14 @@
                 <span></span><span></span><span></span><span></span><span></span><span></span>
                 <span></span><span></span><span></span><span></span><span></span><span></span>
               </div>
-              <button class="stop-recording-btn" id="stopRecBtn" title="Stop Listening" type="button">
+              <button
+                class="stop-recording-btn"
+                id="stopRecBtn"
+                title="Stop Listening"
+                type="button"
+                data-tooltip="Stop listening"
+                data-tooltip-position="top"
+              >
                 <i data-lucide="square" size="14"></i>
               </button>
             </div>
@@ -324,10 +400,38 @@
   </main>
 
   <div class="history-popup-menu" id="historyPopupMenu">
-    <div class="history-popup-item" id="hpShareBtn"><i data-lucide="share-2" size="16"></i>Share conversation</div>
-    <div class="history-popup-item" id="hpPinBtn"><i data-lucide="pin" size="16"></i>Pin</div>
-    <div class="history-popup-item" id="hpRenameBtn"><i data-lucide="pencil" size="16"></i>Rename</div>
-    <div class="history-popup-item danger" id="hpDeleteBtn"><i data-lucide="trash-2" size="16"></i>Delete</div>
+    <div
+      class="history-popup-item"
+      id="hpShareBtn"
+      data-tooltip="Share conversation"
+      data-tooltip-position="left"
+    >
+      <i data-lucide="share-2" size="16"></i>Share conversation
+    </div>
+    <div
+      class="history-popup-item"
+      id="hpPinBtn"
+      data-tooltip="Pin conversation"
+      data-tooltip-position="left"
+    >
+      <i data-lucide="pin" size="16"></i>Pin
+    </div>
+    <div
+      class="history-popup-item"
+      id="hpRenameBtn"
+      data-tooltip="Rename conversation"
+      data-tooltip-position="left"
+    >
+      <i data-lucide="pencil" size="16"></i>Rename
+    </div>
+    <div
+      class="history-popup-item danger"
+      id="hpDeleteBtn"
+      data-tooltip="Delete conversation"
+      data-tooltip-position="left"
+    >
+      <i data-lucide="trash-2" size="16"></i>Delete
+    </div>
   </div>
 
   <!-- NEYO SETTINGS V1 — WITH PROFILE RESTORED -->
@@ -336,7 +440,14 @@
       <aside class="neo-settings-sidebar">
 
         <!-- Close button -->
-        <button class="neo-settings-close" id="neoSettingsCloseBtn" type="button" aria-label="Close settings">
+        <button
+          class="neo-settings-close"
+          id="neoSettingsCloseBtn"
+          type="button"
+          aria-label="Close settings"
+          data-tooltip="Close settings"
+          data-tooltip-position="right"
+        >
           <i data-lucide="x" size="20"></i>
         </button>
 
@@ -769,8 +880,24 @@
                 <div class="profile-upload-row">
                   <div class="profile-editor-avatar" id="settingsAvatarPreview">U</div>
                   <div class="profile-upload-actions">
-                    <button class="settings-ghost-btn" id="chooseAvatarBtn" type="button">Change photo</button>
-                    <button class="settings-ghost-btn" id="removeAvatarBtn" type="button">Remove</button>
+                    <button
+                      class="settings-ghost-btn"
+                      id="chooseAvatarBtn"
+                      type="button"
+                      data-tooltip="Change profile photo"
+                      data-tooltip-position="top"
+                    >
+                      Change photo
+                    </button>
+                    <button
+                      class="settings-ghost-btn"
+                      id="removeAvatarBtn"
+                      type="button"
+                      data-tooltip="Remove profile photo"
+                      data-tooltip-position="top"
+                    >
+                      Remove
+                    </button>
                     <input id="settingsAvatarFileInput" type="file" accept="image/jpeg,image/png,image/webp" hidden>
                     <span class="settings-helper-text">PNG, JPG or WebP · Max 5 MB</span>
                   </div>
@@ -785,8 +912,24 @@
                 <input id="settingsUsernameInput" type="text" placeholder="@username" readonly>
               </label>
               <div class="profile-editor-actions">
-                <button class="settings-primary-btn" id="saveProfileSettingsBtn" type="button">Save</button>
-                <button class="settings-ghost-btn" id="resetProfileSettingsBtn" type="button">Cancel</button>
+                <button
+                  class="settings-primary-btn"
+                  id="saveProfileSettingsBtn"
+                  type="button"
+                  data-tooltip="Save profile"
+                  data-tooltip-position="top"
+                >
+                  Save
+                </button>
+                <button
+                  class="settings-ghost-btn"
+                  id="resetProfileSettingsBtn"
+                  type="button"
+                  data-tooltip="Cancel changes"
+                  data-tooltip-position="top"
+                >
+                  Cancel
+                </button>
               </div>
             </div>
           </div>
@@ -856,7 +999,15 @@
               <strong id="billingPlanText">Free Plan</strong>
               <small>Upgrade to unlock more usage and advanced features.</small>
             </div>
-            <button class="settings-primary-btn" id="settingsUpgradeBtn" type="button">Upgrade</button>
+            <button
+              class="settings-primary-btn"
+              id="settingsUpgradeBtn"
+              type="button"
+              data-tooltip="Upgrade to Pro"
+              data-tooltip-position="top"
+            >
+              Upgrade
+            </button>
           </div>
         </div>
 
@@ -1086,7 +1237,15 @@
   <!-- Upgrade Modal (unchanged) -->
   <div class="modal-overlay" id="upgradeModal">
     <div class="modal-card">
-      <button class="modal-close-btn" id="modalCloseBtn" type="button">&times;</button>
+      <button
+        class="modal-close-btn"
+        id="modalCloseBtn"
+        type="button"
+        data-tooltip="Close"
+        data-tooltip-position="left"
+      >
+        &times;
+      </button>
       <div class="modal-header">
         <div class="pro-sparkle-badge"><i data-lucide="zap" size="22"></i></div>
         <h2>Unlock NEYO L1.2 Pro</h2>
@@ -1107,8 +1266,24 @@
         </div>
       </div>
       <div class="modal-footer-actions">
-        <button class="upgrade-btn-primary" id="upgradeActionBtn" type="button">Upgrade to Pro ($12/mo)</button>
-        <button class="upgrade-btn-secondary" id="modalMaybeLaterBtn" type="button">Maybe Later</button>
+        <button
+          class="upgrade-btn-primary"
+          id="upgradeActionBtn"
+          type="button"
+          data-tooltip="Upgrade to Pro"
+          data-tooltip-position="top"
+        >
+          Upgrade to Pro ($12/mo)
+        </button>
+        <button
+          class="upgrade-btn-secondary"
+          id="modalMaybeLaterBtn"
+          type="button"
+          data-tooltip="Maybe later"
+          data-tooltip-position="top"
+        >
+          Maybe Later
+        </button>
       </div>
     </div>
   </div>

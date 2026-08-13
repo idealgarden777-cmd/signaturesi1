@@ -846,7 +846,7 @@ body.dark-mode .sidebar-content::-webkit-scrollbar-thumb:hover {
     background-clip: padding-box;
 }
 /* =========================================================
-   NEYO SIDEBAR — NO ZOOM / SCALE INTERACTIONS
+   NEYO SIDEBAR — ZERO SHIFT / ZERO ZOOM INTERACTIONS
    ========================================================= */
 
 .sidebar .brand-button,
@@ -859,37 +859,81 @@ body.dark-mode .sidebar-content::-webkit-scrollbar-thumb:hover {
 .sidebar .popup-item {
     transform: none !important;
     scale: 1 !important;
-}
 
-.sidebar .brand-button:hover,
-.sidebar .brand-button:active,
-.sidebar .icon-btn:hover,
-.sidebar .icon-btn:active,
-.sidebar .new-chat-btn:hover,
-.sidebar .new-chat-btn:active,
-.sidebar .sidebar-personality-btn:hover,
-.sidebar .sidebar-personality-btn:active,
-.sidebar .history-item:hover,
-.sidebar .history-item:active,
-.sidebar .history-three-dot:hover,
-.sidebar .history-three-dot:active,
-.sidebar .user-profile-btn:hover,
-.sidebar .user-profile-btn:active,
-.sidebar .popup-item:hover,
-.sidebar .popup-item:active {
-    transform: none !important;
-    scale: 1 !important;
-}
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
 
-/* Keep premium hover feedback without movement */
-.sidebar .new-chat-btn,
-.sidebar .sidebar-personality-btn,
-.sidebar .history-item,
-.sidebar .history-three-dot,
-.sidebar .user-profile-btn,
-.sidebar .popup-item {
+    translate: none !important;
+
+    box-sizing: border-box !important;
+
+    vertical-align: middle !important;
+
     transition:
         background-color 140ms ease,
         color 140ms ease,
-        opacity 140ms ease !important;
+        opacity 140ms ease,
+        border-color 140ms ease !important;
+}
+
+
+/* Never move on hover / focus / click */
+.sidebar .brand-button:hover,
+.sidebar .brand-button:focus,
+.sidebar .brand-button:active,
+
+.sidebar .icon-btn:hover,
+.sidebar .icon-btn:focus,
+.sidebar .icon-btn:active,
+
+.sidebar .new-chat-btn:hover,
+.sidebar .new-chat-btn:focus,
+.sidebar .new-chat-btn:active,
+
+.sidebar .sidebar-personality-btn:hover,
+.sidebar .sidebar-personality-btn:focus,
+.sidebar .sidebar-personality-btn:active,
+
+.sidebar .history-item:hover,
+.sidebar .history-item:focus,
+.sidebar .history-item:active,
+
+.sidebar .history-three-dot:hover,
+.sidebar .history-three-dot:focus,
+.sidebar .history-three-dot:active,
+
+.sidebar .user-profile-btn:hover,
+.sidebar .user-profile-btn:focus,
+.sidebar .user-profile-btn:active,
+
+.sidebar .popup-item:hover,
+.sidebar .popup-item:focus,
+.sidebar .popup-item:active {
+    transform: none !important;
+    scale: 1 !important;
+    translate: none !important;
+
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+}
+
+
+/* Lock icon position too */
+.sidebar button svg,
+.sidebar button i,
+.sidebar .history-three-dot svg,
+.sidebar .history-three-dot i,
+.sidebar .popup-item svg,
+.sidebar .popup-item i {
+    transform: none !important;
+    translate: none !important;
+}
+
+
+/* Prevent active press animation */
+.sidebar button:active,
+.sidebar .history-three-dot:active,
+.sidebar .popup-item:active {
+    top: auto !important;
+    bottom: auto !important;
 }

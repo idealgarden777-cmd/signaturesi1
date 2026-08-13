@@ -3,17 +3,16 @@
 NEYO — LANGUAGE COMPONENT
 
 Owns:
-- Chat language preference
-- Language selection state
-- UI sync
+- Language preference
+- Settings language menu
+- Active option UI
 - Chat preference sync
-- Public language events / API
+- Public events / API
 
 Does NOT own:
-- Translation
+- Translation engine
 - Chat API implementation
 - Settings modal layout
-- Browser locale detection beyond initial fallback
 =========================================================
 */
 
@@ -22,34 +21,61 @@ Does NOT own:
 
 
     /* =====================================================
-       CONSTANTS
-       ===================================================== */
-
-    const VALID_LANGUAGES =
-        new Set([
-            "auto",
-            "en",
-            "ur",
-            "hi",
-            "es",
-            "fr",
-            "de",
-            "ar"
-        ]);
-
-
-    /* =====================================================
        ELEMENTS
        ===================================================== */
 
-    const languageSelect =
-        document.getElementById(
-            "languageSelect"
-        );
-
     const languageBtn =
         document.getElementById(
-            "languageBtn"
+            "settingsLanguageBtn"
+        );
+
+    const languageValue =
+        document.getElementById(
+            "settingsLanguageValue"
+        );
+
+    const languageMenu =
+        document.getElementById(
+            "settingsLanguageMenu"
+        );
+
+    const languageOptions =
+        languageMenu
+            ? Array.from(
+                languageMenu.querySelectorAll(
+                    ".settings-select-option[data-value]"
+                )
+            )
+            : [];
+
+
+    /* =====================================================
+       CONSTANTS
+       ===================================================== */
+
+    const LABELS =
+        Object.freeze({
+
+            auto:
+                "Auto-detect",
+
+            english:
+                "English",
+
+            urdu:
+                "Urdu",
+
+            "roman-urdu":
+                "Roman Urdu"
+
+        });
+
+
+    const VALID_LANGUAGES =
+        new Set(
+            Object.keys(
+                LABELS
+            )
         );
 
 
@@ -85,7 +111,7 @@ Does NOT own:
     const normalizeLanguage =
         value => {
 
-            const language =
+            const normalized =
                 String(
                     value || "auto"
                 )
@@ -93,13 +119,23 @@ Does NOT own:
                     .toLowerCase();
 
 
-            return VALID_LANGUAGES.has(
-                language
-            )
-                ? language
+            return VALID_LANGUAGES
+                .has(normalized)
+                ? normalized
                 : "auto";
 
         };
+
+
+    const isMenuOpen = () => {
+
+        return (
+            languageMenu &&
+            languageMenu.hidden ===
+                false
+        );
+
+    };
 
 
     /* =====================================================
@@ -108,28 +144,105 @@ Does NOT own:
 
     const updateUi = () => {
 
-        if (languageSelect) {
+        const label =
+            LABELS[
+                currentLanguage
+            ] ||
+            LABELS.auto;
 
-            languageSelect.value =
-                currentLanguage;
 
+        if (languageValue) {
+
+            languageValue.textContent =
+                label;
+
+        }
+
+
+        languageOptions.forEach(
+            option => {
+
+                const selected =
+                    option.dataset.value ===
+                    currentLanguage;
+
+
+                option.classList.toggle(
+                    "active",
+                    selected
+                );
+
+
+                option.setAttribute(
+                    "aria-selected",
+                    String(selected)
+                );
+
+            }
+        );
+
+    };
+
+
+    /* =====================================================
+       MENU
+       ===================================================== */
+
+    const openMenu = () => {
+
+        if (
+            !languageMenu ||
+            !languageBtn
+        ) {
+            return false;
         }
 
 
-        if (languageBtn) {
-
-            languageBtn.dataset.language =
-                currentLanguage;
+        languageMenu.hidden =
+            false;
 
 
-            languageBtn.setAttribute(
-                "aria-label",
-                currentLanguage === "auto"
-                    ? "Language: Auto"
-                    : `Language: ${currentLanguage.toUpperCase()}`
-            );
+        languageBtn.setAttribute(
+            "aria-expanded",
+            "true"
+        );
 
+
+        return true;
+
+    };
+
+
+    const closeMenu = () => {
+
+        if (
+            !languageMenu ||
+            !languageBtn
+        ) {
+            return false;
         }
+
+
+        languageMenu.hidden =
+            true;
+
+
+        languageBtn.setAttribute(
+            "aria-expanded",
+            "false"
+        );
+
+
+        return true;
+
+    };
+
+
+    const toggleMenu = () => {
+
+        return isMenuOpen()
+            ? closeMenu()
+            : openMenu();
 
     };
 
@@ -168,7 +281,11 @@ Does NOT own:
             currentLanguage === next &&
             options.force !== true
         ) {
+
+            updateUi();
+
             return currentLanguage;
+
         }
 
 
@@ -189,7 +306,12 @@ Does NOT own:
                 "neyo:language-change",
                 {
                     language:
-                        currentLanguage
+                        currentLanguage,
+
+                    label:
+                        LABELS[
+                            currentLanguage
+                        ]
                 }
             );
 
@@ -202,45 +324,114 @@ Does NOT own:
 
 
     /* =====================================================
-       SELECT EVENT
-       ===================================================== */
-
-    languageSelect
-        ?.addEventListener(
-            "change",
-            event => {
-
-                setLanguage(
-                    event.target.value
-                );
-
-            }
-        );
-
-
-    /* =====================================================
-       OPTIONAL LANGUAGE BUTTON
+       BUTTON
        ===================================================== */
 
     languageBtn
         ?.addEventListener(
             "click",
-            () => {
+            event => {
 
-                emit(
-                    "neyo:language-menu-request",
-                    {
-                        language:
-                            currentLanguage
-                    }
-                );
+                event.preventDefault();
+
+                event.stopPropagation();
+
+
+                toggleMenu();
 
             }
         );
 
 
     /* =====================================================
-       EXTERNAL EVENTS
+       OPTIONS
+       ===================================================== */
+
+    languageOptions.forEach(
+        option => {
+
+            option.addEventListener(
+                "click",
+                event => {
+
+                    event.preventDefault();
+
+                    event.stopPropagation();
+
+
+                    setLanguage(
+                        option.dataset.value
+                    );
+
+
+                    closeMenu();
+
+                }
+            );
+
+        }
+    );
+
+
+    /* =====================================================
+       OUTSIDE CLICK
+       ===================================================== */
+
+    document.addEventListener(
+        "click",
+        event => {
+
+            if (!isMenuOpen()) {
+                return;
+            }
+
+
+            const target =
+                event.target;
+
+
+            if (
+                languageBtn?.contains(
+                    target
+                ) ||
+                languageMenu?.contains(
+                    target
+                )
+            ) {
+                return;
+            }
+
+
+            closeMenu();
+
+        }
+    );
+
+
+    /* =====================================================
+       ESCAPE
+       ===================================================== */
+
+    document.addEventListener(
+        "keydown",
+        event => {
+
+            if (
+                event.key ===
+                    "Escape" &&
+                isMenuOpen()
+            ) {
+
+                closeMenu();
+
+            }
+
+        }
+    );
+
+
+    /* =====================================================
+       EXTERNAL SET
        ===================================================== */
 
     window.addEventListener(
@@ -248,11 +439,13 @@ Does NOT own:
         event => {
 
             setLanguage(
-                event.detail?.language,
+                event.detail
+                    ?.language,
                 {
                     silent:
                         Boolean(
-                            event.detail?.silent
+                            event.detail
+                                ?.silent
                         )
                 }
             );
@@ -262,23 +455,27 @@ Does NOT own:
 
 
     /* =====================================================
-       AUTH / PROFILE SYNC
+       CHAT PREFERENCE RESTORE
        ===================================================== */
 
     window.addEventListener(
-        "neyo:profile-loaded",
+        "neyo:chat-preferences-change",
         event => {
 
-            const preferredLanguage =
+            const language =
                 event.detail
-                    ?.profile
+                    ?.preferences
                     ?.language;
 
 
-            if (preferredLanguage) {
+            if (language) {
 
                 setLanguage(
-                    preferredLanguage
+                    language,
+                    {
+                        silent:
+                            true
+                    }
                 );
 
             }
@@ -288,19 +485,36 @@ Does NOT own:
 
 
     /* =====================================================
+       SETTINGS CLOSE
+       ===================================================== */
+
+    window.addEventListener(
+        "neyo:settings-close",
+        closeMenu
+    );
+
+
+    /* =====================================================
        INITIAL STATE
        ===================================================== */
 
-    if (
-        languageSelect?.value
-    ) {
+    const initialOption =
+        languageOptions.find(
+            option =>
+                option.classList
+                    .contains(
+                        "active"
+                    )
+        );
 
-        currentLanguage =
-            normalizeLanguage(
-                languageSelect.value
-            );
 
-    }
+    currentLanguage =
+        normalizeLanguage(
+            initialOption
+                ?.dataset
+                ?.value ||
+            "auto"
+        );
 
 
     updateUi();
@@ -322,10 +536,23 @@ Does NOT own:
                 () =>
                     currentLanguage,
 
-            isAuto:
+            open:
+                openMenu,
+
+            close:
+                closeMenu,
+
+            toggle:
+                toggleMenu,
+
+            isOpen:
+                isMenuOpen,
+
+            getLabel:
                 () =>
-                    currentLanguage ===
-                    "auto",
+                    LABELS[
+                        currentLanguage
+                    ],
 
             getSupported:
                 () =>

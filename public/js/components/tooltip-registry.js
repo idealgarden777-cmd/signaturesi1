@@ -1,531 +1,142 @@
 /*
 =========================================================
 NEYO — TOOLTIP REGISTRY
-
-Purpose:
-- Central tooltip labels for the whole UI
-- Works with public/js/components/tooltips.js
-- Keeps legacy neo.js untouched
-- Supports dynamically-created buttons
-- Does NOT use native title tooltips
+Adds missing tooltips to static + dynamically created UI.
+Does NOT modify neo.js.
 =========================================================
 */
 
 (() => {
-  "use strict";
+    "use strict";
+
+    const registry = [
+        // Chat — assistant actions
+        [".copy-msg-btn", "Copy response", "top"],
+        [".share-msg-btn", "Share response", "top"],
+        [".regen-msg-btn", "Regenerate response", "top"],
+
+        // Chat — user actions
+        [".user-edit-btn", "Edit message", "top"],
+        [".user-copy-btn", "Copy message", "top"],
+
+        // Message edit state
+        [".edit-btn-cancel", "Cancel editing", "top"],
+        [".edit-btn-save", "Save and submit", "top"],
+
+        // History
+        [".history-three-dot", "Conversation options", "left"],
+
+        // Attachments
+        [".attachment-remove-btn", "Remove attachment", "top"],
+
+        // Toast / notification
+        [".neo-toast-close", "Close notification", "left"],
+
+        // Main UI
+        ["#brandBtn", "NEYO home", "right"],
+        ["#collapseSidebarBtn", "Close sidebar", "right"],
+        ["#newChatBtn", "New conversation", "right"],
+        ["#sidebarPersonalitiesBtn", "NEYO Personalities", "right"],
+        ["#settingsBtn", "Settings", "right"],
+        ["#sidebarDarkModeToggle", "Appearance", "right"],
+        ["#logoutBtn", "Log out", "right"],
+        ["#userProfileBtn", "Account", "right"],
+
+        // Topbar
+        ["#sidebarToggleBtn", "Toggle sidebar", "right"],
+        ["#modelBadgeBtn", "Choose model", "bottom"],
+        ["#topBarDarkModeToggle", "Change theme", "bottom"],
+
+        // Composer
+        ["#composerExpandBtn", "Expand composer", "top"],
+        ["#attachBtn", "Attach files", "top"],
+        ["#micBtn", "Voice input", "top"],
+        ["#stopRecBtn", "Stop listening", "top"],
+        ["#sendBtn", "Send message", "top"],
+
+        // Attachment popup
+        ["#addFilesMenuBtn", "Add files", "right"],
+        ["#deepResearchToggleBtn", "Deep Research", "right"],
+        ["#personalMemoryBtn", "NEYO Personalities", "right"],
+
+        // History popup
+        ["#hpShareBtn", "Share conversation", "left"],
+        ["#hpPinBtn", "Pin conversation", "left"],
+        ["#hpRenameBtn", "Rename conversation", "left"],
+        ["#hpDeleteBtn", "Delete conversation", "left"],
+
+        // Settings
+        ["#neoSettingsCloseBtn", "Close settings", "right"],
+        ["#chooseAvatarBtn", "Change profile photo", "top"],
+        ["#removeAvatarBtn", "Remove profile photo", "top"],
+        ["#saveProfileSettingsBtn", "Save profile", "top"],
+        ["#resetProfileSettingsBtn", "Cancel changes", "top"],
+        ["#settingsUpgradeBtn", "Upgrade to Pro", "top"],
+
+        // Upgrade modal
+        ["#modalCloseBtn", "Close", "left"],
+        ["#upgradeActionBtn", "Upgrade to Pro", "top"],
+        ["#modalMaybeLaterBtn", "Maybe later", "top"]
+    ];
 
 
-  /* =====================================================
-     STATIC TOOLTIP MAP
-     ===================================================== */
+    function applyTooltip(element, text, position = "top") {
+        if (!element) return;
 
-  const STATIC_TOOLTIPS = [
-    {
-      selector: "#collapseSidebarBtn",
-      text: "Close sidebar",
-      position: "right"
-    },
-    {
-      selector: "#sidebarToggleBtn",
-      text: "Toggle sidebar",
-      position: "bottom"
-    },
-    {
-      selector: "#topBarDarkModeToggle",
-      text: "Change theme",
-      position: "bottom"
-    },
-    {
-      selector: "#modelBadgeBtn",
-      text: "Choose model",
-      position: "bottom"
-    },
+        element.dataset.tooltip = text;
+        element.dataset.tooltipPosition = position;
 
-    {
-      selector: "#composerExpandBtn",
-      text: "Expand",
-      position: "top"
-    },
-    {
-      selector: "#attachBtn",
-      text: "Attach files",
-      position: "top"
-    },
-    {
-      selector: "#micBtn",
-      text: "Voice input",
-      position: "top"
-    },
-    {
-      selector: "#stopRecBtn",
-      text: "Stop listening",
-      position: "top"
-    },
+        if (!element.getAttribute("aria-label")) {
+            const hasVisibleText =
+                (element.textContent || "").trim().length > 0;
 
-    {
-      selector: "#neoSettingsCloseBtn",
-      text: "Close settings",
-      position: "right"
-    },
-
-    {
-      selector: "#modalCloseBtn",
-      text: "Close",
-      position: "left"
-    }
-  ];
-
-
-  /* =====================================================
-     DYNAMIC TOOLTIP RULES
-     ===================================================== */
-
-  const DYNAMIC_TOOLTIPS = [
-    {
-      selector: ".history-action-btn",
-      text: "Conversation options",
-      position: "left"
-    },
-
-    {
-      selector: ".copy-msg-btn",
-      text: "Copy",
-      position: "top"
-    },
-    {
-      selector: ".share-msg-btn",
-      text: "Share",
-      position: "top"
-    },
-    {
-      selector: ".regen-msg-btn",
-      text: "Regenerate",
-      position: "top"
-    },
-
-    {
-      selector: ".user-edit-btn",
-      text: "Edit message",
-      position: "top"
-    },
-    {
-      selector: ".user-copy-btn",
-      text: "Copy",
-      position: "top"
-    },
-
-    {
-      selector: ".chip-remove-btn",
-      text: "Remove attachment",
-      position: "top"
-    },
-    {
-      selector: ".file-chip-remove",
-      text: "Remove attachment",
-      position: "top"
-    },
-
-    {
-      selector: ".attachment-remove-btn",
-      text: "Remove attachment",
-      position: "top"
-    }
-  ];
-
-
-  /* =====================================================
-     APPLY TOOLTIP
-     ===================================================== */
-
-  function applyTooltip(
-    element,
-    text,
-    position = "top"
-  ) {
-    if (!(element instanceof Element)) {
-      return;
-    }
-
-    if (!text) {
-      return;
-    }
-
-    element.setAttribute(
-      "data-tooltip",
-      text
-    );
-
-    element.setAttribute(
-      "data-tooltip-position",
-      position
-    );
-
-    /*
-    Native browser tooltip must never return.
-    */
-    element.removeAttribute(
-      "title"
-    );
-
-
-    /*
-    Only add aria-label when element is
-    an icon-only interactive control and
-    has no accessible label already.
-    */
-
-    const isInteractive =
-      element.matches(
-        "button, [role='button'], a"
-      );
-
-    const hasVisibleText =
-      element.textContent
-        ?.trim()
-        .length > 0;
-
-    const hasAriaLabel =
-      element.hasAttribute(
-        "aria-label"
-      );
-
-    if (
-      isInteractive &&
-      !hasVisibleText &&
-      !hasAriaLabel
-    ) {
-      element.setAttribute(
-        "aria-label",
-        text
-      );
-    }
-  }
-
-
-  /* =====================================================
-     APPLY STATIC REGISTRY
-     ===================================================== */
-
-  function applyStaticTooltips() {
-    for (
-      const rule
-      of STATIC_TOOLTIPS
-    ) {
-      document
-        .querySelectorAll(
-          rule.selector
-        )
-        .forEach(
-          element => {
-            applyTooltip(
-              element,
-              rule.text,
-              rule.position
-            );
-          }
-        );
-    }
-  }
-
-
-  /* =====================================================
-     APPLY DYNAMIC REGISTRY
-     ===================================================== */
-
-  function applyDynamicTooltips(
-    root = document
-  ) {
-    if (!root) {
-      return;
-    }
-
-    for (
-      const rule
-      of DYNAMIC_TOOLTIPS
-    ) {
-      /*
-      Root itself may match.
-      */
-
-      if (
-        root instanceof Element &&
-        root.matches(
-          rule.selector
-        )
-      ) {
-        applyTooltip(
-          root,
-          rule.text,
-          rule.position
-        );
-      }
-
-
-      /*
-      Descendants may match.
-      */
-
-      root
-        .querySelectorAll?.(
-          rule.selector
-        )
-        .forEach(
-          element => {
-            applyTooltip(
-              element,
-              rule.text,
-              rule.position
-            );
-          }
-        );
-    }
-  }
-
-
-  /* =====================================================
-     SEND / STOP SPECIAL STATE
-
-     send-state.js owns the live label:
-     Send <-> Stop
-
-     We only enforce native title removal.
-     ===================================================== */
-
-  function syncSendButton() {
-    const sendBtn =
-      document.getElementById(
-        "sendBtn"
-      );
-
-    if (!sendBtn) {
-      return;
-    }
-
-    sendBtn.removeAttribute(
-      "title"
-    );
-
-    /*
-    Do not overwrite data-tooltip here.
-    send-state.js controls it dynamically.
-    */
-  }
-
-
-  /* =====================================================
-     EXPAND / COLLAPSE SPECIAL STATE
-
-     composer-expand.js owns the live label:
-     Expand <-> Collapse
-     ===================================================== */
-
-  function syncExpandButton() {
-    const button =
-      document.getElementById(
-        "composerExpandBtn"
-      );
-
-    if (!button) {
-      return;
-    }
-
-    button.removeAttribute(
-      "title"
-    );
-
-    const expanded =
-      button.getAttribute(
-        "aria-expanded"
-      ) === "true";
-
-    button.setAttribute(
-      "data-tooltip",
-      expanded
-        ? "Collapse"
-        : "Expand"
-    );
-
-    button.setAttribute(
-      "data-tooltip-position",
-      "top"
-    );
-  }
-
-
-  /* =====================================================
-     OBSERVE SPECIAL STATE CHANGES
-     ===================================================== */
-
-  function observeSpecialButtons() {
-    const sendBtn =
-      document.getElementById(
-        "sendBtn"
-      );
-
-    if (sendBtn) {
-      const observer =
-        new MutationObserver(
-          () => {
-            syncSendButton();
-          }
-        );
-
-      observer.observe(
-        sendBtn,
-        {
-          attributes: true,
-          childList: true,
-          subtree: true
+            if (!hasVisibleText) {
+                element.setAttribute("aria-label", text);
+            }
         }
-      );
     }
 
 
-    const expandBtn =
-      document.getElementById(
-        "composerExpandBtn"
-      );
-
-    if (expandBtn) {
-      const observer =
-        new MutationObserver(
-          () => {
-            syncExpandButton();
-          }
-        );
-
-      observer.observe(
-        expandBtn,
-        {
-          attributes: true,
-          attributeFilter: [
-            "aria-expanded",
-            "title"
-          ]
-        }
-      );
-    }
-  }
-
-
-  /* =====================================================
-     WATCH DYNAMIC UI
-
-     Covers:
-     - new messages
-     - response actions
-     - chat history items
-     - attachments
-     ===================================================== */
-
-  function startDynamicObserver() {
-    if (!document.body) {
-      return;
-    }
-
-    const observer =
-      new MutationObserver(
-        mutations => {
-          for (
-            const mutation
-            of mutations
-          ) {
+    function scan(root = document) {
+        registry.forEach(([selector, text, position]) => {
             if (
-              mutation.type !==
-              "childList"
+                root instanceof Element &&
+                root.matches(selector)
             ) {
-              continue;
+                applyTooltip(root, text, position);
             }
 
-            mutation
-              .addedNodes
-              .forEach(
-                node => {
-                  if (
-                    node instanceof
-                    Element
-                  ) {
-                    applyDynamicTooltips(
-                      node
-                    );
-                  }
+            root.querySelectorAll?.(selector).forEach(element => {
+                applyTooltip(element, text, position);
+            });
+        });
+    }
+
+
+    // Initial page
+    scan(document);
+
+
+    // Dynamic chat messages, history items, notifications, attachments, etc.
+    const observer = new MutationObserver(mutations => {
+        mutations.forEach(mutation => {
+            mutation.addedNodes.forEach(node => {
+                if (node.nodeType === Node.ELEMENT_NODE) {
+                    scan(node);
                 }
-              );
-          }
-
-          syncSendButton();
-          syncExpandButton();
-        }
-      );
+            });
+        });
+    });
 
 
-    observer.observe(
-      document.body,
-      {
+    observer.observe(document.body, {
         childList: true,
         subtree: true
-      }
-    );
-  }
+    });
 
 
-  /* =====================================================
-     CLEAN REMAINING NATIVE TITLES
+    window.NeyoTooltipRegistry = Object.freeze({
+        refresh: () => scan(document)
+    });
 
-     native-tooltips.js already does this globally.
-     This is only a defensive fallback.
-     ===================================================== */
-
-  function removeExistingTitles() {
-    document
-      .querySelectorAll(
-        "[title]"
-      )
-      .forEach(
-        element => {
-          element.removeAttribute(
-            "title"
-          );
-        }
-      );
-  }
-
-
-  /* =====================================================
-     INIT
-     ===================================================== */
-
-  function init() {
-    removeExistingTitles();
-
-    applyStaticTooltips();
-
-    applyDynamicTooltips(
-      document
-    );
-
-    syncSendButton();
-    syncExpandButton();
-
-    observeSpecialButtons();
-
-    startDynamicObserver();
-  }
-
-
-  if (
-    document.readyState ===
-    "loading"
-  ) {
-    document.addEventListener(
-      "DOMContentLoaded",
-      init,
-      {
-        once: true
-      }
-    );
-  } else {
-    init();
-  }
-
-})();  
+})();

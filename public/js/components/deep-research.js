@@ -3,17 +3,15 @@
 NEYO — DEEP RESEARCH COMPONENT
 
 Owns:
-- Deep Research mode state
-- Toggle UI
+- Deep Research toggle state
+- UI sync
 - Chat preference sync
-- Research lifecycle events
-- Public research API
+- Public events / API
 
 Does NOT own:
-- Chat API implementation
-- Web research execution
+- Research execution
 - Search provider logic
-- Message rendering
+- Chat API implementation
 =========================================================
 */
 
@@ -25,14 +23,9 @@ Does NOT own:
        ELEMENTS
        ===================================================== */
 
-    const deepResearchBtn =
+    const deepResearchToggleBtn =
         document.getElementById(
-            "deepResearchBtn"
-        );
-
-    const deepResearchToggle =
-        document.getElementById(
-            "deepResearchToggle"
+            "deepResearchToggleBtn"
         );
 
 
@@ -40,8 +33,7 @@ Does NOT own:
        STATE
        ===================================================== */
 
-    let enabled =
-        false;
+    let enabled = false;
 
 
     /* =====================================================
@@ -66,46 +58,35 @@ Does NOT own:
 
 
     /* =====================================================
-       UI
+       UI SYNC
        ===================================================== */
 
     const updateUi = () => {
 
-        deepResearchBtn
-            ?.classList
-            .toggle(
-                "active",
-                enabled
-            );
+        if (!deepResearchToggleBtn) {
+            return;
+        }
 
 
-        deepResearchToggle
-            ?.classList
-            .toggle(
-                "active",
-                enabled
-            );
-
-
-        deepResearchBtn
-            ?.setAttribute(
-                "aria-pressed",
-                String(enabled)
-            );
-
-
-        deepResearchToggle
-            ?.setAttribute(
-                "aria-pressed",
-                String(enabled)
-            );
-
-
-        document.body
+        deepResearchToggleBtn
             .classList
             .toggle(
-                "deep-research-active",
+                "active",
                 enabled
+            );
+
+
+        deepResearchToggleBtn
+            .setAttribute(
+                "aria-pressed",
+                String(enabled)
+            );
+
+
+        deepResearchToggleBtn
+            .setAttribute(
+                "data-active",
+                String(enabled)
             );
 
     };
@@ -115,7 +96,7 @@ Does NOT own:
        CHAT SYNC
        ===================================================== */
 
-    const syncChatPreferences = () => {
+    const syncChatPreference = () => {
 
         window.NeyoChat
             ?.setPreferences?.({
@@ -127,7 +108,7 @@ Does NOT own:
 
 
     /* =====================================================
-       SET
+       SET STATE
        ===================================================== */
 
     const setDeepResearch = (
@@ -153,7 +134,7 @@ Does NOT own:
 
         updateUi();
 
-        syncChatPreferences();
+        syncChatPreference();
 
 
         if (
@@ -189,28 +170,16 @@ Does NOT own:
 
 
     /* =====================================================
-       BUTTON EVENTS
+       BUTTON EVENT
        ===================================================== */
 
-    deepResearchBtn
+    deepResearchToggleBtn
         ?.addEventListener(
             "click",
             event => {
 
                 event.preventDefault();
 
-                toggleDeepResearch();
-
-            }
-        );
-
-
-    deepResearchToggle
-        ?.addEventListener(
-            "click",
-            event => {
-
-                event.preventDefault();
 
                 toggleDeepResearch();
 
@@ -219,26 +188,7 @@ Does NOT own:
 
 
     /* =====================================================
-       NEW CHAT
-       ===================================================== */
-
-    window.addEventListener(
-        "neyo:new-chat-success",
-        () => {
-
-            /*
-            Keep user's current mode,
-            just re-sync preferences.
-            */
-
-            syncChatPreferences();
-
-        }
-    );
-
-
-    /* =====================================================
-       EXTERNAL EVENTS
+       EXTERNAL SET
        ===================================================== */
 
     window.addEventListener(
@@ -250,7 +200,8 @@ Does NOT own:
                 {
                     silent:
                         Boolean(
-                            event.detail?.silent
+                            event.detail
+                                ?.silent
                         )
                 }
             );
@@ -259,6 +210,10 @@ Does NOT own:
     );
 
 
+    /* =====================================================
+       EXTERNAL TOGGLE
+       ===================================================== */
+
     window.addEventListener(
         "neyo:deep-research-toggle-request",
         toggleDeepResearch
@@ -266,12 +221,52 @@ Does NOT own:
 
 
     /* =====================================================
+       CHAT PREFERENCE RESTORE
+       ===================================================== */
+
+    window.addEventListener(
+        "neyo:chat-preferences-change",
+        event => {
+
+            const value =
+                event.detail
+                    ?.preferences
+                    ?.isDeepResearch;
+
+
+            if (
+                typeof value ===
+                "boolean"
+            ) {
+
+                setDeepResearch(
+                    value,
+                    {
+                        silent:
+                            true
+                    }
+                );
+
+            }
+
+        }
+    );
+
+
+    /* =====================================================
        INITIAL STATE
        ===================================================== */
 
+    enabled =
+        deepResearchToggleBtn
+            ?.getAttribute(
+                "aria-pressed"
+            ) === "true";
+
+
     updateUi();
 
-    syncChatPreferences();
+    syncChatPreference();
 
 
     /* =====================================================

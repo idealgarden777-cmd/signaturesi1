@@ -3,18 +3,16 @@
 NEYO — UPGRADE COMPONENT
 
 Owns:
-- Upgrade-required events
-- Upgrade modal open/close bridge
-- Selected upgrade reason
-- Plan CTA state
+- Upgrade modal open / close
+- Upgrade reason state
+- Upgrade modal buttons
 - Checkout request event
 - Public upgrade API
 
 Does NOT own:
-- Actual checkout API
-- Billing provider logic
+- Billing provider backend
 - Subscription verification
-- Profile plan refresh
+- Checkout API implementation
 =========================================================
 */
 
@@ -31,15 +29,25 @@ Does NOT own:
             "upgradeModal"
         );
 
-    const upgradeBtn =
+    const modalCloseBtn =
         document.getElementById(
-            "upgradeBtn"
+            "modalCloseBtn"
         );
 
-    const upgradeCloseBtn =
+    const upgradeActionBtn =
         document.getElementById(
-            "upgradeCloseBtn"
+            "upgradeActionBtn"
         );
+
+    const modalMaybeLaterBtn =
+        document.getElementById(
+            "modalMaybeLaterBtn"
+        );
+
+
+    if (!upgradeModal) {
+        return;
+    }
 
 
     /* =====================================================
@@ -48,9 +56,6 @@ Does NOT own:
 
     let currentReason =
         null;
-
-    let opening =
-        false;
 
 
     /* =====================================================
@@ -74,6 +79,23 @@ Does NOT own:
     };
 
 
+    const isOpen = () => {
+
+        return (
+            upgradeModal.classList
+                .contains("show") ||
+            upgradeModal.classList
+                .contains("open") ||
+            upgradeModal.classList
+                .contains("active") ||
+            upgradeModal.getAttribute(
+                "aria-hidden"
+            ) === "false"
+        );
+
+    };
+
+
     /* =====================================================
        OPEN
        ===================================================== */
@@ -83,50 +105,40 @@ Does NOT own:
     ) => {
 
         currentReason =
-            reason || {};
+            reason &&
+            typeof reason === "object"
+                ? {
+                    ...reason
+                }
+                : {};
 
 
-        if (opening) {
-            return;
-        }
+        upgradeModal.classList.add(
+            "show",
+            "open",
+            "active"
+        );
 
 
-        opening =
-            true;
+        upgradeModal.setAttribute(
+            "aria-hidden",
+            "false"
+        );
 
 
-        /* -----------------------------------------
-           USE GENERIC MODAL ENGINE IF AVAILABLE
-           ----------------------------------------- */
+        document.body.classList.add(
+            "upgrade-open"
+        );
 
-        if (
-            upgradeModal &&
-            window.NeyoModal
-                ?.open
-        ) {
 
-            window.NeyoModal.open(
-                upgradeModal
-            );
+        requestAnimationFrame(
+            () => {
 
-        }
+                upgradeActionBtn
+                    ?.focus?.();
 
-        else if (upgradeModal) {
-
-            upgradeModal.classList.add(
-                "show"
-            );
-
-            upgradeModal.classList.add(
-                "open"
-            );
-
-            upgradeModal.setAttribute(
-                "aria-hidden",
-                "false"
-            );
-
-        }
+            }
+        );
 
 
         emit(
@@ -138,8 +150,7 @@ Does NOT own:
         );
 
 
-        opening =
-            false;
+        return true;
 
     };
 
@@ -150,34 +161,27 @@ Does NOT own:
 
     const closeUpgrade = () => {
 
-        if (
-            upgradeModal &&
-            window.NeyoModal
-                ?.close
-        ) {
-
-            window.NeyoModal.close(
-                upgradeModal
-            );
-
+        if (!isOpen()) {
+            return false;
         }
 
-        else if (upgradeModal) {
 
-            upgradeModal.classList.remove(
-                "show"
-            );
+        upgradeModal.classList.remove(
+            "show",
+            "open",
+            "active"
+        );
 
-            upgradeModal.classList.remove(
-                "open"
-            );
 
-            upgradeModal.setAttribute(
-                "aria-hidden",
-                "true"
-            );
+        upgradeModal.setAttribute(
+            "aria-hidden",
+            "true"
+        );
 
-        }
+
+        document.body.classList.remove(
+            "upgrade-open"
+        );
 
 
         emit(
@@ -192,6 +196,9 @@ Does NOT own:
         currentReason =
             null;
 
+
+        return true;
+
     };
 
 
@@ -201,23 +208,11 @@ Does NOT own:
 
     const requestCheckout = () => {
 
-        /*
-        Important:
-
-        upgrade.js intentionally does NOT call
-        /api/checkout directly.
-
-        ZIP currently has no api/checkout.js.
-
-        A future checkout.js module will listen
-        for this event and own billing logic.
-        */
-
         emit(
             "neyo:checkout-request",
             {
                 source:
-                    "upgrade",
+                    "upgrade-modal",
 
                 plan:
                     "pro",
@@ -231,7 +226,106 @@ Does NOT own:
 
 
     /* =====================================================
-       UPGRADE REQUIRED EVENT
+       CLOSE BUTTON
+       ===================================================== */
+
+    modalCloseBtn
+        ?.addEventListener(
+            "click",
+            event => {
+
+                event.preventDefault();
+
+
+                closeUpgrade();
+
+            }
+        );
+
+
+    /* =====================================================
+       MAYBE LATER BUTTON
+       ===================================================== */
+
+    modalMaybeLaterBtn
+        ?.addEventListener(
+            "click",
+            event => {
+
+                event.preventDefault();
+
+
+                closeUpgrade();
+
+            }
+        );
+
+
+    /* =====================================================
+       UPGRADE CTA
+       ===================================================== */
+
+    upgradeActionBtn
+        ?.addEventListener(
+            "click",
+            event => {
+
+                event.preventDefault();
+
+
+                requestCheckout();
+
+            }
+        );
+
+
+    /* =====================================================
+       BACKDROP
+       ===================================================== */
+
+    upgradeModal.addEventListener(
+        "click",
+        event => {
+
+            if (
+                event.target ===
+                upgradeModal
+            ) {
+
+                closeUpgrade();
+
+            }
+
+        }
+    );
+
+
+    /* =====================================================
+       ESCAPE
+       ===================================================== */
+
+    document.addEventListener(
+        "keydown",
+        event => {
+
+            if (
+                event.key === "Escape" &&
+                isOpen()
+            ) {
+
+                event.preventDefault();
+
+
+                closeUpgrade();
+
+            }
+
+        }
+    );
+
+
+    /* =====================================================
+       UPGRADE REQUIRED
        ===================================================== */
 
     window.addEventListener(
@@ -248,7 +342,7 @@ Does NOT own:
 
 
     /* =====================================================
-       DIRECT MODEL LOCK FALLBACK
+       MODEL UPGRADE FALLBACK
        ===================================================== */
 
     window.addEventListener(
@@ -295,41 +389,6 @@ Does NOT own:
 
 
     /* =====================================================
-       CTA BUTTON
-       ===================================================== */
-
-    upgradeBtn?.addEventListener(
-        "click",
-        event => {
-
-            event.preventDefault();
-
-
-            requestCheckout();
-
-        }
-    );
-
-
-    /* =====================================================
-       CLOSE BUTTON
-       ===================================================== */
-
-    upgradeCloseBtn
-        ?.addEventListener(
-            "click",
-            event => {
-
-                event.preventDefault();
-
-
-                closeUpgrade();
-
-            }
-        );
-
-
-    /* =====================================================
        PUBLIC EVENTS
        ===================================================== */
 
@@ -353,6 +412,16 @@ Does NOT own:
 
 
     /* =====================================================
+       INITIAL STATE
+       ===================================================== */
+
+    upgradeModal.setAttribute(
+        "aria-hidden",
+        "true"
+    );
+
+
+    /* =====================================================
        PUBLIC API
        ===================================================== */
 
@@ -368,34 +437,15 @@ Does NOT own:
             checkout:
                 requestCheckout,
 
+            isOpen,
+
             getReason:
                 () =>
                     currentReason
                         ? {
                             ...currentReason
                         }
-                        : null,
-
-            isOpen:
-                () => {
-
-                    if (!upgradeModal) {
-                        return false;
-                    }
-
-
-                    return (
-                        upgradeModal.classList
-                            .contains(
-                                "show"
-                            ) ||
-                        upgradeModal.classList
-                            .contains(
-                                "open"
-                            )
-                    );
-
-                }
+                        : null
 
         });
 

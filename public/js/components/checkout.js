@@ -3,21 +3,19 @@
 NEYO — CHECKOUT COMPONENT
 
 Owns:
-- Upgrade button checkout flow
+- Upgrade checkout flow
 - Secure /api/checkout request
-- Checkout URL validation
-- Button loading state
-- Checkout success return detection
-- Public checkout API
+- Trusted Lemon Squeezy URL validation
+- Upgrade button loading state
+- Duplicate checkout prevention
+- Checkout return handling
+- Public checkout events / API
 
 Does NOT own:
-- Lemon Squeezy secrets
-- Subscription activation
-- Webhook processing
 - neo.js
-
-Backend:
-POST /api/checkout
+- Lemon Squeezy secrets
+- Webhook processing
+- Subscription activation
 =========================================================
 */
 
@@ -30,7 +28,6 @@ POST /api/checkout
        ===================================================== */
 
     const CONFIG = Object.freeze({
-
         endpoint:
             "/api/checkout",
 
@@ -40,7 +37,6 @@ POST /api/checkout
         allowedCheckoutHosts: [
             "lemonsqueezy.com"
         ]
-
     });
 
 
@@ -56,7 +52,7 @@ POST /api/checkout
        ELEMENTS
        ===================================================== */
 
-    const getUpgradeModalButton = () =>
+    const getUpgradeButton = () =>
         document.getElementById(
             "upgradeActionBtn"
         );
@@ -69,7 +65,7 @@ POST /api/checkout
 
 
     /* =====================================================
-       EVENTS
+       EVENT HELPER
        ===================================================== */
 
     const emit = (
@@ -90,7 +86,78 @@ POST /api/checkout
 
 
     /* =====================================================
-       TOAST
+       SAFE MESSAGE
+       ===================================================== */
+
+    const normalizeMessage = (
+        value,
+        fallback =
+            "Something went wrong."
+    ) => {
+
+        if (
+            typeof value ===
+            "string"
+        ) {
+
+            const text =
+                value.trim();
+
+
+            return text ||
+                fallback;
+
+        }
+
+
+        if (
+            value &&
+            typeof value ===
+            "object"
+        ) {
+
+            if (
+                typeof value.message ===
+                "string"
+            ) {
+
+                return (
+                    value.message.trim() ||
+                    fallback
+                );
+
+            }
+
+
+            if (
+                typeof value.error ===
+                "string"
+            ) {
+
+                return (
+                    value.error.trim() ||
+                    fallback
+                );
+
+            }
+
+        }
+
+
+        return fallback;
+
+    };
+
+
+    /* =====================================================
+       TOAST / NOTIFICATION
+
+       IMPORTANT:
+       Existing NEYO toast system expects
+       a plain message string.
+
+       This prevents:
+       [object Object]
        ===================================================== */
 
     const notify = (
@@ -98,29 +165,46 @@ POST /api/checkout
         type = "info"
     ) => {
 
+        const safeMessage =
+            normalizeMessage(
+                message
+            );
+
+
+        window.dispatchEvent(
+            new CustomEvent(
+                "neyo:toast",
+                {
+                    detail:
+                        safeMessage
+                }
+            )
+        );
+
+
         /*
-        Let the existing NEYO notification
-        system handle presentation.
+        Secondary richer event for any
+        newer components that need type.
         */
 
         emit(
-            "neyo:toast",
+            "neyo:notification",
             {
-                message,
+                message:
+                    safeMessage,
+
                 type
             }
         );
 
 
-        /*
-        Console fallback only.
-        Avoid browser alert().
-        */
-
-        if (type === "error") {
+        if (
+            type ===
+            "error"
+        ) {
 
             console.error(
-                `[NEYO Checkout] ${message}`
+                `[NEYO Checkout] ${safeMessage}`
             );
 
         }
@@ -129,15 +213,16 @@ POST /api/checkout
 
 
     /* =====================================================
-       CHECKOUT URL SECURITY
+       TRUSTED CHECKOUT URL
        ===================================================== */
 
     const isTrustedCheckoutUrl =
         value => {
 
             if (
-                !value ||
-                typeof value !== "string"
+                typeof value !==
+                "string" ||
+                !value.trim()
             ) {
 
                 return false;
@@ -148,7 +233,9 @@ POST /api/checkout
             try {
 
                 const url =
-                    new URL(value);
+                    new URL(
+                        value
+                    );
 
 
                 if (
@@ -161,7 +248,7 @@ POST /api/checkout
                 }
 
 
-                const host =
+                const hostname =
                     url.hostname
                         .toLowerCase();
 
@@ -169,11 +256,17 @@ POST /api/checkout
                 return CONFIG
                     .allowedCheckoutHosts
                     .some(
-                        allowed =>
-                            host === allowed ||
-                            host.endsWith(
-                                `.${allowed}`
-                            )
+                        allowedHost => {
+
+                            return (
+                                hostname ===
+                                    allowedHost ||
+                                hostname.endsWith(
+                                    `.${allowedHost}`
+                                )
+                            );
+
+                        }
                     );
 
             } catch {
@@ -239,15 +332,15 @@ POST /api/checkout
             );
 
 
-            const original =
+            const originalText =
                 button.dataset
                     .checkoutOriginalText;
 
 
-            if (original) {
+            if (originalText) {
 
                 button.textContent =
-                    original;
+                    originalText;
 
             }
 
@@ -256,11 +349,11 @@ POST /api/checkout
     };
 
 
-    const setAllButtonsBusy =
+    const setAllUpgradeButtonsBusy =
         busy => {
 
             setButtonBusy(
-                getUpgradeModalButton(),
+                getUpgradeButton(),
                 busy
             );
 
@@ -271,6 +364,80 @@ POST /api/checkout
             );
 
         };
+
+
+    /* =====================================================
+       READ RESPONSE BODY
+       ===================================================== */
+
+    const readResponseJson =
+        async response => {
+
+            try {
+
+                return await response.json();
+
+            } catch {
+
+                return {};
+
+            }
+
+        };
+
+
+    /* =====================================================
+       BUILD ERROR MESSAGE
+       ===================================================== */
+
+    const getResponseError = (
+        response,
+        data
+    ) => {
+
+        if (
+            response.status ===
+            401
+        ) {
+
+            return (
+                "Your session has expired. Please sign in again."
+            );
+
+        }
+
+
+        if (
+            response.status ===
+            403
+        ) {
+
+            return (
+                "Checkout request was blocked for security reasons."
+            );
+
+        }
+
+
+        if (
+            response.status ===
+            503
+        ) {
+
+            return normalizeMessage(
+                data?.error,
+                "Checkout is not configured yet."
+            );
+
+        }
+
+
+        return normalizeMessage(
+            data?.error,
+            "Unable to start secure checkout."
+        );
+
+    };
 
 
     /* =====================================================
@@ -294,7 +461,7 @@ POST /api/checkout
                 true;
 
 
-            setAllButtonsBusy(
+            setAllUpgradeButtonsBusy(
                 true
             );
 
@@ -339,30 +506,34 @@ POST /api/checkout
 
 
                 const data =
-                    await response
-                        .json()
-                        .catch(
-                            () => ({})
-                        );
-
-
-                if (
-                    response.status ===
-                    401
-                ) {
-
-                    throw new Error(
-                        "Please sign in again before upgrading."
+                    await readResponseJson(
+                        response
                     );
-
-                }
 
 
                 if (!response.ok) {
 
                     throw new Error(
-                        data?.error ||
-                        "Unable to start checkout."
+                        getResponseError(
+                            response,
+                            data
+                        )
+                    );
+
+                }
+
+
+                const checkoutUrl =
+                    typeof data?.url ===
+                    "string"
+                        ? data.url.trim()
+                        : "";
+
+
+                if (!checkoutUrl) {
+
+                    throw new Error(
+                        "Checkout URL was not returned."
                     );
 
                 }
@@ -370,7 +541,7 @@ POST /api/checkout
 
                 if (
                     !isTrustedCheckoutUrl(
-                        data?.url
+                        checkoutUrl
                     )
                 ) {
 
@@ -387,18 +558,17 @@ POST /api/checkout
                         source,
 
                         url:
-                            data.url
+                            checkoutUrl
                     }
                 );
 
 
                 /*
-                Full-page redirect is safer and
-                simpler than popup checkout.
+                Redirect only after validation.
                 */
 
                 window.location.assign(
-                    data.url
+                    checkoutUrl
                 );
 
 
@@ -406,8 +576,15 @@ POST /api/checkout
 
             } catch (error) {
 
+                const message =
+                    normalizeMessage(
+                        error,
+                        "Checkout could not be opened. Please try again."
+                    );
+
+
                 console.error(
-                    "[NEYO Checkout] Checkout failed:",
+                    "[NEYO Checkout] Request failed:",
                     error
                 );
 
@@ -417,16 +594,13 @@ POST /api/checkout
                     {
                         source,
 
-                        message:
-                            error?.message ||
-                            "Checkout failed."
+                        message
                     }
                 );
 
 
                 notify(
-                    error?.message ||
-                    "Checkout could not be opened. Please try again.",
+                    message,
                     "error"
                 );
 
@@ -439,7 +613,7 @@ POST /api/checkout
                     false;
 
 
-                setAllButtonsBusy(
+                setAllUpgradeButtonsBusy(
                     false
                 );
 
@@ -451,26 +625,24 @@ POST /api/checkout
     /* =====================================================
        CLICK INTERCEPTION
 
-       Capture phase is intentional.
+       Capture phase is important.
 
-       neo.js currently has its own
-       upgradeActionBtn click listener.
-       We stop that old handler so only
-       ONE checkout request is sent.
+       neo.js already has a checkout listener.
+       This prevents two POST requests.
        ===================================================== */
 
     document.addEventListener(
         "click",
         event => {
 
-            const upgradeModalButton =
+            const modalUpgradeButton =
                 event.target
                     ?.closest?.(
                         "#upgradeActionBtn"
                     );
 
 
-            const settingsButton =
+            const settingsUpgradeButton =
                 event.target
                     ?.closest?.(
                         "#settingsUpgradeBtn"
@@ -478,8 +650,8 @@ POST /api/checkout
 
 
             if (
-                !upgradeModalButton &&
-                !settingsButton
+                !modalUpgradeButton &&
+                !settingsUpgradeButton
             ) {
 
                 return;
@@ -495,12 +667,10 @@ POST /api/checkout
 
 
             startCheckout({
-
                 source:
-                    settingsButton
+                    settingsUpgradeButton
                         ? "settings"
                         : "upgrade-modal"
-
             });
 
         },
@@ -509,7 +679,7 @@ POST /api/checkout
 
 
     /* =====================================================
-       PUBLIC CHECKOUT REQUEST EVENT
+       PUBLIC REQUEST EVENT
        ===================================================== */
 
     window.addEventListener(
@@ -517,11 +687,9 @@ POST /api/checkout
         event => {
 
             startCheckout({
-
                 source:
                     event.detail?.source ||
                     "event"
-
             });
 
         }
@@ -529,62 +697,79 @@ POST /api/checkout
 
 
     /* =====================================================
-       SUCCESS RETURN DETECTION
+       CHECKOUT SUCCESS RETURN
        ===================================================== */
 
-    const handleCheckoutReturn = () => {
+    const handleCheckoutReturn =
+        () => {
 
-        const url =
-            new URL(
-                window.location.href
+            let url;
+
+
+            try {
+
+                url =
+                    new URL(
+                        window.location.href
+                    );
+
+            } catch {
+
+                return;
+
+            }
+
+
+            const checkoutStatus =
+                url.searchParams.get(
+                    "checkout"
+                );
+
+
+            if (
+                checkoutStatus !==
+                "success"
+            ) {
+
+                return;
+
+            }
+
+
+            emit(
+                "neyo:checkout-return-success"
             );
 
 
-        const status =
-            url.searchParams.get(
+            notify(
+                "Payment received. Your Pro access is being updated.",
+                "success"
+            );
+
+
+            /*
+            Remove checkout=success from URL
+            without refreshing the page.
+            */
+
+            url.searchParams.delete(
                 "checkout"
             );
 
 
-        if (
-            status !==
-            "success"
-        ) {
-
-            return;
-
-        }
+            const cleanUrl =
+                url.pathname +
+                url.search +
+                url.hash;
 
 
-        emit(
-            "neyo:checkout-return-success"
-        );
+            window.history.replaceState(
+                {},
+                document.title,
+                cleanUrl
+            );
 
-
-        notify(
-            "Payment received. Your Pro status is being updated.",
-            "success"
-        );
-
-
-        /*
-        Remove ?checkout=success without reload.
-        */
-
-        url.searchParams.delete(
-            "checkout"
-        );
-
-
-        window.history.replaceState(
-            {},
-            document.title,
-            url.pathname +
-            url.search +
-            url.hash
-        );
-
-    };
+        };
 
 
     /* =====================================================
@@ -601,8 +786,11 @@ POST /api/checkout
                 () =>
                     checkoutRunning,
 
-            endpoint:
-                CONFIG.endpoint
+            getEndpoint:
+                () =>
+                    CONFIG.endpoint,
+
+            isTrustedCheckoutUrl
 
         });
 

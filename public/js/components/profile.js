@@ -1,15 +1,16 @@
 /*
 =========================================================
 NEYO — PROFILE COMPONENT
+STABLE REPAIR VERSION
 
 Owns:
 - Load current profile
 - Update sidebar profile UI
+- Free / Pro badge
+- Billing plan UI
 - Avatar prepare/upload/save
 - Avatar removal
 - Profile state
-- Plan badge sync
-- Billing plan sync
 - Public profile events / API
 
 Does NOT own:
@@ -17,6 +18,7 @@ Does NOT own:
 - Logout
 - Checkout
 - Webhooks
+- Model menu UI
 - Settings modal layout
 - Supabase client creation
 =========================================================
@@ -74,21 +76,6 @@ Does NOT own:
     const settingsUpgradeBtn =
         document.getElementById(
             "settingsUpgradeBtn"
-        );
-
-    const settingsAvatarPreview =
-        document.getElementById(
-            "settingsAvatarPreview"
-        );
-
-    const settingsDisplayNameInput =
-        document.getElementById(
-            "settingsDisplayNameInput"
-        );
-
-    const settingsUsernameInput =
-        document.getElementById(
-            "settingsUsernameInput"
         );
 
 
@@ -180,7 +167,8 @@ Does NOT own:
 
 
             return (
-                text.charAt(0)
+                text
+                    .charAt(0)
                     .toUpperCase() ||
                 "U"
             );
@@ -242,17 +230,17 @@ Does NOT own:
 
     const renderAvatar =
         (
-            element,
             avatarUrl,
             fallbackName
         ) => {
 
-            if (!element) {
+            if (!userAvatar) {
                 return;
             }
 
 
-            element.replaceChildren();
+            userAvatar
+                .replaceChildren();
 
 
             if (avatarUrl) {
@@ -285,13 +273,18 @@ Does NOT own:
                     "error",
                     () => {
 
-                        element.replaceChildren();
+                        userAvatar
+                            .replaceChildren();
 
-                        element.classList.remove(
-                            "has-avatar"
-                        );
 
-                        element.textContent =
+                        userAvatar
+                            .classList
+                            .remove(
+                                "has-avatar"
+                            );
+
+
+                        userAvatar.textContent =
                             getInitial(
                                 fallbackName
                             );
@@ -303,14 +296,17 @@ Does NOT own:
                 );
 
 
-                element.appendChild(
-                    image
-                );
+                userAvatar
+                    .appendChild(
+                        image
+                    );
 
 
-                element.classList.add(
-                    "has-avatar"
-                );
+                userAvatar
+                    .classList
+                    .add(
+                        "has-avatar"
+                    );
 
 
                 return;
@@ -318,12 +314,14 @@ Does NOT own:
             }
 
 
-            element.classList.remove(
-                "has-avatar"
-            );
+            userAvatar
+                .classList
+                .remove(
+                    "has-avatar"
+                );
 
 
-            element.textContent =
+            userAvatar.textContent =
                 getInitial(
                     fallbackName
                 );
@@ -354,12 +352,6 @@ Does NOT own:
 
                 userPlanBadge.dataset.plan =
                     plan;
-
-
-                userPlanBadge.classList.toggle(
-                    "is-pro",
-                    plan === "pro"
-                );
 
             }
 
@@ -412,14 +404,6 @@ Does NOT own:
                 .dataset.plan =
                 plan;
 
-
-            emit(
-                "neyo:plan-change",
-                {
-                    plan
-                }
-            );
-
         };
 
 
@@ -427,87 +411,58 @@ Does NOT own:
        RENDER PROFILE
        ===================================================== */
 
-    const renderProfile = () => {
+    const renderProfile =
+        () => {
 
-        const user =
-            profileState.user ||
-            {};
+            const user =
+                profileState.user ||
+                {};
 
-        const profile =
-            profileState.profile ||
-            {};
-
-
-        const displayName =
-            profile.displayName ||
-            user.displayName ||
-            user.username ||
-            "User";
+            const profile =
+                profileState.profile ||
+                {};
 
 
-        if (userNameDisplay) {
-
-            userNameDisplay.textContent =
-                user.username
-                    ? `@${user.username}`
-                    : displayName;
-
-        }
+            const displayName =
+                profile.displayName ||
+                user.displayName ||
+                user.username ||
+                "User";
 
 
-        renderPlan(
-            user.planType
-        );
+            if (userNameDisplay) {
 
+                userNameDisplay.textContent =
+                    user.username
+                        ? `@${user.username}`
+                        : displayName;
 
-        renderAvatar(
-            userAvatar,
-            profile.avatarUrl,
-            displayName
-        );
-
-
-        renderAvatar(
-            settingsAvatarPreview,
-            profile.avatarUrl,
-            displayName
-        );
-
-
-        if (
-            settingsDisplayNameInput
-        ) {
-
-            settingsDisplayNameInput.value =
-                displayName;
-
-        }
-
-
-        if (
-            settingsUsernameInput
-        ) {
-
-            settingsUsernameInput.value =
-                user.username
-                    ? `@${user.username}`
-                    : "";
-
-        }
-
-
-        emit(
-            "neyo:profile-rendered",
-            {
-                user:
-                    profileState.user,
-
-                profile:
-                    profileState.profile
             }
-        );
 
-    };
+
+            renderPlan(
+                user.planType
+            );
+
+
+            renderAvatar(
+                profile.avatarUrl,
+                displayName
+            );
+
+
+            emit(
+                "neyo:profile-rendered",
+                {
+                    user:
+                        profileState.user,
+
+                    profile:
+                        profileState.profile
+                }
+            );
+
+        };
 
 
     /* =====================================================
@@ -561,36 +516,42 @@ Does NOT own:
 
 
                 profileState = {
+
                     user:
-                        data.user ||
+                        data?.user ||
                         null,
 
                     profile:
-                        data.profile ||
+                        data?.profile ||
                         null
+
                 };
 
 
                 renderProfile();
 
 
+                /*
+                Send real account plan to
+                model/access components.
+                */
+
                 if (
-                    profileState.user
+                    profileState
+                        .user
                         ?.planType
                 ) {
 
-                    window.dispatchEvent(
-                        new CustomEvent(
-                            "neyo:model-plan-set",
-                            {
-                                detail: {
-                                    plan:
-                                        profileState
-                                            .user
-                                            .planType
-                                }
-                            }
-                        )
+                    emit(
+                        "neyo:model-plan-set",
+                        {
+                            plan:
+                                normalizePlan(
+                                    profileState
+                                        .user
+                                        .planType
+                                )
+                        }
                     );
 
                 }
@@ -599,7 +560,11 @@ Does NOT own:
                 emit(
                     "neyo:profile-loaded",
                     {
-                        ...profileState
+                        user:
+                            profileState.user,
+
+                        profile:
+                            profileState.profile
                     }
                 );
 
@@ -655,9 +620,10 @@ Does NOT own:
 
 
             if (
-                !ALLOWED_AVATAR_TYPES.has(
-                    file.type
-                )
+                !ALLOWED_AVATAR_TYPES
+                    .has(
+                        file.type
+                    )
             ) {
 
                 throw new Error(
@@ -743,12 +709,9 @@ Does NOT own:
 
 
             if (
-                !data?.upload
-                    ?.bucket ||
-                !data?.upload
-                    ?.path ||
-                !data?.upload
-                    ?.token
+                !data?.upload?.bucket ||
+                !data?.upload?.path ||
+                !data?.upload?.token
             ) {
 
                 throw new Error(
@@ -764,7 +727,7 @@ Does NOT own:
 
 
     /* =====================================================
-       SAVE AVATAR PATH
+       SAVE AVATAR
        ===================================================== */
 
     const saveAvatar =
@@ -891,7 +854,7 @@ Does NOT own:
 
 
                 const avatarUrl =
-                    saved.avatarUrl ||
+                    saved?.avatarUrl ||
                     null;
 
 
@@ -933,7 +896,8 @@ Does NOT own:
                 );
 
 
-                window.NeyoNotifications
+                window
+                    .NeyoNotifications
                     ?.error?.(
                         error?.message ||
                         "Profile photo could not be updated."
@@ -1037,6 +1001,7 @@ Does NOT own:
 
 
             profileState = {
+
                 user:
                     data.user ??
                     profileState.user,
@@ -1044,10 +1009,32 @@ Does NOT own:
                 profile:
                     data.profile ??
                     profileState.profile
+
             };
 
 
             renderProfile();
+
+
+            if (
+                profileState
+                    .user
+                    ?.planType
+            ) {
+
+                emit(
+                    "neyo:model-plan-set",
+                    {
+                        plan:
+                            normalizePlan(
+                                profileState
+                                    .user
+                                    .planType
+                            )
+                    }
+                );
+
+            }
 
         };
 
@@ -1089,52 +1076,6 @@ Does NOT own:
 
 
     window.addEventListener(
-        "neyo:checkout-return-success",
-        () => {
-
-            setTimeout(
-                loadProfile,
-                1000
-            );
-
-
-            setTimeout(
-                loadProfile,
-                3000
-            );
-
-        }
-    );
-
-
-    window.addEventListener(
-        "focus",
-        () => {
-
-            loadProfile();
-
-        }
-    );
-
-
-    document.addEventListener(
-        "visibilitychange",
-        () => {
-
-            if (
-                document.visibilityState ===
-                "visible"
-            ) {
-
-                loadProfile();
-
-            }
-
-        }
-    );
-
-
-    window.addEventListener(
         "neyo:avatar-upload-request",
         event => {
 
@@ -1164,7 +1105,8 @@ Does NOT own:
                 .catch(
                     error => {
 
-                        window.NeyoNotifications
+                        window
+                            .NeyoNotifications
                             ?.error?.(
                                 error?.message ||
                                 "Profile photo could not be removed."
@@ -1203,23 +1145,30 @@ Does NOT own:
                 setProfileState,
 
             getUser:
-                () =>
-                    profileState.user
+                () => {
+
+                    return profileState.user
                         ? {
                             ...profileState.user
                         }
-                        : null,
+                        : null;
+
+                },
 
             getProfile:
-                () =>
-                    profileState.profile
+                () => {
+
+                    return profileState.profile
                         ? {
                             ...profileState.profile
                         }
-                        : null,
+                        : null;
+
+                },
 
             getState:
                 () => ({
+
                     user:
                         profileState.user
                             ? {
@@ -1233,6 +1182,7 @@ Does NOT own:
                                 ...profileState.profile
                             }
                             : null
+
                 }),
 
             getPlan:
@@ -1255,24 +1205,28 @@ Does NOT own:
 
 
     /* =====================================================
-       INITIAL PROFILE LOAD
+       INITIAL LOAD
+
+       Original component did not reliably load itself.
+       Now profile is fetched once when app boots.
        ===================================================== */
 
-    const bootProfile = () => {
+    const bootProfile =
+        () => {
 
-        loadProfile()
-            .catch(
-                error => {
+            loadProfile()
+                .catch(
+                    error => {
 
-                    console.error(
-                        "Initial profile load failed:",
-                        error
-                    );
+                        console.error(
+                            "Initial profile load failed:",
+                            error
+                        );
 
-                }
-            );
+                    }
+                );
 
-    };
+        };
 
 
     if (

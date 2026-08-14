@@ -1,10 +1,20 @@
 /*
 =========================================================
 NEYO — LEMON SQUEEZY WEBHOOK
-Vercel Raw-Body Safe Version
+FINAL SUBSCRIPTION SYNC
 
 Route:
 POST /api/webhooks/lemon
+
+Handles:
+- subscription_created
+- subscription_updated
+- subscription_payment_success
+- subscription_cancelled
+- subscription_resumed
+- subscription_expired
+- subscription_paused
+- subscription_unpaused
 
 Database:
 - public.user_subscriptions
@@ -12,6 +22,7 @@ Database:
 
 Required env:
 - LEMON_SQUEEZY_WEBHOOK_SECRET
+- LEMON_SQUEEZY_API_KEY
 - SUPABASE_URL
 - SUPABASE_SERVICE_ROLE_KEY
 =========================================================
@@ -22,7 +33,7 @@ import { createClient } from "@supabase/supabase-js";
 
 
 /* =====================================================
-   IMPORTANT — DISABLE BODY PARSING
+   VERCEL RAW BODY
    ===================================================== */
 
 export const config = {
@@ -37,9 +48,11 @@ export const config = {
    ===================================================== */
 
 function clean(value) {
+
     return typeof value === "string"
         ? value.trim().replace(/^['"]|['"]$/g, "")
         : "";
+
 }
 
 
@@ -55,9 +68,11 @@ function createSupabaseAdmin() {
 
 
     if (!url || !key) {
+
         throw new Error(
             "Supabase configuration is missing."
         );
+
     }
 
 
@@ -72,6 +87,7 @@ function createSupabaseAdmin() {
             }
         }
     );
+
 }
 
 
@@ -96,6 +112,7 @@ async function readRawBody(req) {
 
 
     return Buffer.concat(chunks);
+
 }
 
 
@@ -114,19 +131,25 @@ function verifySignature(
         !signature ||
         !secret
     ) {
+
         return false;
+
     }
 
 
-    const digest =
+    const expectedHex =
+        crypto
+            .createHmac(
+                "sha256",
+                secret
+            )
+            .update(rawBody)
+            .digest("hex");
+
+
+    const expected =
         Buffer.from(
-            crypto
-                .createHmac(
-                    "sha256",
-                    secret
-                )
-                .update(rawBody)
-                .digest("hex"),
+            expectedHex,
             "utf8"
         );
 
@@ -139,38 +162,26 @@ function verifySignature(
 
 
     if (
-        digest.length !==
+        expected.length !==
         received.length
     ) {
+
         return false;
+
     }
 
 
     return crypto.timingSafeEqual(
-        digest,
+        expected,
         received
     );
+
 }
 
 
 /* =====================================================
-   STATUS
+   DATE
    ===================================================== */
-
-function hasProAccess(status) {
-
-    return [
-        "active",
-        "on_trial",
-        "past_due",
-        "paused",
-        "cancelled"
-    ].includes(
-        String(status || "")
-            .toLowerCase()
-    );
-}
-
 
 function normalizeDate(value) {
 
@@ -188,11 +199,385 @@ function normalizeDate(value) {
     )
         ? null
         : date.toISOString();
+
 }
 
 
 /* =====================================================
-   HANDLER
+   ACCESS STATUS
+   ===================================================== */
+
+function hasProAccess(status) {
+
+    const value =
+        String(status || "")
+            .trim()
+            .toLowerCase();
+
+
+    return [
+        "active",
+        "on_trial",
+        "past_due",
+        "paused",
+        "cancelled"
+    ].includes(value);
+
+}
+
+
+/* =====================================================
+   FETCH SUBSCRIPTION FROM LEMON
+   ===================================================== */
+
+async function fetchSubscription(
+    subscriptionId
+) {
+
+    const apiKey =
+        clean(
+            process.env.LEMON_SQUEEZY_API_KEY
+        );
+
+
+    if (!apiKey) {
+
+        throw new Error(
+            "LEMON_SQUEEZY_API_KEY is missing."
+        );
+
+    }
+
+
+    const response =
+        await fetch(
+            `https://api.lemonsqueezy.com/v1/subscriptions/${encodeURIComponent(subscriptionId)}`,
+            {
+                method: "GET",
+
+                headers: {
+                    Accept:
+                        "application/vnd.api+json",
+
+                    "Content-Type":
+                        "application/vnd.api+json",
+
+                    Authorization:
+                        `Bearer ${apiKey}`
+                }
+            }
+        );
+
+
+    const json =
+        await response
+            .json()
+            .catch(
+                () => ({})
+            );
+
+
+    if (!response.ok) {
+
+        const detail =
+            json
+                ?.errors?.[0]
+                ?.detail ||
+            "Unable to retrieve Lemon subscription.";
+
+
+        throw new Error(detail);
+
+    }
+
+
+    if (
+        json?.data?.type !==
+        "subscriptions"
+    ) {
+
+        throw new Error(
+            "Invalid subscription response from Lemon Squeezy."
+        );
+
+    }
+
+
+    return json.data;
+
+}
+
+
+/* =====================================================
+   NORMALIZE SUBSCRIPTION
+   ===================================================== */
+
+function normalizeSubscription(data) {
+
+    const attributes =
+        data?.attributes || {};
+
+
+    return {
+
+        subscriptionId:
+            String(
+                data?.id || ""
+            ).trim(),
+
+        status:
+            String(
+                attributes?.status || ""
+            )
+                .trim()
+                .toLowerCase(),
+
+        customerId:
+            attributes?.customer_id != null
+                ? String(
+                    attributes.customer_id
+                )
+                : null,
+
+        orderId:
+            attributes?.order_id != null
+                ? String(
+                    attributes.order_id
+                )
+                : null,
+
+        variantId:
+            attributes?.variant_id != null
+                ? String(
+                    attributes.variant_id
+                )
+                : null,
+
+        renewsAt:
+            normalizeDate(
+                attributes?.renews_at
+            ),
+
+        endsAt:
+            normalizeDate(
+                attributes?.ends_at
+            )
+
+    };
+
+}
+
+
+/* =====================================================
+   SYNC TO SUPABASE
+   ===================================================== */
+
+async function syncSubscription({
+    userId,
+    subscriptionData
+}) {
+
+    const supabase =
+        createSupabaseAdmin();
+
+
+    const subscription =
+        normalizeSubscription(
+            subscriptionData
+        );
+
+
+    if (
+        !subscription.subscriptionId
+    ) {
+
+        throw new Error(
+            "Subscription ID is missing."
+        );
+
+    }
+
+
+    const now =
+        new Date()
+            .toISOString();
+
+
+    /* -------------------------------------------------
+       VERIFY USER
+       ------------------------------------------------- */
+
+    const {
+        data: user,
+        error: userError
+    } =
+        await supabase
+            .from("bean_users")
+            .select(
+                "id, plan_type"
+            )
+            .eq(
+                "id",
+                userId
+            )
+            .maybeSingle();
+
+
+    if (
+        userError ||
+        !user
+    ) {
+
+        throw new Error(
+            "Webhook user was not found."
+        );
+
+    }
+
+
+    /* -------------------------------------------------
+       SUBSCRIPTION UPSERT
+       ------------------------------------------------- */
+
+    const row = {
+
+        user_id:
+            userId,
+
+        plan_tier:
+            "pro",
+
+        status:
+            subscription.status ||
+            "unknown",
+
+        provider:
+            "lemon_squeezy",
+
+        provider_subscription_id:
+            subscription.subscriptionId,
+
+        provider_customer_id:
+            subscription.customerId,
+
+        provider_order_id:
+            subscription.orderId,
+
+        variant_id:
+            subscription.variantId,
+
+        renews_at:
+            subscription.renewsAt,
+
+        ends_at:
+            subscription.endsAt,
+
+        updated_at:
+            now
+
+    };
+
+
+    const {
+        error:
+            subscriptionError
+    } =
+        await supabase
+            .from(
+                "user_subscriptions"
+            )
+            .upsert(
+                row,
+                {
+                    onConflict:
+                        "provider_subscription_id"
+                }
+            );
+
+
+    if (
+        subscriptionError
+    ) {
+
+        console.error(
+            "Subscription upsert error:",
+            subscriptionError
+        );
+
+
+        throw new Error(
+            "Unable to sync subscription."
+        );
+
+    }
+
+
+    /* -------------------------------------------------
+       USER PLAN
+       ------------------------------------------------- */
+
+    const nextPlan =
+        hasProAccess(
+            subscription.status
+        )
+            ? "pro"
+            : "free";
+
+
+    const {
+        error:
+            planError
+    } =
+        await supabase
+            .from(
+                "bean_users"
+            )
+            .update({
+                plan_type:
+                    nextPlan,
+
+                updated_at:
+                    now
+            })
+            .eq(
+                "id",
+                userId
+            );
+
+
+    if (
+        planError
+    ) {
+
+        console.error(
+            "Plan update error:",
+            planError
+        );
+
+
+        throw new Error(
+            "Unable to update user plan."
+        );
+
+    }
+
+
+    return {
+        subscriptionId:
+            subscription.subscriptionId,
+
+        status:
+            subscription.status,
+
+        plan:
+            nextPlan
+    };
+
+}
+
+
+/* =====================================================
+   MAIN HANDLER
    ===================================================== */
 
 export default async function handler(
@@ -200,7 +585,10 @@ export default async function handler(
     res
 ) {
 
-    if (req.method !== "POST") {
+    if (
+        req.method !==
+        "POST"
+    ) {
 
         res.setHeader(
             "Allow",
@@ -214,13 +602,14 @@ export default async function handler(
                 error:
                     "Method Not Allowed"
             });
+
     }
 
 
     try {
 
         /* =============================================
-           WEBHOOK SECRET
+           SECRET
            ============================================= */
 
         const secret =
@@ -232,22 +621,18 @@ export default async function handler(
 
         if (!secret) {
 
-            console.error(
-                "LEMON_SQUEEZY_WEBHOOK_SECRET missing."
-            );
-
-
             return res
                 .status(500)
                 .json({
                     error:
                         "Webhook is not configured."
                 });
+
         }
 
 
         /* =============================================
-           RAW BODY + SIGNATURE
+           VERIFY SIGNATURE
            ============================================= */
 
         const rawBody =
@@ -270,22 +655,18 @@ export default async function handler(
             )
         ) {
 
-            console.warn(
-                "Invalid Lemon Squeezy webhook signature."
-            );
-
-
             return res
                 .status(401)
                 .json({
                     error:
                         "Invalid webhook signature."
                 });
+
         }
 
 
         /* =============================================
-           PARSE PAYLOAD
+           PARSE JSON
            ============================================= */
 
         let payload;
@@ -308,98 +689,28 @@ export default async function handler(
                     error:
                         "Invalid webhook JSON."
                 });
+
         }
 
 
         const eventName =
             String(
-                payload?.meta
+                payload
+                    ?.meta
                     ?.event_name || ""
-            );
-
-
-        const customData =
-            payload?.meta
-                ?.custom_data || {};
+            ).trim();
 
 
         const userId =
             String(
-                customData
+                payload
+                    ?.meta
+                    ?.custom_data
                     ?.user_id || ""
             ).trim();
 
 
-        /* =============================================
-           IGNORE EVENTS WE DON'T NEED
-           ============================================= */
-
-        const supportedEvents =
-            new Set([
-                "subscription_created",
-                "subscription_updated",
-                "subscription_cancelled",
-                "subscription_resumed",
-                "subscription_expired",
-                "subscription_paused",
-                "subscription_unpaused"
-            ]);
-
-
-        /*
-        Payment-success event is an invoice object,
-        not the subscription object.
-
-        The actual subscription state is handled
-        by subscription_created / updated events.
-        */
-
-        if (
-            eventName ===
-            "subscription_payment_success"
-        ) {
-
-            return res
-                .status(200)
-                .json({
-                    received: true,
-                    ignored: true,
-                    event:
-                        eventName
-                });
-        }
-
-
-        if (
-            !supportedEvents.has(
-                eventName
-            )
-        ) {
-
-            return res
-                .status(200)
-                .json({
-                    received: true,
-                    ignored: true,
-                    event:
-                        eventName
-                });
-        }
-
-
-        /* =============================================
-           USER ID
-           ============================================= */
-
         if (!userId) {
-
-            console.error(
-                "Webhook custom user_id missing.",
-                {
-                    eventName
-                }
-            );
-
 
             return res
                 .status(400)
@@ -407,269 +718,126 @@ export default async function handler(
                     error:
                         "Webhook user ID is missing."
                 });
+
         }
 
 
-        const data =
-            payload?.data || {};
-
-
-        const attributes =
-            data?.attributes || {};
-
-
-        const subscriptionId =
-            String(
-                data?.id || ""
-            ).trim();
-
-
-        const status =
-            String(
-                attributes
-                    ?.status || ""
-            )
-                .trim()
-                .toLowerCase();
-
-
-        if (
-            !subscriptionId
-        ) {
-
-            return res
-                .status(400)
-                .json({
-                    error:
-                        "Subscription ID is missing."
-                });
-        }
-
-
-        const customerId =
-            attributes
-                ?.customer_id != null
-                ? String(
-                    attributes.customer_id
-                )
-                : null;
-
-
-        const orderId =
-            attributes
-                ?.order_id != null
-                ? String(
-                    attributes.order_id
-                )
-                : null;
-
-
-        const variantId =
-            attributes
-                ?.variant_id != null
-                ? String(
-                    attributes.variant_id
-                )
-                : null;
-
-
-        const renewsAt =
-            normalizeDate(
-                attributes
-                    ?.renews_at
-            );
-
-
-        const endsAt =
-            normalizeDate(
-                attributes
-                    ?.ends_at
-            );
-
-
-        const planType =
-            hasProAccess(status)
-                ? "pro"
-                : "free";
-
-
-        const now =
-            new Date()
-                .toISOString();
-
-
-        const supabase =
-            createSupabaseAdmin();
+        let subscriptionData =
+            null;
 
 
         /* =============================================
-           VERIFY USER
+           PAYMENT SUCCESS
            ============================================= */
 
-        const {
-            data: user,
-            error: userError
-        } =
-            await supabase
-                .from(
-                    "bean_users"
-                )
-                .select(
-                    "id"
-                )
-                .eq(
-                    "id",
-                    userId
-                )
-                .maybeSingle();
-
-
         if (
-            userError ||
-            !user
+            eventName ===
+            "subscription_payment_success"
         ) {
 
-            console.error(
-                "Webhook user not found:",
-                userError
-            );
+            /*
+            Payment-success payload is a
+            subscription-invoice object.
+
+            We use its subscription_id to fetch
+            the actual subscription.
+            */
+
+            const subscriptionId =
+                payload
+                    ?.data
+                    ?.attributes
+                    ?.subscription_id;
 
 
-            return res
-                .status(404)
-                .json({
-                    error:
-                        "User not found."
-                });
+            if (
+                !subscriptionId
+            ) {
+
+                return res
+                    .status(400)
+                    .json({
+                        error:
+                            "Payment event subscription ID is missing."
+                    });
+
+            }
+
+
+            subscriptionData =
+                await fetchSubscription(
+                    String(
+                        subscriptionId
+                    )
+                );
+
         }
 
 
         /* =============================================
-           UPSERT SUBSCRIPTION
+           DIRECT SUBSCRIPTION EVENTS
            ============================================= */
 
-        const subscriptionRow = {
+        else if (
+            payload?.data?.type ===
+            "subscriptions"
+        ) {
 
-            user_id:
+            subscriptionData =
+                payload.data;
+
+        }
+
+
+        /* =============================================
+           IGNORE OTHER EVENTS
+           ============================================= */
+
+        else {
+
+            return res
+                .status(200)
+                .json({
+                    received:
+                        true,
+
+                    ignored:
+                        true,
+
+                    event:
+                        eventName
+                });
+
+        }
+
+
+        /* =============================================
+           SYNC
+           ============================================= */
+
+        const result =
+            await syncSubscription({
                 userId,
-
-            plan_tier:
-                "pro",
-
-            status:
-                status || "unknown",
-
-            provider:
-                "lemon_squeezy",
-
-            provider_subscription_id:
-                subscriptionId,
-
-            provider_customer_id:
-                customerId,
-
-            provider_order_id:
-                orderId,
-
-            variant_id:
-                variantId,
-
-            renews_at:
-                renewsAt,
-
-            ends_at:
-                endsAt,
-
-            updated_at:
-                now
-
-        };
-
-
-        const {
-            error:
-                subscriptionError
-        } =
-            await supabase
-                .from(
-                    "user_subscriptions"
-                )
-                .upsert(
-                    subscriptionRow,
-                    {
-                        onConflict:
-                            "provider_subscription_id"
-                    }
-                );
-
-
-        if (subscriptionError) {
-
-            console.error(
-                "Subscription sync failed:",
-                subscriptionError
-            );
-
-
-            return res
-                .status(500)
-                .json({
-                    error:
-                        "Unable to sync subscription."
-                });
-        }
-
-
-        /* =============================================
-           UPDATE USER PLAN
-           ============================================= */
-
-        const {
-            error:
-                planError
-        } =
-            await supabase
-                .from(
-                    "bean_users"
-                )
-                .update({
-                    plan_type:
-                        planType,
-
-                    updated_at:
-                        now
-                })
-                .eq(
-                    "id",
-                    userId
-                );
-
-
-        if (planError) {
-
-            console.error(
-                "Plan update failed:",
-                planError
-            );
-
-
-            return res
-                .status(500)
-                .json({
-                    error:
-                        "Unable to update user plan."
-                });
-        }
+                subscriptionData
+            });
 
 
         console.log(
-            "Lemon subscription webhook processed.",
+            "Lemon subscription synced.",
             {
-                eventName,
+                event:
+                    eventName,
+
                 userId,
-                subscriptionId,
-                status,
-                planType
+
+                subscriptionId:
+                    result.subscriptionId,
+
+                status:
+                    result.status,
+
+                plan:
+                    result.plan
             }
         );
 
@@ -677,9 +845,17 @@ export default async function handler(
         return res
             .status(200)
             .json({
-                received: true,
+                received:
+                    true,
+
+                synced:
+                    true,
+
                 event:
-                    eventName
+                    eventName,
+
+                plan:
+                    result.plan
             });
 
     } catch (error) {
@@ -694,7 +870,10 @@ export default async function handler(
             .status(500)
             .json({
                 error:
+                    error?.message ||
                     "Webhook processing failed."
             });
+
     }
+
 }

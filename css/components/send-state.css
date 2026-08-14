@@ -35,7 +35,6 @@ Purpose:
 
 .send-btn.is-generating {
     cursor: pointer !important;
-
     transform: none !important;
 }
 
@@ -117,7 +116,10 @@ Purpose:
 .send-btn.is-generating:focus-visible {
     outline:
         2px solid
-        var(--focus-ring, rgba(59, 130, 246, 0.45)) !important;
+        var(
+            --focus-ring,
+            rgba(59, 130, 246, 0.45)
+        ) !important;
 
     outline-offset: 2px !important;
 }

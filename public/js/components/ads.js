@@ -1,22 +1,23 @@
 /*
 =========================================================
 NEYO — ADS COMPONENT
-Vignette Web Ads Integration
+Monetag Vignette Web Ads
+
+Current Zone:
+11573086
 
 Owns:
 - Monetag Vignette detection
-- Ad integration health state
-- Legacy rewarded-ad button cleanup
-- Public ad status events / API
+- Ads button UI
+- Legacy Watch Ad click interception
+- Ads health/status
+- Public API
 
 Does NOT own:
 - neo.js
 - Checkout
-- Subscription logic
-- Rewarded message credits
-
-Current Monetag Vignette Zone:
-11573086
+- Pro subscription
+- Fake rewarded credits
 =========================================================
 */
 
@@ -43,7 +44,13 @@ Current Monetag Vignette Zone:
             "n6wxm.com",
 
         scriptName:
-            "vignette.min.js"
+            "vignette.min.js",
+
+        buttonText:
+            "Continue with Ads",
+
+        buttonLoadingText:
+            "Loading Ads..."
 
     });
 
@@ -52,10 +59,10 @@ Current Monetag Vignette Zone:
        STATE
        ===================================================== */
 
-    let sdkDetected =
+    let initialized =
         false;
 
-    let initialized =
+    let scriptReady =
         false;
 
 
@@ -128,36 +135,72 @@ Current Monetag Vignette Zone:
 
 
     /* =====================================================
-       LEGACY WATCH-AD BUTTON CLEANUP
+       ADS BUTTON
        ===================================================== */
 
-    const removeLegacyRewardButton = () => {
+    const getAdsButton = () => {
+
+        return document.getElementById(
+            "watchAdBtn"
+        );
+
+    };
+
+
+    const configureAdsButton = () => {
 
         const button =
-            document.getElementById(
-                "watchAdBtn"
-            );
+            getAdsButton();
 
 
         if (!button) {
+
             return false;
+
         }
 
 
         /*
-        Current Monetag integration is Vignette,
+        IMPORTANT:
+
+        Current integration is Vignette,
         not Rewarded Interstitial.
 
-        Therefore "Watch Ad for 5 messages"
-        must not be exposed to users.
+        Therefore we do NOT claim that
+        watching this ad gives 5 messages.
         */
 
-        button.remove();
+
+        button.textContent =
+            CONFIG.buttonText;
 
 
-        emit(
-            "neyo:legacy-reward-ad-removed"
+        button.disabled =
+            false;
+
+
+        button.removeAttribute(
+            "aria-busy"
         );
+
+
+        button.dataset.tooltip =
+            "Continue using NEYO with ads";
+
+
+        button.dataset.tooltipPosition =
+            "top";
+
+
+        button.setAttribute(
+            "aria-label",
+            "Continue with ads"
+        );
+
+
+        button.dataset
+            .neyoAdsConfigured =
+            "true";
 
 
         return true;
@@ -166,7 +209,49 @@ Current Monetag Vignette Zone:
 
 
     /* =====================================================
-       DETECT VIGNETTE
+       CLOSE UPGRADE MODAL
+       ===================================================== */
+
+    const closeUpgradeModal = () => {
+
+        const modal =
+            document.getElementById(
+                "upgradeModal"
+            );
+
+
+        if (!modal) {
+
+            return;
+
+        }
+
+
+        modal.classList.remove(
+            "show"
+        );
+
+
+        modal.classList.remove(
+            "open"
+        );
+
+
+        modal.classList.remove(
+            "active"
+        );
+
+
+        modal.setAttribute(
+            "aria-hidden",
+            "true"
+        );
+
+    };
+
+
+    /* =====================================================
+       SCRIPT DETECTION
        ===================================================== */
 
     const detectVignette = () => {
@@ -177,7 +262,7 @@ Current Monetag Vignette Zone:
 
         if (!script) {
 
-            sdkDetected =
+            scriptReady =
                 false;
 
 
@@ -186,27 +271,14 @@ Current Monetag Vignette Zone:
         }
 
 
-        if (!sdkDetected) {
+        /*
+        The script element exists.
+        Monetag Vignette controls actual
+        ad delivery automatically.
+        */
 
-            sdkDetected =
-                true;
-
-
-            emit(
-                "neyo:ads-ready",
-                {
-                    provider:
-                        CONFIG.provider,
-
-                    format:
-                        CONFIG.format,
-
-                    zoneId:
-                        CONFIG.zoneId
-                }
-            );
-
-        }
+        scriptReady =
+            true;
 
 
         return true;
@@ -215,23 +287,21 @@ Current Monetag Vignette Zone:
 
 
     /* =====================================================
-       SCRIPT LOAD MONITOR
+       MONITOR SCRIPT
        ===================================================== */
 
-    const monitorScript = () => {
+    const monitorVignetteScript = () => {
 
         const script =
             getVignetteScript();
 
 
         if (!script) {
-            return;
+
+            return false;
+
         }
 
-
-        /*
-        Avoid attaching duplicate listeners.
-        */
 
         if (
             script.dataset
@@ -239,7 +309,7 @@ Current Monetag Vignette Zone:
             "true"
         ) {
 
-            return;
+            return true;
 
         }
 
@@ -253,12 +323,12 @@ Current Monetag Vignette Zone:
             "load",
             () => {
 
-                sdkDetected =
+                scriptReady =
                     true;
 
 
                 emit(
-                    "neyo:ads-script-loaded",
+                    "neyo:ads-ready",
                     {
                         provider:
                             CONFIG.provider,
@@ -283,17 +353,17 @@ Current Monetag Vignette Zone:
             "error",
             () => {
 
-                sdkDetected =
+                scriptReady =
                     false;
 
 
                 console.warn(
-                    "[NEYO Ads] Monetag Vignette script failed to load."
+                    "[NEYO Ads] Monetag Vignette failed to load."
                 );
 
 
                 emit(
-                    "neyo:ads-script-error",
+                    "neyo:ads-error",
                     {
                         provider:
                             CONFIG.provider,
@@ -310,22 +380,124 @@ Current Monetag Vignette Zone:
             }
         );
 
+
+        return true;
+
     };
+
+
+    /* =====================================================
+       ADS BUTTON CLICK
+
+       Capture phase prevents neo.js old
+       placeholder handler from showing:
+       "Ad integration will be available soon."
+       ===================================================== */
+
+    document.addEventListener(
+        "click",
+        event => {
+
+            const button =
+                event.target
+                    ?.closest?.(
+                        "#watchAdBtn"
+                    );
+
+
+            if (!button) {
+
+                return;
+
+            }
+
+
+            event.preventDefault();
+
+            event.stopPropagation();
+
+            event.stopImmediatePropagation();
+
+
+            configureAdsButton();
+
+
+            const available =
+                detectVignette();
+
+
+            if (!available) {
+
+                console.warn(
+                    "[NEYO Ads] Vignette script is not available.",
+                    {
+                        zoneId:
+                            CONFIG.zoneId
+                    }
+                );
+
+
+                emit(
+                    "neyo:ads-unavailable",
+                    {
+                        zoneId:
+                            CONFIG.zoneId
+                    }
+                );
+
+
+                return;
+
+            }
+
+
+            /*
+            Vignette ads are delivered by
+            Monetag automatically.
+
+            There is no show_ZONE() method
+            for this web format.
+            */
+
+
+            closeUpgradeModal();
+
+
+            emit(
+                "neyo:ads-continue",
+                {
+                    provider:
+                        CONFIG.provider,
+
+                    format:
+                        CONFIG.format,
+
+                    zoneId:
+                        CONFIG.zoneId
+                }
+            );
+
+        },
+        true
+    );
 
 
     /* =====================================================
        DOM OBSERVER
 
-       neo.js dynamically creates watchAdBtn,
-       so remove it whenever it appears.
-       Also detect dynamically injected Monetag script.
+       neo.js creates watchAdBtn dynamically.
+       Whenever it appears, convert it into
+       the current ads button.
        ===================================================== */
 
     const observer =
         new MutationObserver(
             mutations => {
 
-                let shouldCheckAds =
+                let buttonFound =
+                    false;
+
+                let scriptFound =
                     false;
 
 
@@ -357,7 +529,8 @@ Current Monetag Vignette Zone:
                             )
                         ) {
 
-                            removeLegacyRewardButton();
+                            buttonFound =
+                                true;
 
                         }
 
@@ -370,7 +543,7 @@ Current Monetag Vignette Zone:
                             )
                         ) {
 
-                            shouldCheckAds =
+                            scriptFound =
                                 true;
 
                         }
@@ -380,11 +553,18 @@ Current Monetag Vignette Zone:
                 }
 
 
-                if (shouldCheckAds) {
+                if (buttonFound) {
+
+                    configureAdsButton();
+
+                }
+
+
+                if (scriptFound) {
 
                     detectVignette();
 
-                    monitorScript();
+                    monitorVignetteScript();
 
                 }
 
@@ -400,6 +580,10 @@ Current Monetag Vignette Zone:
 
         const script =
             getVignetteScript();
+
+
+        const button =
+            getAdsButton();
 
 
         return {
@@ -419,10 +603,13 @@ Current Monetag Vignette Zone:
             ready:
                 Boolean(
                     script &&
-                    sdkDetected
+                    scriptReady
                 ),
 
-            rewardedAds:
+            adsButtonPresent:
+                Boolean(button),
+
+            rewardedCredits:
                 false
 
         };
@@ -436,11 +623,11 @@ Current Monetag Vignette Zone:
 
     const refresh = () => {
 
-        removeLegacyRewardButton();
-
         detectVignette();
 
-        monitorScript();
+        monitorVignetteScript();
+
+        configureAdsButton();
 
 
         return getStatus();
@@ -449,13 +636,15 @@ Current Monetag Vignette Zone:
 
 
     /* =====================================================
-       INITIALIZE
+       INIT
        ===================================================== */
 
     const init = () => {
 
         if (initialized) {
+
             return;
+
         }
 
 
@@ -463,11 +652,11 @@ Current Monetag Vignette Zone:
             true;
 
 
-        removeLegacyRewardButton();
-
         detectVignette();
 
-        monitorScript();
+        monitorVignetteScript();
+
+        configureAdsButton();
 
 
         observer.observe(
@@ -505,7 +694,10 @@ Current Monetag Vignette Zone:
 
             isReady:
                 () =>
-                    sdkDetected,
+                    Boolean(
+                        getVignetteScript() &&
+                        scriptReady
+                    ),
 
             getZoneId:
                 () =>

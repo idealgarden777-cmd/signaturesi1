@@ -1,6 +1,7 @@
 /*
 =========================================================
 NEYO — LEMON SQUEEZY WEBHOOK
+Vercel Raw-Body Safe Version
 
 Route:
 POST /api/webhooks/lemon
@@ -21,6 +22,17 @@ import { createClient } from "@supabase/supabase-js";
 
 
 /* =====================================================
+   IMPORTANT — DISABLE BODY PARSING
+   ===================================================== */
+
+export const config = {
+    api: {
+        bodyParser: false
+    }
+};
+
+
+/* =====================================================
    HELPERS
    ===================================================== */
 
@@ -36,13 +48,13 @@ function createSupabaseAdmin() {
     const url =
         clean(process.env.SUPABASE_URL);
 
-    const serviceRoleKey =
+    const key =
         clean(
             process.env.SUPABASE_SERVICE_ROLE_KEY
         );
 
 
-    if (!url || !serviceRoleKey) {
+    if (!url || !key) {
         throw new Error(
             "Supabase configuration is missing."
         );
@@ -51,7 +63,7 @@ function createSupabaseAdmin() {
 
     return createClient(
         url,
-        serviceRoleKey,
+        key,
         {
             auth: {
                 persistSession: false,
@@ -67,42 +79,10 @@ function createSupabaseAdmin() {
    RAW BODY
    ===================================================== */
 
-async function getRawBody(req) {
-
-    if (req.rawBody) {
-
-        return Buffer.isBuffer(req.rawBody)
-            ? req.rawBody
-            : Buffer.from(req.rawBody);
-    }
-
-
-    /*
-    Some Vercel runtimes may already parse req.body.
-    Preserve the body as consistently as possible.
-    */
-
-    if (req.body) {
-
-        if (Buffer.isBuffer(req.body)) {
-            return req.body;
-        }
-
-        if (typeof req.body === "string") {
-            return Buffer.from(
-                req.body,
-                "utf8"
-            );
-        }
-
-        return Buffer.from(
-            JSON.stringify(req.body),
-            "utf8"
-        );
-    }
-
+async function readRawBody(req) {
 
     const chunks = [];
+
 
     for await (const chunk of req) {
 
@@ -111,6 +91,7 @@ async function getRawBody(req) {
                 ? chunk
                 : Buffer.from(chunk)
         );
+
     }
 
 
@@ -119,7 +100,7 @@ async function getRawBody(req) {
 
 
 /* =====================================================
-   SIGNATURE
+   SIGNATURE VERIFY
    ===================================================== */
 
 function verifySignature(
@@ -137,7 +118,7 @@ function verifySignature(
     }
 
 
-    const expected =
+    const digest =
         Buffer.from(
             crypto
                 .createHmac(
@@ -158,7 +139,7 @@ function verifySignature(
 
 
     if (
-        expected.length !==
+        digest.length !==
         received.length
     ) {
         return false;
@@ -166,14 +147,14 @@ function verifySignature(
 
 
     return crypto.timingSafeEqual(
-        expected,
+        digest,
         received
     );
 }
 
 
 /* =====================================================
-   SUBSCRIPTION STATUS
+   STATUS
    ===================================================== */
 
 function hasProAccess(status) {
@@ -202,16 +183,11 @@ function normalizeDate(value) {
         new Date(value);
 
 
-    if (
-        Number.isNaN(
-            date.getTime()
-        )
-    ) {
-        return null;
-    }
-
-
-    return date.toISOString();
+    return Number.isNaN(
+        date.getTime()
+    )
+        ? null
+        : date.toISOString();
 }
 
 
@@ -231,6 +207,7 @@ export default async function handler(
             "POST"
         );
 
+
         return res
             .status(405)
             .json({
@@ -243,21 +220,22 @@ export default async function handler(
     try {
 
         /* =============================================
-           SECRET
+           WEBHOOK SECRET
            ============================================= */
 
-        const webhookSecret =
+        const secret =
             clean(
                 process.env
                     .LEMON_SQUEEZY_WEBHOOK_SECRET
             );
 
 
-        if (!webhookSecret) {
+        if (!secret) {
 
             console.error(
                 "LEMON_SQUEEZY_WEBHOOK_SECRET missing."
             );
+
 
             return res
                 .status(500)
@@ -269,30 +247,33 @@ export default async function handler(
 
 
         /* =============================================
-           VERIFY SIGNATURE
+           RAW BODY + SIGNATURE
            ============================================= */
 
         const rawBody =
-            await getRawBody(req);
+            await readRawBody(req);
 
 
         const signature =
-            req.headers[
-                "x-signature"
-            ];
+            String(
+                req.headers[
+                    "x-signature"
+                ] || ""
+            );
 
 
         if (
             !verifySignature(
                 rawBody,
                 signature,
-                webhookSecret
+                secret
             )
         ) {
 
             console.warn(
                 "Invalid Lemon Squeezy webhook signature."
             );
+
 
             return res
                 .status(401)
@@ -309,6 +290,7 @@ export default async function handler(
 
         let payload;
 
+
         try {
 
             payload =
@@ -324,7 +306,7 @@ export default async function handler(
                 .status(400)
                 .json({
                     error:
-                        "Invalid JSON payload."
+                        "Invalid webhook JSON."
                 });
         }
 
@@ -336,37 +318,61 @@ export default async function handler(
             );
 
 
-        /*
-        Checkout custom data:
-        checkout_data.custom.user_id
-        becomes:
-        meta.custom_data.user_id
-        */
+        const customData =
+            payload?.meta
+                ?.custom_data || {};
+
 
         const userId =
             String(
-                payload
-                    ?.meta
-                    ?.custom_data
+                customData
                     ?.user_id || ""
             ).trim();
 
 
-        const data =
-            payload?.data || {};
-
-
-        const attributes =
-            data?.attributes || {};
-
-
         /* =============================================
-           IGNORE NON-SUBSCRIPTION EVENTS
+           IGNORE EVENTS WE DON'T NEED
            ============================================= */
 
+        const supportedEvents =
+            new Set([
+                "subscription_created",
+                "subscription_updated",
+                "subscription_cancelled",
+                "subscription_resumed",
+                "subscription_expired",
+                "subscription_paused",
+                "subscription_unpaused"
+            ]);
+
+
+        /*
+        Payment-success event is an invoice object,
+        not the subscription object.
+
+        The actual subscription state is handled
+        by subscription_created / updated events.
+        */
+
         if (
-            !eventName.startsWith(
-                "subscription_"
+            eventName ===
+            "subscription_payment_success"
+        ) {
+
+            return res
+                .status(200)
+                .json({
+                    received: true,
+                    ignored: true,
+                    event:
+                        eventName
+                });
+        }
+
+
+        if (
+            !supportedEvents.has(
+                eventName
             )
         ) {
 
@@ -374,21 +380,26 @@ export default async function handler(
                 .status(200)
                 .json({
                     received: true,
-                    ignored: true
+                    ignored: true,
+                    event:
+                        eventName
                 });
         }
 
 
+        /* =============================================
+           USER ID
+           ============================================= */
+
         if (!userId) {
 
             console.error(
-                "Lemon webhook missing user_id.",
+                "Webhook custom user_id missing.",
                 {
-                    eventName,
-                    subscriptionId:
-                        data?.id
+                    eventName
                 }
             );
+
 
             return res
                 .status(400)
@@ -397,6 +408,14 @@ export default async function handler(
                         "Webhook user ID is missing."
                 });
         }
+
+
+        const data =
+            payload?.data || {};
+
+
+        const attributes =
+            data?.attributes || {};
 
 
         const subscriptionId =
@@ -412,6 +431,19 @@ export default async function handler(
             )
                 .trim()
                 .toLowerCase();
+
+
+        if (
+            !subscriptionId
+        ) {
+
+            return res
+                .status(400)
+                .json({
+                    error:
+                        "Subscription ID is missing."
+                });
+        }
 
 
         const customerId =
@@ -461,6 +493,11 @@ export default async function handler(
                 : "free";
 
 
+        const now =
+            new Date()
+                .toISOString();
+
+
         const supabase =
             createSupabaseAdmin();
 
@@ -470,7 +507,7 @@ export default async function handler(
            ============================================= */
 
         const {
-            data: existingUser,
+            data: user,
             error: userError
         } =
             await supabase
@@ -478,7 +515,7 @@ export default async function handler(
                     "bean_users"
                 )
                 .select(
-                    "id, plan_type, status"
+                    "id"
                 )
                 .eq(
                     "id",
@@ -489,13 +526,14 @@ export default async function handler(
 
         if (
             userError ||
-            !existingUser
+            !user
         ) {
 
             console.error(
                 "Webhook user not found:",
                 userError
             );
+
 
             return res
                 .status(404)
@@ -507,13 +545,8 @@ export default async function handler(
 
 
         /* =============================================
-           UPSERT USER SUBSCRIPTION
+           UPSERT SUBSCRIPTION
            ============================================= */
-
-        const now =
-            new Date()
-                .toISOString();
-
 
         const subscriptionRow = {
 
@@ -530,7 +563,7 @@ export default async function handler(
                 "lemon_squeezy",
 
             provider_subscription_id:
-                subscriptionId || null,
+                subscriptionId,
 
             provider_customer_id:
                 customerId,
@@ -577,6 +610,7 @@ export default async function handler(
                 subscriptionError
             );
 
+
             return res
                 .status(500)
                 .json({
@@ -614,9 +648,10 @@ export default async function handler(
         if (planError) {
 
             console.error(
-                "User plan update failed:",
+                "Plan update failed:",
                 planError
             );
+
 
             return res
                 .status(500)
@@ -628,7 +663,7 @@ export default async function handler(
 
 
         console.log(
-            "Lemon subscription synced.",
+            "Lemon subscription webhook processed.",
             {
                 eventName,
                 userId,

@@ -2,12 +2,18 @@
 =========================================================
 NEYO — REWARDED ADS COMPONENT
 
-Purpose:
-- Handle rewarded ads outside neo.js
-- Intercept legacy Watch Ad button
-- Reward successful ad completion
-- Keep free-user bonus state
-- Support Monetag SDK
+Owns:
+- Rewarded ad trigger
+- Watch Ad button interception
+- Reward balance
+- Reward consume
+- Monetag SDK detection
+- Public events / API
+
+Does NOT own:
+- neo.js
+- Checkout
+- Subscription activation
 =========================================================
 */
 
@@ -23,16 +29,17 @@ Purpose:
 
         rewardMessages: 5,
 
-        // Replace after Monetag zone is connected.
-        zoneId: "",
+        zoneId:
+            "11455541",
 
-        sdkFunction: "",
+        sdkFunction:
+            "show_11455541",
 
         rewardStorageKey:
             "neyo_rewarded_messages",
 
         placement:
-            "free_message_reward"
+            "neyo_free_messages"
 
     });
 
@@ -41,11 +48,12 @@ Purpose:
        STATE
        ===================================================== */
 
-    let adRunning = false;
+    let adRunning =
+        false;
 
 
     /* =====================================================
-       HELPERS
+       EVENTS
        ===================================================== */
 
     const emit = (
@@ -65,7 +73,11 @@ Purpose:
     };
 
 
-    const toast = (
+    /* =====================================================
+       TOAST
+       ===================================================== */
+
+    const showToast = (
         message,
         type = "info"
     ) => {
@@ -78,12 +90,33 @@ Purpose:
             }
         );
 
+
+        /*
+        Fallback if app toast listener
+        is currently unavailable.
+        */
+
+        if (
+            !window.NeyoToast &&
+            type === "error"
+        ) {
+
+            console.warn(
+                `[NEYO Ads] ${message}`
+            );
+
+        }
+
     };
 
 
+    /* =====================================================
+       REWARD BALANCE
+       ===================================================== */
+
     const getRewardBalance = () => {
 
-        const raw =
+        const value =
             Number(
                 localStorage.getItem(
                     CONFIG.rewardStorageKey
@@ -91,12 +124,19 @@ Purpose:
             );
 
 
-        return Number.isFinite(raw)
-            ? Math.max(
-                0,
-                Math.floor(raw)
-            )
-            : 0;
+        if (
+            !Number.isFinite(value) ||
+            value < 0
+        ) {
+
+            return 0;
+
+        }
+
+
+        return Math.floor(
+            value
+        );
 
     };
 
@@ -104,7 +144,7 @@ Purpose:
     const saveRewardBalance =
         amount => {
 
-            const safeAmount =
+            const next =
                 Math.max(
                     0,
                     Math.floor(
@@ -115,7 +155,7 @@ Purpose:
 
             localStorage.setItem(
                 CONFIG.rewardStorageKey,
-                String(safeAmount)
+                String(next)
             );
 
 
@@ -123,12 +163,12 @@ Purpose:
                 "neyo:ad-reward-balance-change",
                 {
                     remaining:
-                        safeAmount
+                        next
                 }
             );
 
 
-            return safeAmount;
+            return next;
 
         };
 
@@ -143,7 +183,11 @@ Purpose:
 
 
         return saveRewardBalance(
-            current + amount
+            current +
+            Math.max(
+                0,
+                Number(amount) || 0
+            )
         );
 
     };
@@ -156,7 +200,9 @@ Purpose:
 
 
         if (current <= 0) {
+
             return false;
+
         }
 
 
@@ -165,69 +211,16 @@ Purpose:
         );
 
 
-        return true;
-
-    };
-
-
-    /* =====================================================
-       SDK RESOLUTION
-       ===================================================== */
-
-    const getSdkFunction = () => {
-
-        /*
-        Example after Monetag gives you:
-
-        Zone ID:
-        123456
-
-        SDK function:
-        show_123456
-
-        CONFIG becomes:
-
-        zoneId: "123456",
-        sdkFunction: "show_123456"
-        */
-
-
-        if (
-            CONFIG.sdkFunction &&
-            typeof window[
-                CONFIG.sdkFunction
-            ] === "function"
-        ) {
-
-            return window[
-                CONFIG.sdkFunction
-            ];
-
-        }
-
-
-        if (CONFIG.zoneId) {
-
-            const generatedName =
-                `show_${CONFIG.zoneId}`;
-
-
-            if (
-                typeof window[
-                    generatedName
-                ] === "function"
-            ) {
-
-                return window[
-                    generatedName
-                ];
-
+        emit(
+            "neyo:ad-reward-consumed",
+            {
+                remaining:
+                    getRewardBalance()
             }
+        );
 
-        }
 
-
-        return null;
+        return true;
 
     };
 
@@ -240,7 +233,7 @@ Purpose:
 
         try {
 
-            const storedUser =
+            const user =
                 JSON.parse(
                     localStorage.getItem(
                         "signaturesi_user"
@@ -249,16 +242,16 @@ Purpose:
                 );
 
 
-            if (storedUser?.id) {
+            if (user?.id) {
 
                 return String(
-                    storedUser.id
+                    user.id
                 );
 
             }
 
         } catch {
-            // Ignore malformed storage.
+            // Ignore invalid localStorage.
         }
 
 
@@ -292,43 +285,111 @@ Purpose:
 
 
     /* =====================================================
-       BUTTON UI
+       MONETAG SDK
        ===================================================== */
 
-    const getWatchButton = () =>
-        document.getElementById(
+    const getAdFunction = () => {
+
+        const direct =
+            window[
+                CONFIG.sdkFunction
+            ];
+
+
+        if (
+            typeof direct ===
+            "function"
+        ) {
+
+            return direct;
+
+        }
+
+
+        const generated =
+            window[
+                `show_${CONFIG.zoneId}`
+            ];
+
+
+        if (
+            typeof generated ===
+            "function"
+        ) {
+
+            return generated;
+
+        }
+
+
+        return null;
+
+    };
+
+
+    const isSdkReady = () => {
+
+        return Boolean(
+            getAdFunction()
+        );
+
+    };
+
+
+    /* =====================================================
+       WATCH AD BUTTON
+       ===================================================== */
+
+    const getWatchButton = () => {
+
+        return document.getElementById(
             "watchAdBtn"
         );
 
-
-    const setButtonLoading =
-        loading => {
-
-            const button =
-                getWatchButton();
+    };
 
 
-            if (!button) {
-                return;
-            }
+    const updateWatchButton = () => {
+
+        const button =
+            getWatchButton();
 
 
-            button.disabled =
-                loading;
+        if (!button) {
+            return;
+        }
 
 
-            button.setAttribute(
-                "aria-busy",
-                String(loading)
-            );
+        button.textContent =
+            adRunning
+                ? "Loading ad..."
+                : `Watch Ad for ${CONFIG.rewardMessages} messages`;
 
 
-            button.textContent =
-                loading
-                    ? "Loading ad..."
-                    : `Watch Ad for ${CONFIG.rewardMessages} messages`;
+        button.disabled =
+            adRunning;
 
-        };
+
+        button.setAttribute(
+            "aria-busy",
+            String(adRunning)
+        );
+
+
+        button.dataset.tooltip =
+            `Watch an ad for ${CONFIG.rewardMessages} bonus messages`;
+
+
+        button.dataset.tooltipPosition =
+            "top";
+
+
+        button.setAttribute(
+            "aria-label",
+            `Watch ad for ${CONFIG.rewardMessages} bonus messages`
+        );
+
+    };
 
 
     /* =====================================================
@@ -358,29 +419,42 @@ Purpose:
         async () => {
 
             if (adRunning) {
+
                 return false;
+
             }
 
 
             const showAd =
-                getSdkFunction();
+                getAdFunction();
 
 
             if (!showAd) {
 
-                toast(
+                console.warn(
+                    "[NEYO Ads] Monetag ad SDK is not loaded yet.",
+                    {
+                        zoneId:
+                            CONFIG.zoneId,
+
+                        expectedFunction:
+                            CONFIG.sdkFunction
+                    }
+                );
+
+
+                showToast(
                     "Rewarded ads are not connected yet.",
                     "info"
                 );
 
 
-                console.warn(
-                    "[NEYO Ads] Monetag SDK function not found."
-                );
-
-
                 emit(
-                    "neyo:ad-sdk-missing"
+                    "neyo:ad-sdk-missing",
+                    {
+                        zoneId:
+                            CONFIG.zoneId
+                    }
                 );
 
 
@@ -393,9 +467,7 @@ Purpose:
                 true;
 
 
-            setButtonLoading(
-                true
-            );
+            updateWatchButton();
 
 
             const trackingId =
@@ -407,6 +479,9 @@ Purpose:
                 emit(
                     "neyo:ad-start",
                     {
+                        zoneId:
+                            CONFIG.zoneId,
+
                         placement:
                             CONFIG.placement,
 
@@ -416,11 +491,12 @@ Purpose:
 
 
                 /*
-                Monetag Rewarded Interstitial.
+                Monetag SDK call.
 
-                Promise resolves only when
-                the rewarded event completes.
+                Reward is added only if
+                this Promise resolves.
                 */
+
                 await showAd({
 
                     ymid:
@@ -441,12 +517,6 @@ Purpose:
                 closeUpgradeModal();
 
 
-                toast(
-                    `${CONFIG.rewardMessages} bonus messages unlocked.`,
-                    "success"
-                );
-
-
                 emit(
                     "neyo:ad-reward-granted",
                     {
@@ -461,19 +531,19 @@ Purpose:
                 );
 
 
+                showToast(
+                    `${CONFIG.rewardMessages} bonus messages unlocked.`,
+                    "success"
+                );
+
+
                 return true;
 
             } catch (error) {
 
                 console.warn(
-                    "[NEYO Ads] Rewarded ad failed:",
+                    "[NEYO Ads] Ad failed or was not completed.",
                     error
-                );
-
-
-                toast(
-                    "Ad was unavailable or not completed.",
-                    "info"
                 );
 
 
@@ -485,6 +555,12 @@ Purpose:
                 );
 
 
+                showToast(
+                    "Ad unavailable or not completed.",
+                    "info"
+                );
+
+
                 return false;
 
             } finally {
@@ -493,9 +569,7 @@ Purpose:
                     false;
 
 
-                setButtonLoading(
-                    false
-                );
+                updateWatchButton();
 
             }
 
@@ -503,10 +577,7 @@ Purpose:
 
 
     /* =====================================================
-       INTERCEPT LEGACY NEO.JS WATCH BUTTON
-
-       document capture phase runs before the
-       legacy target click handler in neo.js.
+       INTERCEPT LEGACY NEO.JS BUTTON
        ===================================================== */
 
     document.addEventListener(
@@ -514,15 +585,21 @@ Purpose:
         event => {
 
             const button =
-                event.target.closest?.(
-                    "#watchAdBtn"
-                );
+                event.target
+                    ?.closest?.(
+                        "#watchAdBtn"
+                    );
 
 
             if (!button) {
                 return;
             }
 
+
+            /*
+            Capture phase stops the old
+            neo.js placeholder click.
+            */
 
             event.preventDefault();
 
@@ -539,35 +616,57 @@ Purpose:
 
 
     /* =====================================================
-       WATCH FOR DYNAMIC BUTTON
+       DYNAMIC BUTTON OBSERVER
        ===================================================== */
 
     const observer =
         new MutationObserver(
-            () => {
+            mutations => {
 
-                const button =
-                    getWatchButton();
-
-
-                if (!button) {
-                    return;
-                }
+                let shouldRefresh =
+                    false;
 
 
-                button.dataset.tooltip =
-                    `Watch an ad for ${CONFIG.rewardMessages} bonus messages`;
+                mutations.forEach(
+                    mutation => {
+
+                        mutation.addedNodes
+                            .forEach(
+                                node => {
+
+                                    if (
+                                        node.nodeType !==
+                                        Node.ELEMENT_NODE
+                                    ) {
+                                        return;
+                                    }
 
 
-                button.dataset
-                    .tooltipPosition =
-                    "top";
+                                    if (
+                                        node.id ===
+                                            "watchAdBtn" ||
+                                        node.querySelector?.(
+                                            "#watchAdBtn"
+                                        )
+                                    ) {
 
+                                        shouldRefresh =
+                                            true;
 
-                button.setAttribute(
-                    "aria-label",
-                    `Watch ad for ${CONFIG.rewardMessages} bonus messages`
+                                    }
+
+                                }
+                            );
+
+                    }
                 );
+
+
+                if (shouldRefresh) {
+
+                    updateWatchButton();
+
+                }
 
             }
         );
@@ -586,12 +685,16 @@ Purpose:
 
 
     /* =====================================================
-       PUBLIC EVENTS
+       EXTERNAL EVENTS
        ===================================================== */
 
     window.addEventListener(
         "neyo:ad-show-request",
-        showRewardedAd
+        () => {
+
+            showRewardedAd();
+
+        }
     );
 
 
@@ -618,6 +721,13 @@ Purpose:
 
 
     /* =====================================================
+       INITIAL STATE
+       ===================================================== */
+
+    updateWatchButton();
+
+
+    /* =====================================================
        PUBLIC API
        ===================================================== */
 
@@ -627,15 +737,21 @@ Purpose:
             show:
                 showRewardedAd,
 
-            getRewardBalance,
-
-            consumeReward,
-
-            addReward,
+            isSdkReady,
 
             isRunning:
                 () =>
-                    adRunning
+                    adRunning,
+
+            getRewardBalance,
+
+            addReward,
+
+            consumeReward,
+
+            getZoneId:
+                () =>
+                    CONFIG.zoneId
 
         });
 

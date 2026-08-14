@@ -1,23 +1,22 @@
 /*
 =========================================================
 NEYO — MODEL MENU COMPONENT
-LEGACY-CONFLICT-SAFE VERSION
+STABLE REPAIR VERSION
 
 Owns:
 - Model dropdown open / close
 - Model selection
 - Active model UI
 - Current model display
-- Pro model access
-- Pro unlock state
-- Legacy neo.js click interception
+- Pro access state
+- Legacy neo.js conflict protection
 - Public model events / API
 
 Does NOT own:
 - Checkout
-- Upgrade modal UI
 - Subscription fetching
 - Chat API
+- Usage limits
 =========================================================
 */
 
@@ -61,22 +60,32 @@ Does NOT own:
 
 
     /* =====================================================
-       MODELS
+       MODEL CONFIG
        ===================================================== */
 
     const MODELS =
         Object.freeze({
 
             "l1.0": {
-                id: "l1.0",
-                label: "NEYO L1.0",
-                plan: "free"
+                id:
+                    "l1.0",
+
+                label:
+                    "NEYO L1.0",
+
+                plan:
+                    "free"
             },
 
             "l1.2": {
-                id: "l1.2",
-                label: "NEYO L1.2 Pro",
-                plan: "pro"
+                id:
+                    "l1.2",
+
+                label:
+                    "NEYO L1.2 Pro",
+
+                plan:
+                    "pro"
             }
 
         });
@@ -162,7 +171,9 @@ Does NOT own:
                 model.plan === "pro" &&
                 !isProUser()
             ) {
+
                 return false;
+
             }
 
 
@@ -172,7 +183,7 @@ Does NOT own:
 
 
     /* =====================================================
-       MENU STATE
+       MENU
        ===================================================== */
 
     const isMenuOpen =
@@ -251,7 +262,7 @@ Does NOT own:
 
 
     /* =====================================================
-       PRO ACCESS UI
+       ACCESS UI
        ===================================================== */
 
     const updateAccessUI =
@@ -287,42 +298,36 @@ Does NOT own:
                         );
 
 
-                    option
-                        .classList
-                        .toggle(
-                            "locked",
-                            isProModel &&
-                            !unlocked
-                        );
+                    option.classList.toggle(
+                        "locked",
+                        isProModel &&
+                        !unlocked
+                    );
 
 
-                    option
-                        .classList
-                        .toggle(
-                            "is-unlocked",
-                            isProModel &&
-                            unlocked
-                        );
+                    option.classList.toggle(
+                        "is-unlocked",
+                        isProModel &&
+                        unlocked
+                    );
 
 
                     if (
                         isProModel
                     ) {
 
-                        option
-                            .setAttribute(
-                                "aria-disabled",
-                                String(
-                                    !unlocked
-                                )
-                            );
+                        option.setAttribute(
+                            "aria-disabled",
+                            String(
+                                !unlocked
+                            )
+                        );
 
                     } else {
 
-                        option
-                            .removeAttribute(
-                                "aria-disabled"
-                            );
+                        option.removeAttribute(
+                            "aria-disabled"
+                        );
 
                     }
 
@@ -333,7 +338,7 @@ Does NOT own:
 
 
     /* =====================================================
-       ACTIVE MODEL UI
+       MODEL UI
        ===================================================== */
 
     const updateModelUI =
@@ -371,21 +376,18 @@ Does NOT own:
                         modelId;
 
 
-                    option
-                        .classList
-                        .toggle(
-                            "active",
+                    option.classList.toggle(
+                        "active",
+                        active
+                    );
+
+
+                    option.setAttribute(
+                        "aria-selected",
+                        String(
                             active
-                        );
-
-
-                    option
-                        .setAttribute(
-                            "aria-selected",
-                            String(
-                                active
-                            )
-                        );
+                        )
+                    );
 
                 }
             );
@@ -397,7 +399,7 @@ Does NOT own:
 
 
     /* =====================================================
-       SELECT MODEL
+       MODEL SELECT
        ===================================================== */
 
     const selectModel =
@@ -418,7 +420,7 @@ Does NOT own:
 
 
             /*
-            FREE USER → PRO MODEL
+            FREE USER ATTEMPTS PRO MODEL
             */
 
             if (
@@ -448,7 +450,7 @@ Does NOT own:
 
 
             /*
-            SELECT
+            SUCCESSFUL SELECT
             */
 
             selectedModel =
@@ -463,9 +465,25 @@ Does NOT own:
             closeMenu();
 
 
+            /*
+            Persist selected model for
+            components that load later.
+            */
+
+            try {
+
+                sessionStorage.setItem(
+                    "neyo_selected_model",
+                    selectedModel
+                );
+
+            } catch {
+                // Ignore storage failures.
+            }
+
+
             if (
-                options.silent !==
-                true
+                options.silent !== true
             ) {
 
                 emit(
@@ -488,7 +506,7 @@ Does NOT own:
 
 
     /* =====================================================
-       USER PLAN
+       PLAN
        ===================================================== */
 
     const setUserPlan =
@@ -504,9 +522,9 @@ Does NOT own:
 
 
             /*
-            If plan drops from Pro → Free
-            while L1.2 is selected,
-            safely switch back to L1.0.
+            If user becomes Free while
+            Pro model is selected,
+            fall back safely.
             */
 
             if (
@@ -522,6 +540,18 @@ Does NOT own:
                 updateModelUI(
                     selectedModel
                 );
+
+
+                try {
+
+                    sessionStorage.setItem(
+                        "neyo_selected_model",
+                        selectedModel
+                    );
+
+                } catch {
+                    // Ignore.
+                }
 
 
                 emit(
@@ -555,12 +585,7 @@ Does NOT own:
 
 
     /* =====================================================
-       LEGACY NEO.JS CONFLICT BLOCKER
-
-       IMPORTANT:
-       Capture phase executes before old bubble listeners.
-       stopImmediatePropagation prevents neo.js from
-       toggling the same menu again.
+       LEGACY NEO.JS CONFLICT PROTECTION
        ===================================================== */
 
     modelBadgeBtn.addEventListener(
@@ -568,9 +593,7 @@ Does NOT own:
         event => {
 
             event.preventDefault();
-
             event.stopPropagation();
-
             event.stopImmediatePropagation();
 
 
@@ -581,10 +604,6 @@ Does NOT own:
     );
 
 
-    /* =====================================================
-       MODEL OPTION CLICKS
-       ===================================================== */
-
     modelOptions.forEach(
         option => {
 
@@ -592,15 +611,8 @@ Does NOT own:
                 "click",
                 event => {
 
-                    /*
-                    Prevent legacy neo.js
-                    option listeners.
-                    */
-
                     event.preventDefault();
-
                     event.stopPropagation();
-
                     event.stopImmediatePropagation();
 
 
@@ -635,28 +647,25 @@ Does NOT own:
         "click",
         event => {
 
-            const clickedButton =
-                modelBadgeBtn
-                    .contains(
-                        event.target
-                    );
-
-
-            const clickedMenu =
-                modelDropdownMenu
-                    .contains(
-                        event.target
-                    );
+            if (
+                modelBadgeBtn.contains(
+                    event.target
+                )
+            ) {
+                return;
+            }
 
 
             if (
-                !clickedButton &&
-                !clickedMenu
+                modelDropdownMenu.contains(
+                    event.target
+                )
             ) {
-
-                closeMenu();
-
+                return;
             }
+
+
+            closeMenu();
 
         },
         true
@@ -664,7 +673,7 @@ Does NOT own:
 
 
     /* =====================================================
-       ESCAPE KEY
+       ESCAPE
        ===================================================== */
 
     document.addEventListener(
@@ -672,22 +681,17 @@ Does NOT own:
         event => {
 
             if (
-                event.key !==
-                    "Escape" ||
+                event.key !== "Escape" ||
                 !isMenuOpen()
             ) {
                 return;
             }
 
 
-            event.stopPropagation();
-
-
             closeMenu();
 
 
-            modelBadgeBtn
-                .focus();
+            modelBadgeBtn.focus();
 
         },
         true
@@ -695,7 +699,7 @@ Does NOT own:
 
 
     /* =====================================================
-       PLAN EVENTS
+       PROFILE / PLAN EVENTS
        ===================================================== */
 
     window.addEventListener(
@@ -703,20 +707,12 @@ Does NOT own:
         event => {
 
             setUserPlan(
-                event
-                    .detail
-                    ?.plan
+                event.detail?.plan
             );
 
         }
     );
 
-
-    /*
-    Extra fallback:
-    profile.js also emits profile-loaded.
-    This protects against event-order/race issues.
-    */
 
     window.addEventListener(
         "neyo:profile-loaded",
@@ -742,7 +738,7 @@ Does NOT own:
 
 
     /* =====================================================
-       EXTERNAL MODEL SELECT
+       EXTERNAL EVENTS
        ===================================================== */
 
     window.addEventListener(
@@ -750,9 +746,7 @@ Does NOT own:
         event => {
 
             selectModel(
-                event
-                    .detail
-                    ?.model
+                event.detail?.model
             );
 
         }
@@ -761,21 +755,13 @@ Does NOT own:
 
     window.addEventListener(
         "neyo:model-menu-open-request",
-        () => {
-
-            openMenu();
-
-        }
+        openMenu
     );
 
 
     window.addEventListener(
         "neyo:model-menu-close-request",
-        () => {
-
-            closeMenu();
-
-        }
+        closeMenu
     );
 
 
@@ -786,11 +772,9 @@ Does NOT own:
     const initialActive =
         modelOptions.find(
             option =>
-                option
-                    .classList
-                    .contains(
-                        "active"
-                    )
+                option.classList.contains(
+                    "active"
+                )
         );
 
 
@@ -799,16 +783,45 @@ Does NOT own:
             ?.dataset
             ?.model &&
         MODELS[
-            initialActive
-                .dataset
-                .model
+            initialActive.dataset.model
         ]
     ) {
 
         selectedModel =
-            initialActive
-                .dataset
-                .model;
+            initialActive.dataset.model;
+
+    }
+
+
+    /*
+    Restore previous session model.
+    Only restore if access is allowed
+    after plan sync.
+    */
+
+    let storedModel =
+        null;
+
+
+    try {
+
+        storedModel =
+            sessionStorage.getItem(
+                "neyo_selected_model"
+            );
+
+    } catch {
+        storedModel = null;
+    }
+
+
+    if (
+        storedModel &&
+        MODELS[storedModel]
+    ) {
+
+        selectedModel =
+            storedModel;
 
     }
 
@@ -818,18 +831,14 @@ Does NOT own:
     );
 
 
-    modelBadgeBtn
-        .setAttribute(
-            "aria-expanded",
-            "false"
-        );
+    modelBadgeBtn.setAttribute(
+        "aria-expanded",
+        "false"
+    );
 
 
     /* =====================================================
        PROFILE FALLBACK
-
-       If profile.js happened to load before this component,
-       read its current plan directly.
        ===================================================== */
 
     const syncExistingProfilePlan =
@@ -846,8 +855,7 @@ Does NOT own:
             ) {
 
                 setUserPlan(
-                    profileUser
-                        .planType
+                    profileUser.planType
                 );
 
             }
@@ -856,7 +864,9 @@ Does NOT own:
 
 
     /*
-    Run immediately and once shortly after boot.
+    profile.js loads immediately after
+    model-menu.js, so check now and
+    again after boot.
     */
 
     syncExistingProfilePlan();
@@ -864,7 +874,63 @@ Does NOT own:
 
     setTimeout(
         syncExistingProfilePlan,
-        250
+        100
+    );
+
+
+    setTimeout(
+        syncExistingProfilePlan,
+        500
+    );
+
+
+    /* =====================================================
+       FINAL ACCESS CHECK AFTER PLAN LOAD
+       ===================================================== */
+
+    window.addEventListener(
+        "neyo:model-plan-change",
+        () => {
+
+            /*
+            Restore stored Pro model only
+            after Pro entitlement is known.
+            */
+
+            let stored =
+                null;
+
+
+            try {
+
+                stored =
+                    sessionStorage.getItem(
+                        "neyo_selected_model"
+                    );
+
+            } catch {
+                stored = null;
+            }
+
+
+            if (
+                stored &&
+                MODELS[stored] &&
+                canUseModel(stored) &&
+                selectedModel !== stored
+            ) {
+
+                selectModel(
+                    stored,
+                    {
+                        silent:
+                            true
+                    }
+                );
+
+            }
+
+        }
     );
 
 

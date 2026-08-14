@@ -1,21 +1,22 @@
 /*
 =========================================================
 NEYO — MODEL MENU COMPONENT
+Legacy-safe version
 
 Owns:
 - Model dropdown open / close
 - Model selection
 - Active model UI
 - Current model display
-- Pro model access
-- Pro unlock UI state
+- Free / Pro access
+- Legacy neo.js click isolation
 - Public model events / API
 
 Does NOT own:
 - Checkout
-- Upgrade modal UI
 - Subscription fetching
 - Chat API
+- neo.js
 =========================================================
 */
 
@@ -66,25 +67,15 @@ Does NOT own:
         Object.freeze({
 
             "l1.0": {
-                id:
-                    "l1.0",
-
-                label:
-                    "NEYO L1.0",
-
-                plan:
-                    "free"
+                id: "l1.0",
+                label: "NEYO L1.0",
+                plan: "free"
             },
 
             "l1.2": {
-                id:
-                    "l1.2",
-
-                label:
-                    "NEYO L1.2 Pro",
-
-                plan:
-                    "pro"
+                id: "l1.2",
+                label: "NEYO L1.2 Pro",
+                plan: "pro"
             }
 
         });
@@ -99,6 +90,9 @@ Does NOT own:
 
     let userPlan =
         "free";
+
+    let menuOpen =
+        false;
 
 
     /* =====================================================
@@ -122,24 +116,27 @@ Does NOT own:
     };
 
 
-    const getModel =
-        modelId =>
-            MODELS[
-                modelId
-            ] ||
-            null;
-
-
     const normalizePlan =
-        plan =>
-            String(
-                plan || "free"
+        value => {
+
+            return String(
+                value || "free"
             )
                 .trim()
                 .toLowerCase() ===
                 "pro"
                 ? "pro"
                 : "free";
+
+        };
+
+
+    const getModel =
+        modelId =>
+            MODELS[
+                modelId
+            ] ||
+            null;
 
 
     const isProUser =
@@ -163,8 +160,7 @@ Does NOT own:
 
 
             if (
-                model.plan ===
-                    "pro" &&
+                model.plan === "pro" &&
                 !isProUser()
             ) {
                 return false;
@@ -176,12 +172,34 @@ Does NOT own:
         };
 
 
+    /*
+    IMPORTANT:
+    Blocks old neo.js model click handlers
+    without modifying neo.js.
+    */
+
+    const isolateLegacyClick =
+        event => {
+
+            event.preventDefault();
+
+            event.stopPropagation();
+
+            event.stopImmediatePropagation();
+
+        };
+
+
     /* =====================================================
-       MENU
+       MENU STATE
        ===================================================== */
 
     const openMenu =
         () => {
+
+            menuOpen =
+                true;
+
 
             modelDropdownMenu
                 .classList
@@ -207,6 +225,10 @@ Does NOT own:
     const closeMenu =
         () => {
 
+            menuOpen =
+                false;
+
+
             modelDropdownMenu
                 .classList
                 .remove(
@@ -231,13 +253,7 @@ Does NOT own:
     const toggleMenu =
         () => {
 
-            if (
-                modelDropdownMenu
-                    .classList
-                    .contains(
-                        "show"
-                    )
-            ) {
+            if (menuOpen) {
 
                 closeMenu();
 
@@ -251,7 +267,7 @@ Does NOT own:
 
 
     /* =====================================================
-       MODEL OPTION ACCESS UI
+       ACCESS UI
        ===================================================== */
 
     const updateAccessUI =
@@ -261,9 +277,7 @@ Does NOT own:
                 option => {
 
                     const modelId =
-                        option
-                            .dataset
-                            .model;
+                        option.dataset.model;
 
 
                     const model =
@@ -277,53 +291,52 @@ Does NOT own:
                     }
 
 
+                    const isProModel =
+                        model.plan ===
+                        "pro";
+
+
                     const unlocked =
                         canUseModel(
                             modelId
                         );
 
 
-                    const isProModel =
-                        model.plan ===
-                        "pro";
+                    option.classList.toggle(
+                        "locked",
+                        isProModel &&
+                        !unlocked
+                    );
 
 
-                    option
-                        .classList
-                        .toggle(
-                            "locked",
-                            isProModel &&
-                            !unlocked
+                    option.classList.toggle(
+                        "is-unlocked",
+                        isProModel &&
+                        unlocked
+                    );
+
+
+                    option.dataset.locked =
+                        isProModel &&
+                        !unlocked
+                            ? "true"
+                            : "false";
+
+
+                    if (isProModel) {
+
+                        option.setAttribute(
+                            "aria-disabled",
+                            String(
+                                !unlocked
+                            )
                         );
-
-
-                    option
-                        .classList
-                        .toggle(
-                            "is-unlocked",
-                            isProModel &&
-                            unlocked
-                        );
-
-
-                    if (
-                        isProModel
-                    ) {
-
-                        option
-                            .setAttribute(
-                                "aria-disabled",
-                                String(
-                                    !unlocked
-                                )
-                            );
 
                     } else {
 
-                        option
-                            .removeAttribute(
-                                "aria-disabled"
-                            );
+                        option.removeAttribute(
+                            "aria-disabled"
+                        );
 
                     }
 
@@ -366,27 +379,20 @@ Does NOT own:
                 option => {
 
                     const active =
-                        option
-                            .dataset
-                            .model ===
+                        option.dataset.model ===
                         modelId;
 
 
-                    option
-                        .classList
-                        .toggle(
-                            "active",
-                            active
-                        );
+                    option.classList.toggle(
+                        "active",
+                        active
+                    );
 
 
-                    option
-                        .setAttribute(
-                            "aria-selected",
-                            String(
-                                active
-                            )
-                        );
+                    option.setAttribute(
+                        "aria-selected",
+                        String(active)
+                    );
 
                 }
             );
@@ -418,6 +424,10 @@ Does NOT own:
             }
 
 
+            /* ---------------------------------------------
+               PRO LOCK
+               --------------------------------------------- */
+
             if (
                 !canUseModel(
                     modelId
@@ -444,6 +454,10 @@ Does NOT own:
             }
 
 
+            /* ---------------------------------------------
+               SELECT
+               --------------------------------------------- */
+
             selectedModel =
                 modelId;
 
@@ -457,8 +471,7 @@ Does NOT own:
 
 
             if (
-                options
-                    .silent !==
+                options.silent !==
                 true
             ) {
 
@@ -498,9 +511,9 @@ Does NOT own:
 
 
             /*
-            If user somehow loses Pro access
-            while L1.2 is selected,
-            safely fall back to L1.0.
+            If plan becomes Free while Pro
+            model is currently selected,
+            safely return to L1.0.
             */
 
             if (
@@ -549,82 +562,87 @@ Does NOT own:
 
 
     /* =====================================================
-       MAIN BUTTON
+       MAIN MODEL BUTTON
+       CAPTURE PHASE — BLOCKS NEO.JS
        ===================================================== */
 
-    modelBadgeBtn
-        .addEventListener(
-            "click",
-            event => {
+    modelBadgeBtn.addEventListener(
+        "click",
+        event => {
 
+            isolateLegacyClick(
                 event
-                    .stopPropagation();
+            );
 
 
-                toggleMenu();
+            toggleMenu();
 
-            }
-        );
+        },
+        true
+    );
 
 
     /* =====================================================
-       MODEL OPTION EVENTS
+       MODEL OPTIONS
+       CAPTURE PHASE — BLOCKS NEO.JS
        ===================================================== */
 
     modelOptions.forEach(
         option => {
 
-            option
-                .addEventListener(
-                    "click",
-                    event => {
+            option.addEventListener(
+                "click",
+                event => {
 
+                    isolateLegacyClick(
                         event
-                            .stopPropagation();
+                    );
 
 
-                        const modelId =
-                            option
-                                .dataset
-                                .model;
+                    const modelId =
+                        option.dataset.model;
 
 
-                        if (!modelId) {
-                            return;
-                        }
-
-
-                        selectModel(
-                            modelId
-                        );
-
+                    if (!modelId) {
+                        return;
                     }
-                );
+
+
+                    selectModel(
+                        modelId
+                    );
+
+                },
+                true
+            );
 
         }
     );
 
 
     /* =====================================================
-       CLICK OUTSIDE
+       OUTSIDE CLICK
        ===================================================== */
 
     document.addEventListener(
         "click",
         event => {
 
+            if (!menuOpen) {
+                return;
+            }
+
+
             const clickedButton =
-                modelBadgeBtn
-                    .contains(
-                        event.target
-                    );
+                modelBadgeBtn.contains(
+                    event.target
+                );
 
 
             const clickedMenu =
-                modelDropdownMenu
-                    .contains(
-                        event.target
-                    );
+                modelDropdownMenu.contains(
+                    event.target
+                );
 
 
             if (
@@ -651,17 +669,13 @@ Does NOT own:
             if (
                 event.key ===
                     "Escape" &&
-                modelDropdownMenu
-                    .classList
-                    .contains(
-                        "show"
-                    )
+                menuOpen
             ) {
 
                 closeMenu();
 
-                modelBadgeBtn
-                    .focus();
+
+                modelBadgeBtn.focus();
 
             }
 
@@ -670,7 +684,42 @@ Does NOT own:
 
 
     /* =====================================================
-       PUBLIC EVENTS
+       PROFILE / PLAN EVENTS
+       ===================================================== */
+
+    window.addEventListener(
+        "neyo:model-plan-set",
+        event => {
+
+            setUserPlan(
+                event.detail?.plan
+            );
+
+        }
+    );
+
+
+    /*
+    Extra safety:
+    profile.js also emits plan-change.
+    If model-plan-set is ever missed,
+    this keeps model access synchronized.
+    */
+
+    window.addEventListener(
+        "neyo:plan-change",
+        event => {
+
+            setUserPlan(
+                event.detail?.plan
+            );
+
+        }
+    );
+
+
+    /* =====================================================
+       PUBLIC MODEL EVENTS
        ===================================================== */
 
     window.addEventListener(
@@ -678,23 +727,7 @@ Does NOT own:
         event => {
 
             selectModel(
-                event
-                    .detail
-                    ?.model
-            );
-
-        }
-    );
-
-
-    window.addEventListener(
-        "neyo:model-plan-set",
-        event => {
-
-            setUserPlan(
-                event
-                    .detail
-                    ?.plan
+                event.detail?.model
             );
 
         }
@@ -703,47 +736,46 @@ Does NOT own:
 
     window.addEventListener(
         "neyo:model-menu-open-request",
-        openMenu
+        () => {
+
+            openMenu();
+
+        }
     );
 
 
     window.addEventListener(
         "neyo:model-menu-close-request",
-        closeMenu
+        () => {
+
+            closeMenu();
+
+        }
     );
 
 
     /* =====================================================
-       INITIAL STATE
+       INITIAL MODEL
        ===================================================== */
 
     const initialActive =
-        modelOptions
-            .find(
-                option =>
-                    option
-                        .classList
-                        .contains(
-                            "active"
-                        )
-            );
+        modelOptions.find(
+            option =>
+                option.classList.contains(
+                    "active"
+                )
+        );
 
 
     if (
-        initialActive
-            ?.dataset
-            .model &&
+        initialActive?.dataset.model &&
         MODELS[
-            initialActive
-                .dataset
-                .model
+            initialActive.dataset.model
         ]
     ) {
 
         selectedModel =
-            initialActive
-                .dataset
-                .model;
+            initialActive.dataset.model;
 
     }
 
@@ -758,11 +790,41 @@ Does NOT own:
     );
 
 
-    modelBadgeBtn
-        .setAttribute(
-            "aria-expanded",
-            "false"
-        );
+    closeMenu();
+
+
+    /* =====================================================
+       PROFILE ALREADY LOADED FALLBACK
+       ===================================================== */
+
+    const syncExistingProfile =
+        () => {
+
+            const existingPlan =
+                window.NeyoProfile
+                    ?.getPlan?.();
+
+
+            if (existingPlan) {
+
+                setUserPlan(
+                    existingPlan
+                );
+
+            }
+
+        };
+
+
+    /*
+    profile.js normally loads after this file,
+    but this fallback makes the component
+    resilient to script-order changes.
+    */
+
+    queueMicrotask(
+        syncExistingProfile
+    );
 
 
     /* =====================================================
@@ -784,9 +846,18 @@ Does NOT own:
             select:
                 selectModel,
 
+            setUserPlan,
+
+            refreshAccess:
+                updateAccessUI,
+
             getSelected:
                 () =>
                     selectedModel,
+
+            getUserPlan:
+                () =>
+                    userPlan,
 
             getModel:
                 modelId =>
@@ -794,17 +865,15 @@ Does NOT own:
                         modelId
                     ),
 
-            setUserPlan,
-
-            getUserPlan:
-                () =>
-                    userPlan,
-
             canUse:
-                canUseModel,
+                modelId =>
+                    canUseModel(
+                        modelId
+                    ),
 
-            refreshAccess:
-                updateAccessUI
+            isOpen:
+                () =>
+                    menuOpen
 
         });
 

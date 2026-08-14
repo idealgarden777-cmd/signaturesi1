@@ -1,7 +1,7 @@
 /*
 =========================================================
 NEYO — MODEL MENU COMPONENT
-STABLE REPAIR VERSION
+STABLE + UPGRADE MODAL RESTORE
 
 Owns:
 - Model dropdown open / close
@@ -9,7 +9,8 @@ Owns:
 - Active model UI
 - Current model display
 - Pro access state
-- Legacy neo.js conflict protection
+- Upgrade modal trigger for Free users
+- Legacy neo.js click-conflict protection
 - Public model events / API
 
 Does NOT own:
@@ -50,6 +51,21 @@ Does NOT own:
             )
         );
 
+    const upgradeModal =
+        document.getElementById(
+            "upgradeModal"
+        );
+
+    const modalCloseBtn =
+        document.getElementById(
+            "modalCloseBtn"
+        );
+
+    const modalMaybeLaterBtn =
+        document.getElementById(
+            "modalMaybeLaterBtn"
+        );
+
 
     if (
         !modelBadgeBtn ||
@@ -67,25 +83,15 @@ Does NOT own:
         Object.freeze({
 
             "l1.0": {
-                id:
-                    "l1.0",
-
-                label:
-                    "NEYO L1.0",
-
-                plan:
-                    "free"
+                id: "l1.0",
+                label: "NEYO L1.0",
+                plan: "free"
             },
 
             "l1.2": {
-                id:
-                    "l1.2",
-
-                label:
-                    "NEYO L1.2 Pro",
-
-                plan:
-                    "pro"
+                id: "l1.2",
+                label: "NEYO L1.2 Pro",
+                plan: "pro"
             }
 
         });
@@ -130,7 +136,8 @@ Does NOT own:
                 value || "free"
             )
                 .trim()
-                .toLowerCase() === "pro"
+                .toLowerCase() ===
+                "pro"
                 ? "pro"
                 : "free";
 
@@ -183,7 +190,7 @@ Does NOT own:
 
 
     /* =====================================================
-       MENU
+       MODEL MENU
        ===================================================== */
 
     const isMenuOpen =
@@ -262,6 +269,96 @@ Does NOT own:
 
 
     /* =====================================================
+       UPGRADE MODAL
+       ===================================================== */
+
+    const openUpgradeModal =
+        modelId => {
+
+            if (!upgradeModal) {
+                return;
+            }
+
+
+            closeMenu();
+
+
+            upgradeModal
+                .classList
+                .add(
+                    "show"
+                );
+
+
+            upgradeModal
+                .setAttribute(
+                    "aria-hidden",
+                    "false"
+                );
+
+
+            document.body
+                .classList
+                .add(
+                    "modal-open"
+                );
+
+
+            emit(
+                "neyo:model-upgrade-required",
+                {
+                    model:
+                        modelId,
+
+                    modelInfo:
+                        getModel(
+                            modelId
+                        )
+                }
+            );
+
+        };
+
+
+    const closeUpgradeModal =
+        () => {
+
+            if (!upgradeModal) {
+                return;
+            }
+
+
+            upgradeModal
+                .classList
+                .remove(
+                    "show"
+                );
+
+
+            upgradeModal
+                .classList
+                .remove(
+                    "active"
+                );
+
+
+            upgradeModal
+                .setAttribute(
+                    "aria-hidden",
+                    "true"
+                );
+
+
+            document.body
+                .classList
+                .remove(
+                    "modal-open"
+                );
+
+        };
+
+
+    /* =====================================================
        ACCESS UI
        ===================================================== */
 
@@ -272,9 +369,7 @@ Does NOT own:
                 option => {
 
                     const modelId =
-                        option
-                            .dataset
-                            .model;
+                        option.dataset.model;
 
 
                     const model =
@@ -298,36 +393,42 @@ Does NOT own:
                         );
 
 
-                    option.classList.toggle(
-                        "locked",
-                        isProModel &&
-                        !unlocked
-                    );
+                    option
+                        .classList
+                        .toggle(
+                            "locked",
+                            isProModel &&
+                            !unlocked
+                        );
 
 
-                    option.classList.toggle(
-                        "is-unlocked",
-                        isProModel &&
-                        unlocked
-                    );
+                    option
+                        .classList
+                        .toggle(
+                            "is-unlocked",
+                            isProModel &&
+                            unlocked
+                        );
 
 
                     if (
                         isProModel
                     ) {
 
-                        option.setAttribute(
-                            "aria-disabled",
-                            String(
-                                !unlocked
-                            )
-                        );
+                        option
+                            .setAttribute(
+                                "aria-disabled",
+                                String(
+                                    !unlocked
+                                )
+                            );
 
                     } else {
 
-                        option.removeAttribute(
-                            "aria-disabled"
-                        );
+                        option
+                            .removeAttribute(
+                                "aria-disabled"
+                            );
 
                     }
 
@@ -370,24 +471,25 @@ Does NOT own:
                 option => {
 
                     const active =
-                        option
-                            .dataset
-                            .model ===
+                        option.dataset.model ===
                         modelId;
 
 
-                    option.classList.toggle(
-                        "active",
-                        active
-                    );
-
-
-                    option.setAttribute(
-                        "aria-selected",
-                        String(
+                    option
+                        .classList
+                        .toggle(
+                            "active",
                             active
-                        )
-                    );
+                        );
+
+
+                    option
+                        .setAttribute(
+                            "aria-selected",
+                            String(
+                                active
+                            )
+                        );
 
                 }
             );
@@ -399,7 +501,7 @@ Does NOT own:
 
 
     /* =====================================================
-       MODEL SELECT
+       SELECT MODEL
        ===================================================== */
 
     const selectModel =
@@ -420,7 +522,8 @@ Does NOT own:
 
 
             /*
-            FREE USER ATTEMPTS PRO MODEL
+            FREE USER → PRO MODEL
+            Restore original upgrade card.
             */
 
             if (
@@ -429,18 +532,8 @@ Does NOT own:
                 )
             ) {
 
-                closeMenu();
-
-
-                emit(
-                    "neyo:model-upgrade-required",
-                    {
-                        model:
-                            modelId,
-
-                        modelInfo:
-                            model
-                    }
+                openUpgradeModal(
+                    modelId
                 );
 
 
@@ -450,7 +543,7 @@ Does NOT own:
 
 
             /*
-            SUCCESSFUL SELECT
+            SUCCESSFUL MODEL SELECT
             */
 
             selectedModel =
@@ -465,11 +558,6 @@ Does NOT own:
             closeMenu();
 
 
-            /*
-            Persist selected model for
-            components that load later.
-            */
-
             try {
 
                 sessionStorage.setItem(
@@ -478,12 +566,13 @@ Does NOT own:
                 );
 
             } catch {
-                // Ignore storage failures.
+                // Ignore storage failure.
             }
 
 
             if (
-                options.silent !== true
+                options.silent !==
+                true
             ) {
 
                 emit(
@@ -506,7 +595,7 @@ Does NOT own:
 
 
     /* =====================================================
-       PLAN
+       USER PLAN
        ===================================================== */
 
     const setUserPlan =
@@ -522,9 +611,9 @@ Does NOT own:
 
 
             /*
-            If user becomes Free while
-            Pro model is selected,
-            fall back safely.
+            If Pro expires while
+            L1.2 is selected,
+            safely fall back.
             */
 
             if (
@@ -617,9 +706,7 @@ Does NOT own:
 
 
                     const modelId =
-                        option
-                            .dataset
-                            .model;
+                        option.dataset.model;
 
 
                     if (!modelId) {
@@ -640,7 +727,62 @@ Does NOT own:
 
 
     /* =====================================================
-       OUTSIDE CLICK
+       MODAL CLOSE EVENTS
+       ===================================================== */
+
+    modalCloseBtn
+        ?.addEventListener(
+            "click",
+            event => {
+
+                event.preventDefault();
+                event.stopPropagation();
+
+
+                closeUpgradeModal();
+
+            },
+            true
+        );
+
+
+    modalMaybeLaterBtn
+        ?.addEventListener(
+            "click",
+            event => {
+
+                event.preventDefault();
+                event.stopPropagation();
+
+
+                closeUpgradeModal();
+
+            },
+            true
+        );
+
+
+    upgradeModal
+        ?.addEventListener(
+            "click",
+            event => {
+
+                if (
+                    event.target ===
+                    upgradeModal
+                ) {
+
+                    closeUpgradeModal();
+
+                }
+
+            },
+            true
+        );
+
+
+    /* =====================================================
+       OUTSIDE MODEL MENU CLICK
        ===================================================== */
 
     document.addEventListener(
@@ -681,17 +823,36 @@ Does NOT own:
         event => {
 
             if (
-                event.key !== "Escape" ||
-                !isMenuOpen()
+                event.key !==
+                "Escape"
             ) {
                 return;
             }
 
 
-            closeMenu();
+            if (
+                upgradeModal &&
+                upgradeModal.getAttribute(
+                    "aria-hidden"
+                ) === "false"
+            ) {
+
+                closeUpgradeModal();
+
+                return;
+
+            }
 
 
-            modelBadgeBtn.focus();
+            if (
+                isMenuOpen()
+            ) {
+
+                closeMenu();
+
+                modelBadgeBtn.focus();
+
+            }
 
         },
         true
@@ -772,9 +933,11 @@ Does NOT own:
     const initialActive =
         modelOptions.find(
             option =>
-                option.classList.contains(
-                    "active"
-                )
+                option
+                    .classList
+                    .contains(
+                        "active"
+                    )
         );
 
 
@@ -793,52 +956,36 @@ Does NOT own:
     }
 
 
-    /*
-    Restore previous session model.
-    Only restore if access is allowed
-    after plan sync.
-    */
-
-    let storedModel =
-        null;
-
-
-    try {
-
-        storedModel =
-            sessionStorage.getItem(
-                "neyo_selected_model"
-            );
-
-    } catch {
-        storedModel = null;
-    }
-
-
-    if (
-        storedModel &&
-        MODELS[storedModel]
-    ) {
-
-        selectedModel =
-            storedModel;
-
-    }
-
-
     updateModelUI(
         selectedModel
     );
 
 
-    modelBadgeBtn.setAttribute(
-        "aria-expanded",
-        "false"
-    );
+    modelBadgeBtn
+        .setAttribute(
+            "aria-expanded",
+            "false"
+        );
+
+
+    if (
+        upgradeModal &&
+        !upgradeModal.hasAttribute(
+            "aria-hidden"
+        )
+    ) {
+
+        upgradeModal
+            .setAttribute(
+                "aria-hidden",
+                "true"
+            );
+
+    }
 
 
     /* =====================================================
-       PROFILE FALLBACK
+       PROFILE PLAN FALLBACK
        ===================================================== */
 
     const syncExistingProfilePlan =
@@ -863,12 +1010,6 @@ Does NOT own:
         };
 
 
-    /*
-    profile.js loads immediately after
-    model-menu.js, so check now and
-    again after boot.
-    */
-
     syncExistingProfilePlan();
 
 
@@ -881,56 +1022,6 @@ Does NOT own:
     setTimeout(
         syncExistingProfilePlan,
         500
-    );
-
-
-    /* =====================================================
-       FINAL ACCESS CHECK AFTER PLAN LOAD
-       ===================================================== */
-
-    window.addEventListener(
-        "neyo:model-plan-change",
-        () => {
-
-            /*
-            Restore stored Pro model only
-            after Pro entitlement is known.
-            */
-
-            let stored =
-                null;
-
-
-            try {
-
-                stored =
-                    sessionStorage.getItem(
-                        "neyo_selected_model"
-                    );
-
-            } catch {
-                stored = null;
-            }
-
-
-            if (
-                stored &&
-                MODELS[stored] &&
-                canUseModel(stored) &&
-                selectedModel !== stored
-            ) {
-
-                selectModel(
-                    stored,
-                    {
-                        silent:
-                            true
-                    }
-                );
-
-            }
-
-        }
     );
 
 
@@ -973,7 +1064,13 @@ Does NOT own:
                 canUseModel,
 
             refreshAccess:
-                updateAccessUI
+                updateAccessUI,
+
+            openUpgrade:
+                openUpgradeModal,
+
+            closeUpgrade:
+                closeUpgradeModal
 
         });
 

@@ -8,11 +8,15 @@ Owns:
 - Avatar prepare/upload/save
 - Avatar removal
 - Profile state
+- Plan badge sync
+- Billing plan sync
 - Public profile events / API
 
 Does NOT own:
 - Authentication/session creation
 - Logout
+- Checkout
+- Webhooks
 - Settings modal layout
 - Supabase client creation
 =========================================================
@@ -60,6 +64,31 @@ Does NOT own:
     const userPlanBadge =
         document.getElementById(
             "userPlanBadge"
+        );
+
+    const billingPlanText =
+        document.getElementById(
+            "billingPlanText"
+        );
+
+    const settingsUpgradeBtn =
+        document.getElementById(
+            "settingsUpgradeBtn"
+        );
+
+    const settingsAvatarPreview =
+        document.getElementById(
+            "settingsAvatarPreview"
+        );
+
+    const settingsDisplayNameInput =
+        document.getElementById(
+            "settingsDisplayNameInput"
+        );
+
+    const settingsUsernameInput =
+        document.getElementById(
+            "settingsUsernameInput"
         );
 
 
@@ -159,6 +188,24 @@ Does NOT own:
         };
 
 
+    const normalizePlan =
+        value => {
+
+            const plan =
+                String(
+                    value || "free"
+                )
+                    .trim()
+                    .toLowerCase();
+
+
+            return plan === "pro"
+                ? "pro"
+                : "free";
+
+        };
+
+
     /* =====================================================
        SUPABASE CLIENT
        ===================================================== */
@@ -168,7 +215,8 @@ Does NOT own:
 
             if (
                 !client ||
-                typeof client !== "object"
+                typeof client !==
+                    "object"
             ) {
                 return false;
             }
@@ -194,17 +242,17 @@ Does NOT own:
 
     const renderAvatar =
         (
+            element,
             avatarUrl,
             fallbackName
         ) => {
 
-            if (!userAvatar) {
+            if (!element) {
                 return;
             }
 
 
-            userAvatar
-                .replaceChildren();
+            element.replaceChildren();
 
 
             if (avatarUrl) {
@@ -225,12 +273,42 @@ Does NOT own:
                         : "Profile photo";
 
 
-                userAvatar.appendChild(
+                image.loading =
+                    "lazy";
+
+
+                image.decoding =
+                    "async";
+
+
+                image.addEventListener(
+                    "error",
+                    () => {
+
+                        element.replaceChildren();
+
+                        element.classList.remove(
+                            "has-avatar"
+                        );
+
+                        element.textContent =
+                            getInitial(
+                                fallbackName
+                            );
+
+                    },
+                    {
+                        once: true
+                    }
+                );
+
+
+                element.appendChild(
                     image
                 );
 
 
-                userAvatar.classList.add(
+                element.classList.add(
                     "has-avatar"
                 );
 
@@ -240,15 +318,107 @@ Does NOT own:
             }
 
 
-            userAvatar.classList.remove(
+            element.classList.remove(
                 "has-avatar"
             );
 
 
-            userAvatar.textContent =
+            element.textContent =
                 getInitial(
                     fallbackName
                 );
+
+        };
+
+
+    /* =====================================================
+       PLAN UI
+       ===================================================== */
+
+    const renderPlan =
+        planValue => {
+
+            const plan =
+                normalizePlan(
+                    planValue
+                );
+
+
+            if (userPlanBadge) {
+
+                userPlanBadge.textContent =
+                    plan === "pro"
+                        ? "Pro Plan"
+                        : "Free Plan";
+
+
+                userPlanBadge.dataset.plan =
+                    plan;
+
+
+                userPlanBadge.classList.toggle(
+                    "is-pro",
+                    plan === "pro"
+                );
+
+            }
+
+
+            if (billingPlanText) {
+
+                billingPlanText.textContent =
+                    plan === "pro"
+                        ? "NEYO Pro"
+                        : "Free Plan";
+
+            }
+
+
+            if (settingsUpgradeBtn) {
+
+                if (
+                    plan === "pro"
+                ) {
+
+                    settingsUpgradeBtn.textContent =
+                        "Pro Active";
+
+                    settingsUpgradeBtn.disabled =
+                        true;
+
+                    settingsUpgradeBtn.setAttribute(
+                        "aria-disabled",
+                        "true"
+                    );
+
+                } else {
+
+                    settingsUpgradeBtn.textContent =
+                        "Upgrade";
+
+                    settingsUpgradeBtn.disabled =
+                        false;
+
+                    settingsUpgradeBtn.removeAttribute(
+                        "aria-disabled"
+                    );
+
+                }
+
+            }
+
+
+            document.documentElement
+                .dataset.plan =
+                plan;
+
+
+            emit(
+                "neyo:plan-change",
+                {
+                    plan
+                }
+            );
 
         };
 
@@ -285,31 +455,45 @@ Does NOT own:
         }
 
 
-        if (userPlanBadge) {
-
-            const plan =
-                String(
-                    user.planType ||
-                    "free"
-                ).toLowerCase();
+        renderPlan(
+            user.planType
+        );
 
 
-            userPlanBadge.textContent =
-                plan === "pro"
-                    ? "Pro Plan"
-                    : "Free Plan";
+        renderAvatar(
+            userAvatar,
+            profile.avatarUrl,
+            displayName
+        );
 
 
-            userPlanBadge.dataset.plan =
-                plan;
+        renderAvatar(
+            settingsAvatarPreview,
+            profile.avatarUrl,
+            displayName
+        );
+
+
+        if (
+            settingsDisplayNameInput
+        ) {
+
+            settingsDisplayNameInput.value =
+                displayName;
 
         }
 
 
-        renderAvatar(
-            profile.avatarUrl,
-            displayName
-        );
+        if (
+            settingsUsernameInput
+        ) {
+
+            settingsUsernameInput.value =
+                user.username
+                    ? `@${user.username}`
+                    : "";
+
+        }
 
 
         emit(
@@ -378,10 +562,12 @@ Does NOT own:
 
                 profileState = {
                     user:
-                        data.user || null,
+                        data.user ||
+                        null,
 
                     profile:
-                        data.profile || null
+                        data.profile ||
+                        null
                 };
 
 
@@ -422,9 +608,7 @@ Does NOT own:
                     ...profileState
                 };
 
-            }
-
-            catch (error) {
+            } catch (error) {
 
                 emit(
                     "neyo:profile-error",
@@ -434,11 +618,15 @@ Does NOT own:
                 );
 
 
-                throw error;
+                console.error(
+                    "[NEYO Profile] Load failed:",
+                    error
+                );
 
-            }
 
-            finally {
+                return null;
+
+            } finally {
 
                 loading =
                     false;
@@ -711,8 +899,11 @@ Does NOT own:
                     ...profileState,
 
                     profile: {
-                        ...(profileState
-                            .profile || {}),
+                        ...(
+                            profileState
+                                .profile ||
+                            {}
+                        ),
 
                         avatarUrl
                     }
@@ -732,9 +923,7 @@ Does NOT own:
 
                 return avatarUrl;
 
-            }
-
-            catch (error) {
+            } catch (error) {
 
                 emit(
                     "neyo:avatar-upload-error",
@@ -753,9 +942,7 @@ Does NOT own:
 
                 throw error;
 
-            }
-
-            finally {
+            } finally {
 
                 avatarUploading =
                     false;
@@ -808,8 +995,11 @@ Does NOT own:
                 ...profileState,
 
                 profile: {
-                    ...(profileState
-                        .profile || {}),
+                    ...(
+                        profileState
+                            .profile ||
+                        {}
+                    ),
 
                     avatarUrl:
                         null
@@ -882,17 +1072,63 @@ Does NOT own:
         "neyo:profile-load-request",
         () => {
 
-            loadProfile()
-                .catch(
-                    error => {
+            loadProfile();
 
-                        console.error(
-                            "Profile load failed:",
-                            error
-                        );
+        }
+    );
 
-                    }
-                );
+
+    window.addEventListener(
+        "neyo:profile-refresh",
+        () => {
+
+            loadProfile();
+
+        }
+    );
+
+
+    window.addEventListener(
+        "neyo:checkout-return-success",
+        () => {
+
+            setTimeout(
+                loadProfile,
+                1000
+            );
+
+
+            setTimeout(
+                loadProfile,
+                3000
+            );
+
+        }
+    );
+
+
+    window.addEventListener(
+        "focus",
+        () => {
+
+            loadProfile();
+
+        }
+    );
+
+
+    document.addEventListener(
+        "visibilitychange",
+        () => {
+
+            if (
+                document.visibilityState ===
+                "visible"
+            ) {
+
+                loadProfile();
+
+            }
 
         }
     );
@@ -951,6 +1187,9 @@ Does NOT own:
             load:
                 loadProfile,
 
+            refresh:
+                loadProfile,
+
             render:
                 renderProfile,
 
@@ -996,6 +1235,14 @@ Does NOT own:
                             : null
                 }),
 
+            getPlan:
+                () =>
+                    normalizePlan(
+                        profileState
+                            ?.user
+                            ?.planType
+                    ),
+
             isLoading:
                 () =>
                     loading,
@@ -1005,5 +1252,46 @@ Does NOT own:
                     avatarUploading
 
         });
+
+
+    /* =====================================================
+       INITIAL PROFILE LOAD
+       ===================================================== */
+
+    const bootProfile = () => {
+
+        loadProfile()
+            .catch(
+                error => {
+
+                    console.error(
+                        "Initial profile load failed:",
+                        error
+                    );
+
+                }
+            );
+
+    };
+
+
+    if (
+        document.readyState ===
+        "loading"
+    ) {
+
+        document.addEventListener(
+            "DOMContentLoaded",
+            bootProfile,
+            {
+                once: true
+            }
+        );
+
+    } else {
+
+        bootProfile();
+
+    }
 
 })();

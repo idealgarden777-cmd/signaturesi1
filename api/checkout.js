@@ -174,7 +174,7 @@ export default async function handler(
        ================================================= */
 
     const user =
-        getAuthenticatedUser(req);
+        await getAuthenticatedUser(req);   // <-- 👈 CHANGED HERE
 
 
     if (

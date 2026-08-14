@@ -1,704 +1,394 @@
-/*
-=========================================================
-NEYO — PROFILE COMPONENT
-
-Owns:
-- Load current user profile from /api/profile
-- Update username
-- Update display name
-- Update avatar
-- Update Free / Pro plan badge
-- Refresh after checkout/webhook related events
-
-Does NOT own:
-- Authentication
-- Checkout creation
-- Webhooks
-=========================================================
-*/
-
-(() => {
-    "use strict";
+import { createClient } from "@supabase/supabase-js";
+import crypto from "node:crypto";
 
 
-    /* =====================================================
-       CONFIG
-       ===================================================== */
+/* =====================================================
+   SUPABASE ADMIN
+   ===================================================== */
 
-    const CONFIG = Object.freeze({
-        endpoint: "/api/profile"
-    });
-
-
-    /* =====================================================
-       STATE
-       ===================================================== */
-
-    let loading = false;
-    let currentProfile = null;
+function cleanEnv(value) {
+    return typeof value === "string"
+        ? value.trim().replace(/^["']|["']$/g, "")
+        : "";
+}
 
 
-    /* =====================================================
-       ELEMENTS
-       ===================================================== */
+function createSupabaseAdmin() {
 
-    const getUserNameDisplay = () =>
-        document.getElementById(
-            "userNameDisplay"
+    const supabaseUrl =
+        cleanEnv(
+            process.env.SUPABASE_URL
+        );
+
+    const serviceRoleKey =
+        cleanEnv(
+            process.env.SUPABASE_SERVICE_ROLE_KEY
         );
 
 
-    const getUserPlanBadge = () =>
-        document.getElementById(
-            "userPlanBadge"
+    if (
+        !supabaseUrl ||
+        !serviceRoleKey
+    ) {
+
+        throw new Error(
+            "Supabase configuration is missing."
+        );
+
+    }
+
+
+    return createClient(
+        supabaseUrl,
+        serviceRoleKey,
+        {
+            auth: {
+                persistSession: false,
+                autoRefreshToken: false,
+                detectSessionInUrl: false
+            }
+        }
+    );
+}
+
+
+/* =====================================================
+   COOKIE
+   ===================================================== */
+
+function getCookie(
+    req,
+    name
+) {
+
+    const cookies =
+        String(
+            req?.headers?.cookie || ""
+        ).split(";");
+
+
+    for (
+        const cookie of cookies
+    ) {
+
+        const [
+            key,
+            ...valueParts
+        ] =
+            cookie
+                .trim()
+                .split("=");
+
+
+        if (
+            key === name
+        ) {
+
+            const value =
+                valueParts.join("=");
+
+
+            try {
+
+                return decodeURIComponent(
+                    value
+                );
+
+            } catch {
+
+                return value;
+
+            }
+
+        }
+
+    }
+
+
+    return null;
+}
+
+
+/* =====================================================
+   TOKEN HASH
+   ===================================================== */
+
+function hashToken(token) {
+
+    return crypto
+        .createHash("sha256")
+        .update(token)
+        .digest("hex");
+
+}
+
+
+/* =====================================================
+   HANDLER
+   ===================================================== */
+
+export default async function handler(
+    req,
+    res
+) {
+
+    res.setHeader(
+        "Cache-Control",
+        "no-store, no-cache, must-revalidate"
+    );
+
+
+    if (
+        req.method !== "GET"
+    ) {
+
+        res.setHeader(
+            "Allow",
+            "GET"
         );
 
 
-    const getUserAvatar = () =>
-        document.getElementById(
-            "userAvatar"
-        );
+        return res
+            .status(405)
+            .json({
+                error:
+                    "Method not allowed"
+            });
+
+    }
 
 
-    const getSettingsAvatarPreview = () =>
-        document.getElementById(
-            "settingsAvatarPreview"
-        );
+    try {
+
+        const supabase =
+            createSupabaseAdmin();
 
 
-    const getSettingsDisplayNameInput = () =>
-        document.getElementById(
-            "settingsDisplayNameInput"
-        );
+        /* =================================================
+           SESSION COOKIE
+           ================================================= */
+
+        const cookieName =
+            cleanEnv(
+                process.env
+                    .SESSION_COOKIE_NAME
+            ) ||
+            "bean_session";
 
 
-    const getSettingsUsernameInput = () =>
-        document.getElementById(
-            "settingsUsernameInput"
-        );
+        const rawToken =
+            getCookie(
+                req,
+                cookieName
+            );
 
 
-    const getBillingPlanText = () =>
-        document.getElementById(
-            "billingPlanText"
-        );
+        if (!rawToken) {
+
+            return res
+                .status(401)
+                .json({
+                    error:
+                        "Unauthorized"
+                });
+
+        }
 
 
-    const getSettingsUpgradeButton = () =>
-        document.getElementById(
-            "settingsUpgradeBtn"
-        );
+        /* =================================================
+           SESSION LOOKUP
+           ================================================= */
+
+        const tokenHash =
+            hashToken(
+                rawToken
+            );
 
 
-    /* =====================================================
-       HELPERS
-       ===================================================== */
+        const {
+            data: session,
+            error: sessionError
+        } =
+            await supabase
+                .from(
+                    "bean_sessions"
+                )
+                .select(
+                    "user_id, expires_at, revoked_at"
+                )
+                .eq(
+                    "token_hash",
+                    tokenHash
+                )
+                .maybeSingle();
 
-    const normalizePlan = value => {
 
-        const plan =
+        if (
+            sessionError ||
+            !session ||
+            session.revoked_at ||
+            new Date(
+                session.expires_at
+            ).getTime() <= Date.now()
+        ) {
+
+            return res
+                .status(401)
+                .json({
+                    error:
+                        "Unauthorized"
+                });
+
+        }
+
+
+        /* =================================================
+           USER
+           ================================================= */
+
+        const {
+            data: user,
+            error: userError
+        } =
+            await supabase
+                .from(
+                    "bean_users"
+                )
+                .select(
+                    "id, username, display_name, status, plan_type"
+                )
+                .eq(
+                    "id",
+                    session.user_id
+                )
+                .maybeSingle();
+
+
+        if (
+            userError ||
+            !user ||
+            user.status !== "active"
+        ) {
+
+            return res
+                .status(401)
+                .json({
+                    error:
+                        "Unauthorized"
+                });
+
+        }
+
+
+        /* =================================================
+           PROFILE
+           ================================================= */
+
+        const {
+            data: profile,
+            error: profileError
+        } =
+            await supabase
+                .from(
+                    "bean_profiles"
+                )
+                .select(
+                    "display_name, avatar_url"
+                )
+                .eq(
+                    "user_id",
+                    user.id
+                )
+                .maybeSingle();
+
+
+        if (
+            profileError
+        ) {
+
+            console.error(
+                "Profile lookup failed:",
+                profileError
+            );
+
+
+            return res
+                .status(500)
+                .json({
+                    error:
+                        "Unable to load profile"
+                });
+
+        }
+
+
+        /* =================================================
+           RESPONSE
+           ================================================= */
+
+        const planType =
             String(
-                value || "free"
+                user.plan_type ||
+                "free"
             )
                 .trim()
                 .toLowerCase();
 
 
-        return plan === "pro"
-            ? "pro"
-            : "free";
+        return res
+            .status(200)
+            .json({
 
-    };
+                user: {
 
+                    id:
+                        user.id,
 
-    const normalizeUsername = value => {
+                    username:
+                        user.username,
 
-        const username =
-            String(
-                value || ""
-            ).trim();
+                    displayName:
+                        user.display_name,
 
-
-        if (!username) {
-            return "@user";
-        }
-
-
-        return username.startsWith("@")
-            ? username
-            : `@${username}`;
-
-    };
-
-
-    const getInitial = value => {
-
-        const text =
-            String(
-                value || "U"
-            ).trim();
-
-
-        return (
-            text.charAt(0) || "U"
-        ).toUpperCase();
-
-    };
-
-
-    /* =====================================================
-       AVATAR
-       ===================================================== */
-
-    const renderAvatar = (
-        element,
-        {
-            avatarUrl,
-            fallbackText
-        }
-    ) => {
-
-        if (!element) {
-            return;
-        }
-
-
-        element.innerHTML = "";
-
-
-        if (avatarUrl) {
-
-            const image =
-                document.createElement(
-                    "img"
-                );
-
-
-            image.src =
-                avatarUrl;
-
-
-            image.alt =
-                "Profile";
-
-
-            image.loading =
-                "lazy";
-
-
-            image.decoding =
-                "async";
-
-
-            image.style.width =
-                "100%";
-
-
-            image.style.height =
-                "100%";
-
-
-            image.style.objectFit =
-                "cover";
-
-
-            image.style.borderRadius =
-                "inherit";
-
-
-            image.addEventListener(
-                "error",
-                () => {
-
-                    element.innerHTML = "";
-
-                    element.textContent =
-                        getInitial(
-                            fallbackText
-                        );
+                    planType:
+                        planType === "pro"
+                            ? "pro"
+                            : "free"
 
                 },
-                {
-                    once: true
-                }
-            );
 
 
-            element.appendChild(
-                image
-            );
+                profile: {
 
+                    displayName:
+                        profile?.display_name ||
+                        user.display_name ||
+                        user.username ||
+                        "User",
 
-            return;
-
-        }
-
-
-        element.textContent =
-            getInitial(
-                fallbackText
-            );
-
-    };
-
-
-    /* =====================================================
-       PLAN UI
-       ===================================================== */
-
-    const renderPlan = planValue => {
-
-        const plan =
-            normalizePlan(
-                planValue
-            );
-
-
-        const badge =
-            getUserPlanBadge();
-
-
-        const billingText =
-            getBillingPlanText();
-
-
-        const upgradeButton =
-            getSettingsUpgradeButton();
-
-
-        if (badge) {
-
-            badge.textContent =
-                plan === "pro"
-                    ? "Pro Plan"
-                    : "Free Plan";
-
-
-            badge.dataset.plan =
-                plan;
-
-
-            badge.classList.toggle(
-                "is-pro",
-                plan === "pro"
-            );
-
-        }
-
-
-        if (billingText) {
-
-            billingText.textContent =
-                plan === "pro"
-                    ? "NEYO Pro"
-                    : "Free Plan";
-
-        }
-
-
-        if (upgradeButton) {
-
-            if (
-                plan === "pro"
-            ) {
-
-                upgradeButton.textContent =
-                    "Pro Active";
-
-
-                upgradeButton.disabled =
-                    true;
-
-
-                upgradeButton.setAttribute(
-                    "aria-disabled",
-                    "true"
-                );
-
-            } else {
-
-                upgradeButton.textContent =
-                    "Upgrade";
-
-
-                upgradeButton.disabled =
-                    false;
-
-
-                upgradeButton.removeAttribute(
-                    "aria-disabled"
-                );
-
-            }
-
-        }
-
-
-        document.documentElement
-            .dataset.plan =
-            plan;
-
-
-        window.dispatchEvent(
-            new CustomEvent(
-                "neyo:plan-change",
-                {
-                    detail: {
-                        plan
-                    }
-                }
-            )
-        );
-
-    };
-
-
-    /* =====================================================
-       PROFILE UI
-       ===================================================== */
-
-    const renderProfile = data => {
-
-        const user =
-            data?.user || {};
-
-
-        const profile =
-            data?.profile || {};
-
-
-        const username =
-            normalizeUsername(
-                user.username
-            );
-
-
-        const displayName =
-            String(
-                profile.displayName ||
-                user.displayName ||
-                user.username ||
-                "User"
-            ).trim();
-
-
-        const avatarUrl =
-            profile.avatarUrl ||
-            null;
-
-
-        const planType =
-            normalizePlan(
-                user.planType
-            );
-
-
-        const userNameDisplay =
-            getUserNameDisplay();
-
-
-        if (userNameDisplay) {
-
-            userNameDisplay.textContent =
-                username;
-
-        }
-
-
-        renderAvatar(
-            getUserAvatar(),
-            {
-                avatarUrl,
-                fallbackText:
-                    displayName ||
-                    username
-            }
-        );
-
-
-        renderAvatar(
-            getSettingsAvatarPreview(),
-            {
-                avatarUrl,
-                fallbackText:
-                    displayName ||
-                    username
-            }
-        );
-
-
-        const displayNameInput =
-            getSettingsDisplayNameInput();
-
-
-        if (displayNameInput) {
-
-            displayNameInput.value =
-                displayName;
-
-        }
-
-
-        const usernameInput =
-            getSettingsUsernameInput();
-
-
-        if (usernameInput) {
-
-            usernameInput.value =
-                username;
-
-        }
-
-
-        renderPlan(
-            planType
-        );
-
-
-        currentProfile = {
-            user: {
-                ...user,
-                planType
-            },
-
-            profile: {
-                ...profile,
-                displayName,
-                avatarUrl
-            }
-        };
-
-
-        window.dispatchEvent(
-            new CustomEvent(
-                "neyo:profile-loaded",
-                {
-                    detail:
-                        currentProfile
-                }
-            )
-        );
-
-    };
-
-
-    /* =====================================================
-       LOAD PROFILE
-       ===================================================== */
-
-    const loadProfile =
-        async () => {
-
-            if (loading) {
-                return currentProfile;
-            }
-
-
-            loading = true;
-
-
-            try {
-
-                const response =
-                    await fetch(
-                        CONFIG.endpoint,
-                        {
-                            method:
-                                "GET",
-
-                            credentials:
-                                "include",
-
-                            cache:
-                                "no-store",
-
-                            headers: {
-                                Accept:
-                                    "application/json"
-                            }
-                        }
-                    );
-
-
-                const data =
-                    await response
-                        .json()
-                        .catch(
-                            () => ({})
-                        );
-
-
-                if (
-                    response.status ===
-                    401
-                ) {
-
-                    console.warn(
-                        "[NEYO Profile] User is not authenticated."
-                    );
-
-
-                    return null;
+                    avatarUrl:
+                        profile?.avatar_url ||
+                        null
 
                 }
 
+            });
 
-                if (!response.ok) {
+    } catch (error) {
 
-                    throw new Error(
-                        data?.error ||
-                        "Unable to load profile."
-                    );
-
-                }
-
-
-                renderProfile(
-                    data
-                );
-
-
-                return currentProfile;
-
-            } catch (error) {
-
-                console.error(
-                    "[NEYO Profile] Load failed:",
-                    error
-                );
-
-
-                return null;
-
-            } finally {
-
-                loading = false;
-
-            }
-
-        };
-
-
-    /* =====================================================
-       REFRESH EVENTS
-       ===================================================== */
-
-    window.addEventListener(
-        "neyo:profile-refresh",
-        () => {
-
-            loadProfile();
-
-        }
-    );
-
-
-    window.addEventListener(
-        "neyo:checkout-return-success",
-        () => {
-
-            /*
-            Webhook may need a moment to
-            update the database.
-            */
-
-            setTimeout(
-                loadProfile,
-                1200
-            );
-
-
-            setTimeout(
-                loadProfile,
-                3000
-            );
-
-        }
-    );
-
-
-    window.addEventListener(
-        "focus",
-        () => {
-
-            /*
-            Useful when user returns
-            from Lemon Squeezy tab/page.
-            */
-
-            loadProfile();
-
-        }
-    );
-
-
-    document.addEventListener(
-        "visibilitychange",
-        () => {
-
-            if (
-                document.visibilityState ===
-                "visible"
-            ) {
-
-                loadProfile();
-
-            }
-
-        }
-    );
-
-
-    /* =====================================================
-       PUBLIC API
-       ===================================================== */
-
-    window.NeyoProfile =
-        Object.freeze({
-
-            load:
-                loadProfile,
-
-            refresh:
-                loadProfile,
-
-            getCurrent:
-                () =>
-                    currentProfile,
-
-            getPlan:
-                () =>
-                    normalizePlan(
-                        currentProfile
-                            ?.user
-                            ?.planType
-                    )
-
-        });
-
-
-    /* =====================================================
-       BOOT
-       ===================================================== */
-
-    if (
-        document.readyState ===
-        "loading"
-    ) {
-
-        document.addEventListener(
-            "DOMContentLoaded",
-            loadProfile,
-            {
-                once: true
-            }
+        console.error(
+            "Profile API exception:",
+            error
         );
 
-    } else {
 
-        loadProfile();
+        return res
+            .status(500)
+            .json({
+                error:
+                    "Unable to load profile"
+            });
 
     }
 
-})();
+}

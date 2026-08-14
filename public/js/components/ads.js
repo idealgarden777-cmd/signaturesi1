@@ -1,19 +1,22 @@
 /*
 =========================================================
-NEYO — REWARDED ADS COMPONENT
+NEYO — ADS COMPONENT
+Vignette Web Ads Integration
 
 Owns:
-- Rewarded ad trigger
-- Watch Ad button interception
-- Reward balance
-- Reward consume
-- Monetag SDK detection
-- Public events / API
+- Monetag Vignette detection
+- Ad integration health state
+- Legacy rewarded-ad button cleanup
+- Public ad status events / API
 
 Does NOT own:
 - neo.js
 - Checkout
-- Subscription activation
+- Subscription logic
+- Rewarded message credits
+
+Current Monetag Vignette Zone:
+11573086
 =========================================================
 */
 
@@ -27,19 +30,20 @@ Does NOT own:
 
     const CONFIG = Object.freeze({
 
-        rewardMessages: 5,
+        provider:
+            "monetag",
+
+        format:
+            "vignette",
 
         zoneId:
-            "11455541",
+            "11573086",
 
-        sdkFunction:
-            "show_11455541",
+        scriptHost:
+            "n6wxm.com",
 
-        rewardStorageKey:
-            "neyo_rewarded_messages",
-
-        placement:
-            "neyo_free_messages"
+        scriptName:
+            "vignette.min.js"
 
     });
 
@@ -48,7 +52,10 @@ Does NOT own:
        STATE
        ===================================================== */
 
-    let adRunning =
+    let sdkDetected =
+        false;
+
+    let initialized =
         false;
 
 
@@ -74,149 +81,82 @@ Does NOT own:
 
 
     /* =====================================================
-       TOAST
+       FIND MONETAG SCRIPT
        ===================================================== */
 
-    const showToast = (
-        message,
-        type = "info"
-    ) => {
+    const getVignetteScript = () => {
 
-        emit(
-            "neyo:toast",
-            {
-                message,
-                type
-            }
-        );
-
-
-        /*
-        Fallback if app toast listener
-        is currently unavailable.
-        */
-
-        if (
-            !window.NeyoToast &&
-            type === "error"
-        ) {
-
-            console.warn(
-                `[NEYO Ads] ${message}`
+        const scripts =
+            Array.from(
+                document.scripts
             );
 
-        }
+
+        return (
+            scripts.find(
+                script => {
+
+                    const src =
+                        String(
+                            script.src || ""
+                        );
+
+
+                    const zone =
+                        String(
+                            script.dataset?.zone || ""
+                        );
+
+
+                    return (
+                        src.includes(
+                            CONFIG.scriptHost
+                        ) &&
+                        src.includes(
+                            CONFIG.scriptName
+                        ) &&
+                        zone ===
+                            CONFIG.zoneId
+                    );
+
+                }
+            ) ||
+            null
+        );
 
     };
 
 
     /* =====================================================
-       REWARD BALANCE
+       LEGACY WATCH-AD BUTTON CLEANUP
        ===================================================== */
 
-    const getRewardBalance = () => {
+    const removeLegacyRewardButton = () => {
 
-        const value =
-            Number(
-                localStorage.getItem(
-                    CONFIG.rewardStorageKey
-                )
+        const button =
+            document.getElementById(
+                "watchAdBtn"
             );
 
 
-        if (
-            !Number.isFinite(value) ||
-            value < 0
-        ) {
-
-            return 0;
-
-        }
-
-
-        return Math.floor(
-            value
-        );
-
-    };
-
-
-    const saveRewardBalance =
-        amount => {
-
-            const next =
-                Math.max(
-                    0,
-                    Math.floor(
-                        Number(amount) || 0
-                    )
-                );
-
-
-            localStorage.setItem(
-                CONFIG.rewardStorageKey,
-                String(next)
-            );
-
-
-            emit(
-                "neyo:ad-reward-balance-change",
-                {
-                    remaining:
-                        next
-                }
-            );
-
-
-            return next;
-
-        };
-
-
-    const addReward = (
-        amount =
-            CONFIG.rewardMessages
-    ) => {
-
-        const current =
-            getRewardBalance();
-
-
-        return saveRewardBalance(
-            current +
-            Math.max(
-                0,
-                Number(amount) || 0
-            )
-        );
-
-    };
-
-
-    const consumeReward = () => {
-
-        const current =
-            getRewardBalance();
-
-
-        if (current <= 0) {
-
+        if (!button) {
             return false;
-
         }
 
 
-        saveRewardBalance(
-            current - 1
-        );
+        /*
+        Current Monetag integration is Vignette,
+        not Rewarded Interstitial.
+
+        Therefore "Watch Ad for 5 messages"
+        must not be exposed to users.
+        */
+
+        button.remove();
 
 
         emit(
-            "neyo:ad-reward-consumed",
-            {
-                remaining:
-                    getRewardBalance()
-            }
+            "neyo:legacy-reward-ad-removed"
         );
 
 
@@ -226,445 +166,225 @@ Does NOT own:
 
 
     /* =====================================================
-       USER TRACKING ID
+       DETECT VIGNETTE
        ===================================================== */
 
-    const getTrackingId = () => {
+    const detectVignette = () => {
 
-        try {
-
-            const user =
-                JSON.parse(
-                    localStorage.getItem(
-                        "signaturesi_user"
-                    ) ||
-                    "{}"
-                );
+        const script =
+            getVignetteScript();
 
 
-            if (user?.id) {
+        if (!script) {
 
-                return String(
-                    user.id
-                );
+            sdkDetected =
+                false;
 
-            }
 
-        } catch {
-            // Ignore invalid localStorage.
+            return false;
+
         }
 
 
-        let sessionId =
-            sessionStorage.getItem(
-                "neyo_ad_session_id"
-            );
+        if (!sdkDetected) {
+
+            sdkDetected =
+                true;
 
 
-        if (!sessionId) {
+            emit(
+                "neyo:ads-ready",
+                {
+                    provider:
+                        CONFIG.provider,
 
-            sessionId =
-                crypto.randomUUID
-                    ? crypto.randomUUID()
-                    : `neyo-${Date.now()}-${Math.random()
-                        .toString(36)
-                        .slice(2)}`;
+                    format:
+                        CONFIG.format,
 
-
-            sessionStorage.setItem(
-                "neyo_ad_session_id",
-                sessionId
+                    zoneId:
+                        CONFIG.zoneId
+                }
             );
 
         }
 
 
-        return sessionId;
+        return true;
 
     };
 
 
     /* =====================================================
-       MONETAG SDK
+       SCRIPT LOAD MONITOR
        ===================================================== */
 
-    const getAdFunction = () => {
+    const monitorScript = () => {
 
-        const direct =
-            window[
-                CONFIG.sdkFunction
-            ];
+        const script =
+            getVignetteScript();
 
 
-        if (
-            typeof direct ===
-            "function"
-        ) {
-
-            return direct;
-
-        }
-
-
-        const generated =
-            window[
-                `show_${CONFIG.zoneId}`
-            ];
-
-
-        if (
-            typeof generated ===
-            "function"
-        ) {
-
-            return generated;
-
-        }
-
-
-        return null;
-
-    };
-
-
-    const isSdkReady = () => {
-
-        return Boolean(
-            getAdFunction()
-        );
-
-    };
-
-
-    /* =====================================================
-       WATCH AD BUTTON
-       ===================================================== */
-
-    const getWatchButton = () => {
-
-        return document.getElementById(
-            "watchAdBtn"
-        );
-
-    };
-
-
-    const updateWatchButton = () => {
-
-        const button =
-            getWatchButton();
-
-
-        if (!button) {
+        if (!script) {
             return;
         }
 
 
-        button.textContent =
-            adRunning
-                ? "Loading ad..."
-                : `Watch Ad for ${CONFIG.rewardMessages} messages`;
+        /*
+        Avoid attaching duplicate listeners.
+        */
+
+        if (
+            script.dataset
+                .neyoAdsObserved ===
+            "true"
+        ) {
+
+            return;
+
+        }
 
 
-        button.disabled =
-            adRunning;
+        script.dataset
+            .neyoAdsObserved =
+            "true";
 
 
-        button.setAttribute(
-            "aria-busy",
-            String(adRunning)
-        );
+        script.addEventListener(
+            "load",
+            () => {
 
-
-        button.dataset.tooltip =
-            `Watch an ad for ${CONFIG.rewardMessages} bonus messages`;
-
-
-        button.dataset.tooltipPosition =
-            "top";
-
-
-        button.setAttribute(
-            "aria-label",
-            `Watch ad for ${CONFIG.rewardMessages} bonus messages`
-        );
-
-    };
-
-
-    /* =====================================================
-       CLOSE UPGRADE MODAL
-       ===================================================== */
-
-    const closeUpgradeModal = () => {
-
-        const modal =
-            document.getElementById(
-                "upgradeModal"
-            );
-
-
-        modal?.classList.remove(
-            "show"
-        );
-
-    };
-
-
-    /* =====================================================
-       SHOW REWARDED AD
-       ===================================================== */
-
-    const showRewardedAd =
-        async () => {
-
-            if (adRunning) {
-
-                return false;
-
-            }
-
-
-            const showAd =
-                getAdFunction();
-
-
-            if (!showAd) {
-
-                console.warn(
-                    "[NEYO Ads] Monetag ad SDK is not loaded yet.",
-                    {
-                        zoneId:
-                            CONFIG.zoneId,
-
-                        expectedFunction:
-                            CONFIG.sdkFunction
-                    }
-                );
-
-
-                showToast(
-                    "Rewarded ads are not connected yet.",
-                    "info"
-                );
+                sdkDetected =
+                    true;
 
 
                 emit(
-                    "neyo:ad-sdk-missing",
+                    "neyo:ads-script-loaded",
                     {
+                        provider:
+                            CONFIG.provider,
+
+                        format:
+                            CONFIG.format,
+
                         zoneId:
                             CONFIG.zoneId
                     }
                 );
 
-
-                return false;
-
+            },
+            {
+                once:
+                    true
             }
+        );
 
 
-            adRunning =
-                true;
+        script.addEventListener(
+            "error",
+            () => {
 
-
-            updateWatchButton();
-
-
-            const trackingId =
-                getTrackingId();
-
-
-            try {
-
-                emit(
-                    "neyo:ad-start",
-                    {
-                        zoneId:
-                            CONFIG.zoneId,
-
-                        placement:
-                            CONFIG.placement,
-
-                        trackingId
-                    }
-                );
-
-
-                /*
-                Monetag SDK call.
-
-                Reward is added only if
-                this Promise resolves.
-                */
-
-                await showAd({
-
-                    ymid:
-                        trackingId,
-
-                    requestVar:
-                        CONFIG.placement
-
-                });
-
-
-                const balance =
-                    addReward(
-                        CONFIG.rewardMessages
-                    );
-
-
-                closeUpgradeModal();
-
-
-                emit(
-                    "neyo:ad-reward-granted",
-                    {
-                        amount:
-                            CONFIG.rewardMessages,
-
-                        remaining:
-                            balance,
-
-                        trackingId
-                    }
-                );
-
-
-                showToast(
-                    `${CONFIG.rewardMessages} bonus messages unlocked.`,
-                    "success"
-                );
-
-
-                return true;
-
-            } catch (error) {
-
-                console.warn(
-                    "[NEYO Ads] Ad failed or was not completed.",
-                    error
-                );
-
-
-                emit(
-                    "neyo:ad-failed",
-                    {
-                        error
-                    }
-                );
-
-
-                showToast(
-                    "Ad unavailable or not completed.",
-                    "info"
-                );
-
-
-                return false;
-
-            } finally {
-
-                adRunning =
+                sdkDetected =
                     false;
 
 
-                updateWatchButton();
+                console.warn(
+                    "[NEYO Ads] Monetag Vignette script failed to load."
+                );
 
+
+                emit(
+                    "neyo:ads-script-error",
+                    {
+                        provider:
+                            CONFIG.provider,
+
+                        zoneId:
+                            CONFIG.zoneId
+                    }
+                );
+
+            },
+            {
+                once:
+                    true
             }
+        );
 
-        };
+    };
 
 
     /* =====================================================
-       INTERCEPT LEGACY NEO.JS BUTTON
-       ===================================================== */
+       DOM OBSERVER
 
-    document.addEventListener(
-        "click",
-        event => {
-
-            const button =
-                event.target
-                    ?.closest?.(
-                        "#watchAdBtn"
-                    );
-
-
-            if (!button) {
-                return;
-            }
-
-
-            /*
-            Capture phase stops the old
-            neo.js placeholder click.
-            */
-
-            event.preventDefault();
-
-            event.stopPropagation();
-
-            event.stopImmediatePropagation();
-
-
-            showRewardedAd();
-
-        },
-        true
-    );
-
-
-    /* =====================================================
-       DYNAMIC BUTTON OBSERVER
+       neo.js dynamically creates watchAdBtn,
+       so remove it whenever it appears.
+       Also detect dynamically injected Monetag script.
        ===================================================== */
 
     const observer =
         new MutationObserver(
             mutations => {
 
-                let shouldRefresh =
+                let shouldCheckAds =
                     false;
 
 
-                mutations.forEach(
-                    mutation => {
+                for (
+                    const mutation
+                    of mutations
+                ) {
 
-                        mutation.addedNodes
-                            .forEach(
-                                node => {
+                    for (
+                        const node
+                        of mutation.addedNodes
+                    ) {
 
-                                    if (
-                                        node.nodeType !==
-                                        Node.ELEMENT_NODE
-                                    ) {
-                                        return;
-                                    }
+                        if (
+                            node.nodeType !==
+                            Node.ELEMENT_NODE
+                        ) {
+
+                            continue;
+
+                        }
 
 
-                                    if (
-                                        node.id ===
-                                            "watchAdBtn" ||
-                                        node.querySelector?.(
-                                            "#watchAdBtn"
-                                        )
-                                    ) {
+                        if (
+                            node.id ===
+                                "watchAdBtn" ||
+                            node.querySelector?.(
+                                "#watchAdBtn"
+                            )
+                        ) {
 
-                                        shouldRefresh =
-                                            true;
+                            removeLegacyRewardButton();
 
-                                    }
+                        }
 
-                                }
-                            );
+
+                        if (
+                            node.tagName ===
+                                "SCRIPT" ||
+                            node.querySelector?.(
+                                "script"
+                            )
+                        ) {
+
+                            shouldCheckAds =
+                                true;
+
+                        }
 
                     }
-                );
+
+                }
 
 
-                if (shouldRefresh) {
+                if (shouldCheckAds) {
 
-                    updateWatchButton();
+                    detectVignette();
+
+                    monitorScript();
 
                 }
 
@@ -672,59 +392,102 @@ Does NOT own:
         );
 
 
-    observer.observe(
-        document.body,
-        {
-            childList:
-                true,
+    /* =====================================================
+       STATUS
+       ===================================================== */
 
-            subtree:
-                true
-        }
-    );
+    const getStatus = () => {
+
+        const script =
+            getVignetteScript();
+
+
+        return {
+
+            provider:
+                CONFIG.provider,
+
+            format:
+                CONFIG.format,
+
+            zoneId:
+                CONFIG.zoneId,
+
+            scriptPresent:
+                Boolean(script),
+
+            ready:
+                Boolean(
+                    script &&
+                    sdkDetected
+                ),
+
+            rewardedAds:
+                false
+
+        };
+
+    };
 
 
     /* =====================================================
-       EXTERNAL EVENTS
+       REFRESH
        ===================================================== */
 
-    window.addEventListener(
-        "neyo:ad-show-request",
-        () => {
+    const refresh = () => {
 
-            showRewardedAd();
+        removeLegacyRewardButton();
 
-        }
-    );
+        detectVignette();
 
-
-    window.addEventListener(
-        "neyo:ad-reward-consume-request",
-        () => {
-
-            const consumed =
-                consumeReward();
+        monitorScript();
 
 
-            emit(
-                "neyo:ad-reward-consume-result",
-                {
-                    consumed,
+        return getStatus();
 
-                    remaining:
-                        getRewardBalance()
-                }
-            );
-
-        }
-    );
+    };
 
 
     /* =====================================================
-       INITIAL STATE
+       INITIALIZE
        ===================================================== */
 
-    updateWatchButton();
+    const init = () => {
+
+        if (initialized) {
+            return;
+        }
+
+
+        initialized =
+            true;
+
+
+        removeLegacyRewardButton();
+
+        detectVignette();
+
+        monitorScript();
+
+
+        observer.observe(
+            document.documentElement,
+            {
+                childList:
+                    true,
+
+                subtree:
+                    true
+            }
+        );
+
+
+        emit(
+            "neyo:ads-init",
+            getStatus()
+        );
+
+    };
 
 
     /* =====================================================
@@ -734,25 +497,49 @@ Does NOT own:
     window.NeyoAds =
         Object.freeze({
 
-            show:
-                showRewardedAd,
+            init,
 
-            isSdkReady,
+            refresh,
 
-            isRunning:
+            getStatus,
+
+            isReady:
                 () =>
-                    adRunning,
-
-            getRewardBalance,
-
-            addReward,
-
-            consumeReward,
+                    sdkDetected,
 
             getZoneId:
                 () =>
-                    CONFIG.zoneId
+                    CONFIG.zoneId,
+
+            getFormat:
+                () =>
+                    CONFIG.format
 
         });
+
+
+    /* =====================================================
+       BOOT
+       ===================================================== */
+
+    if (
+        document.readyState ===
+        "loading"
+    ) {
+
+        document.addEventListener(
+            "DOMContentLoaded",
+            init,
+            {
+                once:
+                    true
+            }
+        );
+
+    } else {
+
+        init();
+
+    }
 
 })();

@@ -1304,11 +1304,20 @@
   </div>
 
   <!-- ========================================================= -->
-  <!-- SCRIPTS — CLEAN WORKING BASELINE + EXPAND + TOOLTIPS + REGISTRY + ADS + CHECKOUT + PROFILE -->
+  <!-- SCRIPTS — NEW ORDER: NEO → MODEL-MENU → PROFILE → CHECKOUT → REST -->
   <!-- ========================================================= -->
 
   <!-- Main working app -->
   <script src="/neo.js?v=86"></script>
+
+  <!-- Model menu (restored, v2) -->
+  <script type="module" src="/js/components/model-menu.js?v=2"></script>
+
+  <!-- Profile (updated to v2) -->
+  <script type="module" src="/js/components/profile.js?v=2"></script>
+
+  <!-- Checkout (v4) -->
+  <script type="module" src="/js/components/checkout.js?v=4"></script>
 
   <!-- Composer expand (restored) -->
   <script type="module" src="/js/components/composer-expand.js?v=2"></script>
@@ -1319,12 +1328,6 @@
 
   <!-- Ads module -->
   <script type="module" src="/js/components/ads.js?v=1"></script>
-
-  <!-- Checkout -->
-  <script type="module" src="/js/components/checkout.js?v=4"></script>
-
-  <!-- Profile (restored) -->
-  <script type="module" src="/js/components/profile.js?v=1"></script>
 
   <!-- Mobile viewport fixes only -->
   <script type="module" src="/js/components/mobile-viewport.js?v=1"></script>

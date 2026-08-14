@@ -5,18 +5,17 @@ NEYO — LEMON SQUEEZY CHECKOUT API
 Route:
 POST /api/checkout
 
-Owns:
-- Authentication check
-- Origin protection
-- Lemon Squeezy checkout creation
-- User ID → checkout custom data
-- Hosted checkout fallback
-- Safe checkout URL validation
+Purpose:
+- Authenticate current user
+- Validate request origin
+- Create Lemon Squeezy checkout
+- Pass user ID into checkout custom data
+- Return secure checkout URL
 
 Server-only:
-- API keys
-- Store ID
-- Variant ID
+- LEMON_SQUEEZY_API_KEY
+- LEMON_SQUEEZY_STORE_ID
+- LEMON_SQUEEZY_VARIANT_ID
 =========================================================
 */
 
@@ -48,18 +47,14 @@ function clean(value) {
 }
 
 
-function safeLemonCheckoutUrl(
-    value
-) {
+function safeLemonCheckoutUrl(value) {
 
     const raw =
         clean(value);
 
 
     if (!raw) {
-
         return "";
-
     }
 
 
@@ -83,13 +78,10 @@ function safeLemonCheckoutUrl(
 
 
         if (
-            url.protocol !==
-                "https:" ||
+            url.protocol !== "https:" ||
             !trustedHost
         ) {
-
             return "";
-
         }
 
 
@@ -113,10 +105,6 @@ export default async function handler(
     res
 ) {
 
-    /* =================================================
-       RESPONSE HEADERS
-       ================================================= */
-
     setJsonHeaders(res);
 
 
@@ -125,8 +113,7 @@ export default async function handler(
        ================================================= */
 
     if (
-        req.method !==
-        "POST"
+        req.method !== "POST"
     ) {
 
         res.setHeader(
@@ -238,7 +225,7 @@ export default async function handler(
         );
 
 
-    const hostedCheckoutUrl =
+    const fallbackCheckoutUrl =
         safeLemonCheckoutUrl(
             process.env
                 .LEMON_SQUEEZY_CHECKOUT_URL
@@ -246,7 +233,7 @@ export default async function handler(
 
 
     /* =================================================
-       CONFIG CHECK
+       CONFIG VALIDATION
        ================================================= */
 
     if (
@@ -255,26 +242,16 @@ export default async function handler(
         !variantId
     ) {
 
-        /*
-        Optional fallback.
-
-        If hosted checkout URL exists,
-        checkout can still open.
-        */
-
         if (
-            hostedCheckoutUrl
+            fallbackCheckoutUrl
         ) {
 
             return res
                 .status(200)
                 .json({
-                    success:
-                        true,
-
+                    success: true,
                     url:
-                        hostedCheckoutUrl,
-
+                        fallbackCheckoutUrl,
                     mode:
                         "hosted"
                 });
@@ -283,7 +260,7 @@ export default async function handler(
 
 
         console.error(
-            "Lemon Squeezy checkout configuration missing.",
+            "Missing Lemon Squeezy config.",
             {
                 apiKey:
                     Boolean(apiKey),
@@ -310,7 +287,7 @@ export default async function handler(
 
 
     /* =================================================
-       CHECKOUT ATTRIBUTES
+       CHECKOUT DATA
        ================================================= */
 
     const attributes = {
@@ -337,11 +314,6 @@ export default async function handler(
     };
 
 
-    /*
-    After successful payment,
-    Lemon redirects user back to NEYO.
-    */
-
     if (
         successUrl
     ) {
@@ -358,7 +330,7 @@ export default async function handler(
 
 
     /* =================================================
-       CREATE LEMON CHECKOUT
+       CREATE CHECKOUT
        ================================================= */
 
     try {
@@ -480,7 +452,7 @@ export default async function handler(
 
 
         /* =============================================
-           GET CHECKOUT URL
+           CHECKOUT URL
            ============================================= */
 
         const checkoutUrl =
@@ -497,7 +469,7 @@ export default async function handler(
         ) {
 
             console.error(
-                "Lemon Squeezy checkout URL missing."
+                "Checkout URL missing from Lemon Squeezy response."
             );
 
 
@@ -518,7 +490,6 @@ export default async function handler(
         return res
             .status(200)
             .json({
-
                 success:
                     true,
 
@@ -527,7 +498,6 @@ export default async function handler(
 
                 mode:
                     "dynamic"
-
             });
 
     } catch (error) {

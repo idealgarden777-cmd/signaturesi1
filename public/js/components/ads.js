@@ -1,23 +1,23 @@
 /*
 =========================================================
 NEYO — ADS COMPONENT
-STABLE FREE / PRO VERSION
+FINAL DUAL-ZONE FREE / PRO VERSION
 
-Provider:
-- Monetag
+FREE:
+- Monetag Vignette
+  Zone: 11573086
+- Monetag Onclick / Popunder
+  Zone: 11583334
 
-Format:
-- Vignette Web Ads
+PRO:
+- No ad scripts
+- Ad-free experience
 
-Zone:
-- 11573086
-
-Behavior:
-- FREE  → Monetag ads enabled
-- PRO   → Ads disabled
-- Waits for real account plan before loading ads
-- Does NOT grant fake rewarded messages
-- Does NOT modify neo.js
+IMPORTANT:
+- Waits for real profile plan
+- Does not assume Free on boot
+- Does not grant fake rewarded credits
+- Does not modify neo.js
 =========================================================
 */
 
@@ -34,23 +34,36 @@ Behavior:
         provider:
             "monetag",
 
-        format:
-            "vignette",
+        vignette: Object.freeze({
+            zoneId:
+                "11573086",
 
-        zoneId:
-            "11573086",
+            src:
+                "https://n6wxm.com/vignette.min.js",
 
-        scriptUrl:
-            "https://n6wxm.com/vignette.min.js",
+            host:
+                "n6wxm.com"
+        }),
 
-        scriptHost:
-            "n6wxm.com",
+        onclick: Object.freeze({
+            zoneId:
+                "11583334",
+
+            src:
+                "https://zovidree.com/tag.min.js",
+
+            host:
+                "zovidree.com"
+        }),
 
         buttonText:
             "Continue with Ads",
 
-        buttonLoadingText:
-            "Loading Ads..."
+        loadingText:
+            "Loading Ads...",
+
+        proButtonText:
+            "Pro — Ad Free"
 
     });
 
@@ -65,18 +78,24 @@ Behavior:
     let userPlan =
         "unknown";
 
-    let scriptReady =
-        false;
-
-    let scriptLoading =
-        false;
-
     let profileResolved =
+        false;
+
+    let vignetteReady =
+        false;
+
+    let onclickReady =
+        false;
+
+    let vignetteLoading =
+        false;
+
+    let onclickLoading =
         false;
 
 
     /* =====================================================
-       EVENT HELPER
+       EVENTS
        ===================================================== */
 
     function emit(
@@ -97,7 +116,7 @@ Behavior:
 
 
     /* =====================================================
-       PLAN HELPERS
+       PLAN
        ===================================================== */
 
     function normalizePlan(
@@ -115,31 +134,18 @@ Behavior:
         if (
             plan === "pro"
         ) {
-
             return "pro";
-
         }
 
 
         if (
             plan === "free"
         ) {
-
             return "free";
-
         }
 
 
         return "unknown";
-
-    }
-
-
-    function isProUser() {
-
-        return (
-            userPlan === "pro"
-        );
 
     }
 
@@ -153,45 +159,89 @@ Behavior:
     }
 
 
-    /* =====================================================
-       FIND MONETAG SCRIPT
-       ===================================================== */
-
-    function getAdsScript() {
-
-        const scripts =
-            Array.from(
-                document.scripts
-            );
-
+    function isProUser() {
 
         return (
-            scripts.find(
-                script => {
+            userPlan === "pro"
+        );
 
-                    const src =
-                        String(
-                            script.src || ""
+    }
+
+
+    /* =====================================================
+       SCRIPT FINDERS
+       ===================================================== */
+
+    function findVignetteScript() {
+
+        return (
+            Array.from(
+                document.scripts
+            )
+                .find(
+                    script => {
+
+                        const src =
+                            String(
+                                script.src || ""
+                            );
+
+
+                        const zone =
+                            String(
+                                script.dataset?.zone ||
+                                ""
+                            );
+
+
+                        return (
+                            src.includes(
+                                CONFIG.vignette.host
+                            ) &&
+                            zone ===
+                                CONFIG.vignette.zoneId
                         );
 
+                    }
+                ) ||
+            null
+        );
 
-                    const zone =
-                        String(
-                            script.dataset?.zone ||
-                            ""
+    }
+
+
+    function findOnclickScript() {
+
+        return (
+            Array.from(
+                document.scripts
+            )
+                .find(
+                    script => {
+
+                        const src =
+                            String(
+                                script.src || ""
+                            );
+
+
+                        const zone =
+                            String(
+                                script.dataset?.zone ||
+                                ""
+                            );
+
+
+                        return (
+                            src.includes(
+                                CONFIG.onclick.host
+                            ) &&
+                            zone ===
+                                CONFIG.onclick.zoneId
                         );
 
-
-                    return (
-                        src.includes(
-                            CONFIG.scriptHost
-                        ) &&
-                        zone ===
-                            CONFIG.zoneId
-                    );
-
-                }
-            ) ||
+                    }
+                ) ||
             null
         );
 
@@ -199,7 +249,7 @@ Behavior:
 
 
     /* =====================================================
-       WATCH ADS BUTTON
+       BUTTON
        ===================================================== */
 
     function getAdsButton() {
@@ -225,10 +275,11 @@ Behavior:
 
 
         /*
-        PLAN NOT KNOWN YET
+        PLAN UNKNOWN
         */
 
         if (
+            !profileResolved ||
             userPlan === "unknown"
         ) {
 
@@ -246,13 +297,17 @@ Behavior:
             );
 
 
+            button.dataset.tooltip =
+                "Checking your plan";
+
+
             return true;
 
         }
 
 
         /*
-        PRO USER
+        PRO
         */
 
         if (
@@ -264,7 +319,7 @@ Behavior:
 
 
             button.textContent =
-                "Pro — Ad Free";
+                CONFIG.proButtonText;
 
 
             button.setAttribute(
@@ -292,7 +347,7 @@ Behavior:
 
 
         /*
-        FREE USER
+        FREE
         */
 
         button.disabled =
@@ -310,8 +365,11 @@ Behavior:
 
 
         button.textContent =
-            scriptLoading
-                ? CONFIG.buttonLoadingText
+            (
+                vignetteLoading ||
+                onclickLoading
+            )
+                ? CONFIG.loadingText
                 : CONFIG.buttonText;
 
 
@@ -339,36 +397,411 @@ Behavior:
 
 
     /* =====================================================
-       REMOVE ADS SCRIPT
+       SCRIPT CREATION
        ===================================================== */
 
-    function disableAds() {
+    function createAdScript({
+        src,
+        zoneId,
+        type
+    }) {
 
         const script =
-            getAdsScript();
+            document.createElement(
+                "script"
+            );
 
 
-        /*
-        Remove only NEYO-owned dynamically
-        injected Monetag script.
-        */
+        script.async =
+            true;
+
+
+        script.src =
+            src;
+
+
+        script.dataset.zone =
+            zoneId;
+
+
+        script.dataset.neyoAdsOwned =
+            "true";
+
+
+        script.dataset.neyoAdsType =
+            type;
+
+
+        return script;
+
+    }
+
+
+    /* =====================================================
+       VIGNETTE
+       ===================================================== */
+
+    function loadVignette() {
 
         if (
-            script &&
-            script.dataset
-                ?.neyoAdsOwned ===
-                "true"
+            !profileResolved ||
+            !isFreeUser()
         ) {
 
-            script.remove();
+            return null;
 
         }
 
 
-        scriptReady =
+        const existing =
+            findVignetteScript();
+
+
+        if (existing) {
+
+            vignetteReady =
+                true;
+
+            vignetteLoading =
+                false;
+
+
+            return existing;
+
+        }
+
+
+        if (
+            vignetteLoading
+        ) {
+
+            return null;
+
+        }
+
+
+        vignetteLoading =
+            true;
+
+
+        configureAdsButton();
+
+
+        const script =
+            createAdScript({
+                src:
+                    CONFIG.vignette.src,
+
+                zoneId:
+                    CONFIG.vignette.zoneId,
+
+                type:
+                    "vignette"
+            });
+
+
+        script.addEventListener(
+            "load",
+            () => {
+
+                vignetteLoading =
+                    false;
+
+                vignetteReady =
+                    true;
+
+
+                configureAdsButton();
+
+
+                emit(
+                    "neyo:ads-vignette-ready",
+                    {
+                        zoneId:
+                            CONFIG.vignette.zoneId
+                    }
+                );
+
+            },
+            {
+                once:
+                    true
+            }
+        );
+
+
+        script.addEventListener(
+            "error",
+            () => {
+
+                vignetteLoading =
+                    false;
+
+                vignetteReady =
+                    false;
+
+
+                configureAdsButton();
+
+
+                console.warn(
+                    "[NEYO Ads] Vignette failed to load."
+                );
+
+
+                emit(
+                    "neyo:ads-vignette-error",
+                    {
+                        zoneId:
+                            CONFIG.vignette.zoneId
+                    }
+                );
+
+            },
+            {
+                once:
+                    true
+            }
+        );
+
+
+        (
+            document.head ||
+            document.documentElement
+        )
+            .appendChild(
+                script
+            );
+
+
+        return script;
+
+    }
+
+
+    /* =====================================================
+       ONCLICK / POPUNDER
+       ===================================================== */
+
+    function loadOnclick() {
+
+        if (
+            !profileResolved ||
+            !isFreeUser()
+        ) {
+
+            return null;
+
+        }
+
+
+        const existing =
+            findOnclickScript();
+
+
+        if (existing) {
+
+            onclickReady =
+                true;
+
+            onclickLoading =
+                false;
+
+
+            return existing;
+
+        }
+
+
+        if (
+            onclickLoading
+        ) {
+
+            return null;
+
+        }
+
+
+        onclickLoading =
+            true;
+
+
+        configureAdsButton();
+
+
+        const script =
+            createAdScript({
+                src:
+                    CONFIG.onclick.src,
+
+                zoneId:
+                    CONFIG.onclick.zoneId,
+
+                type:
+                    "onclick"
+            });
+
+
+        script.addEventListener(
+            "load",
+            () => {
+
+                onclickLoading =
+                    false;
+
+                onclickReady =
+                    true;
+
+
+                configureAdsButton();
+
+
+                emit(
+                    "neyo:ads-onclick-ready",
+                    {
+                        zoneId:
+                            CONFIG.onclick.zoneId
+                    }
+                );
+
+            },
+            {
+                once:
+                    true
+            }
+        );
+
+
+        script.addEventListener(
+            "error",
+            () => {
+
+                onclickLoading =
+                    false;
+
+                onclickReady =
+                    false;
+
+
+                configureAdsButton();
+
+
+                console.warn(
+                    "[NEYO Ads] Onclick failed to load."
+                );
+
+
+                emit(
+                    "neyo:ads-onclick-error",
+                    {
+                        zoneId:
+                            CONFIG.onclick.zoneId
+                    }
+                );
+
+            },
+            {
+                once:
+                    true
+            }
+        );
+
+
+        (
+            document.head ||
+            document.documentElement
+        )
+            .appendChild(
+                script
+            );
+
+
+        return script;
+
+    }
+
+
+    /* =====================================================
+       LOAD ALL FREE ADS
+       ===================================================== */
+
+    function loadFreeAds() {
+
+        if (
+            !profileResolved ||
+            !isFreeUser()
+        ) {
+
+            return false;
+
+        }
+
+
+        loadVignette();
+
+        loadOnclick();
+
+
+        document.documentElement
+            .setAttribute(
+                "data-neyo-ads",
+                "enabled"
+            );
+
+
+        emit(
+            "neyo:ads-enabled",
+            {
+                plan:
+                    "free",
+
+                vignetteZone:
+                    CONFIG.vignette.zoneId,
+
+                onclickZone:
+                    CONFIG.onclick.zoneId
+            }
+        );
+
+
+        return true;
+
+    }
+
+
+    /* =====================================================
+       DISABLE ADS
+       ===================================================== */
+
+    function disableAds() {
+
+        const scripts =
+            Array.from(
+                document.querySelectorAll(
+                    'script[data-neyo-ads-owned="true"]'
+                )
+            );
+
+
+        scripts.forEach(
+            script => {
+
+                script.remove();
+
+            }
+        );
+
+
+        vignetteReady =
             false;
 
-        scriptLoading =
+        onclickReady =
+            false;
+
+        vignetteLoading =
+            false;
+
+        onclickLoading =
             false;
 
 
@@ -389,249 +822,6 @@ Behavior:
                     userPlan
             }
         );
-
-    }
-
-
-    /* =====================================================
-       LOAD MONETAG
-       ===================================================== */
-
-    function loadAds() {
-
-        /*
-        Never load ads until account plan
-        has been positively identified
-        as FREE.
-        */
-
-        if (
-            !profileResolved ||
-            !isFreeUser()
-        ) {
-
-            return null;
-
-        }
-
-
-        const existing =
-            getAdsScript();
-
-
-        if (existing) {
-
-            scriptReady =
-                true;
-
-            scriptLoading =
-                false;
-
-
-            document.documentElement
-                .setAttribute(
-                    "data-neyo-ads",
-                    "enabled"
-                );
-
-
-            configureAdsButton();
-
-
-            return existing;
-
-        }
-
-
-        if (
-            scriptLoading
-        ) {
-
-            return null;
-
-        }
-
-
-        scriptLoading =
-            true;
-
-
-        configureAdsButton();
-
-
-        const script =
-            document.createElement(
-                "script"
-            );
-
-
-        script.async =
-            true;
-
-
-        script.src =
-            CONFIG.scriptUrl;
-
-
-        script.dataset.zone =
-            CONFIG.zoneId;
-
-
-        /*
-        Lets us safely identify
-        scripts created by this module.
-        */
-
-        script.dataset.neyoAdsOwned =
-            "true";
-
-
-        script.addEventListener(
-            "load",
-            () => {
-
-                scriptLoading =
-                    false;
-
-                scriptReady =
-                    true;
-
-
-                document.documentElement
-                    .setAttribute(
-                        "data-neyo-ads",
-                        "enabled"
-                    );
-
-
-                configureAdsButton();
-
-
-                emit(
-                    "neyo:ads-ready",
-                    {
-                        provider:
-                            CONFIG.provider,
-
-                        format:
-                            CONFIG.format,
-
-                        zoneId:
-                            CONFIG.zoneId,
-
-                        plan:
-                            userPlan
-                    }
-                );
-
-            },
-            {
-                once:
-                    true
-            }
-        );
-
-
-        script.addEventListener(
-            "error",
-            () => {
-
-                scriptLoading =
-                    false;
-
-                scriptReady =
-                    false;
-
-
-                document.documentElement
-                    .setAttribute(
-                        "data-neyo-ads",
-                        "error"
-                    );
-
-
-                configureAdsButton();
-
-
-                console.warn(
-                    "[NEYO Ads] Monetag script failed to load."
-                );
-
-
-                emit(
-                    "neyo:ads-error",
-                    {
-                        provider:
-                            CONFIG.provider,
-
-                        zoneId:
-                            CONFIG.zoneId
-                    }
-                );
-
-            },
-            {
-                once:
-                    true
-            }
-        );
-
-
-        /*
-        Head is safer because body may
-        not yet exist during early boot.
-        */
-
-        (
-            document.head ||
-            document.documentElement
-        ).appendChild(
-            script
-        );
-
-
-        return script;
-
-    }
-
-
-    /* =====================================================
-       CLOSE UPGRADE MODAL
-       ===================================================== */
-
-    function closeUpgradeModal() {
-
-        const modal =
-            document.getElementById(
-                "upgradeModal"
-            );
-
-
-        if (!modal) {
-
-            return;
-
-        }
-
-
-        modal.classList.remove(
-            "show",
-            "open",
-            "active"
-        );
-
-
-        modal.setAttribute(
-            "aria-hidden",
-            "true"
-        );
-
-
-        document.body
-            ?.classList
-            .remove(
-                "modal-open"
-            );
 
     }
 
@@ -662,6 +852,7 @@ Behavior:
         userPlan =
             plan;
 
+
         profileResolved =
             true;
 
@@ -674,14 +865,14 @@ Behavior:
 
 
         if (
-            plan === "pro"
+            isProUser()
         ) {
 
             disableAds();
 
         } else {
 
-            loadAds();
+            loadFreeAds();
 
         }
 
@@ -707,8 +898,39 @@ Behavior:
 
 
     /* =====================================================
-       DIRECT PROFILE CHECK
+       PROFILE RESOLUTION
        ===================================================== */
+
+    function resolvePlanFromProfile() {
+
+        try {
+
+            const plan =
+                window
+                    .NeyoProfile
+                    ?.getUser?.()
+                    ?.planType;
+
+
+            if (!plan) {
+
+                return false;
+
+            }
+
+
+            return applyPlan(
+                plan
+            );
+
+        } catch {
+
+            return false;
+
+        }
+
+    }
+
 
     async function resolvePlanFromApi() {
 
@@ -772,7 +994,7 @@ Behavior:
         } catch (error) {
 
             console.warn(
-                "[NEYO Ads] Unable to resolve account plan.",
+                "[NEYO Ads] Unable to resolve plan.",
                 error
             );
 
@@ -785,42 +1007,48 @@ Behavior:
 
 
     /* =====================================================
-       EXISTING PROFILE CHECK
+       UPGRADE MODAL
        ===================================================== */
 
-    function resolvePlanFromProfile() {
+    function closeUpgradeModal() {
 
-        try {
-
-            const plan =
-                window
-                    .NeyoProfile
-                    ?.getUser?.()
-                    ?.planType;
-
-
-            if (!plan) {
-
-                return false;
-
-            }
-
-
-            return applyPlan(
-                plan
+        const modal =
+            document.getElementById(
+                "upgradeModal"
             );
 
-        } catch {
 
-            return false;
+        if (!modal) {
+
+            return;
 
         }
+
+
+        modal.classList.remove(
+            "show",
+            "open",
+            "active"
+        );
+
+
+        modal.setAttribute(
+            "aria-hidden",
+            "true"
+        );
+
+
+        document.body
+            ?.classList
+            .remove(
+                "modal-open"
+            );
 
     }
 
 
     /* =====================================================
-       BUTTON CLICK
+       WATCH ADS BUTTON
        ===================================================== */
 
     document.addEventListener(
@@ -842,8 +1070,7 @@ Behavior:
 
 
             /*
-            Prevent legacy neo.js
-            placeholder click handler.
+            Block old neo.js placeholder.
             */
 
             event.preventDefault();
@@ -851,22 +1078,6 @@ Behavior:
             event.stopPropagation();
 
             event.stopImmediatePropagation();
-
-
-            /*
-            PRO
-            */
-
-            if (
-                isProUser()
-            ) {
-
-                closeUpgradeModal();
-
-
-                return;
-
-            }
 
 
             /*
@@ -879,6 +1090,20 @@ Behavior:
 
                 resolvePlanFromApi();
 
+                return;
+
+            }
+
+
+            /*
+            PRO
+            */
+
+            if (
+                isProUser()
+            ) {
+
+                closeUpgradeModal();
 
                 return;
 
@@ -887,30 +1112,16 @@ Behavior:
 
             /*
             FREE
+
+            Onclick format is already armed
+            globally after script loads.
+
+            This button does not guarantee
+            an ad impression by itself.
             */
 
-            if (
-                !getAdsScript()
-            ) {
+            loadFreeAds();
 
-                loadAds();
-
-
-                return;
-
-            }
-
-
-            /*
-            IMPORTANT:
-            Vignette itself decides ad delivery.
-
-            This click only means:
-            user accepts continuing in
-            ad-supported mode.
-
-            It does NOT grant credits.
-            */
 
             closeUpgradeModal();
 
@@ -921,14 +1132,12 @@ Behavior:
                     provider:
                         CONFIG.provider,
 
-                    format:
-                        CONFIG.format,
-
-                    zoneId:
-                        CONFIG.zoneId,
-
                     plan:
-                        userPlan,
+                        "free",
+
+                    vignetteReady,
+
+                    onclickReady,
 
                     rewarded:
                         false
@@ -1070,12 +1279,6 @@ Behavior:
             provider:
                 CONFIG.provider,
 
-            format:
-                CONFIG.format,
-
-            zoneId:
-                CONFIG.zoneId,
-
             plan:
                 userPlan,
 
@@ -1084,14 +1287,37 @@ Behavior:
             adsAllowed:
                 isFreeUser(),
 
-            scriptPresent:
-                Boolean(
-                    getAdsScript()
-                ),
+            vignette: {
+                zoneId:
+                    CONFIG.vignette.zoneId,
 
-            scriptReady,
+                scriptPresent:
+                    Boolean(
+                        findVignetteScript()
+                    ),
 
-            scriptLoading,
+                ready:
+                    vignetteReady,
+
+                loading:
+                    vignetteLoading
+            },
+
+            onclick: {
+                zoneId:
+                    CONFIG.onclick.zoneId,
+
+                scriptPresent:
+                    Boolean(
+                        findOnclickScript()
+                    ),
+
+                ready:
+                    onclickReady,
+
+                loading:
+                    onclickLoading
+            },
 
             buttonPresent:
                 Boolean(
@@ -1129,7 +1355,13 @@ Behavior:
             isFreeUser()
         ) {
 
-            loadAds();
+            loadFreeAds();
+
+        } else if (
+            isProUser()
+        ) {
+
+            disableAds();
 
         }
 
@@ -1174,21 +1406,20 @@ Behavior:
 
 
         /*
-        Do not assume FREE at startup.
-        This prevents Pro users from
-        receiving an ad before their
-        account plan is loaded.
+        Do not assume FREE.
+
+        Wait for profile first.
         */
 
         configureAdsButton();
 
 
-        const foundFromProfile =
+        const found =
             resolvePlanFromProfile();
 
 
         if (
-            !foundFromProfile
+            !found
         ) {
 
             await resolvePlanFromApi();
@@ -1231,27 +1462,36 @@ Behavior:
                 () =>
                     isFreeUser(),
 
-            isReady:
-                () =>
-                    Boolean(
-                        isFreeUser() &&
-                        scriptReady &&
-                        getAdsScript()
-                    ),
+            loadFreeAds,
 
-            load:
-                loadAds,
+            loadVignette,
+
+            loadOnclick,
 
             disable:
                 disableAds,
 
-            getZoneId:
+            isVignetteReady:
                 () =>
-                    CONFIG.zoneId,
+                    Boolean(
+                        vignetteReady &&
+                        findVignetteScript()
+                    ),
 
-            getFormat:
+            isOnclickReady:
                 () =>
-                    CONFIG.format
+                    Boolean(
+                        onclickReady &&
+                        findOnclickScript()
+                    ),
+
+            getVignetteZone:
+                () =>
+                    CONFIG.vignette.zoneId,
+
+            getOnclickZone:
+                () =>
+                    CONFIG.onclick.zoneId
 
         });
 
@@ -1268,7 +1508,9 @@ Behavior:
         document.addEventListener(
             "DOMContentLoaded",
             () => {
+
                 init();
+
             },
             {
                 once:

@@ -98,18 +98,8 @@
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.8/purify.min.js"></script>
 
-  <!-- Monetag Vignette -->
-  <script>
-  (function (s) {
-    s.dataset.zone = '11573086';
-    s.src = 'https://n6wxm.com/vignette.min.js';
-  })(
-    [document.documentElement, document.body]
-      .filter(Boolean)
-      .pop()
-      .appendChild(document.createElement('script'))
-  );
-  </script>
+  <!-- Monetag Vignette - NOW LOADED VIA ads.js MODULE, NOT INLINE -->
+  <!-- Inline script removed to ensure Pro users stay ad-free -->
 </head>
 
 <body>
@@ -1304,7 +1294,7 @@
   </div>
 
   <!-- ========================================================= -->
-  <!-- SCRIPTS — FULL ORDER WITH SEND-STATE RESTORED            -->
+  <!-- SCRIPTS — FULL ORDER WITH SEND-STATE RESTORED & ADS V2   -->
   <!-- ========================================================= -->
 
   <!-- Main working app -->
@@ -1329,8 +1319,8 @@
   <!-- Send state (restored, v2) -->
   <script type="module" src="/js/components/send-state.js?v=2"></script>
 
-  <!-- Ads module -->
-  <script type="module" src="/js/components/ads.js?v=1"></script>
+  <!-- Ads module (v2) — handles Monetag Vignette with plan check -->
+  <script type="module" src="/js/components/ads.js?v=2"></script>
 
   <!-- Mobile viewport fixes only -->
   <script type="module" src="/js/components/mobile-viewport.js?v=1"></script>

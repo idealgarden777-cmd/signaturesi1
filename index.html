@@ -8,16 +8,20 @@
   >
   <meta name="theme-color" content="#ffffff">
   <meta name="referrer" content="strict-origin-when-cross-origin">
-  
+
+  <!-- Monetag Verification (kept) -->
   <meta name="monetag" content="5c03c9d12ef5dab45df4b58c864f5ae9">
-  
+
+  <!-- Monetag Onclick Tag — REMOVED (now handled by ads.js for Free users only) -->
+
   <meta http-equiv="Content-Security-Policy" content="
     default-src 'self';
     script-src 'self' 'unsafe-inline'
       https://cdn.jsdelivr.net
       https://unpkg.com
       https://cdnjs.cloudflare.com
-      https://n6wxm.com;
+      https://n6wxm.com
+      https://zovidree.com;
     style-src 'self' 'unsafe-inline'
       https://fonts.googleapis.com
       https://cdn.jsdelivr.net;
@@ -32,7 +36,8 @@
       https://cdn.jsdelivr.net
       https://unpkg.com
       https://cdnjs.cloudflare.com
-      https://n6wxm.com;
+      https://n6wxm.com
+      https://zovidree.com;
   ">
 
   <title>NEYO • Signaturesi</title>
@@ -1294,7 +1299,7 @@
   </div>
 
   <!-- ========================================================= -->
-  <!-- SCRIPTS — FULL ORDER WITH SEND-STATE RESTORED & ADS V2   -->
+  <!-- SCRIPTS — FULL ORDER WITH SEND-STATE RESTORED & ADS v3   -->
   <!-- ========================================================= -->
 
   <!-- Main working app -->
@@ -1319,7 +1324,7 @@
   <!-- Send state (restored, v2) -->
   <script type="module" src="/js/components/send-state.js?v=2"></script>
 
-  <!-- Ads module (v3) — handles Monetag Vignette with plan check -->
+  <!-- Ads module (v3) — handles Monetag Vignette + Onclick for Free users only -->
   <script type="module" src="/js/components/ads.js?v=3"></script>
 
   <!-- Mobile viewport fixes only -->

@@ -364,3 +364,109 @@ body.dark-mode
     }
 
 }
+/* =========================================================
+   EXPANDED MODE — HARD ISOLATION GUARD
+   Prevent scrollbar/normal-composer rules from leaking
+   into composer-expand.css.
+   ========================================================= */
+
+#glassInputContainer.is-writing-expanded {
+    border-radius: 24px !important;
+
+    /*
+    Expanded dimensions remain owned by
+    composer-expand.css.
+    */
+}
+
+
+/* Expanded input row must use original expand layout */
+
+#glassInputContainer.is-writing-expanded
+.composer-input-row {
+    position: relative !important;
+
+    display: flex !important;
+    align-items: flex-end !important;
+
+    padding-bottom: 0 !important;
+}
+
+
+/* Expanded textarea — remove normal scrollbar overrides */
+
+#glassInputContainer.is-writing-expanded
+#chatInput {
+    width: 100% !important;
+
+    padding:
+        36px
+        8px
+        10px
+        8px !important;
+
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+
+    /*
+    Let expanded composer use its own
+    normal internal scrolling.
+    */
+    scrollbar-width: auto !important;
+}
+
+
+/* Restore controls to composer-expand.css behavior */
+
+#glassInputContainer.is-writing-expanded
+#attachBtn,
+
+#glassInputContainer.is-writing-expanded
+#micBtn,
+
+#glassInputContainer.is-writing-expanded
+#sendBtn {
+    position: relative !important;
+
+    left: auto !important;
+    right: auto !important;
+
+    top: auto !important;
+    bottom: 0 !important;
+
+    margin: 0 !important;
+
+    align-self: flex-end !important;
+}
+
+
+/* Our custom compact scrollbar must never
+   appear inside expanded writing mode */
+
+#glassInputContainer.is-writing-expanded
+.composer-custom-scrollbar {
+    display: none !important;
+}
+
+
+/* =========================================================
+   MOBILE EXPANDED MODE
+   ========================================================= */
+
+@media (max-width: 767px) {
+
+    #glassInputContainer.is-writing-expanded {
+        border-radius: 22px !important;
+    }
+
+
+    #glassInputContainer.is-writing-expanded
+    #chatInput {
+        padding:
+            34px
+            7px
+            8px
+            7px !important;
+    }
+
+}

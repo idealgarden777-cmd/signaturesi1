@@ -293,3 +293,95 @@ body.dark-mode
     }
 
 }
+/* =========================================================
+   FINAL SCROLLBAR CLEANUP
+   Hide native textarea scrollbar completely
+   Keep only NEYO custom scrollbar
+   ========================================================= */
+
+#chatInput {
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
+}
+
+#chatInput::-webkit-scrollbar {
+    width: 0 !important;
+    height: 0 !important;
+    display: none !important;
+}
+
+#chatInput::-webkit-scrollbar-track {
+    display: none !important;
+}
+
+#chatInput::-webkit-scrollbar-thumb {
+    display: none !important;
+}
+
+
+/* Custom scrollbar — final positioning */
+
+.composer-custom-scrollbar {
+    right: 12px !important;
+
+    width: 3px !important;
+
+    background:
+        rgba(0, 0, 0, 0.045) !important;
+
+    border-radius: 999px !important;
+}
+
+.composer-custom-scrollbar-thumb {
+    width: 3px !important;
+
+    min-height: 24px !important;
+
+    background:
+        rgba(90, 90, 90, 0.34) !important;
+
+    border-radius: 999px !important;
+
+    box-shadow: none !important;
+}
+
+
+/* Keep text away from scrollbar */
+
+#chatInput {
+    padding-right: 26px !important;
+}
+
+
+/* Mobile tuning */
+
+@media (max-width: 767px) {
+
+    .composer-custom-scrollbar {
+        right: 10px !important;
+        width: 3px !important;
+    }
+
+    #chatInput {
+        padding-right: 22px !important;
+    }
+
+}
+
+
+/* Dark mode */
+
+body.dark-mode
+.composer-custom-scrollbar {
+    background:
+        rgba(255, 255, 255, 0.05) !important;
+}
+
+body.dark-mode
+.composer-custom-scrollbar-thumb {
+    background:
+        rgba(255, 255, 255, 0.32) !important;
+}

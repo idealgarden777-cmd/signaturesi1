@@ -7,13 +7,12 @@ PRODUCTION CLEAN VERSION
 
 /* =========================================================
    1. DESIGN TOKENS & BASE CONTAINER
-   (Sare variables ek jagah define kiye hain to avoid conflict)
    ========================================================= */
 
 #glassInputContainer {
     position: relative !important;
     
-    /* Hardware Acceleration Fix - applied to base so it doesn't jump on expand */
+    /* Hardware Acceleration Fix */
     transform: translateZ(0);
     will-change: height, border-radius, padding;
     
@@ -28,7 +27,7 @@ PRODUCTION CLEAN VERSION
 
     /* Spacing & Sizes */
     --neyo-ui-edge-x: 12px;
-    --neyo-ui-edge-y: 10px;
+    --neyo-ui-edge-y: 8px; /* FIXED: Changed to 8px for exact 56px rail */
     
     --neyo-control-size: 40px;
     --neyo-control-gap: 8px;
@@ -39,12 +38,12 @@ PRODUCTION CLEAN VERSION
     --neyo-scrollbar-right: 8px;
     --neyo-scrollbar-width: 3px;
 
-    /* FIXED: Single bottom zone calculation for all states */
+    /* Single bottom zone calculation (40 + 8 + 8 = 56px) */
     --neyo-bottom-zone: calc(var(--neyo-control-size) + (var(--neyo-ui-edge-y) * 2));
 }
 
 /* =========================================================
-   2. WIDTH LOCK (Removed duplicates & deprecated properties)
+   2. WIDTH LOCK
    ========================================================= */
 
 #composerWrapper,
@@ -61,8 +60,8 @@ PRODUCTION CLEAN VERSION
 
 #glassInputContainer textarea#chatInput {
     overflow-x: hidden !important;
-    overflow-wrap: break-word !important; /* Safely handles long text */
-    word-break: normal !important; /* Removed deprecated break-word */
+    overflow-wrap: break-word !important; 
+    word-break: normal !important; 
 }
 
 /* =========================================================
@@ -133,22 +132,37 @@ PRODUCTION CLEAN VERSION
 }
 
 /* =========================================================
-   6. MULTILINE & EXPANDED STATE (SHARED LOGIC)
+   6. MULTILINE & EXPANDED STATE (INPUT ROW)
    ========================================================= */
 
-#glassInputContainer:not(.is-writing-expanded).composer-multiline .composer-input-row,
-#glassInputContainer.is-writing-expanded .composer-input-row {
+/* FIXED: No height 100% for normal multiline */
+#glassInputContainer:not(.is-writing-expanded).composer-multiline .composer-input-row {
     position: relative !important;
     display: block !important;
     padding: 0 !important;
-    padding-bottom: var(--neyo-bottom-zone) !important; /* Unified bottom spacing */
-    height: 100% !important;
+    padding-bottom: var(--neyo-bottom-zone) !important;
 }
 
-/* Controls absolute positioning for multiline & expanded */
-#glassInputContainer.composer-multiline #attachBtn,
-#glassInputContainer.composer-multiline #micBtn,
-#glassInputContainer.composer-multiline #sendBtn,
+/* FIXED: Explicit height 100% only for expanded */
+#glassInputContainer.is-writing-expanded .composer-input-row {
+    position: relative !important;
+    display: block !important;
+    width: 100% !important;
+    height: 100% !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+    padding-bottom: var(--neyo-bottom-zone) !important;
+}
+
+/* =========================================================
+   7. MULTILINE & EXPANDED STATE (CONTROLS)
+   ========================================================= */
+
+/* FIXED: Collision-safe selectors using :not(.is-writing-expanded) */
+#glassInputContainer:not(.is-writing-expanded).composer-multiline #attachBtn,
+#glassInputContainer:not(.is-writing-expanded).composer-multiline #micBtn,
+#glassInputContainer:not(.is-writing-expanded).composer-multiline #sendBtn,
 #glassInputContainer.is-writing-expanded #attachBtn,
 #glassInputContainer.is-writing-expanded #micBtn,
 #glassInputContainer.is-writing-expanded #sendBtn {
@@ -158,25 +172,28 @@ PRODUCTION CLEAN VERSION
     z-index: 20 !important;
 }
 
-#glassInputContainer.composer-multiline #attachBtn,
+#glassInputContainer:not(.is-writing-expanded).composer-multiline #attachBtn,
 #glassInputContainer.is-writing-expanded #attachBtn {
     left: var(--neyo-ui-edge-x) !important;
     right: auto !important;
 }
 
-#glassInputContainer.composer-multiline #sendBtn,
+#glassInputContainer:not(.is-writing-expanded).composer-multiline #sendBtn,
 #glassInputContainer.is-writing-expanded #sendBtn {
     right: var(--neyo-ui-edge-x) !important;
     left: auto !important;
 }
 
-#glassInputContainer.composer-multiline #micBtn,
+#glassInputContainer:not(.is-writing-expanded).composer-multiline #micBtn,
 #glassInputContainer.is-writing-expanded #micBtn {
     right: calc(var(--neyo-ui-edge-x) + var(--neyo-control-size) + var(--neyo-control-gap)) !important;
     left: auto !important;
 }
 
-/* Textarea differences */
+/* =========================================================
+   8. TEXTAREA SIZING & POSITIONING
+   ========================================================= */
+
 #glassInputContainer:not(.is-writing-expanded).composer-multiline textarea#chatInput {
     display: block !important;
     max-height: 132px !important;
@@ -211,7 +228,7 @@ PRODUCTION CLEAN VERSION
 }
 
 /* =========================================================
-   7. CUSTOM SCROLLBAR
+   9. CUSTOM SCROLLBAR
    ========================================================= */
 
 #glassInputContainer .composer-custom-scrollbar {
@@ -271,7 +288,7 @@ PRODUCTION CLEAN VERSION
 }
 
 /* =========================================================
-   8. EXTRA UTILITIES (Dark Mode, Voice, Expand Btn)
+   10. EXTRA UTILITIES (Dark Mode, Voice, Expand Btn)
    ========================================================= */
 
 body.dark-mode #glassInputContainer .composer-custom-scrollbar {
@@ -309,13 +326,13 @@ body.dark-mode #glassInputContainer .composer-custom-scrollbar-thumb {
 }
 
 /* =========================================================
-   9. MOBILE RESPONSIVENESS
+   11. MOBILE RESPONSIVENESS
    ========================================================= */
 
 @media (max-width: 767px) {
     #glassInputContainer {
         --neyo-ui-edge-x: 9px;
-        --neyo-ui-edge-y: 8px;
+        --neyo-ui-edge-y: 6px; /* Scaled down slightly for mobile to maintain proportion */
         --neyo-control-gap: 6px;
         --neyo-text-left: 12px;
         --neyo-text-right: 20px;
@@ -346,7 +363,7 @@ body.dark-mode #glassInputContainer .composer-custom-scrollbar-thumb {
 }
 
 /* =========================================================
-   10. REDUCED MOTION ACCESSIBILITY
+   12. REDUCED MOTION ACCESSIBILITY
    ========================================================= */
 
 @media (prefers-reduced-motion: reduce) {

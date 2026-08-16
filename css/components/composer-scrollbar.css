@@ -1,191 +1,62 @@
 /*
 =========================================================
 NEYO — COMPOSER SCROLLBAR
-CHATGPT-STYLE STABLE VERSION
+MINIMAL SAFE VERSION
 
-Goals:
-- Default composer stays compact pill
-- Text gets full available width
-- Controls stay on bottom row
-- Long text expands naturally
-- Internal scrolling after max-height
-- Native scrollbar hidden
-- Only one thin custom scrollbar visible
-- Mobile + desktop safe
-- No JS/layout conflicts
+Does NOT control composer shape.
+Only:
+- full-width text
+- native scrollbar hidden
+- custom scrollbar
 =========================================================
 */
 
 
-/* =========================================================
-   HOST
-   ========================================================= */
-
 #glassInputContainer {
     position: relative !important;
-
-    width: 100% !important;
-
-    min-height: 56px !important;
-
-    border-radius: 28px !important;
-
-    overflow: hidden !important;
 }
 
 
-/* =========================================================
-   INPUT ROW
-   ========================================================= */
-
-#glassInputContainer .composer-input-row {
-    display: grid !important;
-
-    grid-template-columns:
-        auto
-        1fr
-        auto
-        auto !important;
-
-    grid-template-rows:
-        auto
-        44px !important;
-
-    width: 100% !important;
-
-    min-height: 56px !important;
-
-    align-items: center !important;
-
-    column-gap: 8px !important;
-
-    padding:
-        8px
-        10px
-        4px
-        10px !important;
-
-    box-sizing: border-box !important;
-}
-
-
-/* =========================================================
-   TEXTAREA
-   ========================================================= */
+/* Full-width textarea */
 
 #glassInputContainer #chatInput {
-    grid-column: 1 / -1 !important;
-    grid-row: 1 !important;
-
-    display: block !important;
-
     width: 100% !important;
     max-width: none !important;
     min-width: 0 !important;
 
-    min-height: 24px !important;
-
     max-height: 220px !important;
-
-    margin: 0 !important;
-
-    padding:
-        4px
-        24px
-        4px
-        10px !important;
-
-    box-sizing: border-box !important;
-
-    resize: none !important;
 
     overflow-y: auto !important;
     overflow-x: hidden !important;
 
-    overscroll-behavior: contain !important;
-
     scrollbar-width: none !important;
-
     -ms-overflow-style: none !important;
 
-    line-height: 1.5 !important;
+    resize: none !important;
+
+    box-sizing: border-box !important;
+
+    padding-right: 24px !important;
 }
 
 
-/* Chrome / Safari / Edge native scrollbar off */
+/* Hide native scrollbar */
 
 #glassInputContainer #chatInput::-webkit-scrollbar {
     width: 0 !important;
     height: 0 !important;
-
-    display: none !important;
-}
-
-#glassInputContainer #chatInput::-webkit-scrollbar-track {
-    display: none !important;
-}
-
-#glassInputContainer #chatInput::-webkit-scrollbar-thumb {
     display: none !important;
 }
 
 
-/* =========================================================
-   BOTTOM CONTROLS
-   ========================================================= */
-
-#glassInputContainer #attachBtn {
-    grid-column: 1 !important;
-    grid-row: 2 !important;
-
-    justify-self: start !important;
-
-    align-self: center !important;
-}
-
-
-#glassInputContainer #voiceTranscribeContainer {
-    grid-column: 2 !important;
-    grid-row: 2 !important;
-
-    justify-self: end !important;
-
-    align-self: center !important;
-}
-
-
-#glassInputContainer #micBtn {
-    grid-column: 3 !important;
-    grid-row: 2 !important;
-
-    justify-self: end !important;
-
-    align-self: center !important;
-}
-
-
-#glassInputContainer #sendBtn {
-    grid-column: 4 !important;
-    grid-row: 2 !important;
-
-    justify-self: end !important;
-
-    align-self: center !important;
-}
-
-
-/* =========================================================
-   CUSTOM SCROLLBAR
-   ========================================================= */
+/* Custom scrollbar rail */
 
 .composer-custom-scrollbar {
     position: absolute !important;
 
     top: 14px !important;
-
-    right: 11px !important;
-
-    bottom: 56px !important;
+    right: 10px !important;
+    bottom: 54px !important;
 
     width: 3px !important;
 
@@ -194,10 +65,9 @@ Goals:
     border-radius: 999px !important;
 
     background:
-        rgba(0, 0, 0, 0.045) !important;
+        rgba(0, 0, 0, 0.05) !important;
 
     opacity: 0 !important;
-
     visibility: hidden !important;
 
     pointer-events: none !important;
@@ -208,25 +78,18 @@ Goals:
 }
 
 
-/* Overflow exists */
-
 .composer-custom-scrollbar.is-visible {
     visibility: visible !important;
-
     opacity: 0.35 !important;
 }
 
-
-/* While scrolling */
 
 .composer-custom-scrollbar.is-visible.is-active {
     opacity: 1 !important;
 }
 
 
-/* =========================================================
-   CUSTOM THUMB
-   ========================================================= */
+/* Thumb */
 
 .composer-custom-scrollbar-thumb {
     position: absolute !important;
@@ -243,152 +106,35 @@ Goals:
     background:
         rgba(90, 90, 90, 0.34) !important;
 
-    box-shadow: none !important;
-
     pointer-events: none !important;
+
+    box-shadow: none !important;
 
     will-change:
         transform,
         height !important;
-
-    transition:
-        opacity 120ms ease,
-        background-color 120ms ease !important;
 }
 
 
-/* =========================================================
-   DEFAULT COMPACT STATE
-   ========================================================= */
-
-#glassInputContainer:not(:focus-within)
-#chatInput:placeholder-shown {
-    min-height: 24px !important;
-}
-
-
-/*
-Keep the default shell compact.
-No giant pill / no forced tall state.
-*/
-
-#glassInputContainer:has(#chatInput:placeholder-shown) {
-    min-height: 56px !important;
-
-    border-radius: 28px !important;
-}
-
-
-/* =========================================================
-   LONG CONTENT
-   ========================================================= */
-
-#glassInputContainer:has(#chatInput:not(:placeholder-shown)) {
-    border-radius: 28px !important;
-}
-
-
-/* =========================================================
-   DESKTOP
-   ========================================================= */
-
-@media (min-width: 768px) {
-
-    #glassInputContainer #chatInput {
-        max-height: 220px !important;
-    }
-
-}
-
-
-/* =========================================================
-   MOBILE
-   ========================================================= */
+/* Mobile */
 
 @media (max-width: 767px) {
 
-    #glassInputContainer {
-        min-height: 54px !important;
-
-        border-radius: 27px !important;
-    }
-
-
-    #glassInputContainer .composer-input-row {
-        grid-template-rows:
-            auto
-            42px !important;
-
-        min-height: 54px !important;
-
-        padding:
-            7px
-            8px
-            3px
-            8px !important;
-
-        column-gap: 6px !important;
-    }
-
-
     #glassInputContainer #chatInput {
         max-height: 128px !important;
-
-        padding:
-            3px
-            20px
-            3px
-            8px !important;
-
-        line-height: 1.45 !important;
+        padding-right: 20px !important;
     }
-
 
     .composer-custom-scrollbar {
         top: 12px !important;
-
         right: 8px !important;
-
-        bottom: 52px !important;
-
-        width: 3px !important;
-    }
-
-
-    .composer-custom-scrollbar-thumb {
-        width: 3px !important;
-
-        min-height: 20px !important;
+        bottom: 50px !important;
     }
 
 }
 
 
-/* =========================================================
-   SMALL MOBILE
-   ========================================================= */
-
-@media (max-width: 420px) {
-
-    #glassInputContainer #chatInput {
-        max-height: 118px !important;
-
-        padding-right: 18px !important;
-    }
-
-
-    .composer-custom-scrollbar {
-        right: 7px !important;
-
-        width: 3px !important;
-    }
-
-}
-
-
-/* =========================================================
-   DARK MODE
-   ========================================================= */
+/* Dark mode */
 
 body.dark-mode
 .composer-custom-scrollbar {
@@ -396,39 +142,8 @@ body.dark-mode
         rgba(255, 255, 255, 0.05) !important;
 }
 
-
 body.dark-mode
 .composer-custom-scrollbar-thumb {
     background:
         rgba(255, 255, 255, 0.32) !important;
-}
-
-
-/* =========================================================
-   EXPANDED COMPOSER
-   ========================================================= */
-
-#glassInputContainer.is-expanded
-.composer-custom-scrollbar,
-#glassInputContainer.expanded
-.composer-custom-scrollbar,
-.composer-expanded
-.composer-custom-scrollbar {
-    top: 16px !important;
-
-    bottom: 58px !important;
-}
-
-
-/* =========================================================
-   REDUCED MOTION
-   ========================================================= */
-
-@media (prefers-reduced-motion: reduce) {
-
-    .composer-custom-scrollbar,
-    .composer-custom-scrollbar-thumb {
-        transition: none !important;
-    }
-
 }

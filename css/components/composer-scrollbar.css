@@ -982,3 +982,147 @@ textarea#chatInput {
         bottom: 56px !important;
     }
 }
+/* =========================================================
+   NEYO — FINAL COMPOSER SPACING POLISH
+   ChatGPT-like bottom breathing room
+   No layout / JS logic changes
+   ========================================================= */
+
+
+/* ---------------------------------------------------------
+   NORMAL MULTILINE
+   --------------------------------------------------------- */
+
+#glassInputContainer:not(.is-writing-expanded).composer-multiline {
+    padding-bottom: 3px !important;
+}
+
+
+#glassInputContainer:not(.is-writing-expanded).composer-multiline
+.composer-input-row {
+    padding-bottom: 52px !important;
+}
+
+
+/* + button */
+
+#glassInputContainer:not(.is-writing-expanded).composer-multiline
+#attachBtn {
+    bottom: 8px !important;
+}
+
+
+/* Mic */
+
+#glassInputContainer:not(.is-writing-expanded).composer-multiline
+#micBtn {
+    bottom: 8px !important;
+}
+
+
+/* Send */
+
+#glassInputContainer:not(.is-writing-expanded).composer-multiline
+#sendBtn {
+    bottom: 6px !important;
+}
+
+
+/* ---------------------------------------------------------
+   TEXT AREA
+   Give writing content a little breathing room
+   above the control row.
+   --------------------------------------------------------- */
+
+#glassInputContainer:not(.is-writing-expanded).composer-multiline
+textarea#chatInput {
+    padding-bottom: 8px !important;
+}
+
+
+/* ---------------------------------------------------------
+   EXPANDED COMPOSER
+   Same optical balance
+   --------------------------------------------------------- */
+
+#glassInputContainer.is-writing-expanded
+textarea#chatInput {
+    bottom: 58px !important;
+}
+
+
+#glassInputContainer.is-writing-expanded
+#attachBtn {
+    bottom: 10px !important;
+}
+
+
+#glassInputContainer.is-writing-expanded
+#micBtn {
+    bottom: 10px !important;
+}
+
+
+#glassInputContainer.is-writing-expanded
+#sendBtn {
+    bottom: 7px !important;
+}
+
+
+/* Expanded scrollbar stops above control row */
+
+#glassInputContainer.is-writing-expanded
+.composer-custom-scrollbar {
+    bottom: 66px !important;
+}
+
+
+/* ---------------------------------------------------------
+   MOBILE
+   Slightly tighter but still premium
+   --------------------------------------------------------- */
+
+@media (max-width: 767px) {
+
+    #glassInputContainer:not(.is-writing-expanded).composer-multiline
+    .composer-input-row {
+        padding-bottom: 49px !important;
+    }
+
+    #glassInputContainer:not(.is-writing-expanded).composer-multiline
+    #attachBtn {
+        bottom: 6px !important;
+    }
+
+    #glassInputContainer:not(.is-writing-expanded).composer-multiline
+    #micBtn {
+        bottom: 6px !important;
+    }
+
+    #glassInputContainer:not(.is-writing-expanded).composer-multiline
+    #sendBtn {
+        bottom: 4px !important;
+    }
+
+
+    #glassInputContainer.is-writing-expanded
+    textarea#chatInput {
+        bottom: 54px !important;
+    }
+
+    #glassInputContainer.is-writing-expanded
+    #attachBtn {
+        bottom: 7px !important;
+    }
+
+    #glassInputContainer.is-writing-expanded
+    #micBtn {
+        bottom: 7px !important;
+    }
+
+    #glassInputContainer.is-writing-expanded
+    #sendBtn {
+        bottom: 4px !important;
+    }
+
+}

@@ -882,3 +882,251 @@ body.dark-mode
     }
 
 }
+/* =========================================================
+   NEYO — LOCKED COMPOSER CONTROLS
+   Empty → typing → multiline:
+   ONLY HEIGHT CHANGES.
+   Width / buttons / horizontal geometry never move.
+   ========================================================= */
+
+#glassInputContainer {
+    --neyo-fixed-edge-x: 12px;
+    --neyo-fixed-bottom: 8px;
+
+    --neyo-fixed-control: 40px;
+    --neyo-fixed-gap: 8px;
+
+    --neyo-normal-rail: 56px;
+}
+
+
+/* =========================================================
+   NORMAL COMPOSER
+   One positioning system for ALL normal states.
+   ========================================================= */
+
+#glassInputContainer:not(.is-writing-expanded)
+.composer-input-row {
+    position: relative !important;
+
+    width: 100% !important;
+    min-width: 0 !important;
+
+    box-sizing: border-box !important;
+}
+
+
+/* =========================================================
+   + / MIC / SEND
+   NEVER switch positioning mode while typing.
+   ========================================================= */
+
+#glassInputContainer:not(.is-writing-expanded)
+#attachBtn,
+
+#glassInputContainer:not(.is-writing-expanded)
+#micBtn,
+
+#glassInputContainer:not(.is-writing-expanded)
+#sendBtn {
+    position: absolute !important;
+
+    top: auto !important;
+
+    bottom:
+        var(--neyo-fixed-bottom) !important;
+
+    width:
+        var(--neyo-fixed-control) !important;
+
+    height:
+        var(--neyo-fixed-control) !important;
+
+    min-width:
+        var(--neyo-fixed-control) !important;
+
+    min-height:
+        var(--neyo-fixed-control) !important;
+
+    max-width:
+        var(--neyo-fixed-control) !important;
+
+    max-height:
+        var(--neyo-fixed-control) !important;
+
+    flex:
+        0 0 var(--neyo-fixed-control) !important;
+
+    margin: 0 !important;
+    padding: 0 !important;
+
+    transform: none !important;
+
+    /*
+    Critical:
+    no left/right/bottom animation while typing.
+    */
+    transition:
+        opacity 150ms ease,
+        background-color 150ms ease,
+        color 150ms ease,
+        box-shadow 150ms ease !important;
+
+    z-index: 20 !important;
+}
+
+
+/* + stays here forever */
+
+#glassInputContainer:not(.is-writing-expanded)
+#attachBtn {
+    left:
+        var(--neyo-fixed-edge-x) !important;
+
+    right: auto !important;
+}
+
+
+/* Send stays here forever */
+
+#glassInputContainer:not(.is-writing-expanded)
+#sendBtn {
+    right:
+        var(--neyo-fixed-edge-x) !important;
+
+    left: auto !important;
+}
+
+
+/* Mic stays here forever */
+
+#glassInputContainer:not(.is-writing-expanded)
+#micBtn {
+    right:
+        calc(
+            var(--neyo-fixed-edge-x) +
+            var(--neyo-fixed-control) +
+            var(--neyo-fixed-gap)
+        ) !important;
+
+    left: auto !important;
+}
+
+
+/* =========================================================
+   EMPTY / ONE-LINE TEXTAREA
+   Keep current pill geometry.
+   Reserve space for fixed controls.
+   ========================================================= */
+
+#glassInputContainer:not(.is-writing-expanded):not(.composer-multiline)
+textarea#chatInput {
+    width: 100% !important;
+
+    min-width: 0 !important;
+
+    /*
+    + on left
+    mic + send on right
+    */
+    padding-left: 62px !important;
+    padding-right: 108px !important;
+
+    box-sizing: border-box !important;
+}
+
+
+/* =========================================================
+   MULTILINE
+   ONLY VERTICAL GROWTH
+   ========================================================= */
+
+#glassInputContainer:not(.is-writing-expanded).composer-multiline
+.composer-input-row {
+    display: block !important;
+
+    /*
+    Fixed bottom rail remains identical.
+    Textarea grows above it.
+    */
+    padding-bottom:
+        var(--neyo-normal-rail) !important;
+}
+
+
+/* Text area gets the upper writing canvas */
+
+#glassInputContainer:not(.is-writing-expanded).composer-multiline
+textarea#chatInput {
+    display: block !important;
+
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+
+    max-height: 132px !important;
+
+    margin: 0 !important;
+
+    padding:
+        6px
+        24px
+        2px
+        16px !important;
+
+    box-sizing: border-box !important;
+}
+
+
+/* =========================================================
+   CUSTOM SCROLLBAR
+   Remains above the fixed bottom rail.
+   ========================================================= */
+
+#glassInputContainer:not(.is-writing-expanded)
+.composer-custom-scrollbar {
+    right: 8px !important;
+
+    bottom:
+        calc(
+            var(--neyo-normal-rail) + 5px
+        ) !important;
+}
+
+
+/* =========================================================
+   MOBILE
+   Same principle, tighter spacing.
+   ========================================================= */
+
+@media (max-width: 767px) {
+
+    #glassInputContainer {
+        --neyo-fixed-edge-x: 9px;
+        --neyo-fixed-bottom: 7px;
+
+        --neyo-fixed-gap: 6px;
+
+        --neyo-normal-rail: 54px;
+    }
+
+
+    #glassInputContainer:not(.is-writing-expanded):not(.composer-multiline)
+    textarea#chatInput {
+        padding-left: 57px !important;
+        padding-right: 101px !important;
+    }
+
+
+    #glassInputContainer:not(.is-writing-expanded).composer-multiline
+    textarea#chatInput {
+        max-height: 118px !important;
+
+        padding:
+            5px
+            20px
+            2px
+            12px !important;
+    }
+
+}

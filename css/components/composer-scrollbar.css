@@ -549,3 +549,60 @@ body.dark-mode
     }
 
 }
+/* =========================================================
+   DEFAULT COMPOSER = PERFECT PILL
+   Expands only when content grows
+   ========================================================= */
+
+#glassInputContainer {
+    min-height: 56px !important;
+    border-radius: 999px !important;
+}
+
+
+/* Default empty / one-line state */
+
+#glassInputContainer .composer-input-row {
+    min-height: 56px !important;
+
+    grid-template-rows:
+        minmax(24px, auto)
+        36px !important;
+
+    align-content: center !important;
+}
+
+
+/* Keep one-line textarea compact */
+
+#glassInputContainer #chatInput {
+    min-height: 24px !important;
+    height: auto !important;
+
+    padding-top: 2px !important;
+    padding-bottom: 2px !important;
+}
+
+
+/* When textarea becomes multiline,
+   allow normal rounded composer shape */
+
+#glassInputContainer:has(#chatInput:not(:placeholder-shown)) {
+    border-radius: 28px !important;
+}
+
+
+/* Mobile */
+
+@media (max-width: 767px) {
+
+    #glassInputContainer {
+        min-height: 54px !important;
+        border-radius: 999px !important;
+    }
+
+    #glassInputContainer .composer-input-row {
+        min-height: 54px !important;
+    }
+
+}

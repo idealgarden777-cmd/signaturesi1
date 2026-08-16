@@ -1130,3 +1130,158 @@ textarea#chatInput {
     }
 
 }
+/* =========================================================
+   NEYO — TRUE FIXED NORMAL CONTROLS
+   Buttons anchor to OUTER composer, not growing input row.
+   ========================================================= */
+
+
+/*
+CRITICAL:
+Do not let composer-input-row become the positioning parent.
+The outer #glassInputContainer is already position: relative.
+*/
+
+#glassInputContainer:not(.is-writing-expanded)
+.composer-input-row {
+    position: static !important;
+}
+
+
+/* ---------------------------------------------------------
+   ALL NORMAL STATES
+   Empty + one-line + multiline use identical coordinates.
+   --------------------------------------------------------- */
+
+#glassInputContainer:not(.is-writing-expanded)
+#attachBtn,
+
+#glassInputContainer:not(.is-writing-expanded)
+#micBtn,
+
+#glassInputContainer:not(.is-writing-expanded)
+#sendBtn {
+    position: absolute !important;
+
+    top: auto !important;
+
+    bottom: 5px !important;
+
+    width: 40px !important;
+    height: 40px !important;
+
+    min-width: 40px !important;
+    min-height: 40px !important;
+
+    max-width: 40px !important;
+    max-height: 40px !important;
+
+    flex: 0 0 40px !important;
+
+    margin: 0 !important;
+    padding: 0 !important;
+
+    transform: none !important;
+
+    z-index: 20 !important;
+
+    /*
+    No positional animation while typing.
+    */
+    transition:
+        opacity 150ms ease,
+        background-color 150ms ease,
+        color 150ms ease,
+        box-shadow 150ms ease !important;
+}
+
+
+/* + — fixed to composer edge */
+
+#glassInputContainer:not(.is-writing-expanded)
+#attachBtn {
+    left: 8px !important;
+    right: auto !important;
+}
+
+
+/* Send — fixed to composer edge */
+
+#glassInputContainer:not(.is-writing-expanded)
+#sendBtn {
+    right: 8px !important;
+    left: auto !important;
+}
+
+
+/* Mic — fixed relative to Send */
+
+#glassInputContainer:not(.is-writing-expanded)
+#micBtn {
+    right: 56px !important;
+    left: auto !important;
+}
+
+
+/* ---------------------------------------------------------
+   ONE-LINE TEXT
+   Reserve room for controls without moving them.
+   --------------------------------------------------------- */
+
+#glassInputContainer:not(.is-writing-expanded):not(.composer-multiline)
+textarea#chatInput {
+    padding-left: 56px !important;
+    padding-right: 104px !important;
+}
+
+
+/* ---------------------------------------------------------
+   MULTILINE
+   Only text/composer height grows upward.
+   --------------------------------------------------------- */
+
+#glassInputContainer:not(.is-writing-expanded).composer-multiline
+.composer-input-row {
+    padding-bottom: 50px !important;
+}
+
+
+#glassInputContainer:not(.is-writing-expanded).composer-multiline
+textarea#chatInput {
+    padding:
+        6px
+        22px
+        2px
+        14px !important;
+}
+
+
+/* Mobile */
+
+@media (max-width: 767px) {
+
+    #glassInputContainer:not(.is-writing-expanded)
+    #attachBtn,
+    #glassInputContainer:not(.is-writing-expanded)
+    #micBtn,
+    #glassInputContainer:not(.is-writing-expanded)
+    #sendBtn {
+        bottom: 4px !important;
+    }
+
+    #glassInputContainer:not(.is-writing-expanded)
+    #attachBtn {
+        left: 6px !important;
+    }
+
+    #glassInputContainer:not(.is-writing-expanded)
+    #sendBtn {
+        right: 6px !important;
+    }
+
+    #glassInputContainer:not(.is-writing-expanded)
+    #micBtn {
+        right: 52px !important;
+    }
+
+}

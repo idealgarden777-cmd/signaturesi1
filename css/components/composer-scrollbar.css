@@ -688,3 +688,81 @@ body.dark-mode
         transition: none !important;
     }
 }
+/* =========================================================
+   NEYO — DEFAULT COMPOSER MICRO-SPACING
+   ChatGPT-like compact balance
+   Only affects non-expanded, non-multiline state
+   ========================================================= */
+
+#glassInputContainer:not(.is-writing-expanded):not(.composer-multiline) {
+    --neyo-default-edge-x: 10px;
+    --neyo-default-control-gap: 6px;
+}
+
+
+/* + button slightly closer to edge */
+
+#glassInputContainer:not(.is-writing-expanded):not(.composer-multiline)
+#attachBtn {
+    left: var(--neyo-default-edge-x) !important;
+}
+
+
+/* Send button balanced from right edge */
+
+#glassInputContainer:not(.is-writing-expanded):not(.composer-multiline)
+#sendBtn {
+    right: var(--neyo-default-edge-x) !important;
+}
+
+
+/* Mic closer to send */
+
+#glassInputContainer:not(.is-writing-expanded):not(.composer-multiline)
+#micBtn {
+    right:
+        calc(
+            var(--neyo-default-edge-x) +
+            var(--neyo-control-size) +
+            var(--neyo-default-control-gap)
+        ) !important;
+}
+
+
+/* Placeholder/text starts closer to + */
+
+#glassInputContainer:not(.is-writing-expanded):not(.composer-multiline)
+textarea#chatInput {
+    padding-left: 56px !important;
+
+    padding-right: 100px !important;
+}
+
+
+/* Keep vertical placement exactly locked */
+
+#glassInputContainer:not(.is-writing-expanded):not(.composer-multiline)
+#attachBtn,
+#glassInputContainer:not(.is-writing-expanded):not(.composer-multiline)
+#micBtn,
+#glassInputContainer:not(.is-writing-expanded):not(.composer-multiline)
+#sendBtn {
+    bottom: 8px !important;
+}
+
+
+/* Mobile */
+
+@media (max-width: 767px) {
+
+    #glassInputContainer:not(.is-writing-expanded):not(.composer-multiline) {
+        --neyo-default-edge-x: 8px;
+        --neyo-default-control-gap: 5px;
+    }
+
+    #glassInputContainer:not(.is-writing-expanded):not(.composer-multiline)
+    textarea#chatInput {
+        padding-left: 53px !important;
+        padding-right: 96px !important;
+    }
+}

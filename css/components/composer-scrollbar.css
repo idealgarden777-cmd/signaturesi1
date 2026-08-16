@@ -233,3 +233,179 @@ body.dark-mode
     }
 
 }
+/* =========================================================
+   NEYO — COMPOSER CONTROL POSITIONING
+   Default: vertically centered
+   Expanded: controls stay at bottom
+   ========================================================= */
+
+
+/* Composer row becomes positioning context */
+
+#glassInputContainer .composer-input-row {
+    position: relative !important;
+
+    min-height: 64px !important;
+
+    padding:
+        10px
+        72px
+        10px
+        56px !important;
+
+    box-sizing: border-box !important;
+}
+
+
+/* =========================================================
+   TEXTAREA
+   Full width, grows upward
+   ========================================================= */
+
+#glassInputContainer #chatInput {
+    display: block !important;
+
+    width: 100% !important;
+
+    min-height: 24px !important;
+
+    max-height: 220px !important;
+
+    margin: 0 !important;
+
+    padding:
+        10px
+        20px
+        10px
+        20px !important;
+
+    box-sizing: border-box !important;
+}
+
+
+/* =========================================================
+   LEFT + BUTTON
+   ========================================================= */
+
+#glassInputContainer #attachBtn {
+    position: absolute !important;
+
+    left: 16px !important;
+
+    bottom: 12px !important;
+
+    margin: 0 !important;
+
+    z-index: 10 !important;
+}
+
+
+/* =========================================================
+   MIC BUTTON
+   ========================================================= */
+
+#glassInputContainer #micBtn {
+    position: absolute !important;
+
+    right: 64px !important;
+
+    bottom: 12px !important;
+
+    margin: 0 !important;
+
+    z-index: 10 !important;
+}
+
+
+/* =========================================================
+   SEND BUTTON
+   ========================================================= */
+
+#glassInputContainer #sendBtn {
+    position: absolute !important;
+
+    right: 12px !important;
+
+    bottom: 8px !important;
+
+    margin: 0 !important;
+
+    z-index: 10 !important;
+}
+
+
+/* =========================================================
+   DEFAULT PILL STATE
+   Controls visually center because composer is 64px high
+   ========================================================= */
+
+#glassInputContainer {
+    min-height: 64px !important;
+
+    border-radius: 999px !important;
+}
+
+
+/* =========================================================
+   TEXT SPACE
+   Reserve bottom control area once multiline
+   ========================================================= */
+
+#glassInputContainer #chatInput:not(:placeholder-shown) {
+    padding-bottom: 52px !important;
+}
+
+
+/* =========================================================
+   MOBILE
+   ========================================================= */
+
+@media (max-width: 767px) {
+
+    #glassInputContainer {
+        min-height: 58px !important;
+    }
+
+
+    #glassInputContainer .composer-input-row {
+        min-height: 58px !important;
+
+        padding:
+            8px
+            64px
+            8px
+            50px !important;
+    }
+
+
+    #glassInputContainer #attachBtn {
+        left: 12px !important;
+
+        bottom: 9px !important;
+    }
+
+
+    #glassInputContainer #micBtn {
+        right: 58px !important;
+
+        bottom: 9px !important;
+    }
+
+
+    #glassInputContainer #sendBtn {
+        right: 8px !important;
+
+        bottom: 5px !important;
+    }
+
+
+    #glassInputContainer #chatInput {
+        max-height: 128px !important;
+    }
+
+
+    #glassInputContainer #chatInput:not(:placeholder-shown) {
+        padding-bottom: 48px !important;
+    }
+
+}

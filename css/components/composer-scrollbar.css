@@ -385,3 +385,167 @@ body.dark-mode
     background:
         rgba(255, 255, 255, 0.32) !important;
 }
+/* =========================================================
+   NEYO — CHATGPT STYLE FULL-WIDTH COMPOSER TEXT
+   Text gets almost full composer width.
+   Controls stay on bottom row.
+   ========================================================= */
+
+#glassInputContainer .composer-input-row {
+    display: grid !important;
+
+    grid-template-columns:
+        auto
+        1fr
+        auto
+        auto !important;
+
+    grid-template-rows:
+        minmax(24px, auto)
+        44px !important;
+
+    align-items: center !important;
+
+    position: relative !important;
+
+    width: 100% !important;
+
+    column-gap: 8px !important;
+
+    padding: 0 8px 4px 8px !important;
+}
+
+
+/* =========================================================
+   TEXTAREA — FULL WIDTH
+   ========================================================= */
+
+#glassInputContainer #chatInput {
+    grid-column: 1 / -1 !important;
+    grid-row: 1 !important;
+
+    width: 100% !important;
+    max-width: none !important;
+
+    min-width: 0 !important;
+
+    box-sizing: border-box !important;
+
+    margin: 0 !important;
+
+    /*
+    Text can travel almost all the way
+    to the custom scrollbar.
+    */
+
+    padding-left: 18px !important;
+    padding-right: 22px !important;
+
+    resize: none !important;
+}
+
+
+/* =========================================================
+   BOTTOM CONTROLS
+   ========================================================= */
+
+#glassInputContainer #attachBtn {
+    grid-column: 1 !important;
+    grid-row: 2 !important;
+
+    justify-self: start !important;
+}
+
+
+#glassInputContainer #voiceTranscribeContainer {
+    grid-column: 2 !important;
+    grid-row: 2 !important;
+
+    justify-self: end !important;
+}
+
+
+#glassInputContainer #micBtn {
+    grid-column: 3 !important;
+    grid-row: 2 !important;
+
+    justify-self: end !important;
+}
+
+
+#glassInputContainer #sendBtn {
+    grid-column: 4 !important;
+    grid-row: 2 !important;
+
+    justify-self: end !important;
+}
+
+
+/* =========================================================
+   CUSTOM SCROLLBAR
+   Keep it close to right edge like ChatGPT
+   ========================================================= */
+
+#glassInputContainer
+.composer-custom-scrollbar {
+    right: 12px !important;
+
+    top: 16px !important;
+    bottom: 58px !important;
+
+    width: 3px !important;
+}
+
+
+/* =========================================================
+   DESKTOP HEIGHT
+   ========================================================= */
+
+@media (min-width: 768px) {
+
+    #glassInputContainer #chatInput {
+        max-height: 220px !important;
+
+        padding-left: 18px !important;
+        padding-right: 24px !important;
+    }
+
+}
+
+
+/* =========================================================
+   MOBILE
+   ========================================================= */
+
+@media (max-width: 767px) {
+
+    #glassInputContainer .composer-input-row {
+        grid-template-rows:
+            minmax(24px, auto)
+            42px !important;
+
+        padding:
+            0 6px
+            3px 6px !important;
+    }
+
+
+    #glassInputContainer #chatInput {
+        width: 100% !important;
+
+        max-height: 128px !important;
+
+        padding-left: 14px !important;
+        padding-right: 20px !important;
+    }
+
+
+    #glassInputContainer
+    .composer-custom-scrollbar {
+        right: 9px !important;
+
+        top: 13px !important;
+        bottom: 54px !important;
+    }
+
+}

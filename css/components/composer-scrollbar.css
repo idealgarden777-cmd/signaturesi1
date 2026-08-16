@@ -766,3 +766,114 @@ textarea#chatInput {
         padding-right: 96px !important;
     }
 }
+/* =========================================================
+   NEYO — DEFAULT PILL VERTICAL BALANCE
+   Equal top / bottom spacing
+   ========================================================= */
+
+#glassInputContainer:not(.is-writing-expanded):not(.composer-multiline) {
+    --neyo-default-height: 56px;
+    --neyo-default-control-size: 40px;
+
+    /*
+    (56 - 40) / 2 = 8px
+    Exact equal top/bottom gap.
+    */
+    --neyo-default-y:
+        calc(
+            (var(--neyo-default-height) - var(--neyo-default-control-size)) / 2
+        );
+
+    min-height:
+        var(--neyo-default-height) !important;
+}
+
+
+/* Buttons: exact equal vertical inset */
+
+#glassInputContainer:not(.is-writing-expanded):not(.composer-multiline)
+#attachBtn,
+
+#glassInputContainer:not(.is-writing-expanded):not(.composer-multiline)
+#micBtn,
+
+#glassInputContainer:not(.is-writing-expanded):not(.composer-multiline)
+#sendBtn {
+    top: auto !important;
+
+    bottom:
+        var(--neyo-default-y) !important;
+
+    width:
+        var(--neyo-default-control-size) !important;
+
+    height:
+        var(--neyo-default-control-size) !important;
+
+    min-width:
+        var(--neyo-default-control-size) !important;
+
+    min-height:
+        var(--neyo-default-control-size) !important;
+
+    max-width:
+        var(--neyo-default-control-size) !important;
+
+    max-height:
+        var(--neyo-default-control-size) !important;
+}
+
+
+/* Textarea: vertically centered in same 56px pill */
+
+#glassInputContainer:not(.is-writing-expanded):not(.composer-multiline)
+textarea#chatInput {
+    height: 40px !important;
+    min-height: 40px !important;
+    max-height: 40px !important;
+
+    margin: 0 !important;
+
+    padding-top: 8px !important;
+    padding-bottom: 8px !important;
+
+    box-sizing: border-box !important;
+}
+
+
+/* Input row itself stays exactly centered */
+
+#glassInputContainer:not(.is-writing-expanded):not(.composer-multiline)
+.composer-input-row {
+    min-height:
+        var(--neyo-default-height) !important;
+
+    height:
+        var(--neyo-default-height) !important;
+
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+
+    align-items: center !important;
+}
+
+
+/* Mobile */
+
+@media (max-width: 767px) {
+
+    #glassInputContainer:not(.is-writing-expanded):not(.composer-multiline) {
+        --neyo-default-height: 54px;
+        --neyo-default-control-size: 40px;
+    }
+
+    #glassInputContainer:not(.is-writing-expanded):not(.composer-multiline)
+    textarea#chatInput {
+        height: 40px !important;
+        min-height: 40px !important;
+        max-height: 40px !important;
+
+        padding-top: 8px !important;
+        padding-bottom: 8px !important;
+    }
+}

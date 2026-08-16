@@ -688,3 +688,80 @@ body.dark-mode
         transition: none !important;
     }
 }
+/* =========================================================
+   NEYO — CONTROL SIZE HARD LOCK
+   Buttons must never shrink during typing / resize / expand
+   ========================================================= */
+
+#glassInputContainer #attachBtn,
+#glassInputContainer #micBtn,
+#glassInputContainer #sendBtn {
+    width: 40px !important;
+    height: 40px !important;
+
+    min-width: 40px !important;
+    min-height: 40px !important;
+
+    max-width: 40px !important;
+    max-height: 40px !important;
+
+    flex: 0 0 40px !important;
+    flex-grow: 0 !important;
+    flex-shrink: 0 !important;
+
+    box-sizing: border-box !important;
+
+    padding: 0 !important;
+    margin: 0 !important;
+
+    transform: none !important;
+}
+
+
+/* Prevent the textarea from pushing controls */
+
+#glassInputContainer textarea#chatInput {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+}
+
+
+/* Keep icon geometry stable */
+
+#glassInputContainer #attachBtn svg,
+#glassInputContainer #attachBtn i,
+#glassInputContainer #micBtn svg,
+#glassInputContainer #micBtn i,
+#glassInputContainer #sendBtn svg,
+#glassInputContainer #sendBtn i {
+    flex: 0 0 auto !important;
+
+    transform: none !important;
+}
+
+
+/* Send arrow stays stable */
+
+#glassInputContainer #sendBtn svg,
+#glassInputContainer #sendBtn i {
+    width: 18px !important;
+    height: 18px !important;
+}
+
+
+/* Mic visual size */
+
+#glassInputContainer #micBtn svg,
+#glassInputContainer #micBtn i {
+    width: 19px !important;
+    height: 19px !important;
+}
+
+
+/* Attach visual size */
+
+#glassInputContainer #attachBtn svg,
+#glassInputContainer #attachBtn i {
+    width: 20px !important;
+    height: 20px !important;
+}

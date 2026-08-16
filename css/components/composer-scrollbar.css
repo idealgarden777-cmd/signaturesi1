@@ -1,30 +1,61 @@
 /*
 =========================================================
-NEYO — COMPOSER SCROLLBAR
-MINIMAL SAFE VERSION
+NEYO — COMPOSER LAYOUT + CUSTOM SCROLLBAR
+Stable matched-pair CSS
 
-Does NOT control composer shape.
-Only:
-- full-width text
-- native scrollbar hidden
-- custom scrollbar
+Principles:
+- Base visual design stays from composer.css
+- Empty / one-line = compact pill
+- Multiline = grows naturally
+- Controls center in pill
+- Controls move/stay at bottom when multiline
+- Long content gets internal scroll
+- Native scrollbar hidden
+- Only custom right-side scrollbar visible
 =========================================================
 */
 
+
+/* =========================================================
+   BASE HOST
+   ========================================================= */
 
 #glassInputContainer {
     position: relative !important;
 }
 
 
-/* Full-width textarea */
+/* =========================================================
+   DEFAULT / ONE-LINE PILL
+   ========================================================= */
+
+#glassInputContainer.composer-empty,
+#glassInputContainer:not(.composer-multiline) {
+    border-radius: 999px !important;
+}
+
+
+/* Keep original composer row structure,
+   but allow reliable positioning context */
+
+#glassInputContainer .composer-input-row {
+    position: relative !important;
+    width: 100% !important;
+}
+
+
+/* =========================================================
+   TEXTAREA
+   ========================================================= */
 
 #glassInputContainer #chatInput {
     width: 100% !important;
     max-width: none !important;
     min-width: 0 !important;
 
-    max-height: 220px !important;
+    box-sizing: border-box !important;
+
+    resize: none !important;
 
     overflow-y: auto !important;
     overflow-x: hidden !important;
@@ -32,15 +63,11 @@ Only:
     scrollbar-width: none !important;
     -ms-overflow-style: none !important;
 
-    resize: none !important;
-
-    box-sizing: border-box !important;
-
     padding-right: 24px !important;
 }
 
 
-/* Hide native scrollbar */
+/* Native scrollbar off */
 
 #glassInputContainer #chatInput::-webkit-scrollbar {
     width: 0 !important;
@@ -49,14 +76,99 @@ Only:
 }
 
 
-/* Custom scrollbar rail */
+/* =========================================================
+   EMPTY / ONE-LINE CONTROL POSITIONING
+   ========================================================= */
+
+#glassInputContainer:not(.composer-multiline)
+#attachBtn,
+
+#glassInputContainer:not(.composer-multiline)
+#micBtn,
+
+#glassInputContainer:not(.composer-multiline)
+#sendBtn {
+    align-self: center !important;
+}
+
+
+/* =========================================================
+   MULTILINE STATE
+   ========================================================= */
+
+#glassInputContainer.composer-multiline {
+    border-radius: 28px !important;
+}
+
+
+/*
+When multiline:
+reserve a bottom control strip,
+while text occupies full width above.
+*/
+
+#glassInputContainer.composer-multiline
+.composer-input-row {
+    padding-bottom: 52px !important;
+}
+
+
+/* Controls stay at bottom */
+
+#glassInputContainer.composer-multiline
+#attachBtn {
+    position: absolute !important;
+
+    left: 14px !important;
+    bottom: 10px !important;
+
+    z-index: 10 !important;
+}
+
+
+#glassInputContainer.composer-multiline
+#micBtn {
+    position: absolute !important;
+
+    right: 62px !important;
+    bottom: 10px !important;
+
+    z-index: 10 !important;
+}
+
+
+#glassInputContainer.composer-multiline
+#sendBtn {
+    position: absolute !important;
+
+    right: 10px !important;
+    bottom: 6px !important;
+
+    z-index: 10 !important;
+}
+
+
+/* Text remains wide */
+
+#glassInputContainer.composer-multiline
+#chatInput {
+    padding-left: 14px !important;
+    padding-right: 22px !important;
+
+    max-height: 220px !important;
+}
+
+
+/* =========================================================
+   CUSTOM SCROLLBAR
+   ========================================================= */
 
 .composer-custom-scrollbar {
     position: absolute !important;
 
     top: 14px !important;
-    right: 10px !important;
-    bottom: 54px !important;
+    right: 9px !important;
+    bottom: 56px !important;
 
     width: 3px !important;
 
@@ -80,7 +192,7 @@ Only:
 
 .composer-custom-scrollbar.is-visible {
     visibility: visible !important;
-    opacity: 0.35 !important;
+    opacity: 0.34 !important;
 }
 
 
@@ -88,8 +200,6 @@ Only:
     opacity: 1 !important;
 }
 
-
-/* Thumb */
 
 .composer-custom-scrollbar-thumb {
     position: absolute !important;
@@ -99,7 +209,7 @@ Only:
 
     width: 3px !important;
 
-    min-height: 22px !important;
+    min-height: 20px !important;
 
     border-radius: 999px !important;
 
@@ -116,25 +226,70 @@ Only:
 }
 
 
-/* Mobile */
+/* =========================================================
+   OVERFLOW STATE
+   ========================================================= */
+
+#glassInputContainer.composer-overflow
+#chatInput {
+    overflow-y: auto !important;
+}
+
+
+/* =========================================================
+   MOBILE
+   ========================================================= */
 
 @media (max-width: 767px) {
 
-    #glassInputContainer #chatInput {
-        max-height: 128px !important;
-        padding-right: 20px !important;
+    #glassInputContainer.composer-multiline
+    .composer-input-row {
+        padding-bottom: 48px !important;
     }
 
+
+    #glassInputContainer.composer-multiline
+    #chatInput {
+        max-height: 128px !important;
+
+        padding-left: 10px !important;
+        padding-right: 18px !important;
+    }
+
+
+    #glassInputContainer.composer-multiline
+    #attachBtn {
+        left: 10px !important;
+        bottom: 8px !important;
+    }
+
+
+    #glassInputContainer.composer-multiline
+    #micBtn {
+        right: 56px !important;
+        bottom: 8px !important;
+    }
+
+
+    #glassInputContainer.composer-multiline
+    #sendBtn {
+        right: 7px !important;
+        bottom: 4px !important;
+    }
+
+
     .composer-custom-scrollbar {
-        top: 12px !important;
-        right: 8px !important;
+        top: 11px !important;
+        right: 7px !important;
         bottom: 50px !important;
     }
 
 }
 
 
-/* Dark mode */
+/* =========================================================
+   DARK MODE
+   ========================================================= */
 
 body.dark-mode
 .composer-custom-scrollbar {
@@ -142,270 +297,23 @@ body.dark-mode
         rgba(255, 255, 255, 0.05) !important;
 }
 
+
 body.dark-mode
 .composer-custom-scrollbar-thumb {
     background:
         rgba(255, 255, 255, 0.32) !important;
 }
-/* =========================================================
-   CHATGPT-LIKE DEFAULT COMPOSER SHAPE
-   Compact capsule / pill
-   ========================================================= */
-
-#glassInputContainer {
-    min-height: 64px !important;
-    height: auto !important;
-
-    border-radius: 999px !important;
-
-    padding: 0 !important;
-}
-
-
-/* Keep row vertically compact */
-
-#glassInputContainer .composer-input-row {
-    min-height: 64px !important;
-
-    padding:
-        0
-        12px !important;
-
-    align-items: center !important;
-}
-
-
-/* Textarea compact in default state */
-
-#glassInputContainer #chatInput {
-    min-height: 24px !important;
-
-    padding-top: 0 !important;
-    padding-bottom: 0 !important;
-
-    line-height: 24px !important;
-}
-
-
-/* Keep controls centered inside pill */
-
-#glassInputContainer #attachBtn,
-#glassInputContainer #micBtn,
-#glassInputContainer #sendBtn {
-    align-self: center !important;
-}
 
 
 /* =========================================================
-   WHEN COMPOSER GROWS
-   Keep premium rounded shape
+   REDUCED MOTION
    ========================================================= */
 
-#glassInputContainer:focus-within {
-    border-radius: 32px !important;
-}
-
-
-/* =========================================================
-   MOBILE
-   ========================================================= */
-
-@media (max-width: 767px) {
-
-    #glassInputContainer {
-        min-height: 58px !important;
-
-        border-radius: 999px !important;
-    }
-
-
-    #glassInputContainer .composer-input-row {
-        min-height: 58px !important;
-
-        padding:
-            0
-            10px !important;
-    }
-
-
-    #glassInputContainer #chatInput {
-        line-height: 22px !important;
-    }
-
-}
-/* =========================================================
-   NEYO — COMPOSER CONTROL POSITIONING
-   Default: vertically centered
-   Expanded: controls stay at bottom
-   ========================================================= */
-
-
-/* Composer row becomes positioning context */
-
-#glassInputContainer .composer-input-row {
-    position: relative !important;
-
-    min-height: 64px !important;
-
-    padding:
-        10px
-        72px
-        10px
-        56px !important;
-
-    box-sizing: border-box !important;
-}
-
-
-/* =========================================================
-   TEXTAREA
-   Full width, grows upward
-   ========================================================= */
-
-#glassInputContainer #chatInput {
-    display: block !important;
-
-    width: 100% !important;
-
-    min-height: 24px !important;
-
-    max-height: 220px !important;
-
-    margin: 0 !important;
-
-    padding:
-        10px
-        20px
-        10px
-        20px !important;
-
-    box-sizing: border-box !important;
-}
-
-
-/* =========================================================
-   LEFT + BUTTON
-   ========================================================= */
-
-#glassInputContainer #attachBtn {
-    position: absolute !important;
-
-    left: 16px !important;
-
-    bottom: 12px !important;
-
-    margin: 0 !important;
-
-    z-index: 10 !important;
-}
-
-
-/* =========================================================
-   MIC BUTTON
-   ========================================================= */
-
-#glassInputContainer #micBtn {
-    position: absolute !important;
-
-    right: 64px !important;
-
-    bottom: 12px !important;
-
-    margin: 0 !important;
-
-    z-index: 10 !important;
-}
-
-
-/* =========================================================
-   SEND BUTTON
-   ========================================================= */
-
-#glassInputContainer #sendBtn {
-    position: absolute !important;
-
-    right: 12px !important;
-
-    bottom: 8px !important;
-
-    margin: 0 !important;
-
-    z-index: 10 !important;
-}
-
-
-/* =========================================================
-   DEFAULT PILL STATE
-   Controls visually center because composer is 64px high
-   ========================================================= */
-
-#glassInputContainer {
-    min-height: 64px !important;
-
-    border-radius: 999px !important;
-}
-
-
-/* =========================================================
-   TEXT SPACE
-   Reserve bottom control area once multiline
-   ========================================================= */
-
-#glassInputContainer #chatInput:not(:placeholder-shown) {
-    padding-bottom: 52px !important;
-}
-
-
-/* =========================================================
-   MOBILE
-   ========================================================= */
-
-@media (max-width: 767px) {
-
-    #glassInputContainer {
-        min-height: 58px !important;
-    }
-
-
-    #glassInputContainer .composer-input-row {
-        min-height: 58px !important;
-
-        padding:
-            8px
-            64px
-            8px
-            50px !important;
-    }
-
-
-    #glassInputContainer #attachBtn {
-        left: 12px !important;
-
-        bottom: 9px !important;
-    }
-
-
-    #glassInputContainer #micBtn {
-        right: 58px !important;
-
-        bottom: 9px !important;
-    }
-
-
-    #glassInputContainer #sendBtn {
-        right: 8px !important;
-
-        bottom: 5px !important;
-    }
-
-
-    #glassInputContainer #chatInput {
-        max-height: 128px !important;
-    }
-
-
-    #glassInputContainer #chatInput:not(:placeholder-shown) {
-        padding-bottom: 48px !important;
+@media (prefers-reduced-motion: reduce) {
+
+    .composer-custom-scrollbar,
+    .composer-custom-scrollbar-thumb {
+        transition: none !important;
     }
 
 }

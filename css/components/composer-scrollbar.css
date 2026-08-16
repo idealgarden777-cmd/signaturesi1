@@ -687,3 +687,98 @@ body.dark-mode
         transition: none !important;
     }
 }
+/* =========================================================
+   NEYO — SMOOTH COMPOSER EXPAND / COLLAPSE
+   Visual-only transition polish
+   ========================================================= */
+
+#glassInputContainer {
+    transition:
+        height 220ms cubic-bezier(0.22, 1, 0.36, 1),
+        min-height 220ms cubic-bezier(0.22, 1, 0.36, 1),
+        max-height 220ms cubic-bezier(0.22, 1, 0.36, 1),
+        border-radius 220ms cubic-bezier(0.22, 1, 0.36, 1),
+        padding 220ms cubic-bezier(0.22, 1, 0.36, 1),
+        box-shadow 180ms ease !important;
+
+    will-change:
+        height,
+        border-radius,
+        padding;
+}
+
+
+/* Writing canvas fades/slides into expanded state */
+
+#glassInputContainer
+textarea#chatInput {
+    transition:
+        top 220ms cubic-bezier(0.22, 1, 0.36, 1),
+        bottom 220ms cubic-bezier(0.22, 1, 0.36, 1),
+        height 220ms cubic-bezier(0.22, 1, 0.36, 1),
+        max-height 220ms cubic-bezier(0.22, 1, 0.36, 1),
+        padding 180ms ease !important;
+}
+
+
+/* Controls move smoothly instead of jumping */
+
+#glassInputContainer #attachBtn,
+#glassInputContainer #micBtn,
+#glassInputContainer #sendBtn {
+    transition:
+        left 220ms cubic-bezier(0.22, 1, 0.36, 1),
+        right 220ms cubic-bezier(0.22, 1, 0.36, 1),
+        bottom 220ms cubic-bezier(0.22, 1, 0.36, 1),
+        opacity 150ms ease,
+        background-color 150ms ease,
+        color 150ms ease !important;
+}
+
+
+/* Expand / collapse icon */
+
+#glassInputContainer #composerExpandBtn {
+    transition:
+        top 200ms ease,
+        right 200ms ease,
+        opacity 140ms ease,
+        transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
+        background-color 140ms ease !important;
+}
+
+
+/* Custom scrollbar appears after the shell starts moving */
+
+#glassInputContainer
+.composer-custom-scrollbar {
+    transition:
+        opacity 140ms ease,
+        visibility 140ms ease,
+        top 220ms cubic-bezier(0.22, 1, 0.36, 1),
+        bottom 220ms cubic-bezier(0.22, 1, 0.36, 1) !important;
+}
+
+
+/* Slight visual settling */
+
+#glassInputContainer.is-writing-expanded {
+    transform: translateZ(0);
+}
+
+
+/* Reduced motion remains respected */
+
+@media (prefers-reduced-motion: reduce) {
+
+    #glassInputContainer,
+    #glassInputContainer textarea#chatInput,
+    #glassInputContainer #attachBtn,
+    #glassInputContainer #micBtn,
+    #glassInputContainer #sendBtn,
+    #glassInputContainer #composerExpandBtn,
+    #glassInputContainer .composer-custom-scrollbar {
+        transition: none !important;
+    }
+
+}

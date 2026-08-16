@@ -44,14 +44,14 @@ THIS FILE
     /*
     Default compact capsule.
     */
-    --neyo-pill-height: 64px;
-    --neyo-pill-radius: 32px;
+    --neyo-pill-height: 58px;
+    --neyo-pill-radius: 29px;
 
     /*
     Control geometry.
     */
     --neyo-control-size: 44px;
-    --neyo-control-bottom: 10px;
+    --neyo-control-bottom: 7px;
 
     /*
     Horizontal control spacing.
@@ -62,7 +62,7 @@ THIS FILE
     /*
     Multiline / expanded bottom control zone.
     */
-    --neyo-rail-height: 64px;
+    --neyo-rail-height: 58px;
 
     /*
     Writing canvas padding.
@@ -748,16 +748,16 @@ body.dark-mode
 @media (min-width: 768px) and (max-width: 1100px) {
 
     #glassInputContainer {
-        --neyo-pill-height: 62px;
-        --neyo-pill-radius: 31px;
+        --neyo-pill-height: 58px;
+        --neyo-pill-radius: 29px;
 
         --neyo-control-size: 42px;
-        --neyo-control-bottom: 10px;
+        --neyo-control-bottom: 8px;
 
         --neyo-edge-x: 9px;
         --neyo-control-gap: 6px;
 
-        --neyo-rail-height: 62px;
+        --neyo-rail-height: 58px;
 
         --neyo-oneline-left: 58px;
         --neyo-oneline-right: 102px;
@@ -776,16 +776,16 @@ body.dark-mode
 @media (max-width: 767px) {
 
     #glassInputContainer {
-        --neyo-pill-height: 58px;
-        --neyo-pill-radius: 29px;
+        --neyo-pill-height: 56px;
+        --neyo-pill-radius: 28px;
 
         --neyo-control-size: 40px;
-        --neyo-control-bottom: 9px;
+        --neyo-control-bottom: 8px;
 
         --neyo-edge-x: 8px;
         --neyo-control-gap: 5px;
 
-        --neyo-rail-height: 58px;
+        --neyo-rail-height: 56px;
 
         --neyo-text-left: 12px;
         --neyo-text-right: 18px;
@@ -948,14 +948,16 @@ body.dark-mode
 @media (min-width: 1440px) {
 
     #glassInputContainer {
-        --neyo-pill-height: 64px;
-        --neyo-pill-radius: 32px;
+        --neyo-pill-height: 58px;
+        --neyo-pill-radius: 29px;
 
         --neyo-control-size: 44px;
-        --neyo-control-bottom: 10px;
+        --neyo-control-bottom: 7px;
 
         --neyo-edge-x: 10px;
         --neyo-control-gap: 6px;
+
+        --neyo-rail-height: 58px;
     }
 
 }

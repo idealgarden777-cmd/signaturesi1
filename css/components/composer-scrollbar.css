@@ -1294,3 +1294,187 @@ textarea#chatInput {
     }
 
 }
+/* =========================================================
+   NEYO — FIXED BOTTOM CONTROL RAIL
+   Same geometry at every composer height
+   ========================================================= */
+
+#glassInputContainer {
+    --neyo-rail-height: 56px;
+    --neyo-edge-x: 12px;
+    --neyo-control-size: 40px;
+    --neyo-control-gap: 8px;
+}
+
+
+/* =========================================================
+   MULTILINE + EXPANDED
+   One fixed bottom rail
+   ========================================================= */
+
+#glassInputContainer:not(.is-writing-expanded).composer-multiline
+.composer-input-row,
+#glassInputContainer.is-writing-expanded
+.composer-input-row {
+    position: relative !important;
+}
+
+
+/* =========================================================
+   TEXT AREA MUST STOP ABOVE RAIL
+   ========================================================= */
+
+#glassInputContainer:not(.is-writing-expanded).composer-multiline
+textarea#chatInput {
+    padding-bottom: 0 !important;
+}
+
+
+#glassInputContainer.is-writing-expanded
+textarea#chatInput {
+    bottom: var(--neyo-rail-height) !important;
+}
+
+
+/* =========================================================
+   COMMON CONTROL VERTICAL POSITION
+
+   Formula:
+   (56px rail - 40px control) / 2 = 8px bottom
+   ========================================================= */
+
+#glassInputContainer:not(.is-writing-expanded).composer-multiline
+#attachBtn,
+#glassInputContainer:not(.is-writing-expanded).composer-multiline
+#micBtn,
+#glassInputContainer:not(.is-writing-expanded).composer-multiline
+#sendBtn,
+
+#glassInputContainer.is-writing-expanded
+#attachBtn,
+#glassInputContainer.is-writing-expanded
+#micBtn,
+#glassInputContainer.is-writing-expanded
+#sendBtn {
+    position: absolute !important;
+
+    width: var(--neyo-control-size) !important;
+    height: var(--neyo-control-size) !important;
+
+    min-width: var(--neyo-control-size) !important;
+    min-height: var(--neyo-control-size) !important;
+
+    top: auto !important;
+
+    bottom:
+        calc(
+            (var(--neyo-rail-height) - var(--neyo-control-size)) / 2
+        ) !important;
+
+    margin: 0 !important;
+
+    transform: none !important;
+}
+
+
+/* =========================================================
+   LEFT +
+   ========================================================= */
+
+#glassInputContainer:not(.is-writing-expanded).composer-multiline
+#attachBtn,
+#glassInputContainer.is-writing-expanded
+#attachBtn {
+    left: var(--neyo-edge-x) !important;
+    right: auto !important;
+}
+
+
+/* =========================================================
+   RIGHT SEND
+   ========================================================= */
+
+#glassInputContainer:not(.is-writing-expanded).composer-multiline
+#sendBtn,
+#glassInputContainer.is-writing-expanded
+#sendBtn {
+    right: var(--neyo-edge-x) !important;
+    left: auto !important;
+}
+
+
+/* =========================================================
+   MIC
+   ========================================================= */
+
+#glassInputContainer:not(.is-writing-expanded).composer-multiline
+#micBtn,
+#glassInputContainer.is-writing-expanded
+#micBtn {
+    right:
+        calc(
+            var(--neyo-edge-x) +
+            var(--neyo-control-size) +
+            var(--neyo-control-gap)
+        ) !important;
+
+    left: auto !important;
+}
+
+
+/* =========================================================
+   NORMAL MULTILINE
+   Reserve EXACTLY one rail.
+   ========================================================= */
+
+#glassInputContainer:not(.is-writing-expanded).composer-multiline
+.composer-input-row {
+    padding-bottom: var(--neyo-rail-height) !important;
+}
+
+
+/* =========================================================
+   SCROLLBAR
+   Ends exactly above same rail
+   ========================================================= */
+
+#glassInputContainer
+.composer-custom-scrollbar {
+    bottom:
+        calc(
+            var(--neyo-rail-height) + 5px
+        ) !important;
+}
+
+
+/* =========================================================
+   OPTICAL ICON CENTERING
+
+   Icon itself centered inside same 40px box.
+   ========================================================= */
+
+#glassInputContainer #attachBtn,
+#glassInputContainer #micBtn,
+#glassInputContainer #sendBtn {
+    display: inline-flex !important;
+
+    align-items: center !important;
+    justify-content: center !important;
+
+    padding: 0 !important;
+}
+
+
+/* =========================================================
+   MOBILE
+   ========================================================= */
+
+@media (max-width: 767px) {
+
+    #glassInputContainer {
+        --neyo-rail-height: 54px;
+        --neyo-edge-x: 9px;
+        --neyo-control-gap: 6px;
+    }
+
+}

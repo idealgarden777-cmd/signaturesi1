@@ -1,0 +1,295 @@
+/*
+=========================================================
+NEYO — COMPOSER CUSTOM SCROLLBAR
+
+Purpose:
+- ChatGPT-style internal composer scrollbar
+- Thin right-side rail
+- Rounded moving thumb
+- Appears only when textarea actually overflows
+- No layout shift
+- Mobile-first
+- Light + dark mode safe
+
+Works with:
+public/js/components/composer-scrollbar.js
+=========================================================
+*/
+
+
+/* =========================================================
+   HOST
+   ========================================================= */
+
+#glassInputContainer {
+    position: relative;
+}
+
+
+/* =========================================================
+   HIDE NATIVE TEXTAREA SCROLLBAR
+   ========================================================= */
+
+#chatInput {
+    overflow-y: auto;
+    overflow-x: hidden;
+
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+}
+
+#chatInput::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    display: none;
+}
+
+
+/* =========================================================
+   CUSTOM RAIL
+   ========================================================= */
+
+.composer-custom-scrollbar {
+    position: absolute;
+
+    top: 16px;
+    right: 10px;
+    bottom: 54px;
+
+    width: 4px;
+
+    z-index: 8;
+
+    border-radius: 999px;
+
+    background:
+        rgba(0, 0, 0, 0.055);
+
+    opacity: 0;
+    visibility: hidden;
+
+    pointer-events: none;
+
+    transition:
+        opacity 140ms ease,
+        visibility 140ms ease;
+}
+
+
+/* =========================================================
+   VISIBLE STATE
+   ========================================================= */
+
+.composer-custom-scrollbar.is-visible {
+    visibility: visible;
+}
+
+
+/*
+While actually scrolling / interacting,
+make it more visible.
+*/
+
+.composer-custom-scrollbar.is-visible.is-active {
+    opacity: 1;
+}
+
+
+/*
+When overflow exists but user is idle,
+keep a very subtle indicator.
+*/
+
+.composer-custom-scrollbar.is-visible:not(.is-active) {
+    opacity: 0.42;
+}
+
+
+/* =========================================================
+   THUMB
+   ========================================================= */
+
+.composer-custom-scrollbar-thumb {
+    position: absolute;
+
+    top: 0;
+    left: 0;
+
+    width: 100%;
+    min-height: 22px;
+
+    border-radius: 999px;
+
+    background:
+        rgba(90, 90, 90, 0.38);
+
+    box-shadow:
+        0 0 0 0.5px
+        rgba(0, 0, 0, 0.04);
+
+    transform: translateY(0);
+
+    will-change:
+        transform,
+        height;
+
+    transition:
+        opacity 120ms ease,
+        background-color 120ms ease;
+
+    pointer-events: none;
+}
+
+
+/* =========================================================
+   INPUT PADDING SAFETY
+   ========================================================= */
+
+#chatInput {
+    padding-right: 18px;
+}
+
+
+/* =========================================================
+   DARK MODE
+   ========================================================= */
+
+body.dark-mode
+.composer-custom-scrollbar {
+    background:
+        rgba(255, 255, 255, 0.065);
+}
+
+body.dark-mode
+.composer-custom-scrollbar-thumb {
+    background:
+        rgba(255, 255, 255, 0.34);
+
+    box-shadow:
+        0 0 0 0.5px
+        rgba(255, 255, 255, 0.03);
+}
+
+
+/* =========================================================
+   MOBILE — PRIMARY DESIGN
+   ========================================================= */
+
+@media (max-width: 767px) {
+
+    /*
+    Composer can grow naturally,
+    then text scrolls internally.
+    */
+
+    #chatInput {
+        max-height: 128px;
+
+        overflow-y: auto;
+        overflow-x: hidden;
+
+        padding-right: 16px;
+    }
+
+
+    /*
+    Match screenshot:
+    rail starts inside upper text area
+    and stops above bottom controls.
+    */
+
+    .composer-custom-scrollbar {
+        top: 14px;
+
+        right: 8px;
+
+        bottom: 52px;
+
+        width: 4px;
+    }
+
+
+    .composer-custom-scrollbar-thumb {
+        min-height: 20px;
+
+        background:
+            rgba(95, 95, 95, 0.32);
+    }
+
+
+    body.dark-mode
+    .composer-custom-scrollbar-thumb {
+        background:
+            rgba(255, 255, 255, 0.30);
+    }
+
+}
+
+
+/* =========================================================
+   SMALL MOBILE
+   ========================================================= */
+
+@media (max-width: 420px) {
+
+    #chatInput {
+        max-height: 118px;
+        padding-right: 15px;
+    }
+
+
+    .composer-custom-scrollbar {
+        right: 7px;
+        width: 3px;
+    }
+
+
+    .composer-custom-scrollbar-thumb {
+        min-height: 18px;
+    }
+
+}
+
+
+/* =========================================================
+   EXPANDED COMPOSER
+   ========================================================= */
+
+#glassInputContainer.is-expanded
+.composer-custom-scrollbar,
+#glassInputContainer.expanded
+.composer-custom-scrollbar,
+.composer-expanded
+.composer-custom-scrollbar {
+    top: 18px;
+    bottom: 58px;
+}
+
+
+/* =========================================================
+   FOCUS POLISH
+   ========================================================= */
+
+#chatInput:focus
+~ .composer-custom-scrollbar.is-visible,
+#glassInputContainer:focus-within
+.composer-custom-scrollbar.is-visible {
+    opacity: 0.72;
+}
+
+
+/* =========================================================
+   REDUCED MOTION
+   ========================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+
+    .composer-custom-scrollbar,
+    .composer-custom-scrollbar-thumb {
+        transition: none;
+    }
+
+}

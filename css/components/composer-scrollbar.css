@@ -147,3 +147,89 @@ body.dark-mode
     background:
         rgba(255, 255, 255, 0.32) !important;
 }
+/* =========================================================
+   CHATGPT-LIKE DEFAULT COMPOSER SHAPE
+   Compact capsule / pill
+   ========================================================= */
+
+#glassInputContainer {
+    min-height: 64px !important;
+    height: auto !important;
+
+    border-radius: 999px !important;
+
+    padding: 0 !important;
+}
+
+
+/* Keep row vertically compact */
+
+#glassInputContainer .composer-input-row {
+    min-height: 64px !important;
+
+    padding:
+        0
+        12px !important;
+
+    align-items: center !important;
+}
+
+
+/* Textarea compact in default state */
+
+#glassInputContainer #chatInput {
+    min-height: 24px !important;
+
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+
+    line-height: 24px !important;
+}
+
+
+/* Keep controls centered inside pill */
+
+#glassInputContainer #attachBtn,
+#glassInputContainer #micBtn,
+#glassInputContainer #sendBtn {
+    align-self: center !important;
+}
+
+
+/* =========================================================
+   WHEN COMPOSER GROWS
+   Keep premium rounded shape
+   ========================================================= */
+
+#glassInputContainer:focus-within {
+    border-radius: 32px !important;
+}
+
+
+/* =========================================================
+   MOBILE
+   ========================================================= */
+
+@media (max-width: 767px) {
+
+    #glassInputContainer {
+        min-height: 58px !important;
+
+        border-radius: 999px !important;
+    }
+
+
+    #glassInputContainer .composer-input-row {
+        min-height: 58px !important;
+
+        padding:
+            0
+            10px !important;
+    }
+
+
+    #glassInputContainer #chatInput {
+        line-height: 22px !important;
+    }
+
+}

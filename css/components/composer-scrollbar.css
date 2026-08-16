@@ -35,7 +35,8 @@ THIS FILE
 
 
 /* =========================================================
-   1. DESIGN TOKENS
+   NEYO — UNIFIED COMPOSER SCALE
+   Final compact premium geometry
    ========================================================= */
 
 #glassInputContainer {
@@ -44,38 +45,38 @@ THIS FILE
     /*
     Default compact capsule.
     */
-    --neyo-pill-height: 58px;
-    --neyo-pill-radius: 29px;
+    --neyo-pill-height: 56px;
+    --neyo-pill-radius: 28px;
 
     /*
     Control geometry.
     */
-    --neyo-control-size: 44px;
-    --neyo-control-bottom: 7px;
+    --neyo-control-size: 40px;
+    --neyo-control-bottom: 8px;
 
     /*
     Horizontal control spacing.
     */
-    --neyo-edge-x: 10px;
+    --neyo-edge-x: 8px;
     --neyo-control-gap: 6px;
 
     /*
     Multiline / expanded bottom control zone.
     */
-    --neyo-rail-height: 58px;
+    --neyo-rail-height: 56px;
 
     /*
     Writing canvas padding.
     */
-    --neyo-text-left: 16px;
-    --neyo-text-right: 24px;
+    --neyo-text-left: 14px;
+    --neyo-text-right: 20px;
 
     /*
     Compact textarea reserves space
     for + on left and mic/send on right.
     */
-    --neyo-oneline-left: 62px;
-    --neyo-oneline-right: 108px;
+    --neyo-oneline-left: 56px;
+    --neyo-oneline-right: 96px;
 
     /*
     Custom scrollbar.
@@ -387,8 +388,8 @@ textarea#chatInput {
     max-height:
         var(--neyo-control-size) !important;
 
-    padding-top: 10px !important;
-    padding-bottom: 10px !important;
+    padding-top: 8px !important;
+    padding-bottom: 8px !important;
 
     padding-left:
         var(--neyo-oneline-left) !important;
@@ -431,13 +432,13 @@ textarea#chatInput {
 
     width: 100% !important;
 
-    max-height: 132px !important;
+    max-height: 124px !important;
 
     padding:
-        7px
-        var(--neyo-text-right)
+        6px
+        20px
         3px
-        var(--neyo-text-left) !important;
+        14px !important;
 
     line-height: 1.5 !important;
 }
@@ -748,22 +749,22 @@ body.dark-mode
 @media (min-width: 768px) and (max-width: 1100px) {
 
     #glassInputContainer {
-        --neyo-pill-height: 58px;
-        --neyo-pill-radius: 29px;
+        --neyo-pill-height: 56px;
+        --neyo-pill-radius: 28px;
 
-        --neyo-control-size: 42px;
+        --neyo-control-size: 40px;
         --neyo-control-bottom: 8px;
 
-        --neyo-edge-x: 9px;
+        --neyo-edge-x: 8px;
         --neyo-control-gap: 6px;
 
-        --neyo-rail-height: 58px;
+        --neyo-rail-height: 56px;
 
-        --neyo-oneline-left: 58px;
-        --neyo-oneline-right: 102px;
+        --neyo-oneline-left: 56px;
+        --neyo-oneline-right: 96px;
 
         --neyo-text-left: 14px;
-        --neyo-text-right: 22px;
+        --neyo-text-right: 20px;
     }
 
 }
@@ -776,22 +777,22 @@ body.dark-mode
 @media (max-width: 767px) {
 
     #glassInputContainer {
-        --neyo-pill-height: 56px;
-        --neyo-pill-radius: 28px;
+        --neyo-pill-height: 54px;
+        --neyo-pill-radius: 27px;
 
-        --neyo-control-size: 40px;
+        --neyo-control-size: 38px;
         --neyo-control-bottom: 8px;
 
-        --neyo-edge-x: 8px;
+        --neyo-edge-x: 7px;
         --neyo-control-gap: 5px;
 
-        --neyo-rail-height: 56px;
+        --neyo-rail-height: 54px;
 
         --neyo-text-left: 12px;
         --neyo-text-right: 18px;
 
-        --neyo-oneline-left: 53px;
-        --neyo-oneline-right: 96px;
+        --neyo-oneline-left: 52px;
+        --neyo-oneline-right: 90px;
 
         --neyo-scrollbar-right: 6px;
     }
@@ -799,12 +800,12 @@ body.dark-mode
 
     #glassInputContainer:not(.is-writing-expanded):not(.composer-multiline)
     textarea#chatInput {
-        height: 40px !important;
-        min-height: 40px !important;
-        max-height: 40px !important;
+        height: 38px !important;
+        min-height: 38px !important;
+        max-height: 38px !important;
 
-        padding-top: 8px !important;
-        padding-bottom: 8px !important;
+        padding-top: 7px !important;
+        padding-bottom: 7px !important;
 
         line-height: 24px !important;
     }
@@ -814,15 +815,15 @@ body.dark-mode
     textarea#chatInput {
         max-height:
             min(
-                118px,
+                112px,
                 24dvh
             ) !important;
 
         padding:
-            6px
-            var(--neyo-text-right)
+            5px
+            18px
             3px
-            var(--neyo-text-left) !important;
+            12px !important;
 
         font-size: 16px !important;
         line-height: 1.5 !important;
@@ -882,13 +883,13 @@ body.dark-mode
         --neyo-control-size: 38px;
         --neyo-control-bottom: 8px;
 
-        --neyo-edge-x: 8px;
+        --neyo-edge-x: 7px;
         --neyo-control-gap: 5px;
 
         --neyo-rail-height: 54px;
 
-        --neyo-oneline-left: 51px;
-        --neyo-oneline-right: 92px;
+        --neyo-oneline-left: 52px;
+        --neyo-oneline-right: 90px;
     }
 
 
@@ -922,8 +923,8 @@ body.dark-mode
 @media (max-width: 380px) {
 
     #glassInputContainer {
-        --neyo-pill-height: 56px;
-        --neyo-pill-radius: 28px;
+        --neyo-pill-height: 54px;
+        --neyo-pill-radius: 27px;
 
         --neyo-edge-x: 6px;
         --neyo-control-gap: 4px;
@@ -932,7 +933,7 @@ body.dark-mode
         --neyo-text-right: 16px;
 
         --neyo-oneline-left: 50px;
-        --neyo-oneline-right: 91px;
+        --neyo-oneline-right: 88px;
 
         --neyo-scrollbar-right: 5px;
     }
@@ -948,16 +949,16 @@ body.dark-mode
 @media (min-width: 1440px) {
 
     #glassInputContainer {
-        --neyo-pill-height: 58px;
-        --neyo-pill-radius: 29px;
+        --neyo-pill-height: 56px;
+        --neyo-pill-radius: 28px;
 
-        --neyo-control-size: 44px;
-        --neyo-control-bottom: 7px;
+        --neyo-control-size: 40px;
+        --neyo-control-bottom: 8px;
 
-        --neyo-edge-x: 10px;
+        --neyo-edge-x: 8px;
         --neyo-control-gap: 6px;
 
-        --neyo-rail-height: 58px;
+        --neyo-rail-height: 56px;
     }
 
 }

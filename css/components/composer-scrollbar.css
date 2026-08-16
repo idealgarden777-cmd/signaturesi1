@@ -1126,3 +1126,257 @@ textarea#chatInput {
     }
 
 }
+/* =========================================================
+   NEYO — COMPOSER FINAL SPACING SYSTEM
+   Consistent normal / multiline / expanded geometry
+   ========================================================= */
+
+#glassInputContainer {
+    --neyo-edge-x: 10px;
+    --neyo-edge-y: 8px;
+
+    --neyo-control-size: 40px;
+    --neyo-control-gap: 8px;
+
+    --neyo-scrollbar-right: 8px;
+    --neyo-scrollbar-width: 3px;
+
+    --neyo-writing-left: 14px;
+    --neyo-writing-right: 22px;
+}
+
+
+/* =========================================================
+   CONTROL SIZE — NEVER CHANGES
+   ========================================================= */
+
+#glassInputContainer #attachBtn,
+#glassInputContainer #micBtn,
+#glassInputContainer #sendBtn {
+    width: var(--neyo-control-size) !important;
+    height: var(--neyo-control-size) !important;
+
+    min-width: var(--neyo-control-size) !important;
+    min-height: var(--neyo-control-size) !important;
+
+    margin: 0 !important;
+}
+
+
+/* =========================================================
+   NORMAL / MULTILINE BOTTOM CONTROLS
+   ========================================================= */
+
+#glassInputContainer:not(.is-writing-expanded).composer-multiline
+#attachBtn {
+    left: var(--neyo-edge-x) !important;
+    bottom: var(--neyo-edge-y) !important;
+}
+
+
+#glassInputContainer:not(.is-writing-expanded).composer-multiline
+#sendBtn {
+    right: var(--neyo-edge-x) !important;
+    bottom: var(--neyo-edge-y) !important;
+}
+
+
+#glassInputContainer:not(.is-writing-expanded).composer-multiline
+#micBtn {
+    right:
+        calc(
+            var(--neyo-edge-x) +
+            var(--neyo-control-size) +
+            var(--neyo-control-gap)
+        ) !important;
+
+    bottom: var(--neyo-edge-y) !important;
+}
+
+
+/* Reserve exactly enough bottom room */
+
+#glassInputContainer:not(.is-writing-expanded).composer-multiline
+.composer-input-row {
+    padding-bottom:
+        calc(
+            var(--neyo-control-size) +
+            (var(--neyo-edge-y) * 2)
+        ) !important;
+}
+
+
+/* =========================================================
+   EXPANDED CONTROLS
+   SAME GEOMETRY AS NORMAL
+   ========================================================= */
+
+#glassInputContainer.is-writing-expanded
+#attachBtn {
+    left: var(--neyo-edge-x) !important;
+    bottom: var(--neyo-edge-y) !important;
+
+    position: absolute !important;
+}
+
+
+#glassInputContainer.is-writing-expanded
+#sendBtn {
+    right: var(--neyo-edge-x) !important;
+    bottom: var(--neyo-edge-y) !important;
+
+    position: absolute !important;
+}
+
+
+#glassInputContainer.is-writing-expanded
+#micBtn {
+    right:
+        calc(
+            var(--neyo-edge-x) +
+            var(--neyo-control-size) +
+            var(--neyo-control-gap)
+        ) !important;
+
+    bottom: var(--neyo-edge-y) !important;
+
+    position: absolute !important;
+}
+
+
+/* =========================================================
+   EXPANDED TEXT CANVAS
+   Balanced distance above controls
+   ========================================================= */
+
+#glassInputContainer.is-writing-expanded
+textarea#chatInput {
+    bottom:
+        calc(
+            var(--neyo-control-size) +
+            (var(--neyo-edge-y) * 2) +
+            2px
+        ) !important;
+
+    padding:
+        16px
+        var(--neyo-writing-right)
+        12px
+        var(--neyo-writing-left) !important;
+}
+
+
+/* =========================================================
+   NORMAL MULTILINE TEXT
+   ========================================================= */
+
+#glassInputContainer:not(.is-writing-expanded).composer-multiline
+textarea#chatInput {
+    padding-left:
+        var(--neyo-writing-left) !important;
+
+    padding-right:
+        var(--neyo-writing-right) !important;
+
+    padding-bottom: 6px !important;
+}
+
+
+/* =========================================================
+   SCROLLBAR
+   Same right edge in every state
+   ========================================================= */
+
+#glassInputContainer
+.composer-custom-scrollbar {
+    right:
+        var(--neyo-scrollbar-right) !important;
+
+    width:
+        var(--neyo-scrollbar-width) !important;
+}
+
+
+/* Normal */
+
+#glassInputContainer:not(.is-writing-expanded)
+.composer-custom-scrollbar {
+    top: 12px !important;
+
+    bottom:
+        calc(
+            var(--neyo-control-size) +
+            (var(--neyo-edge-y) * 2) +
+            4px
+        ) !important;
+}
+
+
+/* Expanded */
+
+#glassInputContainer.is-writing-expanded
+.composer-custom-scrollbar {
+    top: 42px !important;
+
+    bottom:
+        calc(
+            var(--neyo-control-size) +
+            (var(--neyo-edge-y) * 2) +
+            4px
+        ) !important;
+}
+
+
+/* =========================================================
+   EXPAND / COLLAPSE BUTTON
+   Same top/right inset in both states
+   ========================================================= */
+
+#glassInputContainer
+#composerExpandBtn {
+    top: 8px !important;
+    right: 8px !important;
+
+    width: 26px !important;
+    height: 26px !important;
+
+    min-width: 26px !important;
+    min-height: 26px !important;
+}
+
+
+/* =========================================================
+   MOBILE
+   Slightly tighter but SAME ratios
+   ========================================================= */
+
+@media (max-width: 767px) {
+
+    #glassInputContainer {
+        --neyo-edge-x: 7px;
+        --neyo-edge-y: 6px;
+
+        --neyo-control-size: 40px;
+        --neyo-control-gap: 6px;
+
+        --neyo-scrollbar-right: 6px;
+
+        --neyo-writing-left: 10px;
+        --neyo-writing-right: 18px;
+    }
+
+
+    #glassInputContainer.is-writing-expanded
+    textarea#chatInput {
+        padding-top: 14px !important;
+        padding-bottom: 10px !important;
+    }
+
+
+    #glassInputContainer
+    #composerExpandBtn {
+        top: 7px !important;
+        right: 7px !important;
+    }
+
+}

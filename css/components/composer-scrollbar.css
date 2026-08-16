@@ -1,69 +1,94 @@
 /*
 =========================================================
 NEYO — COMPOSER SCROLLBAR
-PRODUCTION RESPONSIVE VERSION
+PRODUCTION / RESPONSIVE / WIDTH-STABLE VERSION
 
 GOALS
-- Premium long capsule / pill
-- Stable width at every state
-- Typing changes only vertical height
-- + / mic / send never move or shrink
-- Equal optical spacing
+---------------------------------------------------------
+- ChatGPT-like long premium capsule
+- Stable width at all times
+- Typing changes ONLY height
+- + / mic / send never move
+- Controls never shrink
+- Equal top / bottom spacing
 - Multiline grows upward
-- Expanded writing mode supported
-- One thin custom scrollbar
+- Expanded writing mode remains compatible
+- One custom scrollbar
 - Desktop / tablet / mobile / portrait / landscape
-- Dark mode + reduced motion safe
+- Dark mode + reduced-motion safe
 
 OWNERSHIP
-- composer.css          = base colors / shadow / outer width
-- composer-expand.css   = expanded shell height
-- composer-scrollbar.js = state + custom scrollbar logic
-- this file             = geometry / spacing / scrollbar polish
+---------------------------------------------------------
+composer.css
+    Base colors, border, shadow, outer width
+
+composer-expand.css
+    Expanded shell dimensions
+
+composer-scrollbar.js
+    Multiline / overflow state and thumb syncing
+
+THIS FILE
+    Geometry, spacing, fixed controls, scrollbar visuals
 =========================================================
 */
 
 
 /* =========================================================
-   1. GLOBAL GEOMETRY TOKENS
+   1. DESIGN TOKENS
    ========================================================= */
 
 #glassInputContainer {
     position: relative !important;
 
-    /* Default premium capsule */
-    --neyo-pill-height: 56px;
-    --neyo-pill-radius: 999px;
+    /*
+    Default compact capsule.
+    */
+    --neyo-pill-height: 64px;
+    --neyo-pill-radius: 32px;
 
-    /* Control geometry */
-    --neyo-control-size: 40px;
-    --neyo-control-bottom: 8px;
+    /*
+    Control geometry.
+    */
+    --neyo-control-size: 44px;
+    --neyo-control-bottom: 10px;
 
-    /* Horizontal spacing */
+    /*
+    Horizontal control spacing.
+    */
     --neyo-edge-x: 10px;
     --neyo-control-gap: 6px;
 
-    /* Multiline bottom rail */
-    --neyo-rail-height: 56px;
+    /*
+    Multiline / expanded bottom control zone.
+    */
+    --neyo-rail-height: 64px;
 
-    /* Text canvas */
+    /*
+    Writing canvas padding.
+    */
     --neyo-text-left: 16px;
     --neyo-text-right: 24px;
 
-    /* One-line text reservation */
-    --neyo-oneline-left: 56px;
-    --neyo-oneline-right: 100px;
+    /*
+    Compact textarea reserves space
+    for + on left and mic/send on right.
+    */
+    --neyo-oneline-left: 62px;
+    --neyo-oneline-right: 108px;
 
-    /* Scrollbar */
+    /*
+    Custom scrollbar.
+    */
     --neyo-scrollbar-right: 8px;
     --neyo-scrollbar-width: 3px;
 
-    /*
-    Outer width is intentionally NOT defined here.
-    Existing composer layout remains the width owner.
-    */
-
     box-sizing: border-box !important;
+
+    /*
+    Do NOT declare width here.
+    Existing layout remains width owner.
+    */
 
     transform: translateZ(0);
 
@@ -78,7 +103,7 @@ OWNERSHIP
 
 /* =========================================================
    2. INNER WIDTH STABILITY
-   Outer composer width never gets forced.
+   Outer composer width is NOT forced.
    ========================================================= */
 
 #glassInputContainer .composer-input-row,
@@ -124,7 +149,7 @@ OWNERSHIP
 }
 
 
-/* Native scrollbar completely hidden */
+/* Native scrollbar hidden */
 
 #glassInputContainer textarea#chatInput::-webkit-scrollbar,
 #glassInputContainer textarea#chatInput::-webkit-scrollbar-track,
@@ -138,7 +163,7 @@ OWNERSHIP
 
 /* =========================================================
    4. CONTROL FOUNDATION
-   Hard size lock — no shrinking.
+   Hard size lock.
    ========================================================= */
 
 #glassInputContainer #attachBtn,
@@ -171,8 +196,8 @@ OWNERSHIP
     transform: none !important;
 
     /*
-    No positional transition.
-    Icons never glide when composer grows.
+    No positional animation.
+    Controls stay visually fixed.
     */
     transition:
         opacity 140ms ease,
@@ -189,7 +214,9 @@ OWNERSHIP
 }
 
 
-/* Icon geometry stays stable */
+/* =========================================================
+   5. ICON SIZE LOCK
+   ========================================================= */
 
 #glassInputContainer #attachBtn svg,
 #glassInputContainer #attachBtn i {
@@ -219,8 +246,11 @@ OWNERSHIP
 
 
 /* =========================================================
-   5. NORMAL COMPOSER ANCHOR
-   Controls anchor to OUTER composer.
+   6. NORMAL COMPOSER POSITIONING MODEL
+
+   Important:
+   Controls anchor to OUTER composer,
+   not to a growing inner row.
    ========================================================= */
 
 #glassInputContainer:not(.is-writing-expanded)
@@ -235,8 +265,14 @@ OWNERSHIP
 
 
 /* =========================================================
-   6. NORMAL CONTROLS
-   Empty / typing / multiline = same coordinates.
+   7. NORMAL CONTROLS
+
+   SAME coordinates for:
+   empty
+   one-line
+   typing
+   multiline
+   overflow
    ========================================================= */
 
 #glassInputContainer:not(.is-writing-expanded)
@@ -294,18 +330,31 @@ OWNERSHIP
 
 
 /* =========================================================
-   7. DEFAULT EMPTY / ONE-LINE CAPSULE
-   Exact vertical balance.
+   8. DEFAULT / ONE-LINE PREMIUM CAPSULE
+
+   Long, low-profile, equal vertical spacing.
    ========================================================= */
 
 #glassInputContainer:not(.is-writing-expanded):not(.composer-multiline) {
+    height:
+        var(--neyo-pill-height) !important;
+
     min-height:
+        var(--neyo-pill-height) !important;
+
+    max-height:
         var(--neyo-pill-height) !important;
 
     border-radius:
         var(--neyo-pill-radius) !important;
+
+    padding: 0 !important;
+
+    box-sizing: border-box !important;
 }
 
+
+/* Inner row fills pill */
 
 #glassInputContainer:not(.is-writing-expanded):not(.composer-multiline)
 .composer-input-row {
@@ -315,9 +364,11 @@ OWNERSHIP
     min-height:
         var(--neyo-pill-height) !important;
 
-    padding: 0 !important;
+    max-height:
+        var(--neyo-pill-height) !important;
 
-    box-sizing: border-box !important;
+    padding: 0 !important;
+    margin: 0 !important;
 }
 
 
@@ -327,12 +378,17 @@ OWNERSHIP
 textarea#chatInput {
     position: relative !important;
 
-    height: 40px !important;
-    min-height: 40px !important;
-    max-height: 40px !important;
+    height:
+        var(--neyo-control-size) !important;
 
-    padding-top: 8px !important;
-    padding-bottom: 8px !important;
+    min-height:
+        var(--neyo-control-size) !important;
+
+    max-height:
+        var(--neyo-control-size) !important;
+
+    padding-top: 10px !important;
+    padding-bottom: 10px !important;
 
     padding-left:
         var(--neyo-oneline-left) !important;
@@ -345,10 +401,11 @@ textarea#chatInput {
 
 
 /* =========================================================
-   8. MULTILINE STATE
-   Same width.
-   Same buttons.
-   Only vertical growth.
+   9. MULTILINE STATE
+
+   Width stays identical.
+   Controls stay identical.
+   Only height grows.
    ========================================================= */
 
 #glassInputContainer:not(.is-writing-expanded).composer-multiline
@@ -387,8 +444,9 @@ textarea#chatInput {
 
 
 /* =========================================================
-   9. EXPANDED SHELL
-   Width still remains owned by base layout.
+   10. EXPANDED SHELL
+
+   composer-expand.css remains height owner.
    ========================================================= */
 
 #glassInputContainer.is-writing-expanded {
@@ -397,7 +455,7 @@ textarea#chatInput {
 
 
 /* =========================================================
-   10. EXPANDED INTERNAL CANVAS
+   11. EXPANDED INTERNAL CANVAS
    ========================================================= */
 
 #glassInputContainer.is-writing-expanded
@@ -420,8 +478,7 @@ textarea#chatInput {
 
 
 /* =========================================================
-   11. EXPANDED TEXTAREA
-   Full writing area above fixed control rail.
+   12. EXPANDED TEXTAREA
    ========================================================= */
 
 #glassInputContainer.is-writing-expanded
@@ -456,8 +513,8 @@ textarea#chatInput {
 
 
 /* =========================================================
-   12. EXPANDED CONTROLS
-   Same exact positioning model.
+   13. EXPANDED CONTROLS
+   Same geometry as normal.
    ========================================================= */
 
 #glassInputContainer.is-writing-expanded
@@ -509,7 +566,7 @@ textarea#chatInput {
 
 
 /* =========================================================
-   13. EXPANDED VOICE CONTAINER
+   14. EXPANDED VOICE CONTAINER
    ========================================================= */
 
 #glassInputContainer.is-writing-expanded
@@ -534,7 +591,7 @@ textarea#chatInput {
 
 
 /* =========================================================
-   14. EXPAND / COLLAPSE BUTTON
+   15. EXPAND / COLLAPSE BUTTON
    ========================================================= */
 
 #glassInputContainer #composerExpandBtn {
@@ -557,7 +614,7 @@ textarea#chatInput {
 
 
 /* =========================================================
-   15. CUSTOM SCROLLBAR
+   16. CUSTOM SCROLLBAR
    ========================================================= */
 
 #glassInputContainer
@@ -593,7 +650,7 @@ textarea#chatInput {
 }
 
 
-/* Normal */
+/* Normal scrollbar */
 
 #glassInputContainer:not(.is-writing-expanded)
 .composer-custom-scrollbar {
@@ -601,7 +658,7 @@ textarea#chatInput {
 }
 
 
-/* Expanded */
+/* Expanded scrollbar */
 
 #glassInputContainer.is-writing-expanded
 .composer-custom-scrollbar {
@@ -625,7 +682,7 @@ textarea#chatInput {
 
 
 /* =========================================================
-   16. CUSTOM THUMB
+   17. SCROLLBAR THUMB
    ========================================================= */
 
 #glassInputContainer
@@ -665,7 +722,7 @@ textarea#chatInput {
 
 
 /* =========================================================
-   17. DARK MODE
+   18. DARK MODE
    ========================================================= */
 
 body.dark-mode
@@ -685,14 +742,25 @@ body.dark-mode
 
 
 /* =========================================================
-   18. TABLET
+   19. TABLET
    ========================================================= */
 
 @media (min-width: 768px) and (max-width: 1100px) {
 
     #glassInputContainer {
+        --neyo-pill-height: 62px;
+        --neyo-pill-radius: 31px;
+
+        --neyo-control-size: 42px;
+        --neyo-control-bottom: 10px;
+
         --neyo-edge-x: 9px;
         --neyo-control-gap: 6px;
+
+        --neyo-rail-height: 62px;
+
+        --neyo-oneline-left: 58px;
+        --neyo-oneline-right: 102px;
 
         --neyo-text-left: 14px;
         --neyo-text-right: 22px;
@@ -702,21 +770,22 @@ body.dark-mode
 
 
 /* =========================================================
-   19. MOBILE — PORTRAIT + GENERAL
+   20. MOBILE / PORTRAIT
    ========================================================= */
 
 @media (max-width: 767px) {
 
     #glassInputContainer {
-        --neyo-pill-height: 54px;
+        --neyo-pill-height: 58px;
+        --neyo-pill-radius: 29px;
 
         --neyo-control-size: 40px;
-        --neyo-control-bottom: 7px;
+        --neyo-control-bottom: 9px;
 
         --neyo-edge-x: 8px;
         --neyo-control-gap: 5px;
 
-        --neyo-rail-height: 54px;
+        --neyo-rail-height: 58px;
 
         --neyo-text-left: 12px;
         --neyo-text-right: 18px;
@@ -743,7 +812,11 @@ body.dark-mode
 
     #glassInputContainer:not(.is-writing-expanded).composer-multiline
     textarea#chatInput {
-        max-height: min(118px, 24dvh) !important;
+        max-height:
+            min(
+                118px,
+                24dvh
+            ) !important;
 
         padding:
             6px
@@ -794,8 +867,8 @@ body.dark-mode
 
 
 /* =========================================================
-   20. PHONE LANDSCAPE
-   Preserve long premium capsule.
+   21. PHONE LANDSCAPE
+   Shorter vertical canvas, same premium proportions.
    ========================================================= */
 
 @media
@@ -803,15 +876,16 @@ body.dark-mode
     and (orientation: landscape) {
 
     #glassInputContainer {
-        --neyo-pill-height: 52px;
+        --neyo-pill-height: 54px;
+        --neyo-pill-radius: 27px;
 
         --neyo-control-size: 38px;
-        --neyo-control-bottom: 7px;
+        --neyo-control-bottom: 8px;
 
         --neyo-edge-x: 8px;
         --neyo-control-gap: 5px;
 
-        --neyo-rail-height: 52px;
+        --neyo-rail-height: 54px;
 
         --neyo-oneline-left: 51px;
         --neyo-oneline-right: 92px;
@@ -831,18 +905,26 @@ body.dark-mode
 
     #glassInputContainer:not(.is-writing-expanded).composer-multiline
     textarea#chatInput {
-        max-height: min(92px, 28dvh) !important;
+        max-height:
+            min(
+                92px,
+                28dvh
+            ) !important;
     }
+
 }
 
 
 /* =========================================================
-   21. VERY SMALL PHONES
+   22. SMALL PHONES
    ========================================================= */
 
 @media (max-width: 380px) {
 
     #glassInputContainer {
+        --neyo-pill-height: 56px;
+        --neyo-pill-radius: 28px;
+
         --neyo-edge-x: 6px;
         --neyo-control-gap: 4px;
 
@@ -859,8 +941,28 @@ body.dark-mode
 
 
 /* =========================================================
-   22. TOUCH DEVICES
-   Keep reliable hit targets.
+   23. LARGE DESKTOP
+   Slightly more generous but still compact.
+   ========================================================= */
+
+@media (min-width: 1440px) {
+
+    #glassInputContainer {
+        --neyo-pill-height: 64px;
+        --neyo-pill-radius: 32px;
+
+        --neyo-control-size: 44px;
+        --neyo-control-bottom: 10px;
+
+        --neyo-edge-x: 10px;
+        --neyo-control-gap: 6px;
+    }
+
+}
+
+
+/* =========================================================
+   24. TOUCH DEVICES
    ========================================================= */
 
 @media (pointer: coarse) {
@@ -869,14 +971,16 @@ body.dark-mode
     #glassInputContainer #micBtn,
     #glassInputContainer #sendBtn {
         touch-action: manipulation !important;
-        -webkit-tap-highlight-color: transparent;
+
+        -webkit-tap-highlight-color:
+            transparent;
     }
 
 }
 
 
 /* =========================================================
-   23. REDUCED MOTION
+   25. REDUCED MOTION
    ========================================================= */
 
 @media (prefers-reduced-motion: reduce) {

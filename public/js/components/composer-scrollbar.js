@@ -1,19 +1,23 @@
 /*
 =========================================================
-NEYO — COMPOSER SCROLLBAR
-Custom premium textarea scrollbar
+NEYO — COMPOSER STATE + CUSTOM SCROLLBAR
+Stable matched-pair controller
+
+States:
+- empty / one-line
+- multiline
+- overflow
 
 Owns:
-- Custom rail + thumb
-- Overflow detection
-- Thumb position / size
-- Mobile-safe sync
-- Resize / input / scroll handling
+- state classes
+- custom scrollbar visibility
+- thumb size / position
 
 Does NOT own:
-- Composer autosize
-- Message sending
-- Keyboard logic
+- send logic
+- voice logic
+- attachments
+- composer colors / shadows
 - neo.js
 =========================================================
 */
@@ -24,38 +28,31 @@ Does NOT own:
     const chatInput =
         document.getElementById("chatInput");
 
-    const glassInputContainer =
+    const container =
         document.getElementById("glassInputContainer");
 
-    if (!chatInput || !glassInputContainer) {
+    if (!chatInput || !container) {
         return;
     }
 
-
-    /* =====================================================
-       CREATE SCROLLBAR
-       ===================================================== */
-
-    let scrollbar =
-        glassInputContainer.querySelector(
+    let rail =
+        container.querySelector(
             ".composer-custom-scrollbar"
         );
 
     let thumb = null;
 
-
-    if (!scrollbar) {
-        scrollbar =
+    if (!rail) {
+        rail =
             document.createElement("div");
 
-        scrollbar.className =
+        rail.className =
             "composer-custom-scrollbar";
 
-        scrollbar.setAttribute(
+        rail.setAttribute(
             "aria-hidden",
             "true"
         );
-
 
         thumb =
             document.createElement("div");
@@ -63,36 +60,153 @@ Does NOT own:
         thumb.className =
             "composer-custom-scrollbar-thumb";
 
-
-        scrollbar.appendChild(thumb);
-
-        glassInputContainer.appendChild(
-            scrollbar
-        );
+        rail.appendChild(thumb);
+        container.appendChild(rail);
     } else {
         thumb =
-            scrollbar.querySelector(
+            rail.querySelector(
                 ".composer-custom-scrollbar-thumb"
             );
     }
-
 
     if (!thumb) {
         return;
     }
 
-
-    /* =====================================================
-       STATE
-       ===================================================== */
-
     let rafId = null;
     let hideTimer = null;
 
+    function isEmpty() {
+        return (
+            chatInput.value.trim().length === 0
+        );
+    }
 
-    /* =====================================================
-       HELPERS
-       ===================================================== */
+    function detectMultiline() {
+        const style =
+            window.getComputedStyle(chatInput);
+
+        const lineHeight =
+            parseFloat(style.lineHeight) || 24;
+
+        const visibleHeight =
+            chatInput.clientHeight;
+
+        return (
+            visibleHeight >
+            lineHeight * 1.65
+        );
+    }
+
+    function updateStateClasses() {
+        const empty =
+            isEmpty();
+
+        const multiline =
+            !empty &&
+            detectMultiline();
+
+        const overflow =
+            chatInput.scrollHeight >
+            chatInput.clientHeight + 2;
+
+        container.classList.toggle(
+            "composer-empty",
+            empty
+        );
+
+        container.classList.toggle(
+            "composer-has-content",
+            !empty
+        );
+
+        container.classList.toggle(
+            "composer-multiline",
+            multiline
+        );
+
+        container.classList.toggle(
+            "composer-overflow",
+            overflow
+        );
+
+        rail.classList.toggle(
+            "is-visible",
+            overflow
+        );
+
+        return {
+            empty,
+            multiline,
+            overflow
+        };
+    }
+
+    function updateScrollbar() {
+        const state =
+            updateStateClasses();
+
+        if (!state.overflow) {
+            thumb.style.height = "";
+            thumb.style.transform = "";
+            return;
+        }
+
+        const scrollHeight =
+            chatInput.scrollHeight;
+
+        const clientHeight =
+            chatInput.clientHeight;
+
+        const scrollTop =
+            chatInput.scrollTop;
+
+        const railHeight =
+            rail.clientHeight;
+
+        if (
+            railHeight <= 0 ||
+            scrollHeight <= clientHeight
+        ) {
+            return;
+        }
+
+        const ratio =
+            clientHeight / scrollHeight;
+
+        const thumbHeight =
+            Math.max(
+                20,
+                railHeight * ratio
+            );
+
+        const maxThumbTravel =
+            Math.max(
+                0,
+                railHeight - thumbHeight
+            );
+
+        const maxScroll =
+            Math.max(
+                1,
+                scrollHeight - clientHeight
+            );
+
+        const progress =
+            Math.min(
+                1,
+                Math.max(
+                    0,
+                    scrollTop / maxScroll
+                )
+            );
+
+        thumb.style.height =
+            `${thumbHeight}px`;
+
+        thumb.style.transform =
+            `translateY(${maxThumbTravel * progress}px)`;
+    }
 
     function scheduleUpdate() {
         if (rafId) {
@@ -106,232 +220,60 @@ Does NOT own:
             });
     }
 
+    function showScrollbarBriefly() {
+        if (
+            !container.classList.contains(
+                "composer-overflow"
+            )
+        ) {
+            return;
+        }
 
-    function showScrollbar() {
-        scrollbar.classList.add("is-active");
+        rail.classList.add("is-active");
 
         clearTimeout(hideTimer);
 
         hideTimer =
-            window.setTimeout(() => {
-                scrollbar.classList.remove(
+            setTimeout(() => {
+                rail.classList.remove(
                     "is-active"
                 );
-            }, 900);
+            }, 850);
     }
-
-
-    /* =====================================================
-       UPDATE
-       ===================================================== */
-
-    function updateScrollbar() {
-        const scrollHeight =
-            chatInput.scrollHeight;
-
-        const clientHeight =
-            chatInput.clientHeight;
-
-        const scrollTop =
-            chatInput.scrollTop;
-
-
-        const hasOverflow =
-            scrollHeight >
-            clientHeight + 2;
-
-
-        scrollbar.classList.toggle(
-            "is-visible",
-            hasOverflow
-        );
-
-
-        if (!hasOverflow) {
-            thumb.style.height = "";
-            thumb.style.transform = "";
-            return;
-        }
-
-
-        const railHeight =
-            scrollbar.clientHeight;
-
-
-        if (railHeight <= 0) {
-            return;
-        }
-
-
-        const viewportRatio =
-            clientHeight / scrollHeight;
-
-
-        const minThumbHeight =
-            22;
-
-
-        const thumbHeight =
-            Math.max(
-                minThumbHeight,
-                railHeight * viewportRatio
-            );
-
-
-        const maxThumbTravel =
-            Math.max(
-                0,
-                railHeight - thumbHeight
-            );
-
-
-        const maxScroll =
-            Math.max(
-                1,
-                scrollHeight - clientHeight
-            );
-
-
-        const scrollRatio =
-            Math.min(
-                1,
-                Math.max(
-                    0,
-                    scrollTop / maxScroll
-                )
-            );
-
-
-        const thumbOffset =
-            maxThumbTravel * scrollRatio;
-
-
-        thumb.style.height =
-            `${thumbHeight}px`;
-
-
-        thumb.style.transform =
-            `translateY(${thumbOffset}px)`;
-    }
-
-
-    /* =====================================================
-       INPUT / SCROLL
-       ===================================================== */
 
     chatInput.addEventListener(
         "input",
-        () => {
-            scheduleUpdate();
-        },
-        {
-            passive: true
-        }
+        scheduleUpdate
     );
-
 
     chatInput.addEventListener(
         "scroll",
         () => {
-            showScrollbar();
+            showScrollbarBriefly();
             scheduleUpdate();
         },
         {
             passive: true
         }
     );
-
 
     chatInput.addEventListener(
         "focus",
-        () => {
-            scheduleUpdate();
-        }
+        scheduleUpdate
     );
-
 
     chatInput.addEventListener(
         "blur",
-        () => {
-            scheduleUpdate();
-        }
+        scheduleUpdate
     );
-
-
-    /* =====================================================
-       POINTER / TOUCH ACTIVITY
-       ===================================================== */
-
-    chatInput.addEventListener(
-        "pointerdown",
-        () => {
-            if (
-                scrollbar.classList.contains(
-                    "is-visible"
-                )
-            ) {
-                showScrollbar();
-            }
-        },
-        {
-            passive: true
-        }
-    );
-
-
-    chatInput.addEventListener(
-        "touchmove",
-        () => {
-            showScrollbar();
-        },
-        {
-            passive: true
-        }
-    );
-
-
-    /* =====================================================
-       RESIZE
-       ===================================================== */
 
     const resizeObserver =
-        new ResizeObserver(() => {
-            scheduleUpdate();
-        });
-
+        new ResizeObserver(
+            scheduleUpdate
+        );
 
     resizeObserver.observe(chatInput);
-    resizeObserver.observe(
-        glassInputContainer
-    );
-
-
-    /* =====================================================
-       MUTATION WATCH
-       Useful if other composer modules
-       change classes / layout.
-       ===================================================== */
-
-    const mutationObserver =
-        new MutationObserver(() => {
-            scheduleUpdate();
-        });
-
-
-    mutationObserver.observe(
-        glassInputContainer,
-        {
-            attributes: true,
-            childList: true,
-            subtree: false
-        }
-    );
-
-
-    /* =====================================================
-       VISUAL VIEWPORT
-       Mobile keyboard / orientation
-       ===================================================== */
+    resizeObserver.observe(container);
 
     if (window.visualViewport) {
         window.visualViewport.addEventListener(
@@ -341,16 +283,7 @@ Does NOT own:
                 passive: true
             }
         );
-
-        window.visualViewport.addEventListener(
-            "scroll",
-            scheduleUpdate,
-            {
-                passive: true
-            }
-        );
     }
-
 
     window.addEventListener(
         "resize",
@@ -360,52 +293,39 @@ Does NOT own:
         }
     );
 
-
-    window.addEventListener(
-        "orientationchange",
-        scheduleUpdate,
-        {
-            passive: true
-        }
-    );
-
-
-    /* =====================================================
-       PUBLIC API
-       ===================================================== */
-
     window.NeyoComposerScrollbar =
         Object.freeze({
             refresh:
                 scheduleUpdate,
 
-            show:
-                showScrollbar,
+            getState:
+                () => ({
+                    empty:
+                        container.classList.contains(
+                            "composer-empty"
+                        ),
 
-            isVisible:
-                () =>
-                    scrollbar.classList.contains(
-                        "is-visible"
-                    )
+                    multiline:
+                        container.classList.contains(
+                            "composer-multiline"
+                        ),
+
+                    overflow:
+                        container.classList.contains(
+                            "composer-overflow"
+                        )
+                })
         });
-
-
-    /* =====================================================
-       INIT
-       ===================================================== */
 
     scheduleUpdate();
 
-
-    window.setTimeout(
+    setTimeout(
         scheduleUpdate,
         100
     );
 
-
-    window.setTimeout(
+    setTimeout(
         scheduleUpdate,
-        500
+        400
     );
-
 })();

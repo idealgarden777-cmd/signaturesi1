@@ -1562,3 +1562,100 @@ textarea#chatInput {
     }
 
 }
+/* =========================================================
+   NEYO — WIDTH LOCK
+   Composer width never changes while typing.
+   Only height may grow.
+   ========================================================= */
+
+#composerWrapper,
+#glassInputContainer,
+#glassInputContainer.composer-has-content,
+#glassInputContainer.composer-multiline,
+#glassInputContainer.composer-overflow,
+#glassInputContainer.is-writing-expanded {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+
+    box-sizing: border-box !important;
+}
+
+
+/* Keep the inner row locked to the same width */
+
+#glassInputContainer .composer-input-row,
+#glassInputContainer.composer-multiline .composer-input-row,
+#glassInputContainer.is-writing-expanded .composer-input-row {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+
+    box-sizing: border-box !important;
+}
+
+
+/* Textarea must grow vertically only */
+
+#glassInputContainer textarea#chatInput {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+
+    box-sizing: border-box !important;
+}
+
+
+/* Prevent content from forcing horizontal growth */
+
+#glassInputContainer textarea#chatInput {
+    overflow-x: hidden !important;
+
+    overflow-wrap: break-word !important;
+    word-break: break-word !important;
+}
+
+
+/* =========================================================
+   NORMAL MULTILINE
+   Height may change, width must not.
+   ========================================================= */
+
+#glassInputContainer:not(.is-writing-expanded).composer-multiline {
+    width: 100% !important;
+    max-width: 100% !important;
+}
+
+
+/* =========================================================
+   EXPANDED
+   Same horizontal footprint as compact composer.
+   ========================================================= */
+
+#glassInputContainer.is-writing-expanded {
+    width: 100% !important;
+    max-width: 100% !important;
+
+    left: auto !important;
+    right: auto !important;
+
+    transform: none !important;
+}
+
+
+/* =========================================================
+   MOBILE
+   ========================================================= */
+
+@media (max-width: 767px) {
+
+    #composerWrapper,
+    #glassInputContainer,
+    #glassInputContainer .composer-input-row,
+    #glassInputContainer textarea#chatInput {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+    }
+
+}

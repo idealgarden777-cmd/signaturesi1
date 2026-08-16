@@ -1285,3 +1285,214 @@ textarea#chatInput {
     }
 
 }
+/* =========================================================
+   NEYO — CONTROL ICON POSITION LOCK
+   Composer may grow.
+   Controls NEVER animate or shift.
+   ========================================================= */
+
+
+/* Outer composer is the permanent anchor */
+
+#glassInputContainer {
+    position: relative !important;
+}
+
+
+/* =========================================================
+   NORMAL COMPOSER
+   Empty / typing / multiline = SAME coordinates
+   ========================================================= */
+
+#glassInputContainer:not(.is-writing-expanded)
+#attachBtn,
+
+#glassInputContainer:not(.is-writing-expanded)
+#micBtn,
+
+#glassInputContainer:not(.is-writing-expanded)
+#sendBtn {
+    position: absolute !important;
+
+    top: auto !important;
+
+    bottom: 8px !important;
+
+    width: 40px !important;
+    height: 40px !important;
+
+    min-width: 40px !important;
+    min-height: 40px !important;
+
+    max-width: 40px !important;
+    max-height: 40px !important;
+
+    flex: 0 0 40px !important;
+
+    margin: 0 !important;
+    padding: 0 !important;
+
+    /*
+    CRITICAL:
+    no movement animation.
+    */
+    transition:
+        opacity 150ms ease,
+        background-color 150ms ease,
+        color 150ms ease,
+        box-shadow 150ms ease !important;
+
+    transform: none !important;
+
+    z-index: 30 !important;
+}
+
+
+/* + */
+
+#glassInputContainer:not(.is-writing-expanded)
+#attachBtn {
+    left: 12px !important;
+    right: auto !important;
+}
+
+
+/* SEND */
+
+#glassInputContainer:not(.is-writing-expanded)
+#sendBtn {
+    right: 12px !important;
+    left: auto !important;
+}
+
+
+/* MIC */
+
+#glassInputContainer:not(.is-writing-expanded)
+#micBtn {
+    right: 60px !important;
+    left: auto !important;
+}
+
+
+/* =========================================================
+   IMPORTANT:
+   input-row must NOT become control positioning parent
+   ========================================================= */
+
+#glassInputContainer:not(.is-writing-expanded)
+.composer-input-row {
+    position: static !important;
+}
+
+
+/* =========================================================
+   EXPANDED MODE
+   Same concept, same vertical position
+   ========================================================= */
+
+#glassInputContainer.is-writing-expanded
+#attachBtn,
+
+#glassInputContainer.is-writing-expanded
+#micBtn,
+
+#glassInputContainer.is-writing-expanded
+#sendBtn {
+    position: absolute !important;
+
+    top: auto !important;
+    bottom: 8px !important;
+
+    width: 40px !important;
+    height: 40px !important;
+
+    min-width: 40px !important;
+    min-height: 40px !important;
+
+    max-width: 40px !important;
+    max-height: 40px !important;
+
+    margin: 0 !important;
+    padding: 0 !important;
+
+    transform: none !important;
+
+    transition:
+        opacity 150ms ease,
+        background-color 150ms ease,
+        color 150ms ease,
+        box-shadow 150ms ease !important;
+
+    z-index: 30 !important;
+}
+
+
+#glassInputContainer.is-writing-expanded
+#attachBtn {
+    left: 12px !important;
+}
+
+
+#glassInputContainer.is-writing-expanded
+#sendBtn {
+    right: 12px !important;
+}
+
+
+#glassInputContainer.is-writing-expanded
+#micBtn {
+    right: 60px !important;
+}
+
+
+/* =========================================================
+   MOBILE
+   ========================================================= */
+
+@media (max-width: 767px) {
+
+    #glassInputContainer:not(.is-writing-expanded)
+    #attachBtn,
+
+    #glassInputContainer:not(.is-writing-expanded)
+    #micBtn,
+
+    #glassInputContainer:not(.is-writing-expanded)
+    #sendBtn,
+
+    #glassInputContainer.is-writing-expanded
+    #attachBtn,
+
+    #glassInputContainer.is-writing-expanded
+    #micBtn,
+
+    #glassInputContainer.is-writing-expanded
+    #sendBtn {
+        bottom: 7px !important;
+    }
+
+
+    #glassInputContainer:not(.is-writing-expanded)
+    #attachBtn,
+    #glassInputContainer.is-writing-expanded
+    #attachBtn {
+        left: 9px !important;
+    }
+
+
+    #glassInputContainer:not(.is-writing-expanded)
+    #sendBtn,
+    #glassInputContainer.is-writing-expanded
+    #sendBtn {
+        right: 9px !important;
+    }
+
+
+    #glassInputContainer:not(.is-writing-expanded)
+    #micBtn,
+    #glassInputContainer.is-writing-expanded
+    #micBtn {
+        right: 55px !important;
+    }
+}

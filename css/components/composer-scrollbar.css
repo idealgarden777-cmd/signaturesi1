@@ -965,7 +965,62 @@ body.dark-mode
 
 
 /* =========================================================
-   24. TOUCH DEVICES
+   24. COMPACT PILL HORIZONTAL POLISH
+   Tighten left/right control geometry (compact state only)
+   ========================================================= */
+
+#glassInputContainer:not(.is-writing-expanded):not(.composer-multiline)
+#attachBtn {
+    left: 6px !important;
+}
+
+#glassInputContainer:not(.is-writing-expanded):not(.composer-multiline)
+#sendBtn {
+    right: 6px !important;
+}
+
+#glassInputContainer:not(.is-writing-expanded):not(.composer-multiline)
+#micBtn {
+    right: 52px !important;
+}
+
+#glassInputContainer:not(.is-writing-expanded):not(.composer-multiline)
+textarea#chatInput {
+    padding-left: 52px !important;
+    padding-right: 94px !important;
+}
+
+
+/* Mobile horizontal polish */
+
+@media (max-width: 767px) {
+
+    #glassInputContainer:not(.is-writing-expanded):not(.composer-multiline)
+    #attachBtn {
+        left: 5px !important;
+    }
+
+    #glassInputContainer:not(.is-writing-expanded):not(.composer-multiline)
+    #sendBtn {
+        right: 5px !important;
+    }
+
+    #glassInputContainer:not(.is-writing-expanded):not(.composer-multiline)
+    #micBtn {
+        right: 49px !important;
+    }
+
+    #glassInputContainer:not(.is-writing-expanded):not(.composer-multiline)
+    textarea#chatInput {
+        padding-left: 49px !important;
+        padding-right: 89px !important;
+    }
+
+}
+
+
+/* =========================================================
+   25. TOUCH DEVICES
    ========================================================= */
 
 @media (pointer: coarse) {
@@ -983,7 +1038,7 @@ body.dark-mode
 
 
 /* =========================================================
-   25. REDUCED MOTION
+   26. REDUCED MOTION
    ========================================================= */
 
 @media (prefers-reduced-motion: reduce) {

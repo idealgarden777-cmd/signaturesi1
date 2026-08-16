@@ -782,3 +782,158 @@ textarea#chatInput {
     }
 
 }
+/* =========================================================
+   NEYO — CONSISTENT COMPOSER EDGE SPACING
+   Same visual inset at every height
+   ========================================================= */
+
+#glassInputContainer {
+    --composer-edge-x: 10px;
+    --composer-edge-y: 8px;
+
+    --composer-control-size: 40px;
+    --composer-control-gap: 8px;
+
+    --composer-bottom-zone:
+        calc(
+            var(--composer-control-size) +
+            (var(--composer-edge-y) * 2)
+        );
+}
+
+
+/* =========================================================
+   MULTILINE / GROWING COMPOSER
+   ========================================================= */
+
+#glassInputContainer:not(.is-writing-expanded).composer-multiline
+.composer-input-row {
+    padding-bottom:
+        var(--composer-bottom-zone) !important;
+}
+
+
+/* + */
+
+#glassInputContainer:not(.is-writing-expanded).composer-multiline
+#attachBtn {
+    left:
+        var(--composer-edge-x) !important;
+
+    bottom:
+        var(--composer-edge-y) !important;
+}
+
+
+/* SEND */
+
+#glassInputContainer:not(.is-writing-expanded).composer-multiline
+#sendBtn {
+    right:
+        var(--composer-edge-x) !important;
+
+    bottom:
+        var(--composer-edge-y) !important;
+}
+
+
+/* MIC */
+
+#glassInputContainer:not(.is-writing-expanded).composer-multiline
+#micBtn {
+    right:
+        calc(
+            var(--composer-edge-x) +
+            var(--composer-control-size) +
+            var(--composer-control-gap)
+        ) !important;
+
+    bottom:
+        var(--composer-edge-y) !important;
+}
+
+
+/* =========================================================
+   EXPANDED STATE
+   EXACT SAME CONTROL GEOMETRY
+   ========================================================= */
+
+#glassInputContainer.is-writing-expanded
+#attachBtn {
+    left:
+        var(--composer-edge-x) !important;
+
+    bottom:
+        var(--composer-edge-y) !important;
+}
+
+
+#glassInputContainer.is-writing-expanded
+#sendBtn {
+    right:
+        var(--composer-edge-x) !important;
+
+    bottom:
+        var(--composer-edge-y) !important;
+}
+
+
+#glassInputContainer.is-writing-expanded
+#micBtn {
+    right:
+        calc(
+            var(--composer-edge-x) +
+            var(--composer-control-size) +
+            var(--composer-control-gap)
+        ) !important;
+
+    bottom:
+        var(--composer-edge-y) !important;
+}
+
+
+/* =========================================================
+   EXPANDED TEXT AREA
+   Text stops above the exact same bottom control zone
+   ========================================================= */
+
+#glassInputContainer.is-writing-expanded
+textarea#chatInput {
+    bottom:
+        var(--composer-bottom-zone) !important;
+}
+
+
+/* =========================================================
+   CUSTOM SCROLLBAR
+   Stops at same visual control boundary
+   ========================================================= */
+
+#glassInputContainer:not(.is-writing-expanded)
+.composer-custom-scrollbar,
+
+#glassInputContainer.is-writing-expanded
+.composer-custom-scrollbar {
+    bottom:
+        calc(
+            var(--composer-bottom-zone) +
+            4px
+        ) !important;
+}
+
+
+/* =========================================================
+   MOBILE
+   Same proportions, slightly tighter
+   ========================================================= */
+
+@media (max-width: 767px) {
+
+    #glassInputContainer {
+        --composer-edge-x: 7px;
+        --composer-edge-y: 6px;
+
+        --composer-control-gap: 6px;
+    }
+
+}

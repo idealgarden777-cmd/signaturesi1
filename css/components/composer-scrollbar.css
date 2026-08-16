@@ -937,3 +937,99 @@ textarea#chatInput {
     }
 
 }
+/* =========================================================
+   NEYO — MULTILINE COMPACT BALANCE FIX
+   Reduce dead space under text
+   Keep controls visually centered in bottom dock
+   ========================================================= */
+
+#glassInputContainer {
+    --composer-edge-x: 10px;
+    --composer-edge-y: 6px;
+    --composer-control-size: 40px;
+    --composer-control-gap: 8px;
+
+    --composer-bottom-zone:
+        calc(
+            var(--composer-control-size) +
+            (var(--composer-edge-y) * 2)
+        );
+}
+
+
+/* Normal multiline shell should not reserve extra height */
+
+#glassInputContainer:not(.is-writing-expanded).composer-multiline
+.composer-input-row {
+    padding-bottom:
+        var(--composer-bottom-zone) !important;
+}
+
+
+/* Text should end close to the control dock */
+
+#glassInputContainer:not(.is-writing-expanded).composer-multiline
+textarea#chatInput {
+    padding-bottom: 2px !important;
+}
+
+
+/* Controls use same compact inset */
+
+#glassInputContainer:not(.is-writing-expanded).composer-multiline
+#attachBtn,
+#glassInputContainer:not(.is-writing-expanded).composer-multiline
+#micBtn,
+#glassInputContainer:not(.is-writing-expanded).composer-multiline
+#sendBtn {
+    bottom:
+        var(--composer-edge-y) !important;
+}
+
+
+/* Horizontal positions */
+
+#glassInputContainer:not(.is-writing-expanded).composer-multiline
+#attachBtn {
+    left:
+        var(--composer-edge-x) !important;
+}
+
+#glassInputContainer:not(.is-writing-expanded).composer-multiline
+#sendBtn {
+    right:
+        var(--composer-edge-x) !important;
+}
+
+#glassInputContainer:not(.is-writing-expanded).composer-multiline
+#micBtn {
+    right:
+        calc(
+            var(--composer-edge-x) +
+            var(--composer-control-size) +
+            var(--composer-control-gap)
+        ) !important;
+}
+
+
+/* Scrollbar should finish just above controls */
+
+#glassInputContainer:not(.is-writing-expanded)
+.composer-custom-scrollbar {
+    bottom:
+        calc(
+            var(--composer-bottom-zone) +
+            2px
+        ) !important;
+}
+
+
+/* Mobile */
+
+@media (max-width: 767px) {
+    #glassInputContainer {
+        --composer-edge-x: 7px;
+        --composer-edge-y: 5px;
+        --composer-control-gap: 6px;
+    }
+}

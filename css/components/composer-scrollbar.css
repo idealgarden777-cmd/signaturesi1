@@ -765,3 +765,120 @@ body.dark-mode
     width: 20px !important;
     height: 20px !important;
 }
+/* =========================================================
+   NEYO — FIXED CONTROL RAIL
+   Buttons never move vertically
+   ========================================================= */
+
+#glassInputContainer {
+    --neyo-control-size: 40px;
+    --neyo-control-bottom: 8px;
+    --neyo-edge-x: 12px;
+    --neyo-control-gap: 8px;
+}
+
+
+/* Multiline + expanded:
+   controls are always pinned to same Y position */
+
+#glassInputContainer:not(.is-writing-expanded).composer-multiline
+#attachBtn,
+#glassInputContainer:not(.is-writing-expanded).composer-multiline
+#micBtn,
+#glassInputContainer:not(.is-writing-expanded).composer-multiline
+#sendBtn,
+
+#glassInputContainer.is-writing-expanded
+#attachBtn,
+#glassInputContainer.is-writing-expanded
+#micBtn,
+#glassInputContainer.is-writing-expanded
+#sendBtn {
+    position: absolute !important;
+
+    top: auto !important;
+
+    bottom:
+        var(--neyo-control-bottom) !important;
+
+    width:
+        var(--neyo-control-size) !important;
+
+    height:
+        var(--neyo-control-size) !important;
+
+    min-width:
+        var(--neyo-control-size) !important;
+
+    min-height:
+        var(--neyo-control-size) !important;
+
+    max-width:
+        var(--neyo-control-size) !important;
+
+    max-height:
+        var(--neyo-control-size) !important;
+
+    flex: 0 0 var(--neyo-control-size) !important;
+
+    margin: 0 !important;
+
+    transform: none !important;
+
+    transition:
+        opacity 150ms ease,
+        background-color 150ms ease,
+        color 150ms ease !important;
+}
+
+
+/* + fixed left */
+
+#glassInputContainer:not(.is-writing-expanded).composer-multiline
+#attachBtn,
+#glassInputContainer.is-writing-expanded
+#attachBtn {
+    left: var(--neyo-edge-x) !important;
+    right: auto !important;
+}
+
+
+/* Send fixed right */
+
+#glassInputContainer:not(.is-writing-expanded).composer-multiline
+#sendBtn,
+#glassInputContainer.is-writing-expanded
+#sendBtn {
+    right: var(--neyo-edge-x) !important;
+    left: auto !important;
+}
+
+
+/* Mic fixed before send */
+
+#glassInputContainer:not(.is-writing-expanded).composer-multiline
+#micBtn,
+#glassInputContainer.is-writing-expanded
+#micBtn {
+    right:
+        calc(
+            var(--neyo-edge-x) +
+            var(--neyo-control-size) +
+            var(--neyo-control-gap)
+        ) !important;
+
+    left: auto !important;
+}
+
+
+/* Mobile */
+
+@media (max-width: 767px) {
+
+    #glassInputContainer {
+        --neyo-control-bottom: 7px;
+        --neyo-edge-x: 9px;
+        --neyo-control-gap: 6px;
+    }
+
+}

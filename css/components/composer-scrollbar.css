@@ -43,25 +43,47 @@ PRODUCTION CLEAN VERSION
 }
 
 /* =========================================================
-   2. WIDTH LOCK
+   2. WIDTH STABILITY
+   Keep existing composer width.
+   Only prevent typing from changing it.
    ========================================================= */
 
-#composerWrapper,
+/* Do NOT force the wrapper or composer to 100%. Their width stays owned by the existing layout. */
 #glassInputContainer,
-#glassInputContainer .composer-input-row,
+#glassInputContainer.composer-has-content,
+#glassInputContainer.composer-multiline,
+#glassInputContainer.composer-overflow,
+#glassInputContainer.is-writing-expanded {
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+}
+
+/* Inner row always follows the composer itself */
+#glassInputContainer .composer-input-row {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+}
+
+/* Textarea grows vertically only */
 #glassInputContainer textarea#chatInput {
     width: 100% !important;
     max-width: 100% !important;
     min-width: 0 !important;
     box-sizing: border-box !important;
-    margin-left: 0 !important;
-    margin-right: 0 !important;
+    
+    overflow-x: hidden !important;
+    overflow-wrap: break-word !important;
+    word-break: normal !important;
 }
 
-#glassInputContainer textarea#chatInput {
-    overflow-x: hidden !important;
-    overflow-wrap: break-word !important; 
-    word-break: normal !important; 
+/* Never alter horizontal position when state changes */
+#glassInputContainer.composer-multiline,
+#glassInputContainer.composer-overflow,
+#glassInputContainer.is-writing-expanded {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
 }
 
 /* =========================================================
@@ -337,6 +359,13 @@ body.dark-mode #glassInputContainer .composer-custom-scrollbar-thumb {
         --neyo-text-left: 12px;
         --neyo-text-right: 20px;
         --neyo-scrollbar-right: 6px;
+    }
+
+    #glassInputContainer .composer-input-row,
+    #glassInputContainer textarea#chatInput {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
     }
 
     #glassInputContainer:not(.is-writing-expanded).composer-multiline textarea#chatInput {

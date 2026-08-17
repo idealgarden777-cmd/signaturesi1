@@ -1,30 +1,23 @@
 /*
 =========================================================
 NEYO — VOICE / GEMINI TRANSCRIPTION
-STABLE PRODUCTION VERSION
+FINAL SINGLE-ENGINE VERSION
 
 Flow:
 Mic
 → MediaRecorder
 → audio Blob
 → POST /api/transcribe
-→ Gemini 3.5 Flash-Lite
+→ Gemini transcription
 → transcript
 → composer
 
-Owns:
-- microphone recording
-- waveform animation
-- stop recording
-- transcription request
-- transcript insertion
-- cleanup
-
-Does NOT own:
-- Gemini API key
-- Gemini backend call
-- composer geometry
-- voice.css
+Important:
+- neo.js remains untouched
+- legacy mic listeners are isolated by cloning controls
+- NO SpeechRecognition
+- NO webkitSpeechRecognition
+- NO live browser transcription
 =========================================================
 */
 
@@ -33,23 +26,69 @@ Does NOT own:
 
 
     /* =====================================================
-       DOM
+       LEGACY LISTENER ISOLATION
        ===================================================== */
 
-    const micBtn =
+    function isolateButton(original) {
+        if (!original) {
+            return null;
+        }
+
+        const clean =
+            original.cloneNode(true);
+
+        original.replaceWith(clean);
+
+        return clean;
+    }
+
+
+    const originalMicBtn =
         document.getElementById("micBtn");
 
-    const stopRecBtn =
+    const originalStopRecBtn =
         document.getElementById("stopRecBtn");
+
+
+    /*
+    Clone/replace removes JS listeners that may have
+    previously been attached by legacy neo.js.
+
+    IDs/classes/markup stay exactly the same.
+    */
+
+    const micBtn =
+        isolateButton(
+            originalMicBtn
+        );
+
+    const stopRecBtn =
+        isolateButton(
+            originalStopRecBtn
+        );
+
+
+    /* =====================================================
+       DOM
+       ===================================================== */
 
     const chatInput =
         document.getElementById("chatInput");
 
     const composerInputRow =
-        document.querySelector(".composer-input-row");
+        document.querySelector(
+            ".composer-input-row"
+        );
 
     const waveform =
-        document.querySelector(".wave-dots-bar");
+        document.getElementById(
+            "waveDotsBar"
+        );
+
+    const chatMessages =
+        document.getElementById(
+            "chatMessages"
+        );
 
 
     if (
@@ -59,6 +98,11 @@ Does NOT own:
     ) {
         return;
     }
+
+
+    console.log(
+        "[NEYO Voice] MediaRecorder/Gemini engine active"
+    );
 
 
     /* =====================================================
@@ -76,6 +120,12 @@ Does NOT own:
 
             minimumRecordingMs:
                 350,
+
+            contextMessages:
+                4,
+
+            contextMaxChars:
+                5000,
 
             fftSize:
                 256,
@@ -113,45 +163,60 @@ Does NOT own:
        STATE
        ===================================================== */
 
-    let mediaRecorder = null;
+    let mediaRecorder =
+        null;
 
-    let mediaStream = null;
+    let mediaStream =
+        null;
 
-    let audioChunks = [];
+    let audioChunks =
+        [];
 
-    let recordingStartedAt = 0;
+    let recordingStartedAt =
+        0;
 
-    let recordingTimer = 0;
+    let recordingTimer =
+        0;
 
-    let isRecording = false;
+    let isRecording =
+        false;
 
-    let isTranscribing = false;
-
-
-    /* Audio visualizer */
-
-    let audioContext = null;
-
-    let analyser = null;
-
-    let sourceNode = null;
-
-    let timeDomainData = null;
-
-    let animationFrameId = 0;
-
-    let smoothedLevel = 0;
+    let isTranscribing =
+        false;
 
 
-    /* Text insertion */
+    /* Visualizer */
 
-    let prefixText = "";
+    let audioContext =
+        null;
 
-    let suffixText = "";
+    let analyser =
+        null;
+
+    let sourceNode =
+        null;
+
+    let timeDomainData =
+        null;
+
+    let animationFrameId =
+        0;
+
+    let smoothedLevel =
+        0;
+
+
+    /* Transcript insertion */
+
+    let prefixText =
+        "";
+
+    let suffixText =
+        "";
 
 
     /* =====================================================
-       HELPERS
+       COMPOSER REFRESH
        ===================================================== */
 
     function refreshComposer() {
@@ -171,20 +236,86 @@ Does NOT own:
     }
 
 
-    function getWaveBars() {
+    /* =====================================================
+       RECENT CONVERSATION CONTEXT
+       Generic — no hardcoded vocabulary
+       ===================================================== */
 
-        if (!waveform) {
-            return [];
+    function getRecentContext() {
+
+        /*
+        Prefer an existing public context API
+        if NEYO exposes one later.
+        */
+
+        const externalContext =
+            window.NeyoChatContext
+                ?.getRecentText?.(
+                    CONFIG.contextMessages
+                );
+
+
+        if (
+            typeof externalContext ===
+                "string" &&
+            externalContext.trim()
+        ) {
+            return externalContext
+                .trim()
+                .slice(
+                    0,
+                    CONFIG.contextMaxChars
+                );
         }
 
 
-        return Array.from(
-            waveform.querySelectorAll(
-                "span"
+        /*
+        Safe DOM fallback.
+
+        We do not care about exact message implementation.
+        We simply use recent visible message text.
+        */
+
+        if (!chatMessages) {
+            return "";
+        }
+
+
+        const candidates =
+            Array.from(
+                chatMessages.children || []
             )
+                .filter(
+                    element =>
+                        element &&
+                        element.textContent
+                            ?.trim()
+                )
+                .slice(
+                    -CONFIG.contextMessages
+                );
+
+
+        const text =
+            candidates
+                .map(
+                    element =>
+                        element.textContent
+                            .trim()
+                )
+                .join("\n\n");
+
+
+        return text.slice(
+            0,
+            CONFIG.contextMaxChars
         );
     }
 
+
+    /* =====================================================
+       VOICE STATE
+       ===================================================== */
 
     function setVoiceState(
         recording,
@@ -192,32 +323,38 @@ Does NOT own:
     ) {
 
         isRecording =
-            recording;
+            Boolean(recording);
 
         isTranscribing =
-            transcribing;
+            Boolean(transcribing);
 
+
+        /*
+        Keep existing CSS contract.
+        */
 
         composerInputRow.classList.toggle(
             "is-transcribing",
-            recording ||
-            transcribing
+            isRecording ||
+            isTranscribing
         );
 
 
         composerInputRow.classList.toggle(
             "is-processing-transcription",
-            transcribing
+            isTranscribing
         );
 
 
         micBtn.setAttribute(
             "aria-pressed",
-            String(recording)
+            String(isRecording)
         );
 
 
-        if (transcribing) {
+        if (
+            isTranscribing
+        ) {
 
             micBtn.setAttribute(
                 "aria-label",
@@ -227,7 +364,9 @@ Does NOT own:
             micBtn.dataset.tooltip =
                 "Transcribing";
 
-        } else if (recording) {
+        } else if (
+            isRecording
+        ) {
 
             micBtn.setAttribute(
                 "aria-label",
@@ -249,21 +388,25 @@ Does NOT own:
         }
 
 
-        if (stopRecBtn) {
+        if (
+            stopRecBtn
+        ) {
 
             stopRecBtn.disabled =
-                transcribing;
+                isTranscribing;
 
             stopRecBtn.setAttribute(
                 "aria-busy",
-                String(transcribing)
+                String(
+                    isTranscribing
+                )
             );
         }
     }
 
 
     /* =====================================================
-       TEXT INSERTION
+       INSERTION POSITION
        ===================================================== */
 
     function captureInsertionPoint() {
@@ -320,14 +463,19 @@ Does NOT own:
         let before =
             prefixText;
 
-
         let after =
             suffixText;
 
 
+        /*
+        Natural spacing around inserted voice text.
+        */
+
         if (
             before &&
-            !/\s$/.test(before)
+            !/\s$/.test(
+                before
+            )
         ) {
             before += " ";
         }
@@ -339,7 +487,9 @@ Does NOT own:
 
         if (
             after &&
-            !/^\s/.test(after)
+            !/^\s/.test(
+                after
+            )
         ) {
             middle += " ";
         }
@@ -388,14 +538,17 @@ Does NOT own:
 
 
     /* =====================================================
-       MIME TYPE
+       MIME SELECTION
+
+       Prefer OGG first.
+       WebM remains fallback for browsers such as Chrome.
        ===================================================== */
 
     function getSupportedMimeType() {
 
         if (
             typeof MediaRecorder ===
-            "undefined"
+                "undefined"
         ) {
             return "";
         }
@@ -403,13 +556,13 @@ Does NOT own:
 
         const candidates = [
 
-            "audio/webm;codecs=opus",
-
-            "audio/webm",
-
             "audio/ogg;codecs=opus",
 
-            "audio/ogg"
+            "audio/ogg",
+
+            "audio/webm;codecs=opus",
+
+            "audio/webm"
 
         ];
 
@@ -419,18 +572,43 @@ Does NOT own:
             of candidates
         ) {
 
-            if (
-                MediaRecorder
-                    .isTypeSupported(
-                        type
-                    )
-            ) {
-                return type;
+            try {
+
+                if (
+                    MediaRecorder
+                        .isTypeSupported(
+                            type
+                        )
+                ) {
+                    return type;
+                }
+
+            } catch {
+                // Continue.
             }
         }
 
 
         return "";
+    }
+
+
+    /* =====================================================
+       WAVEFORM ELEMENTS
+       ===================================================== */
+
+    function getWaveBars() {
+
+        if (!waveform) {
+            return [];
+        }
+
+
+        return Array.from(
+            waveform.querySelectorAll(
+                "span"
+            )
+        );
     }
 
 
@@ -546,9 +724,11 @@ Does NOT own:
 
 
         if (
-            smoothedLevel < 0.008
+            smoothedLevel <
+            0.008
         ) {
-            smoothedLevel = 0;
+            smoothedLevel =
+                0;
         }
 
 
@@ -563,13 +743,16 @@ Does NOT own:
         time
     ) {
 
-        if (count <= 1) {
+        if (
+            count <= 1
+        ) {
             return level;
         }
 
 
         const center =
-            (count - 1) / 2;
+            (count - 1) /
+            2;
 
 
         const distance =
@@ -648,9 +831,6 @@ Does NOT own:
                         String(
                             CONFIG.idleOpacity
                         );
-
-                    bar.style.backgroundColor =
-                        "currentColor";
                 }
             );
     }
@@ -699,7 +879,8 @@ Does NOT own:
                         index,
                         bars.length,
                         level,
-                        timestamp || 0
+                        timestamp ||
+                        0
                     );
 
 
@@ -747,7 +928,7 @@ Does NOT own:
 
 
     /* =====================================================
-       AUDIO VISUALIZER
+       VISUALIZER START
        ===================================================== */
 
     async function startVisualizer(
@@ -762,7 +943,9 @@ Does NOT own:
             window.webkitAudioContext;
 
 
-        if (!AudioContextClass) {
+        if (
+            !AudioContextClass
+        ) {
             return;
         }
 
@@ -775,8 +958,9 @@ Does NOT own:
 
             if (
                 audioContext.state ===
-                "suspended"
+                    "suspended"
             ) {
+
                 await audioContext
                     .resume();
             }
@@ -825,12 +1009,16 @@ Does NOT own:
         } catch (error) {
 
             console.warn(
-                "NEYO voice visualizer unavailable:",
+                "[NEYO Voice] visualizer unavailable:",
                 error
             );
         }
     }
 
+
+    /* =====================================================
+       VISUALIZER STOP
+       ===================================================== */
 
     function stopVisualizer() {
 
@@ -848,10 +1036,14 @@ Does NOT own:
         }
 
 
-        if (sourceNode) {
+        if (
+            sourceNode
+        ) {
 
             try {
+
                 sourceNode.disconnect();
+
             } catch {
                 // Ignore.
             }
@@ -865,7 +1057,7 @@ Does NOT own:
         if (
             audioContext &&
             audioContext.state !==
-            "closed"
+                "closed"
         ) {
 
             audioContext
@@ -891,12 +1083,14 @@ Does NOT own:
 
 
     /* =====================================================
-       MICROPHONE CLEANUP
+       MEDIA STREAM CLEANUP
        ===================================================== */
 
     function stopMediaStream() {
 
-        if (!mediaStream) {
+        if (
+            !mediaStream
+        ) {
             return;
         }
 
@@ -907,7 +1101,9 @@ Does NOT own:
                 track => {
 
                     try {
+
                         track.stop();
+
                     } catch {
                         // Ignore.
                     }
@@ -948,6 +1144,22 @@ Does NOT own:
         ) {
             extension =
                 "ogg";
+
+        } else if (
+            mimeType.includes(
+                "wav"
+            )
+        ) {
+            extension =
+                "wav";
+
+        } else if (
+            mimeType.includes(
+                "mpeg"
+            )
+        ) {
+            extension =
+                "mp3";
         }
 
 
@@ -955,6 +1167,41 @@ Does NOT own:
             "audio",
             audioBlob,
             `voice.${extension}`
+        );
+
+
+        /*
+        Optional conversational context.
+        No fixed vocabulary.
+        */
+
+        const recentContext =
+            getRecentContext();
+
+
+        if (
+            recentContext
+        ) {
+
+            formData.append(
+                "context",
+                recentContext
+            );
+        }
+
+
+        console.log(
+            "[NEYO Voice] sending audio",
+            {
+                type:
+                    mimeType,
+
+                size:
+                    audioBlob.size,
+
+                contextChars:
+                    recentContext.length
+            }
         );
 
 
@@ -966,12 +1213,16 @@ Does NOT own:
                         "POST",
 
                     body:
-                        formData
+                        formData,
+
+                    credentials:
+                        "same-origin"
                 }
             );
 
 
-        let data = null;
+        let data =
+            null;
 
 
         try {
@@ -980,8 +1231,15 @@ Does NOT own:
                 await response.json();
 
         } catch {
-            // handled below
+            // Handled below.
         }
+
+
+        console.log(
+            "[NEYO Voice] transcription response",
+            response.status,
+            data
+        );
 
 
         if (
@@ -1002,7 +1260,9 @@ Does NOT own:
             ).trim();
 
 
-        if (!transcript) {
+        if (
+            !transcript
+        ) {
 
             throw new Error(
                 "No transcript returned."
@@ -1015,7 +1275,7 @@ Does NOT own:
 
 
     /* =====================================================
-       RECORDING COMPLETE
+       PROCESS FINISHED RECORDING
        ===================================================== */
 
     async function processRecording() {
@@ -1060,7 +1320,9 @@ Does NOT own:
         }
 
 
-        if (!chunks.length) {
+        if (
+            !chunks.length
+        ) {
 
             setVoiceState(
                 false,
@@ -1096,6 +1358,11 @@ Does NOT own:
         }
 
 
+        /*
+        Recording finished.
+        Now enter transcription state.
+        */
+
         setVoiceState(
             false,
             true
@@ -1117,7 +1384,7 @@ Does NOT own:
         } catch (error) {
 
             console.error(
-                "NEYO transcription failed:",
+                "[NEYO Voice] transcription failed:",
                 error
             );
 
@@ -1127,6 +1394,7 @@ Does NOT own:
                     "neyo:voice-error",
                     {
                         detail: {
+
                             message:
                                 error?.message ||
                                 "Voice transcription failed."
@@ -1168,14 +1436,14 @@ Does NOT own:
 
 
         if (
-            !navigator.mediaDevices
+            !navigator
+                .mediaDevices
                 ?.getUserMedia
         ) {
 
             console.warn(
-                "Microphone API unavailable."
+                "[NEYO Voice] getUserMedia unavailable"
             );
-
 
             return;
         }
@@ -1183,13 +1451,12 @@ Does NOT own:
 
         if (
             typeof MediaRecorder ===
-            "undefined"
+                "undefined"
         ) {
 
             console.warn(
-                "MediaRecorder unavailable."
+                "[NEYO Voice] MediaRecorder unavailable"
             );
-
 
             return;
         }
@@ -1226,7 +1493,9 @@ Does NOT own:
                 getSupportedMimeType();
 
 
-            if (mimeType) {
+            if (
+                mimeType
+            ) {
 
                 mediaRecorder =
                     new MediaRecorder(
@@ -1249,59 +1518,62 @@ Does NOT own:
                 [];
 
 
-            mediaRecorder
-                .addEventListener(
-                    "dataavailable",
-                    event => {
+            mediaRecorder.addEventListener(
+                "dataavailable",
+                event => {
 
-                        if (
-                            event.data &&
-                            event.data.size > 0
-                        ) {
-                            audioChunks.push(
-                                event.data
-                            );
-                        }
-                    }
-                );
+                    if (
+                        event.data &&
+                        event.data.size >
+                            0
+                    ) {
 
-
-            mediaRecorder
-                .addEventListener(
-                    "stop",
-                    () => {
-
-                        processRecording();
-
-                    },
-                    {
-                        once: true
-                    }
-                );
-
-
-            mediaRecorder
-                .addEventListener(
-                    "error",
-                    event => {
-
-                        console.error(
-                            "MediaRecorder error:",
-                            event
-                        );
-
-
-                        stopVisualizer();
-
-                        stopMediaStream();
-
-
-                        setVoiceState(
-                            false,
-                            false
+                        audioChunks.push(
+                            event.data
                         );
                     }
-                );
+                }
+            );
+
+
+            mediaRecorder.addEventListener(
+                "stop",
+                () => {
+
+                    processRecording();
+
+                },
+                {
+                    once: true
+                }
+            );
+
+
+            mediaRecorder.addEventListener(
+                "error",
+                event => {
+
+                    console.error(
+                        "[NEYO Voice] MediaRecorder error:",
+                        event
+                    );
+
+
+                    stopVisualizer();
+
+                    stopMediaStream();
+
+
+                    setVoiceState(
+                        false,
+                        false
+                    );
+
+
+                    mediaRecorder =
+                        null;
+                }
+            );
 
 
             recordingStartedAt =
@@ -1319,12 +1591,6 @@ Does NOT own:
             );
 
 
-            /*
-            timeslice ensures chunks are produced
-            continuously instead of relying only
-            on the final recorder stop event.
-            */
-
             mediaRecorder.start(
                 250
             );
@@ -1341,10 +1607,19 @@ Does NOT own:
                     CONFIG.maxRecordingMs
                 );
 
+
+            console.log(
+                "[NEYO Voice] recording started",
+                {
+                    mimeType:
+                        mediaRecorder.mimeType
+                }
+            );
+
         } catch (error) {
 
             console.error(
-                "NEYO microphone start failed:",
+                "[NEYO Voice] microphone start failed:",
                 error
             );
 
@@ -1381,10 +1656,17 @@ Does NOT own:
             0;
 
 
-        if (!isRecording) {
+        if (
+            !isRecording
+        ) {
             return;
         }
 
+
+        /*
+        Flip state before recorder.stop()
+        so UI immediately exits active microphone mode.
+        */
 
         isRecording =
             false;
@@ -1396,7 +1678,7 @@ Does NOT own:
         if (
             mediaRecorder &&
             mediaRecorder.state !==
-            "inactive"
+                "inactive"
         ) {
 
             try {
@@ -1406,7 +1688,7 @@ Does NOT own:
             } catch (error) {
 
                 console.warn(
-                    "Could not stop MediaRecorder:",
+                    "[NEYO Voice] recorder stop failed:",
                     error
                 );
 
@@ -1418,6 +1700,10 @@ Does NOT own:
                     false,
                     false
                 );
+
+
+                mediaRecorder =
+                    null;
             }
 
         } else {
@@ -1435,6 +1721,7 @@ Does NOT own:
 
     /* =====================================================
        MIC BUTTON
+       Capture phase + immediate propagation isolation.
        ===================================================== */
 
     micBtn.addEventListener(
@@ -1445,13 +1732,19 @@ Does NOT own:
 
             event.stopPropagation();
 
+            event.stopImmediatePropagation();
 
-            if (isTranscribing) {
+
+            if (
+                isTranscribing
+            ) {
                 return;
             }
 
 
-            if (isRecording) {
+            if (
+                isRecording
+            ) {
 
                 stopRecording();
 
@@ -1459,7 +1752,8 @@ Does NOT own:
 
                 startRecording();
             }
-        }
+        },
+        true
     );
 
 
@@ -1467,23 +1761,26 @@ Does NOT own:
        STOP BUTTON
        ===================================================== */
 
-    stopRecBtn
-        ?.addEventListener(
-            "click",
-            event => {
+    stopRecBtn?.addEventListener(
+        "click",
+        event => {
 
-                event.preventDefault();
+            event.preventDefault();
 
-                event.stopPropagation();
+            event.stopPropagation();
+
+            event.stopImmediatePropagation();
 
 
-                if (
-                    isRecording
-                ) {
-                    stopRecording();
-                }
+            if (
+                isRecording
+            ) {
+
+                stopRecording();
             }
-        );
+        },
+        true
+    );
 
 
     /* =====================================================
@@ -1499,6 +1796,7 @@ Does NOT own:
                     "Escape" &&
                 isRecording
             ) {
+
                 stopRecording();
             }
         }
@@ -1521,7 +1819,7 @@ Does NOT own:
             if (
                 mediaRecorder &&
                 mediaRecorder.state !==
-                "inactive"
+                    "inactive"
             ) {
 
                 try {
@@ -1577,8 +1875,10 @@ Does NOT own:
 
             isTranscribing:
                 () =>
-                    isTranscribing
+                    isTranscribing,
 
+            engine:
+                "mediarecorder-gemini"
         });
 
 })();

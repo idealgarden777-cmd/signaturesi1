@@ -1,1302 +1,1042 @@
 /*
 =========================================================
 NEYO — ATTACHMENTS
-STABLE PRODUCTION VERSION
+PRODUCTION / COMPOSER-SAFE VERSION
 
 Owns:
 - Attachment popup
-- Native file picker
-- Drag & drop
-- Paste files
-- Attachment state
-- Image preview URLs
-- File preview cards
-- Remove / clear
-- Duplicate protection
-- Public API
+- Drag overlay visuals
+- Attachment preview rail
+- Image preview cards
+- Generic file preview cards
+- Remove button
+- Attachment-state composer integration
+- Responsive behavior
+- Dark mode
 
 Does NOT own:
-- Actual remote upload
-- Supabase storage
-- Message sending
-- Composer geometry
-- Attachment CSS
+- File selection logic
+- Drag/drop JS
+- Upload API
+- Composer width
+- Base composer colors/shadow
+- Composer typing behavior
 =========================================================
 */
 
-(() => {
-    "use strict";
+
+/* =========================================================
+   1. TOKENS
+   ========================================================= */
+
+#composerWrapper {
+    --attachment-preview-height: 76px;
+    --attachment-card-width: 132px;
+    --attachment-card-height: 64px;
+    --attachment-card-radius: 12px;
+    --attachment-gap: 8px;
+}
 
 
-    /* =====================================================
-       DOM
-       ===================================================== */
+/* =========================================================
+   2. POPUP MENU
+   ========================================================= */
 
-    const attachBtn =
-        document.getElementById("attachBtn");
+.attachment-popup-menu {
+    position: absolute;
 
-    const attachPopupMenu =
-        document.getElementById("attachPopupMenu");
+    left: 0;
+    bottom: calc(100% + 12px);
 
-    const addFilesMenuBtn =
-        document.getElementById("addFilesMenuBtn");
+    min-width: 180px;
 
-    const hiddenFileInput =
-        document.getElementById("hiddenFileInput");
+    display: none;
+    flex-direction: column;
 
-    const attachedChipsWrapper =
-        document.getElementById("attachedChipsWrapper");
+    gap: 2px;
 
-    const composerWrapper =
-        document.getElementById("composerWrapper");
+    padding: 8px 6px;
 
-    const dragDropOverlay =
-        document.getElementById("dragDropOverlay");
+    border:
+        1px solid
+        rgba(0, 0, 0, 0.05);
+
+    border-radius: 18px;
+
+    background:
+        rgba(255, 255, 255, 0.96);
+
+    -webkit-backdrop-filter:
+        blur(16px);
+
+    backdrop-filter:
+        blur(16px);
+
+    box-shadow:
+        0 12px 40px
+        rgba(0, 0, 0, 0.12);
+
+    z-index: 1000;
+
+    box-sizing: border-box;
+}
 
 
-    /* =====================================================
-       REQUIRED ELEMENT
-       ===================================================== */
+.attachment-popup-menu.show {
+    display: flex;
+}
 
-    if (!attachedChipsWrapper) {
-        return;
+
+/* =========================================================
+   3. POPUP ITEM
+   ========================================================= */
+
+.attachment-popup-item {
+    width: 100%;
+
+    display: flex;
+    align-items: center;
+
+    gap: 12px;
+
+    padding: 10px 14px;
+
+    border: 0;
+    border-radius: 12px;
+
+    background: transparent;
+
+    color: #1d1d1f;
+
+    font-size: 14px;
+    font-weight: 500;
+
+    text-align: left;
+
+    cursor: pointer;
+
+    box-sizing: border-box;
+
+    transition:
+        background-color 120ms ease,
+        color 120ms ease;
+}
+
+
+.attachment-popup-item:hover {
+    background:
+        rgba(0, 0, 0, 0.045);
+}
+
+
+.attachment-popup-item svg,
+.attachment-popup-item i {
+    width: 20px;
+    height: 20px;
+
+    flex: 0 0 20px;
+
+    opacity: 0.72;
+}
+
+
+.attachment-popup-item span {
+    flex: 1 1 auto;
+
+    min-width: 0;
+}
+
+
+.attachment-popup-item .popup-shortcut {
+    flex: 0 0 auto;
+
+    font-size: 12px;
+    font-weight: 400;
+
+    letter-spacing: 0.25px;
+
+    opacity: 0.42;
+}
+
+
+.attachment-popup-item.danger {
+    color: #e5484d;
+}
+
+
+.attachment-popup-item.danger:hover {
+    background:
+        rgba(229, 72, 77, 0.08);
+}
+
+
+/* =========================================================
+   4. DRAG OVERLAY
+   Visual only.
+   Must NEVER capture drag/drop events.
+   ========================================================= */
+
+#composerWrapper {
+    position: relative;
+}
+
+
+.drag-drop-overlay {
+    position: absolute;
+
+    inset: 0;
+
+    display: flex;
+    flex-direction: column;
+
+    align-items: center;
+    justify-content: center;
+
+    gap: 8px;
+
+    border-radius: inherit;
+
+    background:
+        rgba(20, 20, 20, 0.68);
+
+    -webkit-backdrop-filter:
+        blur(6px);
+
+    backdrop-filter:
+        blur(6px);
+
+    color: #ffffff;
+
+    opacity: 0;
+    visibility: hidden;
+
+    pointer-events: none !important;
+
+    z-index: 100;
+
+    transition:
+        opacity 140ms ease,
+        visibility 140ms ease;
+}
+
+
+.drag-drop-overlay.show {
+    opacity: 1;
+    visibility: visible;
+
+    pointer-events: none !important;
+}
+
+
+.drag-drop-overlay > svg,
+.drag-drop-overlay > i {
+    width: 28px;
+    height: 28px;
+
+    flex: 0 0 28px;
+
+    margin: 0 0 2px;
+
+    pointer-events: none;
+}
+
+
+.drag-drop-overlay > span {
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1.3;
+
+    pointer-events: none;
+}
+
+
+/* =========================================================
+   5. EMPTY PREVIEW WRAPPER
+   ========================================================= */
+
+#attachedChipsWrapper:empty {
+    display: none !important;
+
+    width: 0 !important;
+    height: 0 !important;
+
+    min-width: 0 !important;
+    min-height: 0 !important;
+
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+
+/* =========================================================
+   6. ATTACHMENT STATE — OUTER COMPOSER
+
+   Important:
+   Attachment only adds preview row.
+   Lower control rail keeps normal composer geometry.
+   ========================================================= */
+
+#glassInputContainer:has(
+    #attachedChipsWrapper:not(:empty)
+):not(.is-writing-expanded) {
+    position: relative !important;
+
+    display: block !important;
+
+    height: auto !important;
+
+    min-height:
+        calc(
+            var(--attachment-preview-height) +
+            var(--neyo-pill-height, 56px)
+        ) !important;
+
+    max-height: none !important;
+
+    padding: 0 !important;
+
+    overflow: hidden !important;
+
+    box-sizing: border-box !important;
+}
+
+
+/* =========================================================
+   7. PREVIEW RAIL
+   ========================================================= */
+
+#glassInputContainer
+#attachedChipsWrapper:not(:empty) {
+    position: relative !important;
+
+    width: 100% !important;
+
+    height:
+        var(--attachment-preview-height) !important;
+
+    min-height:
+        var(--attachment-preview-height) !important;
+
+    max-height:
+        var(--attachment-preview-height) !important;
+
+    display: flex !important;
+    align-items: center !important;
+
+    flex-wrap: nowrap !important;
+    flex: 0 0 auto !important;
+
+    gap:
+        var(--attachment-gap) !important;
+
+    margin: 0 !important;
+
+    padding:
+        8px
+        12px
+        4px !important;
+
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+
+    visibility: visible !important;
+    opacity: 1 !important;
+
+    box-sizing: border-box !important;
+
+    z-index: 4 !important;
+
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+
+#glassInputContainer
+#attachedChipsWrapper:not(:empty)::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+}
+
+
+/* =========================================================
+   8. ATTACHMENT CARD
+   ========================================================= */
+
+#glassInputContainer
+#attachedChipsWrapper:not(:empty)
+.attachment-preview-card {
+    position: relative !important;
+
+    width:
+        var(--attachment-card-width) !important;
+
+    height:
+        var(--attachment-card-height) !important;
+
+    min-width:
+        var(--attachment-card-width) !important;
+
+    min-height:
+        var(--attachment-card-height) !important;
+
+    max-width:
+        var(--attachment-card-width) !important;
+
+    max-height:
+        var(--attachment-card-height) !important;
+
+    flex:
+        0 0 var(--attachment-card-width) !important;
+
+    display: block !important;
+
+    margin: 0 !important;
+    padding: 0 !important;
+
+    border:
+        1px solid
+        rgba(0, 0, 0, 0.06) !important;
+
+    border-radius:
+        var(--attachment-card-radius) !important;
+
+    background:
+        rgba(0, 0, 0, 0.025) !important;
+
+    overflow: hidden !important;
+
+    visibility: visible !important;
+    opacity: 1 !important;
+
+    box-sizing: border-box !important;
+
+    flex-shrink: 0 !important;
+}
+
+
+/* =========================================================
+   9. IMAGE PREVIEW
+   ========================================================= */
+
+#glassInputContainer
+#attachedChipsWrapper:not(:empty)
+.attachment-preview-card > img {
+    display: block !important;
+
+    width: 100% !important;
+    height: 100% !important;
+
+    min-width: 100% !important;
+    min-height: 100% !important;
+
+    max-width: 100% !important;
+    max-height: 100% !important;
+
+    margin: 0 !important;
+    padding: 0 !important;
+
+    object-fit: cover !important;
+    object-position: center !important;
+
+    border-radius: inherit !important;
+
+    visibility: visible !important;
+    opacity: 1 !important;
+
+    background:
+        rgba(0, 0, 0, 0.035);
+}
+
+
+/* =========================================================
+   10. IMAGE ERROR FALLBACK
+   ========================================================= */
+
+#glassInputContainer
+.attachment-preview-card.attachment-preview-error {
+    background:
+        rgba(0, 0, 0, 0.04) !important;
+}
+
+
+#glassInputContainer
+.attachment-preview-card.attachment-preview-error > img {
+    opacity: 0.28 !important;
+}
+
+
+/* =========================================================
+   11. GENERIC FILE PREVIEW
+   Current JS creates direct icon + span.
+   ========================================================= */
+
+#glassInputContainer
+.attachment-preview-card
+.attachment-preview-file {
+    width: 100%;
+    height: 100%;
+
+    min-width: 0;
+
+    display: flex;
+
+    align-items: center;
+
+    gap: 10px;
+
+    margin: 0;
+
+    padding:
+        10px
+        30px
+        10px
+        10px;
+
+    border: 0;
+
+    border-radius: inherit;
+
+    background:
+        rgba(0, 0, 0, 0.025);
+
+    color:
+        var(--text-primary, #1d1d1f);
+
+    box-sizing: border-box;
+}
+
+
+#glassInputContainer
+.attachment-preview-card
+.attachment-preview-file > svg,
+
+#glassInputContainer
+.attachment-preview-card
+.attachment-preview-file > i {
+    width: 20px;
+    height: 20px;
+
+    flex: 0 0 20px;
+
+    opacity: 0.62;
+}
+
+
+#glassInputContainer
+.attachment-preview-card
+.attachment-preview-file > span {
+    min-width: 0;
+
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    font-size: 13px;
+    font-weight: 500;
+}
+
+
+/* =========================================================
+   12. REMOVE BUTTON
+   ========================================================= */
+
+#glassInputContainer
+.attachment-preview-card
+.attachment-remove-btn {
+    position: absolute !important;
+
+    top: 6px !important;
+    right: 6px !important;
+
+    width: 22px !important;
+    height: 22px !important;
+
+    min-width: 22px !important;
+    min-height: 22px !important;
+
+    max-width: 22px !important;
+    max-height: 22px !important;
+
+    display: inline-flex !important;
+
+    align-items: center !important;
+    justify-content: center !important;
+
+    margin: 0 !important;
+    padding: 0 !important;
+
+    border: 0 !important;
+    border-radius: 999px !important;
+
+    background:
+        rgba(0, 0, 0, 0.56) !important;
+
+    color:
+        #ffffff !important;
+
+    opacity: 1 !important;
+
+    cursor: pointer !important;
+
+    z-index: 6 !important;
+
+    box-sizing: border-box !important;
+
+    transition:
+        background-color 120ms ease,
+        transform 120ms ease !important;
+}
+
+
+#glassInputContainer
+.attachment-preview-card
+.attachment-remove-btn:hover {
+    background:
+        rgba(0, 0, 0, 0.78) !important;
+}
+
+
+#glassInputContainer
+.attachment-preview-card
+.attachment-remove-btn:active {
+    transform:
+        scale(0.94) !important;
+}
+
+
+#glassInputContainer
+.attachment-preview-card
+.attachment-remove-btn svg,
+
+#glassInputContainer
+.attachment-preview-card
+.attachment-remove-btn i {
+    width: 12px !important;
+    height: 12px !important;
+
+    pointer-events: none !important;
+}
+
+
+/* =========================================================
+   13. LOWER INPUT ROW
+   Exact normal composer geometry.
+   ========================================================= */
+
+#glassInputContainer:has(
+    #attachedChipsWrapper:not(:empty)
+):not(.is-writing-expanded)
+.composer-input-row {
+    position: relative !important;
+
+    display: block !important;
+
+    width: 100% !important;
+
+    height:
+        var(--neyo-pill-height, 56px) !important;
+
+    min-height:
+        var(--neyo-pill-height, 56px) !important;
+
+    max-height:
+        var(--neyo-pill-height, 56px) !important;
+
+    margin: 0 !important;
+    padding: 0 !important;
+
+    box-sizing: border-box !important;
+}
+
+
+/* =========================================================
+   14. CONTROLS
+   Same coordinates as normal composer.
+   ========================================================= */
+
+#glassInputContainer:has(
+    #attachedChipsWrapper:not(:empty)
+):not(.is-writing-expanded)
+#attachBtn,
+
+#glassInputContainer:has(
+    #attachedChipsWrapper:not(:empty)
+):not(.is-writing-expanded)
+#micBtn,
+
+#glassInputContainer:has(
+    #attachedChipsWrapper:not(:empty)
+):not(.is-writing-expanded)
+#sendBtn {
+    position: absolute !important;
+
+    top: auto !important;
+
+    bottom:
+        var(--neyo-control-bottom, 8px) !important;
+
+    margin: 0 !important;
+
+    transform: none !important;
+}
+
+
+/* + */
+
+#glassInputContainer:has(
+    #attachedChipsWrapper:not(:empty)
+):not(.is-writing-expanded)
+#attachBtn {
+    left:
+        var(--neyo-edge-x, 8px) !important;
+
+    right: auto !important;
+}
+
+
+/* Send */
+
+#glassInputContainer:has(
+    #attachedChipsWrapper:not(:empty)
+):not(.is-writing-expanded)
+#sendBtn {
+    right:
+        var(--neyo-edge-x, 8px) !important;
+
+    left: auto !important;
+}
+
+
+/* Mic */
+
+#glassInputContainer:has(
+    #attachedChipsWrapper:not(:empty)
+):not(.is-writing-expanded)
+#micBtn {
+    right:
+        calc(
+            var(--neyo-edge-x, 8px) +
+            var(--neyo-control-size, 40px) +
+            var(--neyo-control-gap, 6px)
+        ) !important;
+
+    left: auto !important;
+}
+
+
+/* =========================================================
+   15. TEXTAREA — ONE LINE WITH ATTACHMENT
+   Same lower-row alignment as normal composer.
+   ========================================================= */
+
+#glassInputContainer:has(
+    #attachedChipsWrapper:not(:empty)
+):not(.is-writing-expanded):not(.composer-multiline)
+textarea#chatInput {
+    position: absolute !important;
+
+    left: 0 !important;
+    right: 0 !important;
+
+    top: auto !important;
+    bottom:
+        var(--neyo-control-bottom, 8px) !important;
+
+    width: 100% !important;
+
+    height:
+        var(--neyo-control-size, 40px) !important;
+
+    min-height:
+        var(--neyo-control-size, 40px) !important;
+
+    max-height:
+        var(--neyo-control-size, 40px) !important;
+
+    margin: 0 !important;
+
+    padding:
+        8px
+        var(--neyo-oneline-right, 96px)
+        8px
+        var(--neyo-oneline-left, 56px) !important;
+
+    line-height: 24px !important;
+
+    transform: none !important;
+
+    box-sizing: border-box !important;
+}
+
+
+/* =========================================================
+   16. MULTILINE WITH ATTACHMENTS
+   Keep typing logic owned by composer-scrollbar.css.
+   Only ensure preview row remains separate.
+   ========================================================= */
+
+#glassInputContainer:has(
+    #attachedChipsWrapper:not(:empty)
+).composer-multiline:not(.is-writing-expanded) {
+    height: auto !important;
+
+    min-height:
+        calc(
+            var(--attachment-preview-height) +
+            var(--neyo-rail-height, 56px)
+        ) !important;
+
+    max-height: none !important;
+}
+
+
+#glassInputContainer:has(
+    #attachedChipsWrapper:not(:empty)
+).composer-multiline:not(.is-writing-expanded)
+.composer-input-row {
+    height: auto !important;
+
+    min-height:
+        var(--neyo-rail-height, 56px) !important;
+
+    max-height: none !important;
+}
+
+
+/* =========================================================
+   17. SUGGESTIONS
+   Do not force display.
+   Only prevent attachment-specific hiding.
+   ========================================================= */
+
+#composerWrapper:has(
+    #attachedChipsWrapper:not(:empty)
+)
+.live-suggestions {
+    visibility: visible;
+    opacity: 1;
+}
+
+
+/* =========================================================
+   18. DARK MODE
+   ========================================================= */
+
+body.dark-mode
+.attachment-popup-menu {
+    border-color:
+        rgba(255, 255, 255, 0.08);
+
+    background:
+        rgba(28, 28, 28, 0.94);
+
+    box-shadow:
+        0 14px 46px
+        rgba(0, 0, 0, 0.34);
+}
+
+
+body.dark-mode
+.attachment-popup-item {
+    color:
+        rgba(255, 255, 255, 0.94);
+}
+
+
+body.dark-mode
+.attachment-popup-item:hover {
+    background:
+        rgba(255, 255, 255, 0.07);
+}
+
+
+body.dark-mode
+#glassInputContainer
+.attachment-preview-card {
+    border-color:
+        rgba(255, 255, 255, 0.08) !important;
+
+    background:
+        rgba(255, 255, 255, 0.045) !important;
+}
+
+
+body.dark-mode
+#glassInputContainer
+.attachment-preview-card
+.attachment-preview-file {
+    background:
+        rgba(255, 255, 255, 0.035);
+
+    color:
+        rgba(255, 255, 255, 0.92);
+}
+
+
+/* =========================================================
+   19. MOBILE
+   ========================================================= */
+
+@media (max-width: 767px) {
+
+    #composerWrapper {
+        --attachment-preview-height: 70px;
+        --attachment-card-width: 118px;
+        --attachment-card-height: 60px;
+        --attachment-card-radius: 11px;
+        --attachment-gap: 6px;
     }
 
 
-    /* =====================================================
-       CONFIG
-       ===================================================== */
-
-    const MAX_ATTACHED_FILES = 5;
-
-
-    /* =====================================================
-       STATE
-       ===================================================== */
-
-    let attachedFiles = [];
-
-    let dragDepth = 0;
-
-
-    /* =====================================================
-       ICON REFRESH
-       ===================================================== */
-
-    function refreshIcons() {
-        if (
-            window.lucide &&
-            typeof window.lucide.createIcons === "function"
-        ) {
-            try {
-                window.lucide.createIcons();
-            } catch {
-                // Non-fatal.
-            }
-        }
+    #glassInputContainer
+    #attachedChipsWrapper:not(:empty) {
+        padding:
+            6px
+            8px
+            4px !important;
     }
 
 
-    /* =====================================================
-       FILE CATEGORY
-       MIME + extension fallback
-       ===================================================== */
-
-    function getFileCategory(file) {
-        const type =
-            String(
-                file?.type || ""
-            ).toLowerCase();
-
-        const name =
-            String(
-                file?.name || ""
-            ).toLowerCase();
-
-
-        /* IMAGE */
-
-        if (
-            type.startsWith("image/") ||
-            /\.(png|jpe?g|webp|gif|bmp|avif|heic|heif|svg)$/i
-                .test(name)
-        ) {
-            return "image";
-        }
-
-
-        /* AUDIO */
-
-        if (
-            type.startsWith("audio/") ||
-            /\.(mp3|wav|m4a|aac|ogg|flac|opus)$/i
-                .test(name)
-        ) {
-            return "audio";
-        }
-
-
-        /* VIDEO */
-
-        if (
-            type.startsWith("video/") ||
-            /\.(mp4|webm|mov|m4v|avi|mkv)$/i
-                .test(name)
-        ) {
-            return "video";
-        }
-
-
-        /* PDF */
-
-        if (
-            type.includes("pdf") ||
-            /\.pdf$/i.test(name)
-        ) {
-            return "pdf";
-        }
-
-
-        /* DOCUMENT */
-
-        if (
-            /\.(doc|docx|rtf|odt)$/i
-                .test(name)
-        ) {
-            return "document";
-        }
-
-
-        /* SPREADSHEET */
-
-        if (
-            /\.(xls|xlsx|csv|ods)$/i
-                .test(name)
-        ) {
-            return "spreadsheet";
-        }
-
-
-        /* PRESENTATION */
-
-        if (
-            /\.(ppt|pptx|odp)$/i
-                .test(name)
-        ) {
-            return "presentation";
-        }
-
-
-        /* CODE */
-
-        if (
-            /\.(js|jsx|ts|tsx|py|java|c|cpp|cs|go|rs|php|rb|swift|kt|html|css|json|xml|yaml|yml|sql|sh)$/i
-                .test(name)
-        ) {
-            return "code";
-        }
-
-
-        return "text";
+    #glassInputContainer:has(
+        #attachedChipsWrapper:not(:empty)
+    ):not(.is-writing-expanded) {
+        min-height:
+            calc(
+                var(--attachment-preview-height) +
+                var(--neyo-pill-height, 54px)
+            ) !important;
     }
 
 
-    /* =====================================================
-       IMAGE DETECTION
-       ===================================================== */
+    #glassInputContainer:has(
+        #attachedChipsWrapper:not(:empty)
+    ):not(.is-writing-expanded)
+    .composer-input-row {
+        height:
+            var(--neyo-pill-height, 54px) !important;
 
-    function isImageAttachment(file) {
-        if (!file) {
-            return false;
-        }
+        min-height:
+            var(--neyo-pill-height, 54px) !important;
 
-
-        if (
-            String(
-                file.type || ""
-            )
-                .toLowerCase()
-                .startsWith("image/")
-        ) {
-            return true;
-        }
-
-
-        if (
-            String(
-                file.mimeType || ""
-            )
-                .toLowerCase()
-                .startsWith("image/")
-        ) {
-            return true;
-        }
-
-
-        if (
-            file.category === "image"
-        ) {
-            return true;
-        }
-
-
-        const name =
-            String(
-                file.name || ""
-            ).toLowerCase();
-
-
-        return /\.(png|jpe?g|webp|gif|bmp|avif|heic|heif|svg)$/i
-            .test(name);
+        max-height:
+            var(--neyo-pill-height, 54px) !important;
     }
 
 
-    /* =====================================================
-       ICON MAPPING
-       ===================================================== */
+    #glassInputContainer:has(
+        #attachedChipsWrapper:not(:empty)
+    ):not(.is-writing-expanded):not(.composer-multiline)
+    textarea#chatInput {
+        height:
+            var(--neyo-control-size, 38px) !important;
 
-    function getFileIcon(file) {
-        const category =
-            file?.category ||
-            getFileCategory(file);
+        min-height:
+            var(--neyo-control-size, 38px) !important;
 
+        max-height:
+            var(--neyo-control-size, 38px) !important;
 
-        switch (category) {
+        padding:
+            7px
+            var(--neyo-oneline-right, 90px)
+            7px
+            var(--neyo-oneline-left, 52px) !important;
 
-            case "image":
-                return "image";
-
-            case "audio":
-                return "music";
-
-            case "video":
-                return "video";
-
-            case "pdf":
-                return "file-text";
-
-            case "document":
-                return "file-text";
-
-            case "spreadsheet":
-                return "sheet";
-
-            case "presentation":
-                return "presentation";
-
-            case "code":
-                return "file-code";
-
-            default:
-                return "file";
-        }
+        line-height: 24px !important;
     }
 
 
-    /* =====================================================
-       PREVIEW URL
-       ===================================================== */
+    .attachment-popup-menu {
+        min-width: 160px;
 
-    function getPreviewUrl(file) {
-        if (!file) {
-            return "";
-        }
+        bottom:
+            calc(100% + 10px);
 
-
-        if (file.previewUrl) {
-            return file.previewUrl;
-        }
-
-
-        if (file.signedUrl) {
-            return file.signedUrl;
-        }
-
-
-        if (file.url) {
-            return file.url;
-        }
-
-
-        return "";
+        padding:
+            6px
+            4px;
     }
 
 
-    /* =====================================================
-       VALID FILE
-       ===================================================== */
+    .attachment-popup-item {
+        gap: 10px;
 
-    function isNativeFile(file) {
-        return (
-            typeof File !== "undefined" &&
-            file instanceof File
-        );
+        padding:
+            9px
+            12px;
+
+        font-size: 13px;
     }
 
 
-    /* =====================================================
-       DUPLICATE CHECK
-       ===================================================== */
-
-    function isDuplicateFile(file) {
-        return attachedFiles.some(
-            item =>
-                item.name === file.name &&
-                item.size === file.size &&
-                item.lastModified ===
-                    file.lastModified
-        );
+    .drag-drop-overlay {
+        gap: 6px;
     }
 
 
-    /* =====================================================
-       DRAG FILE CHECK
-       ===================================================== */
+    .drag-drop-overlay > svg,
+    .drag-drop-overlay > i {
+        width: 24px;
+        height: 24px;
 
-    function dragContainsFiles(event) {
-        const types =
-            Array.from(
-                event.dataTransfer
-                    ?.types || []
-            );
-
-
-        return types.includes(
-            "Files"
-        );
+        flex-basis: 24px;
     }
 
 
-    /* =====================================================
-       CREATE PREVIEW URL
-       ===================================================== */
-
-    function createPreviewUrl(file, category) {
-        if (
-            category !== "image" &&
-            !isImageAttachment(file)
-        ) {
-            return "";
-        }
+    .drag-drop-overlay > span {
+        font-size: 13px;
+    }
+}
 
 
-        try {
-            return URL.createObjectURL(
-                file
-            );
-        } catch {
-            return "";
-        }
+/* =========================================================
+   20. SMALL MOBILE
+   ========================================================= */
+
+@media (max-width: 380px) {
+
+    #composerWrapper {
+        --attachment-card-width: 108px;
+        --attachment-gap: 5px;
     }
 
 
-    /* =====================================================
-       REVOKE PREVIEW
-       ===================================================== */
-
-    function revokePreview(file) {
-        const url =
-            file?.previewUrl;
-
-
-        if (
-            typeof url === "string" &&
-            url.startsWith("blob:")
-        ) {
-            try {
-                URL.revokeObjectURL(
-                    url
-                );
-            } catch {
-                // Non-fatal cleanup.
-            }
-        }
+    #glassInputContainer
+    #attachedChipsWrapper:not(:empty) {
+        padding-left: 6px !important;
+        padding-right: 6px !important;
     }
+}
 
 
-    /* =====================================================
-       EVENTS
-       ===================================================== */
+/* =========================================================
+   21. TOUCH
+   ========================================================= */
 
-    function emitChange() {
-        window.dispatchEvent(
-            new CustomEvent(
-                "neyo:attachments-change",
-                {
-                    detail: {
-                        files:
-                            [...attachedFiles],
+@media (pointer: coarse) {
 
-                        count:
-                            attachedFiles.length
-                    }
-                }
-            )
-        );
+    .attachment-popup-item,
+    .attachment-remove-btn {
+        touch-action:
+            manipulation;
+
+        -webkit-tap-highlight-color:
+            transparent;
     }
+}
 
 
-    function emitLimit() {
-        window.dispatchEvent(
-            new CustomEvent(
-                "neyo:attachments-limit",
-                {
-                    detail: {
-                        max:
-                            MAX_ATTACHED_FILES
-                    }
-                }
-            )
-        );
+/* =========================================================
+   22. REDUCED MOTION
+   ========================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+
+    .attachment-popup-item,
+    .attachment-remove-btn,
+    .drag-drop-overlay {
+        transition:
+            none !important;
     }
-
-
-    /* =====================================================
-       RENDER
-       ===================================================== */
-
-    function renderAttachments() {
-        attachedChipsWrapper
-            .replaceChildren();
-
-
-        attachedFiles.forEach(
-            (file, index) => {
-
-                const card =
-                    document.createElement(
-                        "div"
-                    );
-
-
-                card.className =
-                    "attachment-preview-card";
-
-
-                card.dataset.attachmentIndex =
-                    String(index);
-
-
-                /* =========================================
-                   IMAGE PREVIEW
-                   ========================================= */
-
-                if (
-                    isImageAttachment(file)
-                ) {
-
-                    const image =
-                        document.createElement(
-                            "img"
-                        );
-
-
-                    image.alt =
-                        file.name ||
-                        "Attached image";
-
-
-                    const previewUrl =
-                        getPreviewUrl(file);
-
-
-                    if (previewUrl) {
-                        image.src =
-                            previewUrl;
-                    }
-
-
-                    image.loading =
-                        "eager";
-
-
-                    image.decoding =
-                        "async";
-
-
-                    /*
-                    If browser cannot decode image,
-                    keep card alive rather than breaking
-                    attachment rendering.
-                    */
-
-                    image.addEventListener(
-                        "error",
-                        () => {
-                            card.classList.add(
-                                "attachment-preview-error"
-                            );
-                        },
-                        {
-                            once: true
-                        }
-                    );
-
-
-                    card.appendChild(
-                        image
-                    );
-                }
-
-
-                /* =========================================
-                   NORMAL FILE
-                   ========================================= */
-
-                else {
-
-                    const box =
-                        document.createElement(
-                            "div"
-                        );
-
-
-                    box.className =
-                        "attachment-preview-file";
-
-
-                    const icon =
-                        document.createElement(
-                            "i"
-                        );
-
-
-                    icon.setAttribute(
-                        "data-lucide",
-                        getFileIcon(file)
-                    );
-
-
-                    icon.setAttribute(
-                        "aria-hidden",
-                        "true"
-                    );
-
-
-                    const name =
-                        document.createElement(
-                            "span"
-                        );
-
-
-                    name.textContent =
-                        file.name ||
-                        "Attached file";
-
-
-                    box.append(
-                        icon,
-                        name
-                    );
-
-
-                    card.appendChild(
-                        box
-                    );
-                }
-
-
-                /* =========================================
-                   REMOVE BUTTON
-                   ========================================= */
-
-                const removeBtn =
-                    document.createElement(
-                        "button"
-                    );
-
-
-                removeBtn.type =
-                    "button";
-
-
-                removeBtn.className =
-                    "attachment-remove-btn";
-
-
-                removeBtn.dataset.tooltip =
-                    "Remove attachment";
-
-
-                removeBtn.setAttribute(
-                    "aria-label",
-                    `Remove ${
-                        file.name ||
-                        "attachment"
-                    }`
-                );
-
-
-                removeBtn.innerHTML = `
-                    <i
-                        data-lucide="x"
-                        width="14"
-                        height="14"
-                        aria-hidden="true"
-                    ></i>
-                `;
-
-
-                removeBtn.addEventListener(
-                    "click",
-                    event => {
-
-                        event.preventDefault();
-                        event.stopPropagation();
-
-                        removeAttachment(
-                            index
-                        );
-                    }
-                );
-
-
-                card.appendChild(
-                    removeBtn
-                );
-
-
-                attachedChipsWrapper
-                    .appendChild(
-                        card
-                    );
-            }
-        );
-
-
-        refreshIcons();
-
-        emitChange();
-
-
-        /*
-        Composer JS may need to recalculate
-        after attachment row changes.
-        */
-
-        window.NeyoComposerScrollbar
-            ?.refresh?.();
-    }
-
-
-    /* =====================================================
-       ADD FILES
-       ===================================================== */
-
-    function addFiles(files) {
-        const selected =
-            Array.from(
-                files || []
-            );
-
-
-        if (!selected.length) {
-            return;
-        }
-
-
-        let changed = false;
-
-
-        for (const file of selected) {
-
-            /* -----------------------------------------
-               Maximum attachment count
-               ----------------------------------------- */
-
-            if (
-                attachedFiles.length >=
-                MAX_ATTACHED_FILES
-            ) {
-
-                emitLimit();
-
-                break;
-            }
-
-
-            /* -----------------------------------------
-               Only real browser File objects
-               ----------------------------------------- */
-
-            if (
-                !isNativeFile(file)
-            ) {
-                continue;
-            }
-
-
-            /* -----------------------------------------
-               Skip duplicates
-               ----------------------------------------- */
-
-            if (
-                isDuplicateFile(file)
-            ) {
-                continue;
-            }
-
-
-            const category =
-                getFileCategory(file);
-
-
-            const previewUrl =
-                createPreviewUrl(
-                    file,
-                    category
-                );
-
-
-            const entry = {
-
-                id:
-                    (
-                        window.crypto
-                            ?.randomUUID?.() ||
-                        `${Date.now()}-${Math.random()
-                            .toString(36)
-                            .slice(2)}`
-                    ),
-
-                name:
-                    file.name ||
-                    "attachment",
-
-                type:
-                    file.type ||
-                    "application/octet-stream",
-
-                mimeType:
-                    file.type ||
-                    "application/octet-stream",
-
-                category,
-
-                size:
-                    Number(
-                        file.size || 0
-                    ),
-
-                lastModified:
-                    Number(
-                        file.lastModified || 0
-                    ),
-
-                rawFile:
-                    file,
-
-                previewUrl
-            };
-
-
-            attachedFiles.push(
-                entry
-            );
-
-
-            changed = true;
-        }
-
-
-        if (changed) {
-            renderAttachments();
-        }
-    }
-
-
-    /* =====================================================
-       REMOVE ONE
-       ===================================================== */
-
-    function removeAttachment(index) {
-        if (
-            index < 0 ||
-            index >= attachedFiles.length
-        ) {
-            return;
-        }
-
-
-        const [
-            removed
-        ] =
-            attachedFiles.splice(
-                index,
-                1
-            );
-
-
-        revokePreview(
-            removed
-        );
-
-
-        renderAttachments();
-    }
-
-
-    /* =====================================================
-       CLEAR ALL
-       ===================================================== */
-
-    function clearAttachments() {
-        attachedFiles.forEach(
-            revokePreview
-        );
-
-
-        attachedFiles = [];
-
-
-        renderAttachments();
-    }
-
-
-    /* =====================================================
-       POPUP MENU
-       ===================================================== */
-
-    function openAttachmentMenu() {
-        attachPopupMenu
-            ?.classList
-            .add("show");
-    }
-
-
-    function closeAttachmentMenu() {
-        attachPopupMenu
-            ?.classList
-            .remove("show");
-    }
-
-
-    function toggleAttachmentMenu() {
-        attachPopupMenu
-            ?.classList
-            .toggle("show");
-    }
-
-
-    /* =====================================================
-       + BUTTON
-       ===================================================== */
-
-    attachBtn?.addEventListener(
-        "click",
-        event => {
-
-            event.preventDefault();
-            event.stopPropagation();
-
-            toggleAttachmentMenu();
-        }
-    );
-
-
-    /* =====================================================
-       ADD FILES MENU ITEM
-       ===================================================== */
-
-    addFilesMenuBtn?.addEventListener(
-        "click",
-        event => {
-
-            event.preventDefault();
-            event.stopPropagation();
-
-
-            closeAttachmentMenu();
-
-
-            /*
-            Must remain inside the direct user click
-            so browser allows native picker.
-            */
-
-            hiddenFileInput
-                ?.click();
-        }
-    );
-
-
-    /* =====================================================
-       NATIVE FILE INPUT
-       ===================================================== */
-
-    hiddenFileInput?.addEventListener(
-        "change",
-        event => {
-
-            const input =
-                event.currentTarget;
-
-
-            const files =
-                input?.files;
-
-
-            if (
-                files &&
-                files.length
-            ) {
-                addFiles(
-                    files
-                );
-            }
-
-
-            /*
-            Important:
-            Allows selecting same file again
-            after it has been removed.
-            */
-
-            if (input) {
-                input.value = "";
-            }
-        }
-    );
-
-
-    /* =====================================================
-       CLICK OUTSIDE
-       ===================================================== */
-
-    document.addEventListener(
-        "click",
-        event => {
-
-            const target =
-                event.target;
-
-
-            const insideButton =
-                attachBtn
-                    ?.contains(target);
-
-
-            const insideMenu =
-                attachPopupMenu
-                    ?.contains(target);
-
-
-            if (
-                !insideButton &&
-                !insideMenu
-            ) {
-                closeAttachmentMenu();
-            }
-        }
-    );
-
-
-    /* =====================================================
-       DRAG OVERLAY
-       ===================================================== */
-
-    function showDragOverlay() {
-        dragDropOverlay
-            ?.classList
-            .add("show");
-    }
-
-
-    function hideDragOverlay() {
-        dragDepth = 0;
-
-
-        dragDropOverlay
-            ?.classList
-            .remove("show");
-    }
-
-
-    /* =====================================================
-       DRAG & DROP
-       Single controlled pipeline.
-       ===================================================== */
-
-    if (composerWrapper) {
-
-        /* -----------------------------------------
-           DRAG ENTER
-           ----------------------------------------- */
-
-        composerWrapper
-            .addEventListener(
-                "dragenter",
-                event => {
-
-                    if (
-                        !dragContainsFiles(
-                            event
-                        )
-                    ) {
-                        return;
-                    }
-
-
-                    event.preventDefault();
-                    event.stopPropagation();
-
-
-                    dragDepth += 1;
-
-
-                    showDragOverlay();
-                }
-            );
-
-
-        /* -----------------------------------------
-           DRAG OVER
-           ----------------------------------------- */
-
-        composerWrapper
-            .addEventListener(
-                "dragover",
-                event => {
-
-                    if (
-                        !dragContainsFiles(
-                            event
-                        )
-                    ) {
-                        return;
-                    }
-
-
-                    event.preventDefault();
-                    event.stopPropagation();
-
-
-                    if (
-                        event.dataTransfer
-                    ) {
-                        event.dataTransfer.dropEffect =
-                            "copy";
-                    }
-
-
-                    showDragOverlay();
-                }
-            );
-
-
-        /* -----------------------------------------
-           DRAG LEAVE
-           ----------------------------------------- */
-
-        composerWrapper
-            .addEventListener(
-                "dragleave",
-                event => {
-
-                    if (
-                        !dragContainsFiles(
-                            event
-                        )
-                    ) {
-                        return;
-                    }
-
-
-                    event.preventDefault();
-                    event.stopPropagation();
-
-
-                    dragDepth =
-                        Math.max(
-                            0,
-                            dragDepth - 1
-                        );
-
-
-                    if (
-                        dragDepth === 0
-                    ) {
-                        hideDragOverlay();
-                    }
-                }
-            );
-
-
-        /* -----------------------------------------
-           DROP
-           ----------------------------------------- */
-
-        composerWrapper
-            .addEventListener(
-                "drop",
-                event => {
-
-                    event.preventDefault();
-                    event.stopPropagation();
-
-
-                    const files =
-                        event.dataTransfer
-                            ?.files;
-
-
-                    hideDragOverlay();
-
-
-                    if (
-                        files &&
-                        files.length
-                    ) {
-                        addFiles(
-                            files
-                        );
-                    }
-                }
-            );
-    }
-
-
-    /* =====================================================
-       GLOBAL DRAG SAFETY
-       ===================================================== */
-
-    document.addEventListener(
-        "dragend",
-        hideDragOverlay
-    );
-
-
-    window.addEventListener(
-        "blur",
-        () => {
-
-            if (
-                dragDropOverlay
-                    ?.classList
-                    .contains("show")
-            ) {
-                hideDragOverlay();
-            }
-        }
-    );
-
-
-    /* =====================================================
-       PASTE FILES
-       ===================================================== */
-
-    document.addEventListener(
-        "paste",
-        event => {
-
-            const files =
-                event.clipboardData
-                    ?.files;
-
-
-            if (
-                !files ||
-                !files.length
-            ) {
-                return;
-            }
-
-
-            addFiles(
-                files
-            );
-        }
-    );
-
-
-    /* =====================================================
-       PUBLIC EVENTS
-       ===================================================== */
-
-    window.addEventListener(
-        "neyo:attachments-clear",
-        clearAttachments
-    );
-
-
-    window.addEventListener(
-        "neyo:attachments-open",
-        openAttachmentMenu
-    );
-
-
-    window.addEventListener(
-        "neyo:attachments-close",
-        closeAttachmentMenu
-    );
-
-
-    /* =====================================================
-       CLEANUP
-       ===================================================== */
-
-    window.addEventListener(
-        "pagehide",
-        () => {
-
-            attachedFiles
-                .forEach(
-                    revokePreview
-                );
-
-
-            hideDragOverlay();
-        },
-        {
-            once: true
-        }
-    );
-
-
-    /* =====================================================
-       PUBLIC API
-       ===================================================== */
-
-    window.NeyoAttachments =
-        Object.freeze({
-
-            getFiles:
-                () =>
-                    [...attachedFiles],
-
-            getCount:
-                () =>
-                    attachedFiles.length,
-
-            add:
-                addFiles,
-
-            remove:
-                removeAttachment,
-
-            clear:
-                clearAttachments,
-
-            render:
-                renderAttachments,
-
-            openMenu:
-                openAttachmentMenu,
-
-            closeMenu:
-                closeAttachmentMenu,
-
-            maxFiles:
-                MAX_ATTACHED_FILES
-        });
-
-
-    /* =====================================================
-       INITIAL STATE
-       ===================================================== */
-
-    hideDragOverlay();
-
-    renderAttachments();
-
-})();
+}

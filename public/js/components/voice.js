@@ -1,23 +1,22 @@
 /*
 =========================================================
 NEYO — LIVE VOICE CONVERSATION
-Gemini 2.5 Flash Native Audio
+STEP 1: Stable minimal implementation
 
 Flow:
-Mic
-→ POST /api/voice-token
-→ ephemeral token
-→ Gemini Live API
-→ mic PCM 16 kHz
-→ Gemini native audio
-→ speaker PCM 24 kHz
+Mic click
+→ /api/voice-token
+→ Gemini Live connection
+→ microphone PCM stream
+→ Gemini native audio reply
+→ browser playback
 
 NO:
-- SpeechRecognition
+- browser SpeechRecognition
 - MediaRecorder
 - /api/transcribe
-- FFmpeg
-- dictation mode
+- dictation
+- chat history integration
 =========================================================
 */
 
@@ -34,21 +33,20 @@ import {
     /* =====================================================
        LEGACY LISTENER ISOLATION
 
-       Keeps neo.js untouched.
-       Clone removes old listeners from mic/stop controls.
+       neo.js remains untouched.
+       Replacing these buttons removes listeners previously
+       attached directly to the original DOM nodes.
        ===================================================== */
 
-    function isolateButton(original) {
-        if (!original) {
-            return null;
-        }
+    function isolateButton(element) {
+        if (!element) return null;
 
-        const clean =
-            original.cloneNode(true);
+        const clone =
+            element.cloneNode(true);
 
-        original.replaceWith(clean);
+        element.replaceWith(clone);
 
-        return clean;
+        return clone;
     }
 
 
@@ -91,62 +89,49 @@ import {
        CONFIG
        ===================================================== */
 
-    const CONFIG =
-        Object.freeze({
+    const CONFIG = Object.freeze({
 
-            tokenEndpoint:
-                "/api/voice-token",
+        tokenEndpoint:
+            "/api/voice-token",
 
-            inputSampleRate:
-                16000,
+        inputSampleRate:
+            16000,
 
-            outputSampleRate:
-                24000,
+        outputSampleRate:
+            24000,
 
-            processorBufferSize:
-                4096,
+        processorBufferSize:
+            4096,
 
-            analyserFftSize:
-                256,
+        analyserFftSize:
+            256,
 
-            analyserSmoothing:
-                0.82,
+        maxSessionMs:
+            30 * 60 * 1000
 
-            maxSessionMs:
-                30 * 60 * 1000,
-
-            minimumBarHeight:
-                3,
-
-            maximumBarHeight:
-                24,
-
-            idleOpacity:
-                0.32,
-
-            activeOpacity:
-                0.95
-        });
+    });
 
 
     /* =====================================================
-       STATE
+       SESSION STATE
        ===================================================== */
 
-    let session =
+    let liveSession =
         null;
 
-    let sessionStarting =
+    let connecting =
         false;
 
-    let sessionActive =
+    let active =
         false;
 
     let sessionTimer =
         0;
 
 
-    /* Mic audio */
+    /* =====================================================
+       MICROPHONE STATE
+       ===================================================== */
 
     let micStream =
         null;
@@ -154,38 +139,28 @@ import {
     let inputContext =
         null;
 
-    let micSource =
+    let inputSource =
         null;
 
-    let processorNode =
+    let processor =
         null;
 
     let silentGain =
-        null;
-
-    let analyser =
-        null;
-
-    let analyserData =
         null;
 
     let inputSampleRate =
         48000;
 
 
-    /* Output audio */
+    /* =====================================================
+       WAVEFORM STATE
+       ===================================================== */
 
-    let outputContext =
+    let analyser =
         null;
 
-    let nextPlaybackTime =
-        0;
-
-    const playingSources =
-        new Set();
-
-
-    /* Wave animation */
+    let analyserData =
+        null;
 
     let waveRaf =
         0;
@@ -194,19 +169,30 @@ import {
         0;
 
 
+    /* =====================================================
+       OUTPUT STATE
+       ===================================================== */
+
+    let outputContext =
+        null;
+
+    let nextPlaybackTime =
+        0;
+
+    const playbackSources =
+        new Set();
+
+
     console.log(
-        "[NEYO Voice] Gemini Live engine loaded"
+        "[NEYO Voice] Live voice module loaded"
     );
 
 
     /* =====================================================
-       HELPERS
+       UI STATE
        ===================================================== */
 
-    function setVoiceState(
-        active,
-        connecting = false
-    ) {
+    function syncUi() {
 
         composerInputRow.classList.toggle(
             "is-transcribing",
@@ -234,7 +220,7 @@ import {
 
             micBtn.setAttribute(
                 "aria-label",
-                "Connecting voice"
+                "Connecting voice conversation"
             );
 
         } else if (active) {
@@ -282,6 +268,7 @@ import {
             return [];
         }
 
+
         return Array.from(
             waveform.querySelectorAll(
                 "span"
@@ -296,19 +283,17 @@ import {
             0;
 
 
-        getWaveBars()
-            .forEach(
-                bar => {
+        for (
+            const bar
+            of getWaveBars()
+        ) {
 
-                    bar.style.height =
-                        `${CONFIG.minimumBarHeight}px`;
+            bar.style.height =
+                "3px";
 
-                    bar.style.opacity =
-                        String(
-                            CONFIG.idleOpacity
-                        );
-                }
-            );
+            bar.style.opacity =
+                "0.32";
+        }
     }
 
 
@@ -361,7 +346,7 @@ import {
         timestamp
     ) {
 
-        if (!sessionActive) {
+        if (!active) {
             return;
         }
 
@@ -371,17 +356,17 @@ import {
 
 
         const target =
-            Math.min(
-                1,
-                Math.max(
-                    0,
+            Math.max(
+                0,
+                Math.min(
+                    1,
                     (rms - 0.012) /
-                    0.12
+                    0.11
                 )
             );
 
 
-        const speed =
+        const smoothing =
             target >
             smoothLevel
                 ? 0.32
@@ -393,7 +378,7 @@ import {
                 target -
                 smoothLevel
             ) *
-            speed;
+            smoothing;
 
 
         const bars =
@@ -425,16 +410,16 @@ import {
                 const weight =
                     1 -
                     distance *
-                    0.45;
+                    0.46;
 
 
-                const motion =
+                const movement =
                     0.82 +
                     Math.sin(
                         timestamp *
                         0.005 +
                         index *
-                        0.9
+                        0.85
                     ) *
                     0.18;
 
@@ -446,34 +431,25 @@ import {
                             1,
                             smoothLevel *
                             weight *
-                            motion
+                            movement
                         )
                     );
 
 
-                const height =
-                    CONFIG.minimumBarHeight +
-                    energy *
-                    (
-                        CONFIG.maximumBarHeight -
-                        CONFIG.minimumBarHeight
-                    );
-
-
-                const opacity =
-                    CONFIG.idleOpacity +
-                    energy *
-                    (
-                        CONFIG.activeOpacity -
-                        CONFIG.idleOpacity
-                    );
-
-
                 bar.style.height =
-                    `${height.toFixed(2)}px`;
+                    `${(
+                        3 +
+                        energy *
+                        21
+                    ).toFixed(2)}px`;
+
 
                 bar.style.opacity =
-                    opacity.toFixed(3);
+                    `${(
+                        0.32 +
+                        energy *
+                        0.63
+                    ).toFixed(3)}`;
             }
         );
 
@@ -486,77 +462,7 @@ import {
 
 
     /* =====================================================
-       FLOAT32 → PCM16
-       ===================================================== */
-
-    function float32ToPcm16(
-        input
-    ) {
-
-        const buffer =
-            new ArrayBuffer(
-                input.length *
-                2
-            );
-
-
-        const view =
-            new DataView(
-                buffer
-            );
-
-
-        let offset =
-            0;
-
-
-        for (
-            let i = 0;
-            i < input.length;
-            i += 1
-        ) {
-
-            const sample =
-                Math.max(
-                    -1,
-                    Math.min(
-                        1,
-                        input[i]
-                    )
-                );
-
-
-            const value =
-                sample < 0
-                    ? sample *
-                        0x8000
-                    : sample *
-                        0x7fff;
-
-
-            view.setInt16(
-                offset,
-                value,
-                true
-            );
-
-
-            offset +=
-                2;
-        }
-
-
-        return new Uint8Array(
-            buffer
-        );
-    }
-
-
-    /* =====================================================
-       SIMPLE DOWNSAMPLER
-
-       Browser AudioContext commonly = 48 kHz.
-       Gemini Live input requires 16 kHz PCM.
+       RESAMPLE FLOAT32
        ===================================================== */
 
     function resampleFloat32(
@@ -569,6 +475,7 @@ import {
             sourceRate ===
             targetRate
         ) {
+
             return new Float32Array(
                 input
             );
@@ -610,17 +517,21 @@ import {
 
 
             const end =
-                Math.min(
-                    input.length,
-                    Math.floor(
-                        (i + 1) *
-                        ratio
+                Math.max(
+                    start + 1,
+                    Math.min(
+                        input.length,
+                        Math.floor(
+                            (i + 1) *
+                            ratio
+                        )
                     )
                 );
 
 
             let sum =
                 0;
+
 
             let count =
                 0;
@@ -643,12 +554,7 @@ import {
             output[i] =
                 count
                     ? sum / count
-                    : input[
-                        Math.min(
-                            start,
-                            input.length - 1
-                        )
-                    ] || 0;
+                    : 0;
         }
 
 
@@ -657,32 +563,88 @@ import {
 
 
     /* =====================================================
-       BASE64 HELPERS
+       FLOAT32 → PCM16 LITTLE-ENDIAN
        ===================================================== */
 
-    function uint8ToBase64(
-        bytes
+    function floatToPcm16(
+        input
     ) {
 
-        const CHUNK =
-            0x8000;
+        const output =
+            new Uint8Array(
+                input.length *
+                2
+            );
 
+
+        const view =
+            new DataView(
+                output.buffer
+            );
+
+
+        for (
+            let i = 0;
+            i < input.length;
+            i += 1
+        ) {
+
+            const sample =
+                Math.max(
+                    -1,
+                    Math.min(
+                        1,
+                        input[i]
+                    )
+                );
+
+
+            const integer =
+                sample < 0
+                    ? sample * 32768
+                    : sample * 32767;
+
+
+            view.setInt16(
+                i * 2,
+                integer,
+                true
+            );
+        }
+
+
+        return output;
+    }
+
+
+    /* =====================================================
+       BASE64
+       ===================================================== */
+
+    function bytesToBase64(
+        bytes
+    ) {
 
         let binary =
             "";
 
 
+        const chunkSize =
+            32768;
+
+
         for (
             let i = 0;
             i < bytes.length;
-            i += CHUNK
+            i += chunkSize
         ) {
 
             const chunk =
                 bytes.subarray(
                     i,
                     Math.min(
-                        i + CHUNK,
+                        i +
+                        chunkSize,
                         bytes.length
                     )
                 );
@@ -701,13 +663,13 @@ import {
     }
 
 
-    function base64ToUint8(
-        base64
+    function base64ToBytes(
+        value
     ) {
 
         const binary =
             atob(
-                base64
+                value
             );
 
 
@@ -742,6 +704,19 @@ import {
         bytes
     ) {
 
+        const sampleCount =
+            Math.floor(
+                bytes.byteLength /
+                2
+            );
+
+
+        const output =
+            new Float32Array(
+                sampleCount
+            );
+
+
         const view =
             new DataView(
                 bytes.buffer,
@@ -750,18 +725,9 @@ import {
             );
 
 
-        const samples =
-            new Float32Array(
-                Math.floor(
-                    bytes.byteLength /
-                    2
-                )
-            );
-
-
         for (
             let i = 0;
-            i < samples.length;
+            i < sampleCount;
             i += 1
         ) {
 
@@ -772,7 +738,7 @@ import {
                 );
 
 
-            samples[i] =
+            output[i] =
                 sample /
                 (
                     sample < 0
@@ -782,13 +748,12 @@ import {
         }
 
 
-        return samples;
+        return output;
     }
 
 
     /* =====================================================
-       OUTPUT AUDIO
-       Gemini Live native audio = PCM 24 kHz.
+       OUTPUT AUDIO CONTEXT
        ===================================================== */
 
     async function ensureOutputContext() {
@@ -796,15 +761,18 @@ import {
         if (
             outputContext &&
             outputContext.state !==
-                "closed"
+            "closed"
         ) {
 
             if (
                 outputContext.state ===
-                    "suspended"
+                "suspended"
             ) {
-                await outputContext.resume();
+
+                await outputContext
+                    .resume();
             }
+
 
             return outputContext;
         }
@@ -815,18 +783,25 @@ import {
             window.webkitAudioContext;
 
 
+        if (!AudioContextClass) {
+
+            throw new Error(
+                "Audio playback is not supported."
+            );
+        }
+
+
         outputContext =
-            new AudioContextClass({
-                sampleRate:
-                    CONFIG.outputSampleRate
-            });
+            new AudioContextClass();
 
 
         if (
             outputContext.state ===
-                "suspended"
+            "suspended"
         ) {
-            await outputContext.resume();
+
+            await outputContext
+                .resume();
         }
 
 
@@ -838,7 +813,11 @@ import {
     }
 
 
-    async function playPcmAudio(
+    /* =====================================================
+       PLAY GEMINI PCM 24kHz
+       ===================================================== */
+
+    async function playAudioChunk(
         base64
     ) {
 
@@ -852,30 +831,33 @@ import {
 
 
         const bytes =
-            base64ToUint8(
+            base64ToBytes(
                 base64
             );
 
 
-        const floatSamples =
+        const samples =
             pcm16ToFloat32(
                 bytes
             );
 
 
+        if (!samples.length) {
+            return;
+        }
+
+
         const audioBuffer =
             context.createBuffer(
                 1,
-                floatSamples.length,
+                samples.length,
                 CONFIG.outputSampleRate
             );
 
 
         audioBuffer
             .getChannelData(0)
-            .set(
-                floatSamples
-            );
+            .set(samples);
 
 
         const source =
@@ -891,7 +873,7 @@ import {
         );
 
 
-        const startTime =
+        const startAt =
             Math.max(
                 context.currentTime +
                 0.01,
@@ -900,42 +882,40 @@ import {
 
 
         source.start(
-            startTime
+            startAt
         );
 
 
         nextPlaybackTime =
-            startTime +
+            startAt +
             audioBuffer.duration;
 
 
-        playingSources.add(
+        playbackSources.add(
             source
         );
 
 
-        source.onended =
+        source.addEventListener(
+            "ended",
             () => {
 
-                playingSources.delete(
+                playbackSources.delete(
                     source
                 );
-            };
+            },
+            {
+                once: true
+            }
+        );
     }
 
 
-    /* =====================================================
-       INTERRUPTION
-
-       When user begins speaking again, clear queued
-       Gemini playback so conversation feels natural.
-       ===================================================== */
-
-    function stopCurrentPlayback() {
+    function stopPlayback() {
 
         for (
             const source
-            of playingSources
+            of playbackSources
         ) {
 
             try {
@@ -944,7 +924,7 @@ import {
         }
 
 
-        playingSources.clear();
+        playbackSources.clear();
 
 
         if (outputContext) {
@@ -959,7 +939,7 @@ import {
        TOKEN
        ===================================================== */
 
-    async function getVoiceToken() {
+    async function fetchVoiceToken() {
 
         const response =
             await fetch(
@@ -968,13 +948,13 @@ import {
                     method:
                         "POST",
 
-                    credentials:
-                        "same-origin",
-
                     headers: {
                         "Accept":
                             "application/json"
-                    }
+                    },
+
+                    credentials:
+                        "same-origin"
                 }
             );
 
@@ -988,8 +968,10 @@ import {
 
 
         try {
+
             data =
                 JSON.parse(raw);
+
         } catch {}
 
 
@@ -998,7 +980,7 @@ import {
             throw new Error(
                 data?.error ||
                 raw ||
-                `Voice token failed (${response.status})`
+                `Token request failed (${response.status})`
             );
         }
 
@@ -1019,7 +1001,7 @@ import {
 
 
     /* =====================================================
-       MIC STREAM
+       START MICROPHONE STREAM
        ===================================================== */
 
     async function startMicrophone() {
@@ -1054,15 +1036,25 @@ import {
             window.webkitAudioContext;
 
 
+        if (!AudioContextClass) {
+
+            throw new Error(
+                "Web Audio API is unavailable."
+            );
+        }
+
+
         inputContext =
             new AudioContextClass();
 
 
         if (
             inputContext.state ===
-                "suspended"
+            "suspended"
         ) {
-            await inputContext.resume();
+
+            await inputContext
+                .resume();
         }
 
 
@@ -1070,12 +1062,16 @@ import {
             inputContext.sampleRate;
 
 
-        micSource =
+        inputSource =
             inputContext
                 .createMediaStreamSource(
                     micStream
                 );
 
+
+        /* ------------------------------
+           Wave analyser
+           ------------------------------ */
 
         analyser =
             inputContext
@@ -1086,31 +1082,22 @@ import {
             CONFIG.analyserFftSize;
 
 
-        analyser
-            .smoothingTimeConstant =
-            CONFIG.analyserSmoothing;
-
-
         analyserData =
             new Uint8Array(
                 analyser.fftSize
             );
 
 
-        micSource.connect(
+        inputSource.connect(
             analyser
         );
 
 
-        /*
-        ScriptProcessor is deprecated but broadly supported
-        and keeps this implementation dependency-free.
+        /* ------------------------------
+           PCM capture
+           ------------------------------ */
 
-        Later it can be migrated to AudioWorklet without
-        changing Live API architecture.
-        */
-
-        processorNode =
+        processor =
             inputContext
                 .createScriptProcessor(
                     CONFIG.processorBufferSize,
@@ -1128,12 +1115,12 @@ import {
             0;
 
 
-        micSource.connect(
-            processorNode
+        inputSource.connect(
+            processor
         );
 
 
-        processorNode.connect(
+        processor.connect(
             silentGain
         );
 
@@ -1143,62 +1130,61 @@ import {
         );
 
 
-        processorNode.onaudioprocess =
+        processor.onaudioprocess =
             event => {
 
                 if (
-                    !sessionActive ||
-                    !session
+                    !active ||
+                    !liveSession
                 ) {
                     return;
                 }
 
 
-                const original =
+                const input =
                     event.inputBuffer
-                        .getChannelData(
-                            0
-                        );
+                        .getChannelData(0);
 
 
                 const resampled =
                     resampleFloat32(
-                        original,
+                        input,
                         inputSampleRate,
                         CONFIG.inputSampleRate
                     );
 
 
                 const pcm =
-                    float32ToPcm16(
+                    floatToPcm16(
                         resampled
                     );
 
 
-                const base64 =
-                    uint8ToBase64(
+                const encoded =
+                    bytesToBase64(
                         pcm
                     );
 
 
                 try {
 
-                    session.sendRealtimeInput({
+                    liveSession
+                        .sendRealtimeInput({
 
-                        audio: {
+                            audio: {
 
-                            data:
-                                base64,
+                                data:
+                                    encoded,
 
-                            mimeType:
-                                "audio/pcm;rate=16000"
-                        }
-                    });
+                                mimeType:
+                                    "audio/pcm;rate=16000"
+                            }
+                        });
 
                 } catch (error) {
 
                     console.warn(
-                        "[NEYO Voice] audio send failed:",
+                        "[NEYO Voice] realtime audio send failed:",
                         error
                     );
                 }
@@ -1207,46 +1193,40 @@ import {
 
 
     /* =====================================================
-       STOP MIC
+       STOP MICROPHONE
        ===================================================== */
 
     async function stopMicrophone() {
 
-        if (
-            processorNode
-        ) {
+        if (processor) {
 
-            processorNode.onaudioprocess =
+            processor.onaudioprocess =
                 null;
 
 
             try {
-                processorNode.disconnect();
+                processor.disconnect();
             } catch {}
 
 
-            processorNode =
+            processor =
                 null;
         }
 
 
-        if (
-            micSource
-        ) {
+        if (inputSource) {
 
             try {
-                micSource.disconnect();
+                inputSource.disconnect();
             } catch {}
 
 
-            micSource =
+            inputSource =
                 null;
         }
 
 
-        if (
-            analyser
-        ) {
+        if (analyser) {
 
             try {
                 analyser.disconnect();
@@ -1258,9 +1238,7 @@ import {
         }
 
 
-        if (
-            silentGain
-        ) {
+        if (silentGain) {
 
             try {
                 silentGain.disconnect();
@@ -1276,20 +1254,17 @@ import {
             null;
 
 
-        if (
-            micStream
-        ) {
+        if (micStream) {
 
-            micStream
-                .getTracks()
-                .forEach(
-                    track => {
+            for (
+                const track
+                of micStream.getTracks()
+            ) {
 
-                        try {
-                            track.stop();
-                        } catch {}
-                    }
-                );
+                try {
+                    track.stop();
+                } catch {}
+            }
 
 
             micStream =
@@ -1300,11 +1275,14 @@ import {
         if (
             inputContext &&
             inputContext.state !==
-                "closed"
+            "closed"
         ) {
 
             try {
-                await inputContext.close();
+
+                await inputContext
+                    .close();
+
             } catch {}
         }
 
@@ -1330,41 +1308,37 @@ import {
 
 
     /* =====================================================
-       LIVE MESSAGE
+       HANDLE LIVE MESSAGE
        ===================================================== */
 
-    function handleLiveMessage(
+    function handleServerMessage(
         message
     ) {
 
-        const content =
+        const serverContent =
             message?.serverContent;
 
 
-        if (!content) {
+        if (!serverContent) {
             return;
         }
 
 
         /*
-        If Gemini signals interruption,
-        throw away queued assistant audio.
+        Gemini can signal interruption.
+        Immediately discard queued assistant audio.
         */
 
         if (
-            content.interrupted
+            serverContent.interrupted
         ) {
 
-            stopCurrentPlayback();
+            stopPlayback();
         }
 
 
-        /*
-        Native audio output.
-        */
-
         const parts =
-            content
+            serverContent
                 ?.modelTurn
                 ?.parts ||
             [];
@@ -1375,107 +1349,61 @@ import {
             of parts
         ) {
 
-            const inline =
+            const audio =
                 part?.inlineData;
 
 
             if (
-                inline?.data &&
+                !audio?.data
+            ) {
+                continue;
+            }
+
+
+            if (
                 String(
-                    inline.mimeType ||
+                    audio.mimeType ||
                     ""
                 ).startsWith(
                     "audio/pcm"
                 )
             ) {
 
-                playPcmAudio(
-                    inline.data
+                playAudioChunk(
+                    audio.data
                 ).catch(
                     error => {
 
                         console.error(
-                            "[NEYO Voice] playback failed:",
+                            "[NEYO Voice] playback error:",
                             error
                         );
                     }
                 );
             }
         }
-
-
-        /*
-        Optional input/output transcriptions.
-
-        We do NOT use these for dictation.
-        They are only useful later for chat history/captions.
-        */
-
-        if (
-            content.inputTranscription
-                ?.text
-        ) {
-
-            window.dispatchEvent(
-                new CustomEvent(
-                    "neyo:voice-user-transcript",
-                    {
-                        detail: {
-                            text:
-                                content
-                                    .inputTranscription
-                                    .text
-                        }
-                    }
-                )
-            );
-        }
-
-
-        if (
-            content.outputTranscription
-                ?.text
-        ) {
-
-            window.dispatchEvent(
-                new CustomEvent(
-                    "neyo:voice-model-transcript",
-                    {
-                        detail: {
-                            text:
-                                content
-                                    .outputTranscription
-                                    .text
-                        }
-                    }
-                )
-            );
-        }
     }
 
 
     /* =====================================================
-       START LIVE SESSION
+       START CONVERSATION
        ===================================================== */
 
-    async function startVoiceConversation() {
+    async function startConversation() {
 
         if (
-            sessionActive ||
-            sessionStarting
+            active ||
+            connecting
         ) {
             return;
         }
 
 
-        sessionStarting =
+        connecting =
             true;
 
 
-        setVoiceState(
-            false,
-            true
-        );
+        syncUi();
 
 
         try {
@@ -1487,28 +1415,28 @@ import {
             ) {
 
                 throw new Error(
-                    "Microphone is not supported in this browser."
+                    "Microphone is unavailable."
                 );
             }
 
 
             /*
-            Get ephemeral credential from NEYO backend.
+            1. Get ephemeral credential.
             */
 
             const credentials =
-                await getVoiceToken();
+                await fetchVoiceToken();
 
 
             console.log(
-                "[NEYO Voice] token received",
-                credentials.model
+                "[NEYO Voice] token ready"
             );
 
 
             /*
-            Ephemeral token is used like an API key,
-            and Live API must use v1beta.
+            2. Create browser-side Gemini client.
+
+            Ephemeral token works only for Live API v1beta.
             */
 
             const ai =
@@ -1518,13 +1446,18 @@ import {
                         credentials.token,
 
                     httpOptions: {
+
                         apiVersion:
                             "v1beta"
                     }
                 });
 
 
-            session =
+            /*
+            3. Open Live connection.
+            */
+
+            liveSession =
                 await ai.live.connect({
 
                     model:
@@ -1534,69 +1467,8 @@ import {
 
                         responseModalities: [
                             Modality.AUDIO
-                        ],
-
-
-                        /*
-                        These transcriptions are optional metadata.
-                        They do NOT create a second AI request.
-                        */
-
-                        inputAudioTranscription:
-                            {},
-
-                        outputAudioTranscription:
-                            {},
-
-
-                        /*
-                        Native automatic turn detection.
-                        User can speak naturally and pause.
-                        */
-
-                        realtimeInputConfig: {
-
-                            automaticActivityDetection: {
-
-                                disabled:
-                                    false,
-
-                                prefixPaddingMs:
-                                    120,
-
-                                silenceDurationMs:
-                                    650
-                            }
-                        },
-
-
-                        /*
-                        NEYO voice behavior.
-                        No hardcoded topic vocabulary.
-                        */
-
-                        systemInstruction: {
-                            parts: [
-                                {
-                                    text:
-`You are NEYO in a live voice conversation.
-
-Listen carefully and respond naturally to the user's spoken request.
-
-Rules:
-- Be concise unless more detail is useful.
-- Preserve the user's language naturally.
-- If the user mixes languages, respond naturally in that style when appropriate.
-- Do not behave like a dictation engine.
-- Do not merely repeat what the user said.
-- Answer and converse normally.
-- Avoid unnecessary filler.
-- If the request is unclear, ask a short clarification question.`
-                                }
-                            ]
-                        }
+                        ]
                     },
-
 
                     callbacks: {
 
@@ -1604,7 +1476,7 @@ Rules:
                             () => {
 
                                 console.log(
-                                    "[NEYO Voice] Live socket opened"
+                                    "[NEYO Voice] Live connection opened"
                                 );
                             },
 
@@ -1612,18 +1484,18 @@ Rules:
                         onmessage:
                             message => {
 
-                                handleLiveMessage(
+                                handleServerMessage(
                                     message
                                 );
                             },
 
 
                         onerror:
-                            error => {
+                            event => {
 
                                 console.error(
                                     "[NEYO Voice] Live error:",
-                                    error
+                                    event
                                 );
 
 
@@ -1632,9 +1504,10 @@ Rules:
                                         "neyo:voice-error",
                                         {
                                             detail: {
+
                                                 message:
-                                                    error?.message ||
-                                                    "Voice conversation failed."
+                                                    event?.message ||
+                                                    "Voice connection failed."
                                             }
                                         }
                                     )
@@ -1646,17 +1519,15 @@ Rules:
                             event => {
 
                                 console.log(
-                                    "[NEYO Voice] Live closed:",
+                                    "[NEYO Voice] Live connection closed",
                                     event?.reason ||
                                     ""
                                 );
 
 
-                                if (
-                                    sessionActive
-                                ) {
+                                if (active) {
 
-                                    endVoiceConversation({
+                                    stopConversation({
                                         closeSession:
                                             false
                                     });
@@ -1667,26 +1538,28 @@ Rules:
 
 
             /*
-            Ask for microphone only after Live connection exists.
+            4. Start browser audio output while still
+            inside the user-initiated interaction flow.
+            */
+
+            await ensureOutputContext();
+
+
+            /*
+            5. Start microphone.
             */
 
             await startMicrophone();
 
 
-            await ensureOutputContext();
-
-
-            sessionActive =
+            active =
                 true;
 
-            sessionStarting =
+            connecting =
                 false;
 
 
-            setVoiceState(
-                true,
-                false
-            );
+            syncUi();
 
 
             resetWaveform();
@@ -1707,7 +1580,7 @@ Rules:
                 window.setTimeout(
                     () => {
 
-                        endVoiceConversation();
+                        stopConversation();
 
                     },
                     CONFIG.maxSessionMs
@@ -1727,34 +1600,32 @@ Rules:
             );
 
 
-            sessionStarting =
+            connecting =
                 false;
 
-            sessionActive =
+            active =
                 false;
 
 
             await stopMicrophone();
 
 
-            if (session) {
+            if (liveSession) {
 
                 try {
-                    session.close();
+                    liveSession.close();
                 } catch {}
 
-                session =
+
+                liveSession =
                     null;
             }
 
 
-            stopCurrentPlayback();
+            stopPlayback();
 
 
-            setVoiceState(
-                false,
-                false
-            );
+            syncUi();
 
 
             window.dispatchEvent(
@@ -1762,6 +1633,7 @@ Rules:
                     "neyo:voice-error",
                     {
                         detail: {
+
                             message:
                                 error?.message ||
                                 "Could not start voice conversation."
@@ -1774,26 +1646,26 @@ Rules:
 
 
     /* =====================================================
-       END LIVE SESSION
+       STOP CONVERSATION
        ===================================================== */
 
-    async function endVoiceConversation({
+    async function stopConversation({
         closeSession = true
     } = {}) {
 
         if (
-            !sessionActive &&
-            !sessionStarting &&
-            !session
+            !active &&
+            !connecting &&
+            !liveSession
         ) {
             return;
         }
 
 
-        sessionActive =
+        active =
             false;
 
-        sessionStarting =
+        connecting =
             false;
 
 
@@ -1809,34 +1681,31 @@ Rules:
         await stopMicrophone();
 
 
-        stopCurrentPlayback();
+        stopPlayback();
 
 
         if (
             closeSession &&
-            session
+            liveSession
         ) {
 
             try {
 
-                session.close();
+                liveSession.close();
 
             } catch {}
         }
 
 
-        session =
+        liveSession =
             null;
 
 
-        setVoiceState(
-            false,
-            false
-        );
+        syncUi();
 
 
         console.log(
-            "[NEYO Voice] conversation ended"
+            "[NEYO Voice] conversation stopped"
         );
     }
 
@@ -1850,26 +1719,24 @@ Rules:
         event => {
 
             event.preventDefault();
+
             event.stopPropagation();
+
             event.stopImmediatePropagation();
 
 
-            if (
-                sessionStarting
-            ) {
+            if (connecting) {
                 return;
             }
 
 
-            if (
-                sessionActive
-            ) {
+            if (active) {
 
-                endVoiceConversation();
+                stopConversation();
 
             } else {
 
-                startVoiceConversation();
+                startConversation();
             }
         },
         true
@@ -1880,24 +1747,25 @@ Rules:
        STOP BUTTON
        ===================================================== */
 
-    stopRecBtn
-        ?.addEventListener(
-            "click",
-            event => {
+    stopRecBtn?.addEventListener(
+        "click",
+        event => {
 
-                event.preventDefault();
-                event.stopPropagation();
-                event.stopImmediatePropagation();
+            event.preventDefault();
+
+            event.stopPropagation();
+
+            event.stopImmediatePropagation();
 
 
-                endVoiceConversation();
-            },
-            true
-        );
+            stopConversation();
+        },
+        true
+    );
 
 
     /* =====================================================
-       ESCAPE
+       ESC
        ===================================================== */
 
     document.addEventListener(
@@ -1908,26 +1776,26 @@ Rules:
                 event.key ===
                     "Escape" &&
                 (
-                    sessionActive ||
-                    sessionStarting
+                    active ||
+                    connecting
                 )
             ) {
 
-                endVoiceConversation();
+                stopConversation();
             }
         }
     );
 
 
     /* =====================================================
-       PAGE CLEANUP
+       CLEANUP
        ===================================================== */
 
     window.addEventListener(
         "pagehide",
         () => {
 
-            endVoiceConversation();
+            stopConversation();
 
         },
         {
@@ -1943,10 +1811,7 @@ Rules:
     resetWaveform();
 
 
-    setVoiceState(
-        false,
-        false
-    );
+    syncUi();
 
 
     /* =====================================================
@@ -1957,18 +1822,18 @@ Rules:
         Object.freeze({
 
             start:
-                startVoiceConversation,
+                startConversation,
 
             stop:
-                endVoiceConversation,
+                stopConversation,
 
             isActive:
                 () =>
-                    sessionActive,
+                    active,
 
             isConnecting:
                 () =>
-                    sessionStarting,
+                    connecting,
 
             engine:
                 "gemini-live-native-audio"

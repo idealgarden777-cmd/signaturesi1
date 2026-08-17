@@ -1,15 +1,16 @@
 /*
 =========================================================
-NEYO — LIVE VOICE TOKEN API
+NEYO — GEMINI LIVE VOICE TOKEN
+Minimal production version
 
 Purpose:
-- Create short-lived Gemini Live API token
-- Keep permanent GEMINI_API_KEY server-side
-- Restrict token to NEYO voice model
-- One token = one Live session
+- Keep permanent Gemini API key server-side
+- Create one-use ephemeral Live API token
+- Lock token to NEYO voice model
+- Return token to browser
 
 Requires:
-npm install @google/genai
+@google/genai
 =========================================================
 */
 
@@ -24,21 +25,12 @@ const MODEL =
     "gemini-2.5-flash-native-audio-preview-12-2025";
 
 
-/*
-Ephemeral token lifetime.
-
-Google allows short-lived tokens for client-side
-Live API connections.
-
-30 minutes is enough for a normal voice session.
-*/
-
 const TOKEN_LIFETIME_MS =
     30 * 60 * 1000;
 
 
 /* =========================================================
-   RESPONSE HELPER
+   JSON HELPER
    ========================================================= */
 
 function sendJson(
@@ -46,6 +38,7 @@ function sendJson(
     status,
     body
 ) {
+
     res.status(status);
 
     res.setHeader(
@@ -55,12 +48,7 @@ function sendJson(
 
     res.setHeader(
         "Cache-Control",
-        "no-store, no-cache, must-revalidate"
-    );
-
-    res.setHeader(
-        "Pragma",
-        "no-cache"
+        "no-store"
     );
 
     return res.end(
@@ -70,7 +58,7 @@ function sendJson(
 
 
 /* =========================================================
-   HANDLER
+   API HANDLER
    ========================================================= */
 
 export default async function handler(
@@ -79,7 +67,7 @@ export default async function handler(
 ) {
 
     /* -----------------------------------------------------
-       METHOD
+       POST ONLY
        ----------------------------------------------------- */
 
     if (
@@ -90,7 +78,6 @@ export default async function handler(
             "Allow",
             "POST"
         );
-
 
         return sendJson(
             res,
@@ -104,20 +91,18 @@ export default async function handler(
 
 
     /* -----------------------------------------------------
-       SERVER API KEY
+       SERVER SECRET
        ----------------------------------------------------- */
 
     const apiKey =
-        process.env
-            .GEMINI_API_KEY;
+        process.env.GEMINI_API_KEY;
 
 
     if (!apiKey) {
 
         console.error(
-            "[NEYO Voice Token] GEMINI_API_KEY missing"
+            "[NEYO Voice Token] Missing GEMINI_API_KEY"
         );
-
 
         return sendJson(
             res,
@@ -143,7 +128,7 @@ export default async function handler(
 
 
         /* -------------------------------------------------
-           TOKEN EXPIRATION
+           EXPIRATION
            ------------------------------------------------- */
 
         const expireTime =
@@ -155,11 +140,6 @@ export default async function handler(
 
         /* -------------------------------------------------
            CREATE EPHEMERAL TOKEN
-
-           Locked to:
-           - 1 use
-           - selected Live model
-           - AUDIO response modality
            ------------------------------------------------- */
 
         const token =
@@ -167,10 +147,25 @@ export default async function handler(
 
                 config: {
 
+                    /*
+                    One token = one new Live connection.
+                    */
+
                     uses:
                         1,
 
+
+                    /*
+                    Short-lived credential.
+                    */
+
                     expireTime,
+
+
+                    /*
+                    Browser may use this token only
+                    for this exact Live configuration.
+                    */
 
                     liveConnectConstraints: {
 
@@ -181,14 +176,7 @@ export default async function handler(
 
                             responseModalities: [
                                 "AUDIO"
-                            ],
-
-                            /*
-                            Enables session recovery support
-                            if frontend uses it later.
-                            */
-
-                            sessionResumption: {}
+                            ]
                         }
                     }
                 }
@@ -196,19 +184,16 @@ export default async function handler(
 
 
         /* -------------------------------------------------
-           VALIDATE TOKEN
+           VALIDATE
            ------------------------------------------------- */
 
         if (
-            !token ||
-            !token.name
+            !token?.name
         ) {
 
             console.error(
-                "[NEYO Voice Token] Empty token response",
-                token
+                "[NEYO Voice Token] Gemini returned no token"
             );
-
 
             return sendJson(
                 res,
@@ -221,24 +206,21 @@ export default async function handler(
         }
 
 
+        /* -------------------------------------------------
+           SUCCESS
+           ------------------------------------------------- */
+
         console.log(
-            "[NEYO Voice Token] token created",
+            "[NEYO Voice Token] Created",
             {
                 model:
                     MODEL,
 
-                expires:
+                expiresAt:
                     expireTime
             }
         );
 
-
-        /* -------------------------------------------------
-           SUCCESS
-
-           token.name is the ephemeral credential.
-           Permanent API key is NEVER returned.
-           ------------------------------------------------- */
 
         return sendJson(
             res,
@@ -259,25 +241,15 @@ export default async function handler(
     } catch (error) {
 
         console.error(
-            "[NEYO Voice Token] failed:",
+            "[NEYO Voice Token] Failed:",
             error
         );
 
 
-        /*
-        SDK errors sometimes contain useful
-        status/message information.
-        */
-
         const status =
             Number(
                 error?.status
-            ) || 500;
-
-
-        const message =
-            error?.message ||
-            "Could not create voice session.";
+            );
 
 
         return sendJson(
@@ -288,7 +260,8 @@ export default async function handler(
                 : 500,
             {
                 error:
-                    message
+                    error?.message ||
+                    "Could not create voice session."
             }
         );
     }

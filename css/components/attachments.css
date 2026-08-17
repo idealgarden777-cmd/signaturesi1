@@ -1,727 +1,367 @@
-/*
-=========================================================
-NEYO — ATTACHMENTS COMPONENT
-
-Purpose:
-Attachment previews inside the chat composer.
-
-Rules:
-- Horizontal preview rail
-- Responsive preview cards
-- Minimal remove button
-- Light + dark mode
-- Fade/surface interaction only
-- No scale animation
-=========================================================
-*/
-
-
 /* =========================================================
-   ATTACHMENT PREVIEW RAIL
+   NEYO — ATTACHMENTS
+   Full UI: popup, drag overlay, file cards, remove button,
+   preview rail, and composer integration.
    ========================================================= */
 
-.attached-chips-wrapper {
-    display: flex !important;
-    flex-wrap: nowrap !important;
-
-    gap: var(--neo-space-2, 8px) !important;
-
-    padding:
-        var(--neo-space-2, 8px)
-        var(--neo-space-1, 4px)
-        var(--neo-space-1, 4px) !important;
-
-    min-height: 0 !important;
-
-    overflow-x: auto !important;
-    overflow-y: hidden !important;
-
-    scrollbar-width: thin;
-    scrollbar-color: rgba(120, 120, 128, 0.28) transparent;
+/* ----- POPUP MENU ----- */
+.attachment-popup-menu {
+    position: absolute;
+    bottom: calc(100% + 12px);
+    left: 0;
+    background: rgba(255,255,255,0.95);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-radius: 18px;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.12);
+    padding: 8px 6px;
+    min-width: 180px;
+    z-index: 1000;
+    display: none;
+    flex-direction: column;
+    gap: 2px;
+    border: 1px solid rgba(0,0,0,0.04);
 }
-
-
-/* Hide rail when no attachments exist */
-
-.attached-chips-wrapper:empty {
-    display: none !important;
+.attachment-popup-menu.show {
+    display: flex;
 }
-
-
-/* WebKit scrollbar */
-
-.attached-chips-wrapper::-webkit-scrollbar {
-    height: 4px;
-}
-
-.attached-chips-wrapper::-webkit-scrollbar-track {
+.attachment-popup-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: background 0.12s ease;
+    font-size: 14px;
+    font-weight: 500;
+    color: #1d1d1f;
     background: transparent;
-}
-
-.attached-chips-wrapper::-webkit-scrollbar-thumb {
-    background: rgba(120, 120, 128, 0.28);
-    border-radius: 999px;
-}
-
-
-/* =========================================================
-   ATTACHMENT PREVIEW CARD
-   ========================================================= */
-
-.attachment-preview-card {
-    position: relative;
-
-    width: 148px;
-    height: 104px;
-
-    flex: 0 0 148px;
-
-    overflow: hidden;
-
-    border: 1px solid var(
-        --neo-border,
-        rgba(0, 0, 0, 0.08)
-    );
-
-    border-radius: var(--neo-radius-md, 12px);
-
-    background: var(--neo-surface, #ffffff);
-
-    box-shadow:
-        0 2px 8px rgba(0, 0, 0, 0.04);
-
-    transition:
-        border-color 150ms ease,
-        background-color 150ms ease,
-        box-shadow 150ms ease,
-        opacity 150ms ease;
-
-    transform: none !important;
-}
-
-
-.attachment-preview-card:hover {
-    transform: none !important;
-}
-
-
-/* Preview image */
-
-.attachment-preview-card img {
-    display: block;
-
+    border: 0;
     width: 100%;
-    height: 100%;
+    text-align: left;
+}
+.attachment-popup-item:hover {
+    background: rgba(0,0,0,0.04);
+}
+.attachment-popup-item svg {
+    width: 20px;
+    height: 20px;
+    flex: 0 0 20px;
+    opacity: 0.7;
+}
+.attachment-popup-item span {
+    flex: 1;
+}
+.attachment-popup-item .popup-shortcut {
+    font-size: 12px;
+    opacity: 0.4;
+    font-weight: 400;
+    letter-spacing: 0.3px;
+}
+.attachment-popup-item.danger {
+    color: #e74c3c;
+}
+.attachment-popup-item.danger:hover {
+    background: rgba(231,76,60,0.08);
+}
 
-    object-fit: cover;
-    object-position: center;
-
+/* ----- DRAG OVERLAY (within composer) ----- */
+.drag-drop-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: rgba(20, 20, 20, 0.68);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
     border-radius: inherit;
+    color: #fff;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    z-index: 100;
+    transition: opacity 140ms ease, visibility 140ms ease;
+}
+.drag-drop-overlay.show {
+    opacity: 1;
+    visibility: visible;
+    /* CRITICAL: keep pointer-events none so drag events pass through */
+    pointer-events: none;
+}
+.drag-drop-overlay > svg,
+.drag-drop-overlay > i {
+    width: 28px;
+    height: 28px;
+    margin-bottom: 4px;
+    pointer-events: none;
+}
+.drag-drop-overlay > span {
+    font-size: 14px;
+    font-weight: 500;
+    pointer-events: none;
 }
 
-
-/* =========================================================
-   REMOVE BUTTON
-   ========================================================= */
-
-.attachment-remove-btn {
-    position: absolute !important;
-
-    top: 6px !important;
-    right: 6px !important;
-
-    width: 22px !important;
-    height: 22px !important;
-
-    min-width: 22px !important;
-    min-height: 22px !important;
-
-    padding: 0 !important;
-
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-
-    border:
-        1px solid rgba(255, 255, 255, 0.20) !important;
-
-    border-radius: 999px !important;
-
-    background:
-        rgba(24, 24, 24, 0.74) !important;
-
-    color: #ffffff !important;
-
-    font-size: 17px !important;
-    font-weight: 300 !important;
-    line-height: 1 !important;
-
-    cursor: pointer !important;
-
-    backdrop-filter: blur(8px) !important;
-    -webkit-backdrop-filter: blur(8px) !important;
-
-    box-shadow:
-        0 1px 3px rgba(0, 0, 0, 0.14) !important;
-
-    opacity: 0.88 !important;
-
-    transform: none !important;
-
-    transition:
-        background-color 150ms ease,
-        color 150ms ease,
-        border-color 150ms ease,
-        opacity 150ms ease,
-        box-shadow 150ms ease !important;
-}
-
-
-.attachment-remove-btn:hover {
-    background:
-        rgba(15, 15, 15, 0.90) !important;
-
-    opacity: 1 !important;
-
-    transform: none !important;
-}
-
-
-.attachment-remove-btn:active {
-    transform: none !important;
-}
-
-
-.attachment-remove-btn:focus-visible {
-    outline: 2px solid #ffffff !important;
-    outline-offset: 2px !important;
-}
-
-
-/* =========================================================
-   DARK MODE
-   ========================================================= */
-
-body.dark-mode .attachment-preview-card {
-    border-color:
-        var(
-            --neo-border-dark,
-            rgba(255, 255, 255, 0.10)
-        );
-
-    background:
-        var(--neo-surface-dark, #212121);
-
-    box-shadow:
-        0 2px 8px rgba(0, 0, 0, 0.30);
-}
-
-
-body.dark-mode .attachment-remove-btn {
-    border-color:
-        rgba(255, 255, 255, 0.20) !important;
-
-    background:
-        rgba(20, 20, 20, 0.78) !important;
-}
-
-
-body.dark-mode .attachment-remove-btn:hover {
-    background:
-        rgba(15, 15, 15, 0.90) !important;
-}
-
-
-/* =========================================================
-   MOBILE
-   ========================================================= */
-
-@media (max-width: 640px) {
-
-    .attachment-preview-card {
-        width: 124px;
-        height: 92px;
-
-        flex-basis: 124px;
-    }
-
-}
-/* =========================================================
-   NON-IMAGE FILE ATTACHMENTS
-   ========================================================= */
-
+/* ----- FILE PREVIEW CARD (in message / outside composer) ----- */
 .attachment-preview-file {
-    display: flex !important;
-    align-items: center !important;
-
-    gap: 8px !important;
-
-    padding: 0 !important;
-
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 16px;
+    background: rgba(0,0,0,0.03);
+    border-radius: 14px;
+    border: 1px solid rgba(0,0,0,0.04);
+    margin-bottom: 8px;
+}
+.attachment-preview-file .file-icon {
+    width: 32px;
+    height: 32px;
+    flex: 0 0 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    background: rgba(0,0,0,0.05);
+}
+.attachment-preview-file .file-info {
+    flex: 1;
     min-width: 0;
-
-    font-family:
-        var(
-            --neyo-font-text,
-            "Inter",
-            -apple-system,
-            BlinkMacSystemFont,
-            "Segoe UI",
-            sans-serif
-        );
-
-    font-size: 13px !important;
-    line-height: 1.2 !important;
 }
-
-
-/* File-type icon */
-
-.attachment-preview-file i,
-.attachment-preview-file svg {
-    width: 28px !important;
-    height: 28px !important;
-
-    min-width: 28px !important;
-    min-height: 28px !important;
-
-    flex: 0 0 28px !important;
-
-    display: inline-flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-
-    padding: 5px !important;
-
-    border:
-        1px solid
-        rgba(0, 0, 0, 0.06)
-        !important;
-
-    border-radius: 8px !important;
-
-    background:
-        var(--neyo-surface-soft, #f5f5f5)
-        !important;
-
-    color: #363636 !important;
-
-    opacity: 1 !important;
-
-    box-sizing: border-box !important;
-}
-
-
-/* Filename safety */
-
-.attachment-preview-file span,
 .attachment-preview-file .file-name {
-    min-width: 0;
-
-    overflow: hidden;
-
+    font-size: 13px;
+    font-weight: 500;
     white-space: nowrap;
+    overflow: hidden;
     text-overflow: ellipsis;
 }
-
-
-/*
-Keep real image thumbnails separate.
-*/
-
-.attachment-preview-card img {
-    flex:
-        0 0 40px !important;
+.attachment-preview-file .file-size {
+    font-size: 11px;
+    opacity: 0.5;
+}
+.attachment-remove-btn {
+    background: transparent;
+    border: 0;
+    padding: 6px;
+    cursor: pointer;
+    opacity: 0.3;
+    transition: opacity 0.12s ease;
+    border-radius: 8px;
+}
+.attachment-remove-btn:hover {
+    opacity: 1;
+    background: rgba(0,0,0,0.04);
+}
+.attachment-remove-btn svg {
+    width: 16px;
+    height: 16px;
 }
 
-
-/* =========================================================
-   DARK MODE
-   ========================================================= */
-
-body.dark-mode
-.attachment-preview-file i,
-body.dark-mode
-.attachment-preview-file svg {
-    background:
-        #2a2a2a !important;
-
-    border-color:
-        rgba(255, 255, 255, 0.08)
-        !important;
-
-    color:
-        #e8e8e8 !important;
-}
-/* =========================================================
-   ATTACHMENT KEYBOARD FOCUS
-   ========================================================= */
-
-.attachment-remove-btn:focus-visible {
-    outline:
-        2px solid #ffffff !important;
-
-    outline-offset:
-        2px !important;
-}
-/* =========================================================
-   NEYO — ATTACHMENTS PREMIUM COMPACT PASS
-   ========================================================= */
-
-
-/* Cleaner attachment rail */
-
-.attached-chips-wrapper {
-    gap: 6px !important;
-
-    padding:
-        6px
-        4px
-        4px !important;
-
+/* ----- COMPOSER PREVIEW RAIL (in input bar) ----- */
+#glassInputContainer:has(#attachedChipsWrapper:not(:empty)):not(.is-writing-expanded) {
+    height: auto !important;
     min-height: 0 !important;
-
-    scrollbar-width: thin !important;
-
-    scrollbar-color:
-        rgba(120, 120, 128, 0.18)
-        transparent !important;
-}
-
-.attached-chips-wrapper::-webkit-scrollbar {
-    height: 3px !important;
-}
-
-.attached-chips-wrapper::-webkit-scrollbar-thumb {
-    background:
-        rgba(120, 120, 128, 0.18) !important;
-
-    border-radius: 999px !important;
-}
-
-
-/* Compact cards */
-
-.attachment-preview-card {
-    position: relative !important;
-
-    width: 144px !important;
-    height: 68px !important;
-
-    flex:
-        0
-        0
-        144px !important;
-
-    border-radius: 12px !important;
-
-    border:
-        1px solid
-        rgba(0, 0, 0, 0.08) !important;
-
-    background: #ffffff !important;
-
+    max-height: none !important;
+    padding: 6px 8px 0 !important;
     overflow: hidden !important;
-
-    box-shadow:
-        0 1px 2px
-        rgba(0, 0, 0, 0.03) !important;
-
-    transform: none !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0 !important;
 }
 
-.attachment-preview-card:hover {
-    transform: none !important;
-
-    border-color:
-        rgba(0, 0, 0, 0.13) !important;
+#glassInputContainer #attachedChipsWrapper:not(:empty) {
+    display: flex !important;
+    flex: 0 0 auto !important;
+    flex-wrap: nowrap !important;
+    width: 100% !important;
+    height: 76px !important;
+    min-width: 0 !important;
+    min-height: 76px !important;
+    max-height: 76px !important;
+    gap: 6px !important;
+    margin: 0 !important;
+    padding: 4px 4px 4px !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    box-sizing: border-box !important;
 }
 
+/* ----- PREVIEW CARD inside composer ----- */
+#glassInputContainer #attachedChipsWrapper:not(:empty) .attachment-preview-card {
+    position: relative !important;
+    width: 132px !important;
+    height: 68px !important;
+    min-width: 132px !important;
+    min-height: 68px !important;
+    max-width: 132px !important;
+    max-height: 68px !important;
+    flex: 0 0 132px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border-radius: 12px !important;
+    overflow: hidden !important;
+    box-sizing: border-box !important;
+}
 
-/* Image previews */
-
-.attachment-preview-card img {
+/* Image fills card */
+#glassInputContainer #attachedChipsWrapper:not(:empty) .attachment-preview-card > img {
     display: block !important;
-
     width: 100% !important;
     height: 100% !important;
-
+    min-width: 100% !important;
+    min-height: 100% !important;
+    max-width: 100% !important;
+    max-height: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
     object-fit: cover !important;
-
+    object-position: center !important;
     border-radius: inherit !important;
 }
 
-
-/* Normal file card */
-
-.attachment-preview-file {
-    width: 100% !important;
-    height: 100% !important;
-
-    display: flex !important;
-    align-items: center !important;
-
-    gap: 8px !important;
-
-    box-sizing: border-box !important;
-
-    padding:
-        0
-        30px
-        0
-        10px !important;
-
-    overflow: hidden !important;
+/* Non‑image file inside the card (direct children: svg + span + remove button) */
+#glassInputContainer .attachment-preview-card .attachment-preview-file {
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 30px 10px 10px;
+    box-sizing: border-box;
+    background: rgba(0, 0, 0, 0.025);
+    color: var(--text-primary, #1d1d1f);
+}
+#glassInputContainer .attachment-preview-card .attachment-preview-file > svg,
+#glassInputContainer .attachment-preview-card .attachment-preview-file > i {
+    width: 20px;
+    height: 20px;
+    flex: 0 0 20px;
+    opacity: 0.6;
+}
+#glassInputContainer .attachment-preview-card .attachment-preview-file > span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 13px;
 }
 
-.attachment-preview-file span {
-    min-width: 0 !important;
-
-    overflow: hidden !important;
-
-    white-space: nowrap !important;
-
-    text-overflow: ellipsis !important;
-
-    font-size: 13px !important;
-}
-
-
-/* =========================================================
-   REMOVE BUTTON — NEUTRAL, NEVER RED
-   ========================================================= */
-
-.attachment-remove-btn {
+/* Remove button — absolute top‑right inside the card */
+#glassInputContainer .attachment-preview-card .attachment-remove-btn {
     position: absolute !important;
-
-    top: 5px !important;
-    right: 5px !important;
-
-    width: 19px !important;
-    height: 19px !important;
-
-    min-width: 19px !important;
-    min-height: 19px !important;
-
+    top: 6px !important;
+    right: 6px !important;
+    width: 22px !important;
+    height: 22px !important;
     display: inline-flex !important;
     align-items: center !important;
     justify-content: center !important;
-
+    margin: 0 !important;
     padding: 0 !important;
-
-    border:
-        1px solid
-        rgba(255, 255, 255, 0.22) !important;
-
+    border: 0 !important;
     border-radius: 999px !important;
-
-    background:
-        rgba(30, 30, 30, 0.72) !important;
-
-    color:
-        rgba(255, 255, 255, 0.92) !important;
-
-    box-shadow:
-        0 1px 3px
-        rgba(0, 0, 0, 0.12) !important;
-
-    opacity: 0.92 !important;
-
-    transform: none !important;
-}
-
-.attachment-remove-btn:hover,
-.attachment-remove-btn:focus-visible,
-.attachment-remove-btn:active {
-    background:
-        rgba(20, 20, 20, 0.90) !important;
-
-    color: #ffffff !important;
-
-    border-color:
-        rgba(255, 255, 255, 0.26) !important;
-
+    background: rgba(0, 0, 0, 0.52) !important;
+    color: #fff !important;
     opacity: 1 !important;
-
-    transform: none !important;
+    z-index: 5 !important;
+    cursor: pointer !important;
+    transition: background 0.12s ease !important;
 }
-
-
-/* Force Lucide X to inherit neutral color */
-
-.attachment-remove-btn svg,
-.attachment-remove-btn i {
+#glassInputContainer .attachment-preview-card .attachment-remove-btn:hover {
+    background: rgba(0, 0, 0, 0.75) !important;
+}
+#glassInputContainer .attachment-preview-card .attachment-remove-btn svg {
     width: 12px !important;
     height: 12px !important;
-
-    color: inherit !important;
-
-    stroke: currentColor !important;
-
-    fill: none !important;
+    fill: currentColor !important;
 }
 
-
-/* Dark mode */
-
-body.dark-mode
-.attachment-preview-card {
-    background: #212121 !important;
-
-    border-color:
-        rgba(255, 255, 255, 0.10) !important;
-}
-
-body.dark-mode
-.attachment-remove-btn {
-    background:
-        rgba(255, 255, 255, 0.14) !important;
-
-    color:
-        rgba(255, 255, 255, 0.90) !important;
-}
-
-body.dark-mode
-.attachment-remove-btn:hover {
-    background:
-        rgba(255, 255, 255, 0.20) !important;
-
-    color: #ffffff !important;
-}
-
-
-/* When files exist, remove unnecessary suggestion clutter */
-
-.composer-wrapper:has(
-    .attached-chips-wrapper:not(:empty)
-)
-.live-suggestions {
-    display: none !important;
-}
-/* =========================================================
-   NEYO — DRAG & DROP OVERLAY
-   Stable / non-intercepting attachment drop surface
-   ========================================================= */
-
-#composerWrapper {
-    position: relative;
-}
-
-
-/*
-Important:
-Overlay is purely visual.
-It must NEVER become the drag/drop event target.
-Events stay on #composerWrapper.
-*/
-
-#dragDropOverlay {
-    position: absolute !important;
-
-    inset: 0 !important;
-
-    display: flex !important;
-    flex-direction: column !important;
-
-    align-items: center !important;
-    justify-content: center !important;
-
-    gap: 8px !important;
-
-    border-radius: inherit !important;
-
-    background:
-        rgba(20, 20, 20, 0.72) !important;
-
-    backdrop-filter:
-        blur(6px) !important;
-
-    -webkit-backdrop-filter:
-        blur(6px) !important;
-
-    color: #ffffff !important;
-
-    opacity: 0 !important;
-    visibility: hidden !important;
-
-    /*
-    CRITICAL:
-    Never intercept drag / click / drop events.
-    */
-    pointer-events: none !important;
-
-    z-index: 100 !important;
-
-    transition:
-        opacity 140ms ease,
-        visibility 140ms ease !important;
-}
-
-
-/* Drag active */
-
-#dragDropOverlay.show {
-    opacity: 1 !important;
-    visibility: visible !important;
-
-    /*
-    Keep NONE even while visible.
-    */
-    pointer-events: none !important;
-}
-
-
-/* Icon */
-
-#dragDropOverlay svg,
-#dragDropOverlay i {
-    width: 28px !important;
-    height: 28px !important;
-
+/* ----- INPUT ROW (remains exact composer height) ----- */
+#glassInputContainer:has(#attachedChipsWrapper:not(:empty)):not(.is-writing-expanded) .composer-input-row {
+    position: relative !important;
+    flex: 0 0 56px !important;
+    width: 100% !important;
+    height: 56px !important;
+    min-height: 56px !important;
+    max-height: 56px !important;
     margin: 0 !important;
-
-    pointer-events: none !important;
+    padding: 0 !important;
+    box-sizing: border-box !important;
 }
 
-
-/* Text */
-
-#dragDropOverlay span {
-    font-size: 14px !important;
-    font-weight: 500 !important;
-    line-height: 1.3 !important;
-
-    pointer-events: none !important;
+/* Controls stay vertically centered */
+#glassInputContainer:has(#attachedChipsWrapper:not(:empty)):not(.is-writing-expanded) #attachBtn,
+#glassInputContainer:has(#attachedChipsWrapper:not(:empty)):not(.is-writing-expanded) #micBtn,
+#glassInputContainer:has(#attachedChipsWrapper:not(:empty)):not(.is-writing-expanded) #sendBtn {
+    position: absolute !important;
+    top: 50% !important;
+    bottom: auto !important;
+    transform: translateY(-50%) !important;
+}
+#glassInputContainer:has(#attachedChipsWrapper:not(:empty)):not(.is-writing-expanded) #attachBtn {
+    left: 8px !important;
+}
+#glassInputContainer:has(#attachedChipsWrapper:not(:empty)):not(.is-writing-expanded) #sendBtn {
+    right: 8px !important;
+}
+#glassInputContainer:has(#attachedChipsWrapper:not(:empty)):not(.is-writing-expanded) #micBtn {
+    right: 54px !important;
 }
 
-
-/* Dark mode */
-
-body.dark-mode
-#dragDropOverlay {
-    background:
-        rgba(0, 0, 0, 0.72) !important;
+/* Textarea stays the same size */
+#glassInputContainer:has(#attachedChipsWrapper:not(:empty)):not(.is-writing-expanded):not(.composer-multiline) textarea#chatInput {
+    position: relative !important;
+    width: 100% !important;
+    height: 40px !important;
+    min-height: 40px !important;
+    max-height: 40px !important;
+    margin: 0 !important;
+    padding: 8px 96px 8px 56px !important;
+    line-height: 24px !important;
+    transform: none !important;
+    box-sizing: border-box !important;
 }
 
+/* ----- SUGGESTIONS – only when attachments present, keep visible ----- */
+#composerWrapper:has(#attachedChipsWrapper:not(:empty)) .live-suggestions {
+    visibility: visible;
+    opacity: 1;
+    /* do NOT force display – let the original display value remain */
+}
 
-/* Mobile:
-   drag/drop is mostly desktop behavior,
-   but keep overlay responsive.
-*/
-
+/* ----- MOBILE ----- */
 @media (max-width: 767px) {
-
-    #dragDropOverlay {
-        gap: 6px !important;
+    #glassInputContainer #attachedChipsWrapper:not(:empty) {
+        height: 70px !important;
+        min-height: 70px !important;
+        max-height: 70px !important;
+        padding: 3px 3px 3px !important;
     }
-
-    #dragDropOverlay svg,
-    #dragDropOverlay i {
-        width: 24px !important;
-        height: 24px !important;
+    #glassInputContainer #attachedChipsWrapper:not(:empty) .attachment-preview-card {
+        width: 118px !important;
+        height: 64px !important;
+        min-width: 118px !important;
+        min-height: 64px !important;
+        max-width: 118px !important;
+        max-height: 64px !important;
+        flex-basis: 118px !important;
     }
-
-    #dragDropOverlay span {
-        font-size: 13px !important;
+    #glassInputContainer:has(#attachedChipsWrapper:not(:empty)):not(.is-writing-expanded) .composer-input-row {
+        height: 54px !important;
+        min-height: 54px !important;
+        max-height: 54px !important;
+        flex-basis: 54px !important;
+    }
+    .attachment-popup-menu {
+        min-width: 160px;
+        bottom: calc(100% + 10px);
+        padding: 6px 4px;
+    }
+    .attachment-popup-item {
+        padding: 8px 12px;
+        font-size: 13px;
     }
 }

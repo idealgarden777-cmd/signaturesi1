@@ -1039,3 +1039,105 @@ body.dark-mode
         --voice-stop-gap: 4px;
     }
 }
+/* =========================================================
+   FINAL — STOP BUTTON NEXT TO SEND
+   ========================================================= */
+
+#glassInputContainer {
+    --voice-send-right: 8px;
+    --voice-send-size: 40px;
+
+    --voice-stop-size: 32px;
+    --voice-stop-gap: 4px;
+}
+
+
+/* Send stays fixed at right */
+
+#glassInputContainer
+.composer-input-row.is-transcribing
+#sendBtn {
+    position: absolute !important;
+
+    top: 50% !important;
+    right: var(--voice-send-right) !important;
+
+    bottom: auto !important;
+    left: auto !important;
+
+    transform: translateY(-50%) !important;
+
+    z-index: 40 !important;
+}
+
+
+/* Stop button sits directly before send */
+
+#glassInputContainer
+.composer-input-row.is-transcribing
+#stopRecBtn {
+    display: inline-flex !important;
+
+    position: absolute !important;
+
+    top: 50% !important;
+
+    right:
+        calc(
+            var(--voice-send-right) +
+            var(--voice-send-size) +
+            var(--voice-stop-gap)
+        ) !important;
+
+    bottom: auto !important;
+    left: auto !important;
+
+    width: var(--voice-stop-size) !important;
+    height: var(--voice-stop-size) !important;
+
+    min-width: var(--voice-stop-size) !important;
+    min-height: var(--voice-stop-size) !important;
+
+    max-width: var(--voice-stop-size) !important;
+    max-height: var(--voice-stop-size) !important;
+
+    margin: 0 !important;
+    padding: 0 !important;
+
+    transform: translateY(-50%) !important;
+
+    visibility: visible !important;
+    opacity: 1 !important;
+
+    z-index: 41 !important;
+}
+
+
+/* Waveform ends before stop button */
+
+#glassInputContainer
+.composer-input-row.is-transcribing
+.voice-transcribe-container {
+    right:
+        calc(
+            var(--voice-send-right) +
+            var(--voice-send-size) +
+            var(--voice-stop-gap) +
+            var(--voice-stop-size) +
+            6px
+        ) !important;
+}
+
+
+/* Mobile */
+
+@media (max-width: 767px) {
+
+    #glassInputContainer {
+        --voice-send-right: 7px;
+        --voice-send-size: 38px;
+
+        --voice-stop-size: 30px;
+        --voice-stop-gap: 4px;
+    }
+}

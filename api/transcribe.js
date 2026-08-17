@@ -1,145 +1,67 @@
-/*
-=========================================================
-NEYO — TRANSCRIBE API
-SIMPLE STABLE VERSION
-No FFmpeg
-No native binaries
-=========================================================
-*/
+import { GoogleGenAI } from "@google/genai";
 
 export const config = {
-    api: {
-        bodyParser: false
-    }
+  api: {
+    bodyParser: false
+  }
 };
 
 const MODEL = "gemini-3.5-flash-lite";
-
-const MAX_AUDIO_BYTES =
-    10 * 1024 * 1024;
-
+const MAX_AUDIO_BYTES = 10 * 1024 * 1024;
 const MAX_CONTEXT_CHARS = 5000;
 
-
-/* =========================================================
-   RESPONSE
-   ========================================================= */
-
 function sendJson(res, status, body) {
-    res.status(status);
-
-    res.setHeader(
-        "Content-Type",
-        "application/json; charset=utf-8"
-    );
-
-    res.setHeader(
-        "Cache-Control",
-        "no-store"
-    );
-
-    return res.end(
-        JSON.stringify(body)
-    );
+  res.status(status);
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
+  res.setHeader("Cache-Control", "no-store");
+  return res.end(JSON.stringify(body));
 }
-
-
-/* =========================================================
-   MIME
-   ========================================================= */
-
-function normalizeMimeType(value) {
-    return String(value || "")
-        .toLowerCase()
-        .split(";")[0]
-        .trim();
-}
-
-
-/* =========================================================
-   CONTEXT
-   ========================================================= */
 
 function normalizeContext(value) {
-    return String(value || "")
-        .replace(/\u0000/g, "")
-        .trim()
-        .slice(0, MAX_CONTEXT_CHARS);
+  return String(value || "")
+    .replace(/\u0000/g, "")
+    .trim()
+    .slice(0, MAX_CONTEXT_CHARS);
 }
-
-
-/* =========================================================
-   MULTIPART
-   ========================================================= */
 
 async function parseMultipart(req) {
-    const contentType =
-        req.headers["content-type"];
+  const contentType = req.headers["content-type"];
 
-    if (
-        !contentType ||
-        !contentType.includes(
-            "multipart/form-data"
-        )
-    ) {
-        throw new Error(
-            "INVALID_CONTENT_TYPE"
-        );
+  if (!contentType?.includes("multipart/form-data")) {
+    throw new Error("INVALID_CONTENT_TYPE");
+  }
+
+  const chunks = [];
+  let total = 0;
+
+  for await (const chunk of req) {
+    total += chunk.length;
+
+    if (total > MAX_AUDIO_BYTES + 1024 * 1024) {
+      throw new Error("AUDIO_TOO_LARGE");
     }
 
+    chunks.push(chunk);
+  }
 
-    const chunks = [];
+  const rawBody = Buffer.concat(chunks);
 
-    let totalBytes = 0;
-
-
-    for await (const chunk of req) {
-        totalBytes += chunk.length;
-
-        if (
-            totalBytes >
-            MAX_AUDIO_BYTES +
-            1024 * 1024
-        ) {
-            throw new Error(
-                "AUDIO_TOO_LARGE"
-            );
-        }
-
-        chunks.push(chunk);
+  const request = new Request(
+    "http://localhost/api/transcribe",
+    {
+      method: "POST",
+      headers: {
+        "content-type": contentType
+      },
+      body: rawBody
     }
+  );
 
-
-    const rawBody =
-        Buffer.concat(chunks);
-
-
-    const request =
-        new Request(
-            "http://localhost/api/transcribe",
-            {
-                method: "POST",
-
-                headers: {
-                    "content-type":
-                        contentType
-                },
-
-                body: rawBody
-            }
-        );
-
-
-    return request.formData();
+  return request.formData();
 }
 
-
-/* =========================================================
-   PROMPT
-   ========================================================= */
-
 function buildPrompt(context) {
-    return `
+  return `
 Transcribe the supplied audio accurately.
 
 Rules:
@@ -149,370 +71,172 @@ Rules:
 - Do not translate.
 - Preserve the language actually spoken.
 - Preserve mixed-language speech naturally.
-- Preserve the speaker's meaning.
 - Add normal punctuation and capitalization.
+- Preserve the speaker's original meaning.
 - Correct only obvious recognition mistakes.
 - Do not invent information.
 - Do not rewrite the speaker's ideas.
 
 ${
-    context
-        ? `
+  context
+    ? `
 Recent conversation context:
 
 ${context}
 
-Use this only to resolve genuinely ambiguous words.
-Do not copy context into the transcript unless it was spoken.
+Use this context only to resolve genuinely ambiguous words.
+Do not copy context into the transcript unless it was actually spoken.
 `
-        : ""
+    : ""
 }
 
-Return only the transcript.
+Return only the final transcript.
 `.trim();
 }
 
+export default async function handler(req, res) {
+  if (req.method !== "POST") {
+    res.setHeader("Allow", "POST");
 
-/* =========================================================
-   GEMINI
-   ========================================================= */
+    return sendJson(res, 405, {
+      error: "Method not allowed."
+    });
+  }
 
-async function transcribeWithGemini({
-    apiKey,
-    audioBuffer,
-    mimeType,
-    context
-}) {
+  const apiKey = process.env.GEMINI_API_KEY;
 
-    const audioBase64 =
-        audioBuffer.toString(
-            "base64"
-        );
+  if (!apiKey) {
+    return sendJson(res, 500, {
+      error: "GEMINI_API_KEY is missing."
+    });
+  }
 
+  try {
+    const formData = await parseMultipart(req);
 
-    const response =
-        await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`,
-            {
-                method: "POST",
+    const audioFile = formData.get("audio");
 
-                headers: {
-                    "Content-Type":
-                        "application/json",
-
-                    "x-goog-api-key":
-                        apiKey
-                },
-
-                body:
-                    JSON.stringify({
-                        contents: [
-                            {
-                                role:
-                                    "user",
-
-                                parts: [
-                                    {
-                                        text:
-                                            buildPrompt(
-                                                context
-                                            )
-                                    },
-
-                                    {
-                                        inlineData: {
-                                            mimeType,
-                                            data:
-                                                audioBase64
-                                        }
-                                    }
-                                ]
-                            }
-                        ],
-
-                        generationConfig: {
-                            maxOutputTokens:
-                                4096
-                        }
-                    })
-            }
-        );
-
-
-    const text =
-        await response.text();
-
-
-    let data = null;
-
-
-    try {
-        data =
-            JSON.parse(text);
-    } catch {
-        data = null;
-    }
-
-
-    console.log(
-        "[NEYO Transcribe] Gemini status:",
-        response.status
+    const context = normalizeContext(
+      formData.get("context")
     );
 
-
-    if (!response.ok) {
-
-        console.error(
-            "[NEYO Transcribe] Gemini body:",
-            text
-        );
-
-
-        throw new Error(
-            data?.error?.message ||
-            `Gemini failed (${response.status})`
-        );
+    if (
+      !audioFile ||
+      typeof audioFile.arrayBuffer !== "function"
+    ) {
+      return sendJson(res, 400, {
+        error: "Audio file is required."
+      });
     }
 
+    const audioBuffer = Buffer.from(
+      await audioFile.arrayBuffer()
+    );
+
+    if (!audioBuffer.length) {
+      return sendJson(res, 400, {
+        error: "Audio is empty."
+      });
+    }
+
+    if (audioBuffer.length > MAX_AUDIO_BYTES) {
+      return sendJson(res, 413, {
+        error: "Recording is too large."
+      });
+    }
+
+    console.log(
+      "[NEYO Transcribe] WAV received",
+      {
+        mime: audioFile.type,
+        bytes: audioBuffer.length,
+        contextChars: context.length
+      }
+    );
+
+    const ai = new GoogleGenAI({
+      apiKey
+    });
+
+    const response =
+      await ai.models.generateContent({
+        model: MODEL,
+
+        contents: [
+          {
+            role: "user",
+
+            parts: [
+              {
+                text: buildPrompt(context)
+              },
+
+              {
+                inlineData: {
+                  mimeType: "audio/wav",
+                  data: audioBuffer.toString("base64")
+                }
+              }
+            ]
+          }
+        ]
+      });
 
     const transcript =
-        data?.candidates?.[0]
-            ?.content?.parts
-            ?.map(
-                part =>
-                    part?.text || ""
-            )
-            .join("")
-            .trim() || "";
-
+      String(
+        response.text || ""
+      ).trim();
 
     if (!transcript) {
-        throw new Error(
-            "EMPTY_TRANSCRIPT"
-        );
+      console.error(
+        "[NEYO Transcribe] empty response:",
+        response
+      );
+
+      return sendJson(res, 422, {
+        error: "No transcript returned."
+      });
     }
 
+    console.log(
+      "[NEYO Transcribe] success",
+      {
+        chars: transcript.length
+      }
+    );
 
-    return transcript;
-}
+    return sendJson(res, 200, {
+      transcript
+    });
 
+  } catch (error) {
+    console.error(
+      "[NEYO Transcribe] fatal:",
+      error
+    );
 
-/* =========================================================
-   HANDLER
-   ========================================================= */
-
-export default async function handler(
-    req,
-    res
-) {
-
-    try {
-
-        if (
-            req.method !== "POST"
-        ) {
-
-            res.setHeader(
-                "Allow",
-                "POST"
-            );
-
-
-            return sendJson(
-                res,
-                405,
-                {
-                    error:
-                        "Method not allowed."
-                }
-            );
-        }
-
-
-        const apiKey =
-            process.env
-                .GEMINI_API_KEY;
-
-
-        if (!apiKey) {
-
-            console.error(
-                "[NEYO Transcribe] Missing GEMINI_API_KEY"
-            );
-
-
-            return sendJson(
-                res,
-                500,
-                {
-                    error:
-                        "GEMINI_API_KEY is missing."
-                }
-            );
-        }
-
-
-        const formData =
-            await parseMultipart(req);
-
-
-        const audioFile =
-            formData.get("audio");
-
-
-        const context =
-            normalizeContext(
-                formData.get(
-                    "context"
-                )
-            );
-
-
-        if (
-            !audioFile ||
-            typeof audioFile.arrayBuffer !==
-                "function"
-        ) {
-
-            return sendJson(
-                res,
-                400,
-                {
-                    error:
-                        "Audio file is required."
-                }
-            );
-        }
-
-
-        const buffer =
-            Buffer.from(
-                await audioFile
-                    .arrayBuffer()
-            );
-
-
-        const mimeType =
-            normalizeMimeType(
-                audioFile.type
-            );
-
-
-        console.log(
-            "[NEYO Transcribe] incoming:",
-            {
-                mimeType,
-                bytes:
-                    buffer.length,
-                contextChars:
-                    context.length
-            }
-        );
-
-
-        if (!buffer.length) {
-
-            return sendJson(
-                res,
-                400,
-                {
-                    error:
-                        "Audio is empty."
-                }
-            );
-        }
-
-
-        if (
-            buffer.length >
-            MAX_AUDIO_BYTES
-        ) {
-
-            return sendJson(
-                res,
-                413,
-                {
-                    error:
-                        "Recording too large."
-                }
-            );
-        }
-
-
-        const supported =
-            new Set([
-                "audio/wav",
-                "audio/mp3",
-                "audio/mpeg",
-                "audio/aiff",
-                "audio/aac",
-                "audio/ogg",
-                "audio/flac"
-            ]);
-
-
-        if (
-            !supported.has(
-                mimeType
-            )
-        ) {
-
-            console.error(
-                "[NEYO Transcribe] Unsupported MIME:",
-                mimeType
-            );
-
-
-            return sendJson(
-                res,
-                415,
-                {
-                    error:
-                        `Unsupported audio format: ${mimeType}`
-                }
-            );
-        }
-
-
-        const transcript =
-            await transcribeWithGemini({
-                apiKey,
-                audioBuffer:
-                    buffer,
-                mimeType:
-                    mimeType ===
-                        "audio/mpeg"
-                        ? "audio/mp3"
-                        : mimeType,
-                context
-            });
-
-
-        return sendJson(
-            res,
-            200,
-            {
-                transcript
-            }
-        );
-
-
-    } catch (error) {
-
-        console.error(
-            "[NEYO Transcribe] fatal:",
-            error
-        );
-
-
-        return sendJson(
-            res,
-            500,
-            {
-                error:
-                    error?.message ||
-                    "Voice transcription failed."
-            }
-        );
+    if (
+      error?.message ===
+      "INVALID_CONTENT_TYPE"
+    ) {
+      return sendJson(res, 400, {
+        error: "Expected multipart audio upload."
+      });
     }
+
+    if (
+      error?.message ===
+      "AUDIO_TOO_LARGE"
+    ) {
+      return sendJson(res, 413, {
+        error: "Recording is too large."
+      });
+    }
+
+    return sendJson(res, 500, {
+      error:
+        error?.message ||
+        "Voice transcription failed."
+    });
+  }
 }

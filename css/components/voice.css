@@ -1,125 +1,143 @@
 /*
 =========================================================
-NEYO — VOICE COMPONENT
+NEYO — VOICE / LIVE TRANSCRIPTION
+PRODUCTION VISUAL SYSTEM
 
-Purpose:
-Voice input / recording UI.
+Designed for:
+public/js/components/voice.js
 
-Includes:
-- Mic button
-- Recording container
-- Wave dots
-- Stop recording button
-- Recording animation
+GOALS
+---------------------------------------------------------
+- ChatGPT-class live voice feel
+- Real microphone-reactive waveform
+- No fake equalizer bounce
+- Calm idle state
+- Smooth speech response
+- Premium monochrome bars
+- Stable composer geometry
+- Desktop / tablet / mobile safe
 - Dark mode
-- Mobile
 - Reduced motion
-
-Legacy neo-v3.css remains loaded during migration.
+- No conflict with composer-scrollbar.css
 =========================================================
 */
 
 
 /* =========================================================
-   MIC BUTTON
+   1. VOICE DESIGN TOKENS
    ========================================================= */
 
-.mic-btn {
-    flex: 0 0 auto !important;
+#glassInputContainer {
+    --voice-height: 40px;
 
-    width: 40px;
-    height: 40px;
+    --voice-bar-width: 3px;
+    --voice-bar-gap: 3px;
 
-    min-width: 40px;
-    min-height: 40px;
+    --voice-bar-idle-height: 3px;
+    --voice-bar-max-height: 24px;
 
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
+    --voice-stop-size: 36px;
 
-    margin-right: 2px !important;
+    --voice-edge-x: 10px;
 
-    padding: 0;
-
-    border: 0;
-    border-radius: 999px;
-
-    background: transparent;
-
-    color:
-        var(--neyo-text-secondary, #5f5f5f);
-
-    cursor: pointer;
-
-    transform: none !important;
-
-    transition:
-        background-color 140ms ease,
-        color 140ms ease,
-        opacity 140ms ease;
-}
-
-
-.mic-btn:hover {
-    background:
-        rgba(0, 0, 0, 0.05);
-
-    color:
-        var(--neyo-text, #171717);
-}
-
-
-.mic-btn:active {
-    transform: none !important;
-}
-
-
-.mic-btn svg,
-.mic-btn i {
-    width: 17px;
-    height: 17px;
-
-    flex: 0 0 17px;
+    --voice-muted-opacity: 0.34;
+    --voice-active-opacity: 0.92;
 }
 
 
 /* =========================================================
-   RECORDING CONTAINER
+   2. TRANSCRIBING STATE
    ========================================================= */
 
+#glassInputContainer
+.composer-input-row.is-transcribing {
+    position: relative !important;
+
+    display: flex !important;
+
+    align-items: center !important;
+
+    width: 100% !important;
+
+    min-width: 0 !important;
+
+    box-sizing: border-box !important;
+}
+
+
+/* Hide textarea while voice UI is active */
+
+#glassInputContainer
+.composer-input-row.is-transcribing
+textarea#chatInput {
+    display: none !important;
+}
+
+
+/* Hide normal mic button */
+
+#glassInputContainer
+.composer-input-row.is-transcribing
+#micBtn {
+    display: none !important;
+}
+
+
+/* Keep send visible */
+
+#glassInputContainer
+.composer-input-row.is-transcribing
+#sendBtn {
+    display: inline-flex !important;
+}
+
+
+/* =========================================================
+   3. VOICE TRANSCRIBE CONTAINER
+   ========================================================= */
+
+#glassInputContainer
 .voice-transcribe-container {
-    min-width: 0;
-
     display: none;
-
-    align-items: center;
-    justify-content: flex-end;
-
-    gap: 8px;
 
     flex: 1 1 auto;
 
-    height: 40px;
+    min-width: 0;
+
+    height:
+        var(--voice-height);
+
+    margin: 0;
+
+    padding:
+        0
+        4px
+        0
+        6px;
+
+    align-items: center;
+
+    gap: 8px;
+
+    box-sizing: border-box;
 }
 
 
-/*
-Support common JS states without
-forcing any specific implementation.
-*/
-
-.voice-transcribe-container.active,
-.voice-transcribe-container.is-active,
-.voice-transcribe-container.recording {
-    display: flex;
+#glassInputContainer
+.composer-input-row.is-transcribing
+.voice-transcribe-container {
+    display: flex !important;
 }
 
 
 /* =========================================================
-   WAVE DOTS
+   4. WAVEFORM RAIL
    ========================================================= */
 
+#glassInputContainer
 .wave-dots-bar {
+    position: relative;
+
     flex: 1 1 auto;
 
     min-width: 0;
@@ -127,313 +145,571 @@ forcing any specific implementation.
     height: 30px;
 
     display: flex;
+
     align-items: center;
     justify-content: center;
 
-    gap: 3px;
+    gap:
+        var(--voice-bar-gap);
+
+    padding:
+        0
+        8px;
 
     overflow: hidden;
+
+    color:
+        var(--text-primary);
+
+    box-sizing: border-box;
+
+    isolation: isolate;
 }
 
 
-.wave-dots-bar span {
-    width: 3px;
-    height: 7px;
+/* =========================================================
+   5. WAVEFORM BARS
+   ========================================================= */
 
-    flex: 0 0 3px;
+#glassInputContainer
+.wave-dots-bar span {
+    display: block;
+
+    width:
+        var(--voice-bar-width);
+
+    min-width:
+        var(--voice-bar-width);
+
+    height:
+        var(--voice-bar-idle-height);
 
     border-radius: 999px;
 
     background:
         currentColor;
 
+    opacity:
+        var(--voice-muted-opacity);
+
+    transform-origin: center center;
+
+    flex: 0 0 auto;
+
+    will-change:
+        height,
+        opacity;
+
+    /*
+    JS updates height continuously.
+    Very short easing smooths browser rendering
+    without creating delayed waveform response.
+    */
+    transition:
+        height 52ms linear,
+        opacity 80ms ease,
+        background-color 120ms ease;
+}
+
+
+/* =========================================================
+   6. SPEAKING STATE
+   ========================================================= */
+
+#glassInputContainer
+.wave-dots-bar.is-speaking {
     color:
-        var(--neyo-text, #171717);
+        var(--text-primary);
+}
 
-    opacity: 0.48;
 
-    transform: scaleY(0.55);
+#glassInputContainer
+.wave-dots-bar.is-speaking span {
+    opacity:
+        var(--voice-active-opacity);
+}
 
-    transform-origin: center;
+
+/* =========================================================
+   7. SUBTLE CENTER DEPTH
+   Makes waveform visually coherent.
+   ========================================================= */
+
+#glassInputContainer
+.wave-dots-bar span:nth-child(1),
+#glassInputContainer
+.wave-dots-bar span:last-child {
+    opacity: 0.24;
+}
+
+
+#glassInputContainer
+.wave-dots-bar span:nth-child(2),
+#glassInputContainer
+.wave-dots-bar span:nth-last-child(2) {
+    opacity: 0.30;
+}
+
+
+/* =========================================================
+   8. STOP BUTTON
+   ========================================================= */
+
+#glassInputContainer
+.stop-recording-btn {
+    width:
+        var(--voice-stop-size);
+
+    height:
+        var(--voice-stop-size);
+
+    min-width:
+        var(--voice-stop-size);
+
+    min-height:
+        var(--voice-stop-size);
+
+    max-width:
+        var(--voice-stop-size);
+
+    max-height:
+        var(--voice-stop-size);
+
+    flex:
+        0 0 var(--voice-stop-size);
+
+    display: inline-flex;
+
+    align-items: center;
+    justify-content: center;
+
+    margin: 0;
+
+    padding: 0;
+
+    border: 0;
+
+    border-radius: 999px;
+
+    background:
+        rgba(0, 0, 0, 0.055);
+
+    color:
+        var(--text-primary);
+
+    cursor: pointer;
+
+    box-sizing: border-box;
+
+    transition:
+        background-color 140ms ease,
+        color 140ms ease,
+        transform 120ms ease,
+        opacity 120ms ease;
+
+    -webkit-tap-highlight-color:
+        transparent;
+}
+
+
+#glassInputContainer
+.stop-recording-btn:hover {
+    background:
+        rgba(0, 0, 0, 0.09);
+}
+
+
+#glassInputContainer
+.stop-recording-btn:active {
+    transform:
+        scale(0.96);
+}
+
+
+/* Stop square */
+
+#glassInputContainer
+.stop-recording-btn svg,
+#glassInputContainer
+.stop-recording-btn i {
+    width: 12px !important;
+    height: 12px !important;
+
+    min-width: 12px !important;
+    min-height: 12px !important;
+
+    stroke-width: 2;
+
+    pointer-events: none;
+}
+
+
+/* =========================================================
+   9. FOCUS ACCESSIBILITY
+   ========================================================= */
+
+#glassInputContainer
+.stop-recording-btn:focus {
+    outline: none;
+}
+
+
+#glassInputContainer
+.stop-recording-btn:focus-visible {
+    outline:
+        2px solid
+        var(--focus-ring);
+
+    outline-offset: 2px;
+}
+
+
+/* =========================================================
+   10. RECORDING PRESENCE
+   Tiny visual indicator without aggressive red UI.
+   ========================================================= */
+
+#glassInputContainer
+.composer-input-row.is-transcribing
+.voice-transcribe-container::before {
+    content: "";
+
+    width: 6px;
+    height: 6px;
+
+    flex: 0 0 6px;
+
+    border-radius: 999px;
+
+    background:
+        currentColor;
+
+    opacity: 0.42;
+
+    transform:
+        scale(1);
 
     animation:
-        neyoVoiceWave
-        900ms
+        neyoVoicePresence
+        1.8s
         ease-in-out
         infinite;
 }
 
 
-/* Stagger 24 waveform bars */
-
-.wave-dots-bar span:nth-child(2n) {
-    animation-delay: -120ms;
-}
-
-.wave-dots-bar span:nth-child(3n) {
-    animation-delay: -240ms;
-}
-
-.wave-dots-bar span:nth-child(4n) {
-    animation-delay: -360ms;
-}
-
-.wave-dots-bar span:nth-child(5n) {
-    animation-delay: -480ms;
-}
-
-
-@keyframes neyoVoiceWave {
+@keyframes neyoVoicePresence {
 
     0%,
     100% {
-        transform: scaleY(0.45);
-        opacity: 0.36;
+        opacity: 0.26;
+        transform: scale(0.84);
     }
 
     50% {
-        transform: scaleY(1.6);
-        opacity: 0.90;
+        opacity: 0.62;
+        transform: scale(1);
     }
 
 }
 
 
 /* =========================================================
-   STOP RECORDING BUTTON
+   11. DO NOT MOVE COMPOSER CONTROLS
+   Voice UI must respect fixed composer geometry.
    ========================================================= */
 
-.stop-recording-btn {
-    width: 40px;
-    height: 40px;
+#glassInputContainer
+.composer-input-row.is-transcribing
+#sendBtn {
+    position: absolute !important;
 
-    min-width: 40px;
-    min-height: 40px;
+    top: 50% !important;
+    bottom: auto !important;
 
-    flex: 0 0 40px;
+    right: 8px !important;
 
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-
-    padding: 0;
-
-    border: 0;
-    border-radius: 999px;
-
-    background:
-        #171717;
-
-    color:
-        #ffffff;
-
-    cursor: pointer;
-
-    transform: none !important;
-
-    box-shadow:
-        0 1px 2px rgba(0, 0, 0, 0.10);
-
-    transition:
-        background-color 140ms ease,
-        color 140ms ease,
-        opacity 140ms ease;
+    transform:
+        translateY(-50%) !important;
 }
 
 
-.stop-recording-btn:hover {
-    background:
-        #000000;
-}
+/* Voice container reserves send space */
 
-
-.stop-recording-btn:active {
-    transform: none !important;
-}
-
-
-.stop-recording-btn svg,
-.stop-recording-btn i {
-    width: 14px;
-    height: 14px;
-
-    flex: 0 0 14px;
-}
-
-
-/* =========================================================
-   RECORDING STATE
-   ========================================================= */
-
-.composer-input-row.is-recording textarea#chatInput,
-.glass-input-container.is-recording textarea#chatInput {
-    display: none;
-}
-
-
-.composer-input-row.is-recording .mic-btn,
-.glass-input-container.is-recording .mic-btn {
-    display: none;
-}
-
-
-.composer-input-row.is-recording
-.voice-transcribe-container,
-.glass-input-container.is-recording
+#glassInputContainer
+.composer-input-row.is-transcribing
 .voice-transcribe-container {
-    display: flex;
+    padding-right: 54px;
 }
 
 
 /* =========================================================
-   DARK MODE
+   12. COMPACT / DEFAULT COMPOSER
+   Exact vertical centering.
+   ========================================================= */
+
+#glassInputContainer:not(.is-writing-expanded)
+.composer-input-row.is-transcribing
+.voice-transcribe-container {
+    position: absolute;
+
+    top: 50%;
+    left: 8px;
+    right: 8px;
+
+    height:
+        var(--voice-height);
+
+    transform:
+        translateY(-50%);
+
+    padding-left: 6px;
+    padding-right: 54px;
+}
+
+
+/* =========================================================
+   13. EXPANDED MODE
+   ========================================================= */
+
+#glassInputContainer.is-writing-expanded
+.composer-input-row.is-transcribing
+.voice-transcribe-container {
+    position: absolute;
+
+    left:
+        var(--neyo-edge-x, 10px);
+
+    right:
+        calc(
+            var(--neyo-edge-x, 10px) +
+            46px
+        );
+
+    bottom:
+        8px;
+
+    height:
+        var(--voice-height);
+
+    padding:
+        0
+        4px;
+
+    transform: none;
+}
+
+
+/* =========================================================
+   14. DARK MODE
    ========================================================= */
 
 body.dark-mode
-.mic-btn {
+#glassInputContainer
+.wave-dots-bar {
     color:
-        rgba(255, 255, 255, 0.72);
+        rgba(255, 255, 255, 0.88);
 }
 
 
 body.dark-mode
-.mic-btn:hover {
-    background:
-        rgba(255, 255, 255, 0.07);
-
-    color:
-        #ffffff;
-}
-
-
-body.dark-mode
-.wave-dots-bar span {
-    color:
-        #ececec;
-}
-
-
-body.dark-mode
+#glassInputContainer
 .stop-recording-btn {
     background:
-        #f5f5f5;
+        rgba(255, 255, 255, 0.08);
 
     color:
-        #171717;
+        rgba(255, 255, 255, 0.92);
 }
 
 
 body.dark-mode
+#glassInputContainer
 .stop-recording-btn:hover {
     background:
-        #ffffff;
+        rgba(255, 255, 255, 0.13);
 }
 
 
 /* =========================================================
-   MOBILE
+   15. TABLET
+   ========================================================= */
+
+@media
+    (min-width: 768px)
+    and
+    (max-width: 1100px) {
+
+    #glassInputContainer {
+        --voice-height: 40px;
+
+        --voice-bar-gap: 2.8px;
+
+        --voice-stop-size: 36px;
+    }
+
+}
+
+
+/* =========================================================
+   16. MOBILE
    ========================================================= */
 
 @media (max-width: 767px) {
 
-    .mic-btn,
-    .stop-recording-btn {
-        width:
-            40px !important;
+    #glassInputContainer {
+        --voice-height: 38px;
 
-        height:
-            40px !important;
+        --voice-bar-width: 3px;
+        --voice-bar-gap: 2.5px;
 
-        min-width:
-            40px !important;
+        --voice-bar-max-height: 22px;
 
-        min-height:
-            40px !important;
-
-        flex:
-            0 0 40px !important;
-
-        border-radius:
-            999px !important;
+        --voice-stop-size: 34px;
     }
 
 
-    .mic-btn {
-        margin-right:
-            0 !important;
-
-        background:
-            transparent !important;
-
-        color:
-            var(--mobile-text, #171717)
-            !important;
-    }
-
-
-    .voice-transcribe-container {
-        height:
-            40px;
-
-        gap:
-            6px;
-    }
-
-
+    #glassInputContainer
     .wave-dots-bar {
-        height:
-            28px;
+        height: 28px;
 
         gap:
-            2.5px;
+            var(--voice-bar-gap);
+
+        padding:
+            0
+            5px;
     }
 
 
-    .wave-dots-bar span {
-        width:
-            3px;
-
-        flex-basis:
-            3px;
+    #glassInputContainer
+    .composer-input-row.is-transcribing
+    .voice-transcribe-container {
+        gap: 6px;
     }
 
 
-    body.dark-mode
-    .mic-btn {
-        color:
-            var(--mobile-text, #f5f5f5)
-            !important;
+    #glassInputContainer:not(.is-writing-expanded)
+    .composer-input-row.is-transcribing
+    .voice-transcribe-container {
+        left: 6px;
+        right: 6px;
+
+        padding-left: 4px;
+        padding-right: 50px;
+    }
+
+
+    #glassInputContainer
+    .composer-input-row.is-transcribing
+    #sendBtn {
+        right: 7px !important;
+    }
+
+
+    #glassInputContainer
+    .composer-input-row.is-transcribing
+    .voice-transcribe-container::before {
+        width: 5px;
+        height: 5px;
+
+        flex-basis: 5px;
     }
 
 }
+
+
 /* =========================================================
-   REDUCED MOTION
+   17. SMALL MOBILE
+   ========================================================= */
+
+@media (max-width: 380px) {
+
+    #glassInputContainer {
+        --voice-bar-width: 2.5px;
+        --voice-bar-gap: 2px;
+
+        --voice-stop-size: 32px;
+    }
+
+
+    #glassInputContainer
+    .wave-dots-bar {
+        padding:
+            0
+            3px;
+    }
+
+}
+
+
+/* =========================================================
+   18. LANDSCAPE PHONE
+   ========================================================= */
+
+@media
+    (max-height: 520px)
+    and
+    (orientation: landscape) {
+
+    #glassInputContainer {
+        --voice-height: 36px;
+
+        --voice-stop-size: 32px;
+
+        --voice-bar-max-height: 20px;
+    }
+
+
+    #glassInputContainer
+    .wave-dots-bar {
+        height: 26px;
+    }
+
+}
+
+
+/* =========================================================
+   19. TOUCH DEVICES
+   ========================================================= */
+
+@media (pointer: coarse) {
+
+    #glassInputContainer
+    .stop-recording-btn {
+        touch-action:
+            manipulation;
+    }
+
+}
+
+
+/* =========================================================
+   20. REDUCED MOTION
+   Real microphone updates remain functional,
+   decorative pulse is removed.
    ========================================================= */
 
 @media (prefers-reduced-motion: reduce) {
 
+    #glassInputContainer
+    .composer-input-row.is-transcribing
+    .voice-transcribe-container::before {
+        animation: none;
+    }
+
+
+    #glassInputContainer
     .wave-dots-bar span {
-        animation: none !important;
-
-        transform:
-            scaleY(0.8);
+        transition:
+            opacity 80ms ease !important;
     }
 
 
-    .mic-btn,
+    #glassInputContainer
     .stop-recording-btn {
-        transition-duration:
-            0.01ms !important;
+        transition:
+            background-color 120ms ease,
+            color 120ms ease !important;
     }
 
-}
-
-
-body[data-neyo-motion="reduced"]
-.wave-dots-bar span {
-    animation:
-        none !important;
-
-    transform:
-        scaleY(0.8);
 }

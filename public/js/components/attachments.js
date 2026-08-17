@@ -1,25 +1,26 @@
 /*
 =========================================================
-NEYO — ATTACHMENTS COMPONENT
+NEYO — ATTACHMENTS
 STABLE PRODUCTION VERSION
 
 Owns:
-- Attachment picker
-- Attachment popup open / close
-- Selected file state
-- Attachment preview chips
-- Remove attachment
+- Attachment popup
+- Native file picker
 - Drag & drop
-- Paste upload
-- File category detection
-- Public attachment API
+- Paste files
+- Attachment state
+- Image preview URLs
+- File preview cards
+- Remove / clear
+- Duplicate protection
+- Public API
 
 Does NOT own:
-- Supabase upload
-- /api/upload
+- Actual remote upload
+- Supabase storage
 - Message sending
-- Image compression
-- Chat API
+- Composer geometry
+- Attachment CSS
 =========================================================
 */
 
@@ -28,7 +29,7 @@ Does NOT own:
 
 
     /* =====================================================
-       ELEMENTS
+       DOM
        ===================================================== */
 
     const attachBtn =
@@ -54,7 +55,16 @@ Does NOT own:
 
 
     /* =====================================================
-       CONSTANTS
+       REQUIRED ELEMENT
+       ===================================================== */
+
+    if (!attachedChipsWrapper) {
+        return;
+    }
+
+
+    /* =====================================================
+       CONFIG
        ===================================================== */
 
     const MAX_ATTACHED_FILES = 5;
@@ -70,7 +80,7 @@ Does NOT own:
 
 
     /* =====================================================
-       HELPERS
+       ICON REFRESH
        ===================================================== */
 
     function refreshIcons() {
@@ -81,53 +91,147 @@ Does NOT own:
             try {
                 window.lucide.createIcons();
             } catch {
-                // Safe fallback.
+                // Non-fatal.
             }
         }
     }
 
 
+    /* =====================================================
+       FILE CATEGORY
+       MIME + extension fallback
+       ===================================================== */
+
     function getFileCategory(file) {
         const type =
-            String(file?.type || "")
-                .toLowerCase();
+            String(
+                file?.type || ""
+            ).toLowerCase();
 
-        if (type.startsWith("image/")) {
+        const name =
+            String(
+                file?.name || ""
+            ).toLowerCase();
+
+
+        /* IMAGE */
+
+        if (
+            type.startsWith("image/") ||
+            /\.(png|jpe?g|webp|gif|bmp|avif|heic|heif|svg)$/i
+                .test(name)
+        ) {
             return "image";
         }
 
-        if (type.startsWith("audio/")) {
+
+        /* AUDIO */
+
+        if (
+            type.startsWith("audio/") ||
+            /\.(mp3|wav|m4a|aac|ogg|flac|opus)$/i
+                .test(name)
+        ) {
             return "audio";
         }
 
-        if (type.startsWith("video/")) {
+
+        /* VIDEO */
+
+        if (
+            type.startsWith("video/") ||
+            /\.(mp4|webm|mov|m4v|avi|mkv)$/i
+                .test(name)
+        ) {
             return "video";
         }
 
-        if (type.includes("pdf")) {
+
+        /* PDF */
+
+        if (
+            type.includes("pdf") ||
+            /\.pdf$/i.test(name)
+        ) {
             return "pdf";
         }
+
+
+        /* DOCUMENT */
+
+        if (
+            /\.(doc|docx|rtf|odt)$/i
+                .test(name)
+        ) {
+            return "document";
+        }
+
+
+        /* SPREADSHEET */
+
+        if (
+            /\.(xls|xlsx|csv|ods)$/i
+                .test(name)
+        ) {
+            return "spreadsheet";
+        }
+
+
+        /* PRESENTATION */
+
+        if (
+            /\.(ppt|pptx|odp)$/i
+                .test(name)
+        ) {
+            return "presentation";
+        }
+
+
+        /* CODE */
+
+        if (
+            /\.(js|jsx|ts|tsx|py|java|c|cpp|cs|go|rs|php|rb|swift|kt|html|css|json|xml|yaml|yml|sql|sh)$/i
+                .test(name)
+        ) {
+            return "code";
+        }
+
 
         return "text";
     }
 
+
+    /* =====================================================
+       IMAGE DETECTION
+       ===================================================== */
 
     function isImageAttachment(file) {
         if (!file) {
             return false;
         }
 
+
         if (
-            file.type?.startsWith("image/")
+            String(
+                file.type || ""
+            )
+                .toLowerCase()
+                .startsWith("image/")
         ) {
             return true;
         }
 
+
         if (
-            file.mimeType?.startsWith("image/")
+            String(
+                file.mimeType || ""
+            )
+                .toLowerCase()
+                .startsWith("image/")
         ) {
             return true;
         }
+
 
         if (
             file.category === "image"
@@ -135,21 +239,30 @@ Does NOT own:
             return true;
         }
 
-        const name =
-            String(file.name || "")
-                .toLowerCase();
 
-        return /\.(png|jpg|jpeg|webp|gif)$/i
+        const name =
+            String(
+                file.name || ""
+            ).toLowerCase();
+
+
+        return /\.(png|jpe?g|webp|gif|bmp|avif|heic|heif|svg)$/i
             .test(name);
     }
 
+
+    /* =====================================================
+       ICON MAPPING
+       ===================================================== */
 
     function getFileIcon(file) {
         const category =
             file?.category ||
             getFileCategory(file);
 
+
         switch (category) {
+
             case "image":
                 return "image";
 
@@ -162,30 +275,58 @@ Does NOT own:
             case "pdf":
                 return "file-text";
 
+            case "document":
+                return "file-text";
+
+            case "spreadsheet":
+                return "sheet";
+
+            case "presentation":
+                return "presentation";
+
+            case "code":
+                return "file-code";
+
             default:
                 return "file";
         }
     }
 
 
+    /* =====================================================
+       PREVIEW URL
+       ===================================================== */
+
     function getPreviewUrl(file) {
         if (!file) {
             return "";
         }
 
+
         if (file.previewUrl) {
             return file.previewUrl;
         }
+
 
         if (file.signedUrl) {
             return file.signedUrl;
         }
 
+
+        if (file.url) {
+            return file.url;
+        }
+
+
         return "";
     }
 
 
-    function isRealFile(file) {
+    /* =====================================================
+       VALID FILE
+       ===================================================== */
+
+    function isNativeFile(file) {
         return (
             typeof File !== "undefined" &&
             file instanceof File
@@ -193,26 +334,83 @@ Does NOT own:
     }
 
 
-    function hasFilesInDrag(event) {
-        const types =
-            Array.from(
-                event.dataTransfer?.types || []
-            );
+    /* =====================================================
+       DUPLICATE CHECK
+       ===================================================== */
 
-        return types.includes("Files");
-    }
-
-
-    function fileAlreadyAttached(file) {
+    function isDuplicateFile(file) {
         return attachedFiles.some(
             item =>
                 item.name === file.name &&
                 item.size === file.size &&
-                item.type === (
-                    file.type ||
-                    "application/octet-stream"
-                )
+                item.lastModified ===
+                    file.lastModified
         );
+    }
+
+
+    /* =====================================================
+       DRAG FILE CHECK
+       ===================================================== */
+
+    function dragContainsFiles(event) {
+        const types =
+            Array.from(
+                event.dataTransfer
+                    ?.types || []
+            );
+
+
+        return types.includes(
+            "Files"
+        );
+    }
+
+
+    /* =====================================================
+       CREATE PREVIEW URL
+       ===================================================== */
+
+    function createPreviewUrl(file, category) {
+        if (
+            category !== "image" &&
+            !isImageAttachment(file)
+        ) {
+            return "";
+        }
+
+
+        try {
+            return URL.createObjectURL(
+                file
+            );
+        } catch {
+            return "";
+        }
+    }
+
+
+    /* =====================================================
+       REVOKE PREVIEW
+       ===================================================== */
+
+    function revokePreview(file) {
+        const url =
+            file?.previewUrl;
+
+
+        if (
+            typeof url === "string" &&
+            url.startsWith("blob:")
+        ) {
+            try {
+                URL.revokeObjectURL(
+                    url
+                );
+            } catch {
+                // Non-fatal cleanup.
+            }
+        }
     }
 
 
@@ -226,9 +424,8 @@ Does NOT own:
                 "neyo:attachments-change",
                 {
                     detail: {
-                        files: [
-                            ...attachedFiles
-                        ],
+                        files:
+                            [...attachedFiles],
 
                         count:
                             attachedFiles.length
@@ -259,10 +456,6 @@ Does NOT own:
        ===================================================== */
 
     function renderAttachments() {
-        if (!attachedChipsWrapper) {
-            return;
-        }
-
         attachedChipsWrapper
             .replaceChildren();
 
@@ -275,34 +468,70 @@ Does NOT own:
                         "div"
                     );
 
+
                 card.className =
                     "attachment-preview-card";
 
 
-                /* -----------------------------------------
+                card.dataset.attachmentIndex =
+                    String(index);
+
+
+                /* =========================================
                    IMAGE PREVIEW
-                   ----------------------------------------- */
+                   ========================================= */
 
                 if (
                     isImageAttachment(file)
                 ) {
+
                     const image =
                         document.createElement(
                             "img"
                         );
 
+
                     image.alt =
                         file.name ||
-                        "Uploaded image";
+                        "Attached image";
 
-                    image.src =
+
+                    const previewUrl =
                         getPreviewUrl(file);
 
+
+                    if (previewUrl) {
+                        image.src =
+                            previewUrl;
+                    }
+
+
                     image.loading =
-                        "lazy";
+                        "eager";
+
 
                     image.decoding =
                         "async";
+
+
+                    /*
+                    If browser cannot decode image,
+                    keep card alive rather than breaking
+                    attachment rendering.
+                    */
+
+                    image.addEventListener(
+                        "error",
+                        () => {
+                            card.classList.add(
+                                "attachment-preview-error"
+                            );
+                        },
+                        {
+                            once: true
+                        }
+                    );
+
 
                     card.appendChild(
                         image
@@ -310,15 +539,17 @@ Does NOT own:
                 }
 
 
-                /* -----------------------------------------
+                /* =========================================
                    NORMAL FILE
-                   ----------------------------------------- */
+                   ========================================= */
 
                 else {
+
                     const box =
                         document.createElement(
                             "div"
                         );
+
 
                     box.className =
                         "attachment-preview-file";
@@ -329,9 +560,16 @@ Does NOT own:
                             "i"
                         );
 
+
                     icon.setAttribute(
                         "data-lucide",
                         getFileIcon(file)
+                    );
+
+
+                    icon.setAttribute(
+                        "aria-hidden",
+                        "true"
                     );
 
 
@@ -339,6 +577,7 @@ Does NOT own:
                         document.createElement(
                             "span"
                         );
+
 
                     name.textContent =
                         file.name ||
@@ -350,29 +589,34 @@ Does NOT own:
                         name
                     );
 
+
                     card.appendChild(
                         box
                     );
                 }
 
 
-                /* -----------------------------------------
-                   REMOVE
-                   ----------------------------------------- */
+                /* =========================================
+                   REMOVE BUTTON
+                   ========================================= */
 
                 const removeBtn =
                     document.createElement(
                         "button"
                     );
 
+
                 removeBtn.type =
                     "button";
+
 
                 removeBtn.className =
                     "attachment-remove-btn";
 
+
                 removeBtn.dataset.tooltip =
                     "Remove attachment";
+
 
                 removeBtn.setAttribute(
                     "aria-label",
@@ -381,6 +625,7 @@ Does NOT own:
                         "attachment"
                     }`
                 );
+
 
                 removeBtn.innerHTML = `
                     <i
@@ -395,6 +640,7 @@ Does NOT own:
                 removeBtn.addEventListener(
                     "click",
                     event => {
+
                         event.preventDefault();
                         event.stopPropagation();
 
@@ -409,8 +655,11 @@ Does NOT own:
                     removeBtn
                 );
 
+
                 attachedChipsWrapper
-                    .appendChild(card);
+                    .appendChild(
+                        card
+                    );
             }
         );
 
@@ -421,8 +670,8 @@ Does NOT own:
 
 
         /*
-        Allow composer modules to recalculate
-        after attachment rail height changes.
+        Composer JS may need to recalculate
+        after attachment row changes.
         */
 
         window.NeyoComposerScrollbar
@@ -446,29 +695,43 @@ Does NOT own:
         }
 
 
+        let changed = false;
+
+
         for (const file of selected) {
+
+            /* -----------------------------------------
+               Maximum attachment count
+               ----------------------------------------- */
 
             if (
                 attachedFiles.length >=
                 MAX_ATTACHED_FILES
             ) {
+
                 emitLimit();
 
                 break;
             }
 
 
-            if (!isRealFile(file)) {
+            /* -----------------------------------------
+               Only real browser File objects
+               ----------------------------------------- */
+
+            if (
+                !isNativeFile(file)
+            ) {
                 continue;
             }
 
 
-            /*
-            Avoid accidental duplicate drops/selections.
-            */
+            /* -----------------------------------------
+               Skip duplicates
+               ----------------------------------------- */
 
             if (
-                fileAlreadyAttached(file)
+                isDuplicateFile(file)
             ) {
                 continue;
             }
@@ -478,9 +741,27 @@ Does NOT own:
                 getFileCategory(file);
 
 
+            const previewUrl =
+                createPreviewUrl(
+                    file,
+                    category
+                );
+
+
             const entry = {
+
+                id:
+                    (
+                        window.crypto
+                            ?.randomUUID?.() ||
+                        `${Date.now()}-${Math.random()
+                            .toString(36)
+                            .slice(2)}`
+                    ),
+
                 name:
-                    file.name,
+                    file.name ||
+                    "attachment",
 
                 type:
                     file.type ||
@@ -493,57 +774,61 @@ Does NOT own:
                 category,
 
                 size:
-                    file.size,
+                    Number(
+                        file.size || 0
+                    ),
+
+                lastModified:
+                    Number(
+                        file.lastModified || 0
+                    ),
 
                 rawFile:
                     file,
 
-                previewUrl:
-                    category === "image"
-                        ? URL.createObjectURL(
-                            file
-                        )
-                        : ""
+                previewUrl
             };
 
 
             attachedFiles.push(
                 entry
             );
+
+
+            changed = true;
         }
 
 
-        renderAttachments();
+        if (changed) {
+            renderAttachments();
+        }
     }
 
 
     /* =====================================================
-       REMOVE
+       REMOVE ONE
        ===================================================== */
 
     function removeAttachment(index) {
-        const file =
-            attachedFiles[index];
-
-
         if (
-            file?.previewUrl?.startsWith(
-                "blob:"
-            )
+            index < 0 ||
+            index >= attachedFiles.length
         ) {
-            try {
-                URL.revokeObjectURL(
-                    file.previewUrl
-                );
-            } catch {
-                // Safe cleanup.
-            }
+            return;
         }
 
 
-        attachedFiles.splice(
-            index,
-            1
+        const [
+            removed
+        ] =
+            attachedFiles.splice(
+                index,
+                1
+            );
+
+
+        revokePreview(
+            removed
         );
 
 
@@ -552,40 +837,24 @@ Does NOT own:
 
 
     /* =====================================================
-       CLEAR
+       CLEAR ALL
        ===================================================== */
 
     function clearAttachments() {
         attachedFiles.forEach(
-            file => {
-
-                if (
-                    file?.previewUrl
-                        ?.startsWith(
-                            "blob:"
-                        )
-                ) {
-                    try {
-                        URL.revokeObjectURL(
-                            file.previewUrl
-                        );
-                    } catch {
-                        // Safe cleanup.
-                    }
-                }
-
-            }
+            revokePreview
         );
 
 
         attachedFiles = [];
 
+
         renderAttachments();
     }
 
 
     /* =====================================================
-       ATTACH POPUP
+       POPUP MENU
        ===================================================== */
 
     function openAttachmentMenu() {
@@ -609,9 +878,14 @@ Does NOT own:
     }
 
 
+    /* =====================================================
+       + BUTTON
+       ===================================================== */
+
     attachBtn?.addEventListener(
         "click",
         event => {
+
             event.preventDefault();
             event.stopPropagation();
 
@@ -620,26 +894,34 @@ Does NOT own:
     );
 
 
+    /* =====================================================
+       ADD FILES MENU ITEM
+       ===================================================== */
+
     addFilesMenuBtn?.addEventListener(
         "click",
         event => {
+
             event.preventDefault();
             event.stopPropagation();
 
+
             closeAttachmentMenu();
 
+
             /*
-            Native file picker.
-            Must stay inside direct user interaction.
+            Must remain inside the direct user click
+            so browser allows native picker.
             */
 
-            hiddenFileInput?.click();
+            hiddenFileInput
+                ?.click();
         }
     );
 
 
     /* =====================================================
-       FILE INPUT
+       NATIVE FILE INPUT
        ===================================================== */
 
     hiddenFileInput?.addEventListener(
@@ -649,6 +931,7 @@ Does NOT own:
             const input =
                 event.currentTarget;
 
+
             const files =
                 input?.files;
 
@@ -657,12 +940,15 @@ Does NOT own:
                 files &&
                 files.length
             ) {
-                addFiles(files);
+                addFiles(
+                    files
+                );
             }
 
 
             /*
-            Allow selecting same file again
+            Important:
+            Allows selecting same file again
             after it has been removed.
             */
 
@@ -681,21 +967,23 @@ Does NOT own:
         "click",
         event => {
 
-            const clickedButton =
-                attachBtn?.contains(
-                    event.target
-                );
+            const target =
+                event.target;
 
 
-            const clickedMenu =
-                attachPopupMenu?.contains(
-                    event.target
-                );
+            const insideButton =
+                attachBtn
+                    ?.contains(target);
+
+
+            const insideMenu =
+                attachPopupMenu
+                    ?.contains(target);
 
 
             if (
-                !clickedButton &&
-                !clickedMenu
+                !insideButton &&
+                !insideMenu
             ) {
                 closeAttachmentMenu();
             }
@@ -704,7 +992,7 @@ Does NOT own:
 
 
     /* =====================================================
-       DRAG OVERLAY HELPERS
+       DRAG OVERLAY
        ===================================================== */
 
     function showDragOverlay() {
@@ -717,6 +1005,7 @@ Does NOT own:
     function hideDragOverlay() {
         dragDepth = 0;
 
+
         dragDropOverlay
             ?.classList
             .remove("show");
@@ -725,125 +1014,150 @@ Does NOT own:
 
     /* =====================================================
        DRAG & DROP
-       Stable nested-element-safe implementation.
+       Single controlled pipeline.
        ===================================================== */
 
     if (composerWrapper) {
 
-        composerWrapper.addEventListener(
-            "dragenter",
-            event => {
+        /* -----------------------------------------
+           DRAG ENTER
+           ----------------------------------------- */
 
-                if (
-                    !hasFilesInDrag(event)
-                ) {
-                    return;
+        composerWrapper
+            .addEventListener(
+                "dragenter",
+                event => {
+
+                    if (
+                        !dragContainsFiles(
+                            event
+                        )
+                    ) {
+                        return;
+                    }
+
+
+                    event.preventDefault();
+                    event.stopPropagation();
+
+
+                    dragDepth += 1;
+
+
+                    showDragOverlay();
                 }
+            );
 
 
-                event.preventDefault();
-                event.stopPropagation();
+        /* -----------------------------------------
+           DRAG OVER
+           ----------------------------------------- */
+
+        composerWrapper
+            .addEventListener(
+                "dragover",
+                event => {
+
+                    if (
+                        !dragContainsFiles(
+                            event
+                        )
+                    ) {
+                        return;
+                    }
 
 
-                dragDepth += 1;
-
-                showDragOverlay();
-            }
-        );
+                    event.preventDefault();
+                    event.stopPropagation();
 
 
-        composerWrapper.addEventListener(
-            "dragover",
-            event => {
+                    if (
+                        event.dataTransfer
+                    ) {
+                        event.dataTransfer.dropEffect =
+                            "copy";
+                    }
 
-                if (
-                    !hasFilesInDrag(event)
-                ) {
-                    return;
+
+                    showDragOverlay();
                 }
+            );
 
 
-                event.preventDefault();
-                event.stopPropagation();
+        /* -----------------------------------------
+           DRAG LEAVE
+           ----------------------------------------- */
+
+        composerWrapper
+            .addEventListener(
+                "dragleave",
+                event => {
+
+                    if (
+                        !dragContainsFiles(
+                            event
+                        )
+                    ) {
+                        return;
+                    }
 
 
-                if (
-                    event.dataTransfer
-                ) {
-                    event.dataTransfer
-                        .dropEffect =
-                        "copy";
+                    event.preventDefault();
+                    event.stopPropagation();
+
+
+                    dragDepth =
+                        Math.max(
+                            0,
+                            dragDepth - 1
+                        );
+
+
+                    if (
+                        dragDepth === 0
+                    ) {
+                        hideDragOverlay();
+                    }
                 }
+            );
 
 
-                showDragOverlay();
-            }
-        );
+        /* -----------------------------------------
+           DROP
+           ----------------------------------------- */
+
+        composerWrapper
+            .addEventListener(
+                "drop",
+                event => {
+
+                    event.preventDefault();
+                    event.stopPropagation();
 
 
-        composerWrapper.addEventListener(
-            "dragleave",
-            event => {
-
-                if (
-                    !hasFilesInDrag(event)
-                ) {
-                    return;
-                }
+                    const files =
+                        event.dataTransfer
+                            ?.files;
 
 
-                event.preventDefault();
-                event.stopPropagation();
-
-
-                dragDepth =
-                    Math.max(
-                        0,
-                        dragDepth - 1
-                    );
-
-
-                if (
-                    dragDepth === 0
-                ) {
                     hideDragOverlay();
+
+
+                    if (
+                        files &&
+                        files.length
+                    ) {
+                        addFiles(
+                            files
+                        );
+                    }
                 }
-            }
-        );
-
-
-        composerWrapper.addEventListener(
-            "drop",
-            event => {
-
-                event.preventDefault();
-                event.stopPropagation();
-
-
-                const files =
-                    event.dataTransfer
-                        ?.files;
-
-
-                hideDragOverlay();
-
-
-                if (
-                    files &&
-                    files.length
-                ) {
-                    addFiles(files);
-                }
-            }
-        );
+            );
     }
 
 
     /* =====================================================
        GLOBAL DRAG SAFETY
-
-       If cursor leaves browser/window while dragging,
-       overlay must not remain stuck.
        ===================================================== */
 
     document.addEventListener(
@@ -863,7 +1177,6 @@ Does NOT own:
             ) {
                 hideDragOverlay();
             }
-
         }
     );
 
@@ -889,7 +1202,9 @@ Does NOT own:
             }
 
 
-            addFiles(files);
+            addFiles(
+                files
+            );
         }
     );
 
@@ -917,33 +1232,17 @@ Does NOT own:
 
 
     /* =====================================================
-       PAGE CLEANUP
+       CLEANUP
        ===================================================== */
 
     window.addEventListener(
         "pagehide",
         () => {
 
-            attachedFiles.forEach(
-                file => {
-
-                    if (
-                        file?.previewUrl
-                            ?.startsWith(
-                                "blob:"
-                            )
-                    ) {
-                        try {
-                            URL.revokeObjectURL(
-                                file.previewUrl
-                            );
-                        } catch {
-                            // Safe cleanup.
-                        }
-                    }
-
-                }
-            );
+            attachedFiles
+                .forEach(
+                    revokePreview
+                );
 
 
             hideDragOverlay();
@@ -962,9 +1261,8 @@ Does NOT own:
         Object.freeze({
 
             getFiles:
-                () => [
-                    ...attachedFiles
-                ],
+                () =>
+                    [...attachedFiles],
 
             getCount:
                 () =>
@@ -990,7 +1288,6 @@ Does NOT own:
 
             maxFiles:
                 MAX_ATTACHED_FILES
-
         });
 
 
@@ -999,5 +1296,7 @@ Does NOT own:
        ===================================================== */
 
     hideDragOverlay();
+
+    renderAttachments();
 
 })();

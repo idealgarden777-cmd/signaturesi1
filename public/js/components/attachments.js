@@ -1,6 +1,7 @@
 /*
 =========================================================
 NEYO — ATTACHMENTS COMPONENT
+STABLE PRODUCTION VERSION
 
 Owns:
 - Attachment picker
@@ -65,21 +66,31 @@ Does NOT own:
 
     let attachedFiles = [];
 
+    let dragDepth = 0;
+
 
     /* =====================================================
        HELPERS
        ===================================================== */
 
-    const refreshIcons = () => {
-        if (window.lucide?.createIcons) {
-            window.lucide.createIcons();
+    function refreshIcons() {
+        if (
+            window.lucide &&
+            typeof window.lucide.createIcons === "function"
+        ) {
+            try {
+                window.lucide.createIcons();
+            } catch {
+                // Safe fallback.
+            }
         }
-    };
+    }
 
 
-    const getFileCategory = file => {
+    function getFileCategory(file) {
         const type =
-            file?.type || "";
+            String(file?.type || "")
+                .toLowerCase();
 
         if (type.startsWith("image/")) {
             return "image";
@@ -98,11 +109,13 @@ Does NOT own:
         }
 
         return "text";
-    };
+    }
 
 
-    const isImageAttachment = file => {
-        if (!file) return false;
+    function isImageAttachment(file) {
+        if (!file) {
+            return false;
+        }
 
         if (
             file.type?.startsWith("image/")
@@ -128,17 +141,15 @@ Does NOT own:
 
         return /\.(png|jpg|jpeg|webp|gif)$/i
             .test(name);
-    };
+    }
 
 
-    const getFileIcon = file => {
-
+    function getFileIcon(file) {
         const category =
             file?.category ||
             getFileCategory(file);
 
         switch (category) {
-
             case "image":
                 return "image";
 
@@ -154,12 +165,13 @@ Does NOT own:
             default:
                 return "file";
         }
-    };
+    }
 
 
-    const getPreviewUrl = file => {
-
-        if (!file) return "";
+    function getPreviewUrl(file) {
+        if (!file) {
+            return "";
+        }
 
         if (file.previewUrl) {
             return file.previewUrl;
@@ -170,47 +182,98 @@ Does NOT own:
         }
 
         return "";
-    };
+    }
+
+
+    function isRealFile(file) {
+        return (
+            typeof File !== "undefined" &&
+            file instanceof File
+        );
+    }
+
+
+    function hasFilesInDrag(event) {
+        const types =
+            Array.from(
+                event.dataTransfer?.types || []
+            );
+
+        return types.includes("Files");
+    }
+
+
+    function fileAlreadyAttached(file) {
+        return attachedFiles.some(
+            item =>
+                item.name === file.name &&
+                item.size === file.size &&
+                item.type === (
+                    file.type ||
+                    "application/octet-stream"
+                )
+        );
+    }
 
 
     /* =====================================================
        EVENTS
        ===================================================== */
 
-    const emitChange = () => {
-
+    function emitChange() {
         window.dispatchEvent(
             new CustomEvent(
                 "neyo:attachments-change",
                 {
                     detail: {
-                        files: [...attachedFiles],
-                        count: attachedFiles.length
+                        files: [
+                            ...attachedFiles
+                        ],
+
+                        count:
+                            attachedFiles.length
                     }
                 }
             )
         );
-    };
+    }
+
+
+    function emitLimit() {
+        window.dispatchEvent(
+            new CustomEvent(
+                "neyo:attachments-limit",
+                {
+                    detail: {
+                        max:
+                            MAX_ATTACHED_FILES
+                    }
+                }
+            )
+        );
+    }
 
 
     /* =====================================================
        RENDER
        ===================================================== */
 
-    const renderAttachments = () => {
-
+    function renderAttachments() {
         if (!attachedChipsWrapper) {
             return;
         }
 
-        attachedChipsWrapper.replaceChildren();
+        attachedChipsWrapper
+            .replaceChildren();
 
 
         attachedFiles.forEach(
             (file, index) => {
 
                 const card =
-                    document.createElement("div");
+                    document.createElement(
+                        "div"
+                    );
 
                 card.className =
                     "attachment-preview-card";
@@ -223,9 +286,10 @@ Does NOT own:
                 if (
                     isImageAttachment(file)
                 ) {
-
                     const image =
-                        document.createElement("img");
+                        document.createElement(
+                            "img"
+                        );
 
                     image.alt =
                         file.name ||
@@ -234,26 +298,36 @@ Does NOT own:
                     image.src =
                         getPreviewUrl(file);
 
+                    image.loading =
+                        "lazy";
+
+                    image.decoding =
+                        "async";
+
                     card.appendChild(
                         image
                     );
                 }
 
+
                 /* -----------------------------------------
-                   FILE PREVIEW
+                   NORMAL FILE
                    ----------------------------------------- */
 
                 else {
-
                     const box =
-                        document.createElement("div");
+                        document.createElement(
+                            "div"
+                        );
 
                     box.className =
                         "attachment-preview-file";
 
 
                     const icon =
-                        document.createElement("i");
+                        document.createElement(
+                            "i"
+                        );
 
                     icon.setAttribute(
                         "data-lucide",
@@ -262,7 +336,9 @@ Does NOT own:
 
 
                     const name =
-                        document.createElement("span");
+                        document.createElement(
+                            "span"
+                        );
 
                     name.textContent =
                         file.name ||
@@ -281,11 +357,13 @@ Does NOT own:
 
 
                 /* -----------------------------------------
-                   REMOVE BUTTON
+                   REMOVE
                    ----------------------------------------- */
 
                 const removeBtn =
-                    document.createElement("button");
+                    document.createElement(
+                        "button"
+                    );
 
                 removeBtn.type =
                     "button";
@@ -298,7 +376,10 @@ Does NOT own:
 
                 removeBtn.setAttribute(
                     "aria-label",
-                    "Remove attachment"
+                    `Remove ${
+                        file.name ||
+                        "attachment"
+                    }`
                 );
 
                 removeBtn.innerHTML = `
@@ -313,7 +394,10 @@ Does NOT own:
 
                 removeBtn.addEventListener(
                     "click",
-                    () => {
+                    event => {
+                        event.preventDefault();
+                        event.stopPropagation();
+
                         removeAttachment(
                             index
                         );
@@ -334,17 +418,32 @@ Does NOT own:
         refreshIcons();
 
         emitChange();
-    };
+
+
+        /*
+        Allow composer modules to recalculate
+        after attachment rail height changes.
+        */
+
+        window.NeyoComposerScrollbar
+            ?.refresh?.();
+    }
 
 
     /* =====================================================
        ADD FILES
        ===================================================== */
 
-    const addFiles = files => {
-
+    function addFiles(files) {
         const selected =
-            Array.from(files || []);
+            Array.from(
+                files || []
+            );
+
+
+        if (!selected.length) {
+            return;
+        }
 
 
         for (const file of selected) {
@@ -353,25 +452,23 @@ Does NOT own:
                 attachedFiles.length >=
                 MAX_ATTACHED_FILES
             ) {
-
-                window.dispatchEvent(
-                    new CustomEvent(
-                        "neyo:attachments-limit",
-                        {
-                            detail: {
-                                max:
-                                    MAX_ATTACHED_FILES
-                            }
-                        }
-                    )
-                );
+                emitLimit();
 
                 break;
             }
 
 
+            if (!isRealFile(file)) {
+                continue;
+            }
+
+
+            /*
+            Avoid accidental duplicate drops/selections.
+            */
+
             if (
-                !(file instanceof File)
+                fileAlreadyAttached(file)
             ) {
                 continue;
             }
@@ -403,7 +500,9 @@ Does NOT own:
 
                 previewUrl:
                     category === "image"
-                        ? URL.createObjectURL(file)
+                        ? URL.createObjectURL(
+                            file
+                        )
                         : ""
             };
 
@@ -415,15 +514,14 @@ Does NOT own:
 
 
         renderAttachments();
-    };
+    }
 
 
     /* =====================================================
        REMOVE
        ===================================================== */
 
-    const removeAttachment = index => {
-
+    function removeAttachment(index) {
         const file =
             attachedFiles[index];
 
@@ -433,9 +531,13 @@ Does NOT own:
                 "blob:"
             )
         ) {
-            URL.revokeObjectURL(
-                file.previewUrl
-            );
+            try {
+                URL.revokeObjectURL(
+                    file.previewUrl
+                );
+            } catch {
+                // Safe cleanup.
+            }
         }
 
 
@@ -446,27 +548,32 @@ Does NOT own:
 
 
         renderAttachments();
-    };
+    }
 
 
     /* =====================================================
        CLEAR
        ===================================================== */
 
-    const clearAttachments = () => {
-
+    function clearAttachments() {
         attachedFiles.forEach(
             file => {
 
                 if (
-                    file?.previewUrl?.startsWith(
-                        "blob:"
-                    )
+                    file?.previewUrl
+                        ?.startsWith(
+                            "blob:"
+                        )
                 ) {
-                    URL.revokeObjectURL(
-                        file.previewUrl
-                    );
+                    try {
+                        URL.revokeObjectURL(
+                            file.previewUrl
+                        );
+                    } catch {
+                        // Safe cleanup.
+                    }
                 }
+
             }
         );
 
@@ -474,39 +581,38 @@ Does NOT own:
         attachedFiles = [];
 
         renderAttachments();
-    };
+    }
 
 
     /* =====================================================
        ATTACH POPUP
        ===================================================== */
 
-    const openAttachmentMenu = () => {
+    function openAttachmentMenu() {
         attachPopupMenu
             ?.classList
             .add("show");
-    };
+    }
 
 
-    const closeAttachmentMenu = () => {
+    function closeAttachmentMenu() {
         attachPopupMenu
             ?.classList
             .remove("show");
-    };
+    }
 
 
-    const toggleAttachmentMenu = () => {
-
+    function toggleAttachmentMenu() {
         attachPopupMenu
             ?.classList
             .toggle("show");
-    };
+    }
 
 
     attachBtn?.addEventListener(
         "click",
         event => {
-
+            event.preventDefault();
             event.stopPropagation();
 
             toggleAttachmentMenu();
@@ -517,10 +623,15 @@ Does NOT own:
     addFilesMenuBtn?.addEventListener(
         "click",
         event => {
-
+            event.preventDefault();
             event.stopPropagation();
 
             closeAttachmentMenu();
+
+            /*
+            Native file picker.
+            Must stay inside direct user interaction.
+            */
 
             hiddenFileInput?.click();
         }
@@ -535,22 +646,29 @@ Does NOT own:
         "change",
         event => {
 
+            const input =
+                event.currentTarget;
+
             const files =
-                event.target.files;
+                input?.files;
+
 
             if (
-                files?.length
+                files &&
+                files.length
             ) {
                 addFiles(files);
             }
 
 
             /*
-            Reset input so selecting the same
-            file again still triggers change.
+            Allow selecting same file again
+            after it has been removed.
             */
 
-            event.target.value = "";
+            if (input) {
+                input.value = "";
+            }
         }
     );
 
@@ -567,6 +685,7 @@ Does NOT own:
                 attachBtn?.contains(
                     event.target
                 );
+
 
             const clickedMenu =
                 attachPopupMenu?.contains(
@@ -585,53 +704,110 @@ Does NOT own:
 
 
     /* =====================================================
+       DRAG OVERLAY HELPERS
+       ===================================================== */
+
+    function showDragOverlay() {
+        dragDropOverlay
+            ?.classList
+            .add("show");
+    }
+
+
+    function hideDragOverlay() {
+        dragDepth = 0;
+
+        dragDropOverlay
+            ?.classList
+            .remove("show");
+    }
+
+
+    /* =====================================================
        DRAG & DROP
+       Stable nested-element-safe implementation.
        ===================================================== */
 
     if (composerWrapper) {
 
-        [
+        composerWrapper.addEventListener(
             "dragenter",
-            "dragover"
-        ].forEach(
-            eventName => {
+            event => {
 
-                composerWrapper
-                    .addEventListener(
-                        eventName,
-                        event => {
+                if (
+                    !hasFilesInDrag(event)
+                ) {
+                    return;
+                }
 
-                            event.preventDefault();
-                            event.stopPropagation();
 
-                            dragDropOverlay
-                                ?.classList
-                                .add("show");
-                        }
-                    );
+                event.preventDefault();
+                event.stopPropagation();
+
+
+                dragDepth += 1;
+
+                showDragOverlay();
             }
         );
 
 
-        [
+        composerWrapper.addEventListener(
+            "dragover",
+            event => {
+
+                if (
+                    !hasFilesInDrag(event)
+                ) {
+                    return;
+                }
+
+
+                event.preventDefault();
+                event.stopPropagation();
+
+
+                if (
+                    event.dataTransfer
+                ) {
+                    event.dataTransfer
+                        .dropEffect =
+                        "copy";
+                }
+
+
+                showDragOverlay();
+            }
+        );
+
+
+        composerWrapper.addEventListener(
             "dragleave",
-            "drop"
-        ].forEach(
-            eventName => {
+            event => {
 
-                composerWrapper
-                    .addEventListener(
-                        eventName,
-                        event => {
+                if (
+                    !hasFilesInDrag(event)
+                ) {
+                    return;
+                }
 
-                            event.preventDefault();
-                            event.stopPropagation();
 
-                            dragDropOverlay
-                                ?.classList
-                                .remove("show");
-                        }
+                event.preventDefault();
+                event.stopPropagation();
+
+
+                dragDepth =
+                    Math.max(
+                        0,
+                        dragDepth - 1
                     );
+
+
+                if (
+                    dragDepth === 0
+                ) {
+                    hideDragOverlay();
+                }
             }
         );
 
@@ -640,18 +816,56 @@ Does NOT own:
             "drop",
             event => {
 
+                event.preventDefault();
+                event.stopPropagation();
+
+
                 const files =
                     event.dataTransfer
                         ?.files;
 
+
+                hideDragOverlay();
+
+
                 if (
-                    files?.length
+                    files &&
+                    files.length
                 ) {
                     addFiles(files);
                 }
             }
         );
     }
+
+
+    /* =====================================================
+       GLOBAL DRAG SAFETY
+
+       If cursor leaves browser/window while dragging,
+       overlay must not remain stuck.
+       ===================================================== */
+
+    document.addEventListener(
+        "dragend",
+        hideDragOverlay
+    );
+
+
+    window.addEventListener(
+        "blur",
+        () => {
+
+            if (
+                dragDropOverlay
+                    ?.classList
+                    .contains("show")
+            ) {
+                hideDragOverlay();
+            }
+
+        }
+    );
 
 
     /* =====================================================
@@ -668,10 +882,14 @@ Does NOT own:
 
 
             if (
-                files?.length
+                !files ||
+                !files.length
             ) {
-                addFiles(files);
+                return;
             }
+
+
+            addFiles(files);
         }
     );
 
@@ -699,23 +917,58 @@ Does NOT own:
 
 
     /* =====================================================
+       PAGE CLEANUP
+       ===================================================== */
+
+    window.addEventListener(
+        "pagehide",
+        () => {
+
+            attachedFiles.forEach(
+                file => {
+
+                    if (
+                        file?.previewUrl
+                            ?.startsWith(
+                                "blob:"
+                            )
+                    ) {
+                        try {
+                            URL.revokeObjectURL(
+                                file.previewUrl
+                            );
+                        } catch {
+                            // Safe cleanup.
+                        }
+                    }
+
+                }
+            );
+
+
+            hideDragOverlay();
+        },
+        {
+            once: true
+        }
+    );
+
+
+    /* =====================================================
        PUBLIC API
-
-       Future modules can use:
-
-       NeyoAttachments.getFiles()
-       NeyoAttachments.clear()
-       NeyoAttachments.add(files)
        ===================================================== */
 
     window.NeyoAttachments =
         Object.freeze({
 
-            getFiles: () =>
-                [...attachedFiles],
+            getFiles:
+                () => [
+                    ...attachedFiles
+                ],
 
-            getCount: () =>
-                attachedFiles.length,
+            getCount:
+                () =>
+                    attachedFiles.length,
 
             add:
                 addFiles,
@@ -737,6 +990,14 @@ Does NOT own:
 
             maxFiles:
                 MAX_ATTACHED_FILES
+
         });
+
+
+    /* =====================================================
+       INITIAL STATE
+       ===================================================== */
+
+    hideDragOverlay();
 
 })();

@@ -962,3 +962,80 @@ body.dark-mode
         height: 38px !important;
     }
 }
+/* =========================================================
+   STOP BUTTON — TIGHT TO SEND
+   ========================================================= */
+
+#glassInputContainer {
+    --voice-send-right: 7px;
+    --voice-send-size: 40px;
+
+    --voice-stop-size: 32px;
+    --voice-stop-gap: 4px;
+}
+
+#glassInputContainer
+.composer-input-row.is-transcribing
+#sendBtn {
+    right:
+        var(--voice-send-right) !important;
+}
+
+#glassInputContainer
+.composer-input-row.is-transcribing
+#stopRecBtn {
+    right:
+        calc(
+            var(--voice-send-right) +
+            var(--voice-send-size) +
+            var(--voice-stop-gap)
+        ) !important;
+
+    width:
+        var(--voice-stop-size) !important;
+
+    height:
+        var(--voice-stop-size) !important;
+
+    min-width:
+        var(--voice-stop-size) !important;
+
+    min-height:
+        var(--voice-stop-size) !important;
+
+    max-width:
+        var(--voice-stop-size) !important;
+
+    max-height:
+        var(--voice-stop-size) !important;
+}
+
+
+/* Waveform reserves only the exact right-side control width */
+
+#glassInputContainer
+.composer-input-row.is-transcribing
+.voice-transcribe-container {
+    right:
+        calc(
+            var(--voice-send-right) +
+            var(--voice-send-size) +
+            var(--voice-stop-gap) +
+            var(--voice-stop-size) +
+            6px
+        ) !important;
+}
+
+
+/* Mobile */
+
+@media (max-width: 767px) {
+
+    #glassInputContainer {
+        --voice-send-right: 6px;
+        --voice-send-size: 38px;
+
+        --voice-stop-size: 30px;
+        --voice-stop-gap: 4px;
+    }
+}

@@ -538,7 +538,8 @@ Does NOT own:
 
 
 /* =========================================================
-   12. REMOVE BUTTON
+   REMOVE BUTTON — FADE ONLY
+   No zoom / no movement / no scale
    ========================================================= */
 
 #glassInputContainer
@@ -559,7 +560,6 @@ Does NOT own:
     max-height: 22px !important;
 
     display: inline-flex !important;
-
     align-items: center !important;
     justify-content: center !important;
 
@@ -570,12 +570,9 @@ Does NOT own:
     border-radius: 999px !important;
 
     background:
-        rgba(0, 0, 0, 0.56) !important;
+        rgba(0, 0, 0, 0.54) !important;
 
-    color:
-        #ffffff !important;
-
-    opacity: 1 !important;
+    color: #ffffff !important;
 
     cursor: pointer !important;
 
@@ -583,27 +580,42 @@ Does NOT own:
 
     box-sizing: border-box !important;
 
+    opacity: 0.72 !important;
+
+    transform: none !important;
+
     transition:
-        background-color 120ms ease,
-        transform 120ms ease !important;
+        opacity 140ms ease,
+        background-color 140ms ease !important;
 }
 
+
+/* Hover = only fade stronger */
 
 #glassInputContainer
 .attachment-preview-card
 .attachment-remove-btn:hover {
+    opacity: 1 !important;
+
     background:
-        rgba(0, 0, 0, 0.78) !important;
+        rgba(0, 0, 0, 0.68) !important;
+
+    transform: none !important;
 }
 
+
+/* Click = no zoom / no movement */
 
 #glassInputContainer
 .attachment-preview-card
 .attachment-remove-btn:active {
-    transform:
-        scale(0.94) !important;
+    opacity: 0.82 !important;
+
+    transform: none !important;
 }
 
+
+/* Icon itself never animates */
 
 #glassInputContainer
 .attachment-preview-card
@@ -616,6 +628,10 @@ Does NOT own:
     height: 12px !important;
 
     pointer-events: none !important;
+
+    transform: none !important;
+
+    transition: none !important;
 }
 
 

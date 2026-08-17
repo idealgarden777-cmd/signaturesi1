@@ -1,24 +1,24 @@
 /*
 =========================================================
-NEYO — COMPOSER SCROLLBAR CONTROLLER
-CLEAN PRODUCTION VERSION
+NEYO — COMPOSER SCROLLBAR / TYPING CONTROL
+SIMPLE PRODUCTION VERSION
 
 Owns:
-- content state
 - reliable multiline detection
-- overflow detection
-- custom scrollbar rail/thumb
-- normal + expanded scrollbar sync
+- textarea height control
+- max-height behavior
+- internal scrolling after max-height
+- custom scrollbar sync
+- cursor visibility during long typing
 
 Does NOT own:
-- textarea autosize
 - composer width
 - composer shape
+- + / mic / send positioning
 - send logic
 - voice logic
-- attachment logic
-- expand/collapse behavior
-- neo.js
+- attachments
+- expand/collapse logic
 =========================================================
 */
 
@@ -47,13 +47,35 @@ Does NOT own:
 
 
     /* =====================================================
-       CREATE CUSTOM SCROLLBAR
+       CONFIG
+       ===================================================== */
+
+    const CONFIG = Object.freeze({
+
+        desktopMaxHeight: 132,
+
+        mobileMaxHeight: 112,
+
+        landscapeMaxHeight: 92,
+
+        compactHeight: 40,
+
+        multilineTolerance: 1.35,
+
+        overflowTolerance: 2
+
+    });
+
+
+    /* =====================================================
+       CUSTOM SCROLLBAR
        ===================================================== */
 
     let rail =
         composer.querySelector(
             ".composer-custom-scrollbar"
         );
+
 
     let thumb = null;
 
@@ -65,8 +87,10 @@ Does NOT own:
                 "div"
             );
 
+
         rail.className =
             "composer-custom-scrollbar";
+
 
         rail.setAttribute(
             "aria-hidden",
@@ -79,6 +103,7 @@ Does NOT own:
                 "div"
             );
 
+
         thumb.className =
             "composer-custom-scrollbar-thumb";
 
@@ -86,6 +111,7 @@ Does NOT own:
         rail.appendChild(
             thumb
         );
+
 
         composer.appendChild(
             rail
@@ -117,14 +143,9 @@ Does NOT own:
     let previousValue =
         textarea.value;
 
-    let previousExpanded =
-        composer.classList.contains(
-            "is-writing-expanded"
-        );
-
 
     /* =====================================================
-       BASIC HELPERS
+       HELPERS
        ===================================================== */
 
     function isExpanded() {
@@ -147,7 +168,46 @@ Does NOT own:
     }
 
 
-    function getTextareaMetrics() {
+    function isMobile() {
+
+        return (
+            window.matchMedia(
+                "(max-width: 767px)"
+            ).matches
+        );
+
+    }
+
+
+    function isLandscapePhone() {
+
+        return (
+            window.matchMedia(
+                "(max-height: 520px) and (orientation: landscape)"
+            ).matches
+        );
+
+    }
+
+
+    function getMaxTextareaHeight() {
+
+        if (isLandscapePhone()) {
+            return CONFIG.landscapeMaxHeight;
+        }
+
+
+        if (isMobile()) {
+            return CONFIG.mobileMaxHeight;
+        }
+
+
+        return CONFIG.desktopMaxHeight;
+
+    }
+
+
+    function getMetrics() {
 
         const styles =
             window.getComputedStyle(
@@ -155,49 +215,37 @@ Does NOT own:
             );
 
 
-        const lineHeight =
-            parseFloat(
-                styles.lineHeight
-            ) || 22;
-
-
-        const paddingTop =
-            parseFloat(
-                styles.paddingTop
-            ) || 0;
-
-
-        const paddingBottom =
-            parseFloat(
-                styles.paddingBottom
-            ) || 0;
-
-
         return {
-            lineHeight,
-            paddingTop,
-            paddingBottom
+
+            lineHeight:
+                parseFloat(
+                    styles.lineHeight
+                ) || 22,
+
+            paddingTop:
+                parseFloat(
+                    styles.paddingTop
+                ) || 0,
+
+            paddingBottom:
+                parseFloat(
+                    styles.paddingBottom
+                ) || 0
+
         };
 
     }
 
 
     /* =====================================================
-       RELIABLE MULTILINE DETECTION
-
-       Rules:
-       - Empty = false
-       - Expanded mode = no normal multiline class
-       - Explicit Enter/newline = true
-       - One visual line = false
-       - Actual wrapped second line = true
+       MULTILINE DETECTION
        ===================================================== */
 
     function detectMultiline() {
 
         if (
-            isExpanded() ||
-            !hasContent()
+            !hasContent() ||
+            isExpanded()
         ) {
             return false;
         }
@@ -208,12 +256,10 @@ Does NOT own:
 
 
         /*
-        Explicit newline always means multiline.
+        Explicit Enter always means multiline.
         */
 
-        if (
-            value.includes("\n")
-        ) {
+        if (value.includes("\n")) {
             return true;
         }
 
@@ -223,13 +269,8 @@ Does NOT own:
             paddingTop,
             paddingBottom
         } =
-            getTextareaMetrics();
+            getMetrics();
 
-
-        /*
-        scrollHeight includes vertical padding.
-        Remove it before estimating text lines.
-        */
 
         const textHeight =
             Math.max(
@@ -240,70 +281,154 @@ Does NOT own:
             );
 
 
-        /*
-        Browser subpixel rounding can make
-        one line appear slightly taller.
-
-        1.35 gives a safe margin so typing:
-        "t"
-        "hello"
-        "hello Samuel"
-
-        does NOT trigger multiline.
-        */
-
-        const oneLineLimit =
-            lineHeight * 1.35;
-
-
         return (
             textHeight >
-            oneLineLimit
+            lineHeight *
+                CONFIG.multilineTolerance
         );
 
     }
 
 
     /* =====================================================
-       OVERFLOW DETECTION
+       AUTOSIZE
 
-       Works in both:
-       - normal multiline
-       - expanded writing mode
+       Key behavior:
+       - one line = compact
+       - multiline grows
+       - stops at max-height
+       - after that textarea scrolls internally
        ===================================================== */
 
-    function detectOverflow() {
+    function resizeTextarea() {
 
-        return (
+        if (isExpanded()) {
+            return;
+        }
+
+
+        const content =
+            hasContent();
+
+
+        if (!content) {
+
+            textarea.style.height =
+                `${CONFIG.compactHeight}px`;
+
+
+            textarea.style.overflowY =
+                "hidden";
+
+
+            return;
+        }
+
+
+        /*
+        Reset first so scrollHeight represents
+        actual content height.
+        */
+
+        textarea.style.height =
+            "auto";
+
+
+        const multiline =
+            detectMultiline();
+
+
+        if (!multiline) {
+
+            textarea.style.height =
+                `${CONFIG.compactHeight}px`;
+
+
+            textarea.style.overflowY =
+                "hidden";
+
+
+            return;
+        }
+
+
+        const maxHeight =
+            getMaxTextareaHeight();
+
+
+        const targetHeight =
+            Math.min(
+                textarea.scrollHeight,
+                maxHeight
+            );
+
+
+        textarea.style.height =
+            `${targetHeight}px`;
+
+
+        textarea.style.overflowY =
             textarea.scrollHeight >
-            textarea.clientHeight + 2
-        );
+            maxHeight +
+                CONFIG.overflowTolerance
+
+                ? "auto"
+                : "hidden";
 
     }
 
 
     /* =====================================================
-       SYNC STATE CLASSES
+       CURSOR VISIBILITY
+
+       When user keeps typing after max-height,
+       keep the caret visible inside textarea.
+       ===================================================== */
+
+    function keepCaretVisible() {
+
+        if (
+            isExpanded() ||
+            textarea.scrollHeight <=
+                textarea.clientHeight +
+                    CONFIG.overflowTolerance
+        ) {
+            return;
+        }
+
+
+        /*
+        Browser normally keeps caret visible,
+        but this stabilizes mobile behavior when
+        textarea height changes during input.
+        */
+
+        textarea.scrollTop =
+            textarea.scrollHeight;
+
+    }
+
+
+    /* =====================================================
+       STATE CLASSES
        ===================================================== */
 
     function syncClasses() {
-
-        const expanded =
-            isExpanded();
 
         const content =
             hasContent();
 
 
         const multiline =
-            !expanded &&
             content &&
+            !isExpanded() &&
             detectMultiline();
 
 
         const overflow =
-            content &&
-            detectOverflow();
+            textarea.scrollHeight >
+            textarea.clientHeight +
+                CONFIG.overflowTolerance;
 
 
         composer.classList.toggle(
@@ -330,14 +455,7 @@ Does NOT own:
         );
 
 
-        rail.classList.toggle(
-            "is-expanded-scrollbar",
-            expanded
-        );
-
-
         return {
-            expanded,
             content,
             multiline,
             overflow
@@ -347,7 +465,7 @@ Does NOT own:
 
 
     /* =====================================================
-       UPDATE CUSTOM THUMB
+       CUSTOM SCROLLBAR THUMB
        ===================================================== */
 
     function updateThumb() {
@@ -368,6 +486,7 @@ Does NOT own:
                 "is-active"
             );
 
+
             return;
         }
 
@@ -384,10 +503,6 @@ Does NOT own:
             textarea.clientHeight;
 
 
-        const scrollTop =
-            textarea.scrollTop;
-
-
         if (
             railHeight <= 0 ||
             scrollHeight <= clientHeight
@@ -396,13 +511,8 @@ Does NOT own:
         }
 
 
-        const viewportRatio =
-            clientHeight /
-            scrollHeight;
-
-
         const minimumThumbHeight =
-            state.expanded
+            isExpanded()
                 ? 24
                 : 20;
 
@@ -411,7 +521,10 @@ Does NOT own:
             Math.max(
                 minimumThumbHeight,
                 railHeight *
-                    viewportRatio
+                (
+                    clientHeight /
+                    scrollHeight
+                )
             );
 
 
@@ -431,20 +544,15 @@ Does NOT own:
             );
 
 
-        const scrollProgress =
+        const progress =
             Math.min(
                 1,
                 Math.max(
                     0,
-                    scrollTop /
+                    textarea.scrollTop /
                         maxScroll
                 )
             );
-
-
-        const thumbOffset =
-            maxThumbTravel *
-            scrollProgress;
 
 
         thumb.style.height =
@@ -452,13 +560,40 @@ Does NOT own:
 
 
         thumb.style.transform =
-            `translateY(${thumbOffset}px)`;
+            `translateY(${maxThumbTravel * progress}px)`;
 
     }
 
 
     /* =====================================================
-       RAF SCHEDULER
+       FULL UPDATE
+       ===================================================== */
+
+    function updateComposer() {
+
+        resizeTextarea();
+
+
+        /*
+        Wait one frame after height update so
+        measurements are final.
+        */
+
+        requestAnimationFrame(
+            () => {
+
+                syncClasses();
+
+                updateThumb();
+
+            }
+        );
+
+    }
+
+
+    /* =====================================================
+       SCHEDULER
        ===================================================== */
 
     function scheduleUpdate() {
@@ -478,72 +613,9 @@ Does NOT own:
 
                     rafId = 0;
 
-                    updateThumb();
+                    updateComposer();
 
                 }
-            );
-
-    }
-
-
-    /*
-    Existing composer code may resize
-    textarea one frame after input.
-
-    Two frames ensures we measure the
-    FINAL textarea height, not stale height.
-    */
-
-    function scheduleAfterLayout() {
-
-        requestAnimationFrame(
-            () => {
-
-                requestAnimationFrame(
-                    scheduleUpdate
-                );
-
-            }
-        );
-
-    }
-
-
-    /* =====================================================
-       SCROLLBAR ACTIVE STATE
-       ===================================================== */
-
-    function showScrollbarBriefly() {
-
-        if (
-            !composer.classList.contains(
-                "composer-overflow"
-            )
-        ) {
-            return;
-        }
-
-
-        rail.classList.add(
-            "is-active"
-        );
-
-
-        window.clearTimeout(
-            hideTimer
-        );
-
-
-        hideTimer =
-            window.setTimeout(
-                () => {
-
-                    rail.classList.remove(
-                        "is-active"
-                    );
-
-                },
-                900
             );
 
     }
@@ -561,12 +633,21 @@ Does NOT own:
                 textarea.value;
 
 
+            scheduleUpdate();
+
+
             /*
-            Let legacy autosize / expand
-            logic finish first.
+            One extra frame after resize is useful
+            on mobile keyboards.
             */
 
-            scheduleAfterLayout();
+            requestAnimationFrame(
+                () => {
+
+                    keepCaretVisible();
+
+                }
+            );
 
         }
     );
@@ -580,9 +661,30 @@ Does NOT own:
         "scroll",
         () => {
 
-            showScrollbarBriefly();
+            rail.classList.add(
+                "is-active"
+            );
 
-            scheduleUpdate();
+
+            window.clearTimeout(
+                hideTimer
+            );
+
+
+            hideTimer =
+                window.setTimeout(
+                    () => {
+
+                        rail.classList.remove(
+                            "is-active"
+                        );
+
+                    },
+                    800
+                );
+
+
+            updateThumb();
 
         },
         {
@@ -597,29 +699,116 @@ Does NOT own:
 
     textarea.addEventListener(
         "focus",
-        scheduleAfterLayout
-    );
-
-
-    textarea.addEventListener(
-        "blur",
         scheduleUpdate
     );
 
 
     /* =====================================================
-       RESIZE OBSERVER
+       PROGRAMMATIC VALUE CHANGES
 
-       Detects:
-       - legacy textarea autosize
-       - composer vertical growth
-       - expanded height changes
-       - responsive layout changes
+       Covers:
+       - voice transcription
+       - prompt insertion
+       - send clear
+       - new chat
+       - restored draft
        ===================================================== */
 
-    const resizeObserver =
-        new ResizeObserver(
-            () => {
+    window.setInterval(
+        () => {
+
+            const currentValue =
+                textarea.value;
+
+
+            if (
+                currentValue ===
+                previousValue
+            ) {
+                return;
+            }
+
+
+            previousValue =
+                currentValue;
+
+
+            scheduleUpdate();
+
+        },
+        180
+    );
+
+
+    /* =====================================================
+       WINDOW RESIZE
+
+       Important for:
+       - mobile portrait/landscape
+       - responsive wrap width
+       ===================================================== */
+
+    window.addEventListener(
+        "resize",
+        scheduleUpdate,
+        {
+            passive: true
+        }
+    );
+
+
+    window.addEventListener(
+        "orientationchange",
+        scheduleUpdate,
+        {
+            passive: true
+        }
+    );
+
+
+    /* =====================================================
+       VISUAL VIEWPORT
+
+       Simple mobile keyboard support.
+       No new layout system.
+       ===================================================== */
+
+    if (window.visualViewport) {
+
+        window.visualViewport
+            .addEventListener(
+                "resize",
+                scheduleUpdate,
+                {
+                    passive: true
+                }
+            );
+
+    }
+
+
+    /* =====================================================
+       EXPAND STATE OBSERVER
+       ===================================================== */
+
+    const observer =
+        new MutationObserver(
+            mutations => {
+
+                const changed =
+                    mutations.some(
+                        mutation =>
+                            mutation.type ===
+                                "attributes" &&
+                            mutation.attributeName ===
+                                "class"
+                    );
+
+
+                if (!changed) {
+                    return;
+                }
+
 
                 scheduleUpdate();
 
@@ -627,54 +816,7 @@ Does NOT own:
         );
 
 
-    resizeObserver.observe(
-        textarea
-    );
-
-
-    resizeObserver.observe(
-        composer
-    );
-
-
-    /* =====================================================
-       CLASS OBSERVER
-
-       Watches:
-       .is-writing-expanded
-
-       Important:
-       Ignore our own state classes to avoid
-       unnecessary update loops.
-       ===================================================== */
-
-    const classObserver =
-        new MutationObserver(
-            () => {
-
-                const expanded =
-                    isExpanded();
-
-
-                if (
-                    expanded ===
-                    previousExpanded
-                ) {
-                    return;
-                }
-
-
-                previousExpanded =
-                    expanded;
-
-
-                scheduleAfterLayout();
-
-            }
-        );
-
-
-    classObserver.observe(
+    observer.observe(
         composer,
         {
             attributes: true,
@@ -686,119 +828,20 @@ Does NOT own:
 
 
     /* =====================================================
-       PROGRAMMATIC VALUE CHANGES
-
-       textarea.value changes made by JS
-       do not fire "input".
-
-       Covers:
-       - send cleanup
-       - new chat
-       - clear
-       - restored draft
-       - programmatic prompt insertion
-       ===================================================== */
-
-    const valueWatcher =
-        window.setInterval(
-            () => {
-
-                const currentValue =
-                    textarea.value;
-
-
-                if (
-                    currentValue ===
-                    previousValue
-                ) {
-                    return;
-                }
-
-
-                previousValue =
-                    currentValue;
-
-
-                scheduleAfterLayout();
-
-            },
-            180
-        );
-
-
-    /* =====================================================
-       MOBILE VIEWPORT
-       ===================================================== */
-
-    if (
-        window.visualViewport
-    ) {
-
-        window.visualViewport
-            .addEventListener(
-                "resize",
-                scheduleAfterLayout,
-                {
-                    passive: true
-                }
-            );
-
-
-        window.visualViewport
-            .addEventListener(
-                "scroll",
-                scheduleUpdate,
-                {
-                    passive: true
-                }
-            );
-
-    }
-
-
-    /* =====================================================
-       WINDOW
-       ===================================================== */
-
-    window.addEventListener(
-        "resize",
-        scheduleAfterLayout,
-        {
-            passive: true
-        }
-    );
-
-
-    window.addEventListener(
-        "orientationchange",
-        scheduleAfterLayout,
-        {
-            passive: true
-        }
-    );
-
-
-    /* =====================================================
-       PUBLIC API
+       PUBLIC REFRESH
        ===================================================== */
 
     window.NeyoComposerScrollbar =
         Object.freeze({
 
             refresh:
-                scheduleAfterLayout,
-
+                scheduleUpdate,
 
             getState:
                 () => ({
 
                     expanded:
                         isExpanded(),
-
-                    hasContent:
-                        composer.classList.contains(
-                            "composer-has-content"
-                        ),
 
                     multiline:
                         composer.classList.contains(
@@ -816,48 +859,15 @@ Does NOT own:
 
 
     /* =====================================================
-       INITIAL SYNC
+       INITIALIZE
        ===================================================== */
 
-    scheduleAfterLayout();
+    scheduleUpdate();
 
 
     window.setTimeout(
-        scheduleAfterLayout,
-        120
-    );
-
-
-    window.setTimeout(
-        scheduleAfterLayout,
-        500
-    );
-
-
-    /* =====================================================
-       OPTIONAL CLEANUP
-       Useful if composer is ever dynamically destroyed.
-       ===================================================== */
-
-    window.addEventListener(
-        "pagehide",
-        () => {
-
-            window.clearInterval(
-                valueWatcher
-            );
-
-            window.clearTimeout(
-                hideTimer
-            );
-
-            resizeObserver.disconnect();
-            classObserver.disconnect();
-
-        },
-        {
-            once: true
-        }
+        scheduleUpdate,
+        100
     );
 
 })();

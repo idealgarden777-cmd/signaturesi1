@@ -6,7 +6,7 @@ export const config = {
   }
 };
 
-const MODEL = "gemini-3.5-flash-lite";
+const MODEL = "gemini-3.5-flash";
 const MAX_AUDIO_BYTES = 10 * 1024 * 1024;
 const MAX_CONTEXT_CHARS = 5000;
 

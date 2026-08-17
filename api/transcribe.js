@@ -1,14 +1,17 @@
 /*
 =========================================================
 NEYO — GEMINI AUDIO TRANSCRIPTION API
-Vercel / Node serverless endpoint
+CONTEXT-AWARE / NON-HARDCODED VERSION
 
 Flow:
-FormData(audio)
+FormData:
+- audio
+- context (optional)
+
 → validate
-→ base64
-→ Gemini 3.5 Flash-Lite
-→ transcript
+→ base64 audio
+→ Gemini
+→ faithful transcript
 =========================================================
 */
 
@@ -27,9 +30,12 @@ const MAX_AUDIO_BYTES =
     18 * 1024 * 1024;
 
 
+const MAX_CONTEXT_CHARS =
+    6000;
+
+
 /* =========================================================
-   SUPPORTED AUDIO
-   Gemini documented audio formats.
+   SUPPORTED AUDIO MIME TYPES
    ========================================================= */
 
 const SUPPORTED_MIME_TYPES =
@@ -53,7 +59,7 @@ const SUPPORTED_MIME_TYPES =
 
 
 /* =========================================================
-   RESPONSE HELPERS
+   JSON RESPONSE
    ========================================================= */
 
 function sendJson(
@@ -80,33 +86,30 @@ function sendJson(
 
 
 /* =========================================================
-   GET MULTIPART AUDIO
-   Uses native Request/FormData APIs available
-   in modern Node/Vercel runtimes.
+   PARSE MULTIPART FORM DATA
    ========================================================= */
 
-async function getAudioFile(req) {
+async function parseMultipart(req) {
 
     const chunks = [];
 
-    let total = 0;
+    let totalBytes = 0;
 
 
     for await (
         const chunk of req
     ) {
 
-        total +=
+        totalBytes +=
             chunk.length;
 
 
         /*
-        Multipart has small overhead,
-        so allow a little room above audio limit.
+        Small multipart overhead allowance.
         */
 
         if (
-            total >
+            totalBytes >
             MAX_AUDIO_BYTES +
             1024 * 1024
         ) {
@@ -120,12 +123,6 @@ async function getAudioFile(req) {
             chunk
         );
     }
-
-
-    const body =
-        Buffer.concat(
-            chunks
-        );
 
 
     const contentType =
@@ -146,11 +143,11 @@ async function getAudioFile(req) {
     }
 
 
-    /*
-    Convert incoming Node request into
-    standard Web Request so FormData parser
-    can handle multipart safely.
-    */
+    const rawBody =
+        Buffer.concat(
+            chunks
+        );
+
 
     const request =
         new Request(
@@ -164,33 +161,13 @@ async function getAudioFile(req) {
                         contentType
                 },
 
-                body
+                body:
+                    rawBody
             }
         );
 
 
-    const formData =
-        await request.formData();
-
-
-    const audio =
-        formData.get(
-            "audio"
-        );
-
-
-    if (
-        !audio ||
-        typeof audio.arrayBuffer !==
-            "function"
-    ) {
-        throw new Error(
-            "AUDIO_REQUIRED"
-        );
-    }
-
-
-    return audio;
+    return request.formData();
 }
 
 
@@ -202,51 +179,103 @@ function normalizeMimeType(
     value
 ) {
 
-    const mime =
-        String(
-            value || ""
-        )
-            .toLowerCase()
-            .split(";")[0]
-            .trim();
-
-
-    if (
-        mime ===
-        "audio/webm"
-    ) {
-        return "audio/webm";
-    }
-
-
-    if (
-        mime ===
-        "audio/ogg"
-    ) {
-        return "audio/ogg";
-    }
-
-
-    if (
-        mime ===
-        "audio/mpeg"
-    ) {
-        return "audio/mpeg";
-    }
-
-
-    return mime;
+    return String(
+        value || ""
+    )
+        .toLowerCase()
+        .split(";")[0]
+        .trim();
 }
 
 
 /* =========================================================
-   GEMINI TRANSCRIPTION
+   CONTEXT SANITIZATION
+   ========================================================= */
+
+function normalizeContext(
+    value
+) {
+
+    return String(
+        value || ""
+    )
+        .replace(
+            /\u0000/g,
+            ""
+        )
+        .trim()
+        .slice(
+            0,
+            MAX_CONTEXT_CHARS
+        );
+}
+
+
+/* =========================================================
+   TRANSCRIPTION PROMPT
+   No hardcoded vocabulary.
+   Context only helps disambiguation.
+   ========================================================= */
+
+function buildPrompt(
+    context
+) {
+
+    const contextSection =
+        context
+            ? `
+Recent conversation context:
+
+${context}
+
+Use this context only to resolve genuinely ambiguous speech.
+Do not copy information from the context into the transcript unless it was actually spoken.
+`
+            : `
+No recent conversation context is available.
+`;
+
+
+    return `
+Transcribe the supplied audio as accurately and naturally as possible.
+
+Important rules:
+
+- Return only the transcript.
+- Do not answer the speaker.
+- Do not summarize.
+- Do not explain.
+- Do not translate.
+- Preserve the language actually spoken.
+- Preserve mixed-language speech naturally.
+- Preserve the speaker's original meaning.
+- Add normal punctuation and capitalization.
+- Correct an obvious recognition error only when the intended wording is clear from the audio or surrounding context.
+- Do not invent words.
+- Do not add facts.
+- Do not rewrite the speaker's ideas.
+- Do not make the speech more formal than it was.
+- Keep natural conversational phrasing.
+- Remove only obvious accidental repetitions or meaningless filler sounds when doing so does not change meaning.
+- If a word is genuinely uncertain, prefer the interpretation that best fits the audio and conversation context.
+- Context is evidence for disambiguation only, not source text to copy.
+
+${contextSection}
+
+Return only the final transcript.
+`.trim();
+}
+
+
+/* =========================================================
+   GEMINI REQUEST
    ========================================================= */
 
 async function transcribeWithGemini({
     apiKey,
     audioBuffer,
-    mimeType
+    mimeType,
+    context
 }) {
 
     const audioBase64 =
@@ -255,21 +284,10 @@ async function transcribeWithGemini({
         );
 
 
-    const prompt = `
-Transcribe the speech in this audio accurately.
-
-Rules:
-- Return only the transcript.
-- Do not explain anything.
-- Do not summarize.
-- Do not translate.
-- Preserve the language actually spoken.
-- Preserve Urdu, English, Hindi, Hinglish, Roman Urdu, or mixed-language speech naturally.
-- Add normal punctuation where appropriate.
-- Do not invent words that are not audible.
-- If a small portion is unclear, infer conservatively from context.
-- Do not add speaker labels unless multiple speakers are clearly present.
-`.trim();
+    const prompt =
+        buildPrompt(
+            context
+        );
 
 
     const response =
@@ -313,7 +331,10 @@ Rules:
 
                         generationConfig: {
                             temperature:
-                                0,
+                                0.1,
+
+                            topP:
+                                0.85,
 
                             maxOutputTokens:
                                 4096
@@ -376,7 +397,7 @@ Rules:
 
 
 /* =========================================================
-   HANDLER
+   API HANDLER
    ========================================================= */
 
 export default async function handler(
@@ -384,9 +405,9 @@ export default async function handler(
     res
 ) {
 
-    /* ---------------------------------------------------------
+    /* -----------------------------------------------------
        METHOD
-       --------------------------------------------------------- */
+       ----------------------------------------------------- */
 
     if (
         req.method !==
@@ -410,9 +431,9 @@ export default async function handler(
     }
 
 
-    /* ---------------------------------------------------------
+    /* -----------------------------------------------------
        API KEY
-       --------------------------------------------------------- */
+       ----------------------------------------------------- */
 
     const apiKey =
         process.env
@@ -422,7 +443,7 @@ export default async function handler(
     if (!apiKey) {
 
         console.error(
-            "Missing GEMINI_API_KEY"
+            "NEYO transcription: GEMINI_API_KEY missing."
         );
 
 
@@ -439,30 +460,61 @@ export default async function handler(
 
     try {
 
-        /* -----------------------------------------------------
-           READ AUDIO
-           ----------------------------------------------------- */
+        /* -------------------------------------------------
+           FORM DATA
+           ------------------------------------------------- */
 
-        const audioFile =
-            await getAudioFile(
+        const formData =
+            await parseMultipart(
                 req
             );
 
 
-        const audioArrayBuffer =
+        const audioFile =
+            formData.get(
+                "audio"
+            );
+
+
+        const context =
+            normalizeContext(
+                formData.get(
+                    "context"
+                )
+            );
+
+
+        if (
+            !audioFile ||
+            typeof audioFile.arrayBuffer !==
+                "function"
+        ) {
+
+            return sendJson(
+                res,
+                400,
+                {
+                    error:
+                        "Audio file is required."
+                }
+            );
+        }
+
+
+        /* -------------------------------------------------
+           AUDIO BUFFER
+           ------------------------------------------------- */
+
+        const arrayBuffer =
             await audioFile
                 .arrayBuffer();
 
 
         const audioBuffer =
             Buffer.from(
-                audioArrayBuffer
+                arrayBuffer
             );
 
-
-        /* -----------------------------------------------------
-           SIZE
-           ----------------------------------------------------- */
 
         if (
             audioBuffer.length ===
@@ -496,37 +548,14 @@ export default async function handler(
         }
 
 
-        /* -----------------------------------------------------
+        /* -------------------------------------------------
            MIME
-           ----------------------------------------------------- */
+           ------------------------------------------------- */
 
         const mimeType =
             normalizeMimeType(
                 audioFile.type
             );
-
-
-        /*
-        Google currently documents:
-        WAV / MP3 / AIFF / AAC / OGG / FLAC.
-
-        Do NOT pretend WebM is OGG.
-        */
-
-        if (
-            mimeType ===
-            "audio/webm"
-        ) {
-
-            return sendJson(
-                res,
-                415,
-                {
-                    error:
-                        "This browser recorded WebM audio. Use OGG recording or convert the audio before transcription."
-                }
-            );
-        }
 
 
         if (
@@ -539,27 +568,31 @@ export default async function handler(
                 415,
                 {
                     error:
-                        `Unsupported audio format: ${mimeType || "unknown"}.`
+                        `Unsupported audio format: ${
+                            mimeType ||
+                            "unknown"
+                        }.`
                 }
             );
         }
 
 
-        /* -----------------------------------------------------
-           GEMINI
-           ----------------------------------------------------- */
+        /* -------------------------------------------------
+           TRANSCRIBE
+           ------------------------------------------------- */
 
         const transcript =
             await transcribeWithGemini({
                 apiKey,
                 audioBuffer,
-                mimeType
+                mimeType,
+                context
             });
 
 
-        /* -----------------------------------------------------
+        /* -------------------------------------------------
            SUCCESS
-           ----------------------------------------------------- */
+           ------------------------------------------------- */
 
         return sendJson(
             res,
@@ -572,9 +605,9 @@ export default async function handler(
 
     } catch (error) {
 
-        /* -----------------------------------------------------
+        /* -------------------------------------------------
            KNOWN ERRORS
-           ----------------------------------------------------- */
+           ------------------------------------------------- */
 
         if (
             error?.message ===
@@ -610,23 +643,23 @@ export default async function handler(
 
         if (
             error?.message ===
-            "AUDIO_REQUIRED"
+            "EMPTY_TRANSCRIPT"
         ) {
 
             return sendJson(
                 res,
-                400,
+                422,
                 {
                     error:
-                        "Audio file is required."
+                        "No speech could be transcribed."
                 }
             );
         }
 
 
-        /* -----------------------------------------------------
+        /* -------------------------------------------------
            UNKNOWN / GEMINI ERROR
-           ----------------------------------------------------- */
+           ------------------------------------------------- */
 
         console.error(
             "NEYO transcription error:",

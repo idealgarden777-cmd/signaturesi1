@@ -22,7 +22,7 @@ import { GoogleGenAI } from "@google/genai";
    ========================================================= */
 
 const MODEL =
-    "gemini-2.5-flash-native-audio-preview-12-2025";
+    "gemini-3.1-flash-live-preview";
 
 
 const TOKEN_LIFETIME_MS =

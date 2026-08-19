@@ -184,6 +184,14 @@ NO:
     const target = Math.max(0, Math.min(1, (rms - 0.012) / 0.11));
     const smoothing = target > smoothLevel ? 0.3 : 0.1;
     smoothLevel += (target - smoothLevel) * smoothing;
+
+    // --- NEW: broadcast mic level for mascot ---
+    window.dispatchEvent(
+      new CustomEvent("neyo:voice-mic-level", {
+        detail: { level: smoothLevel }
+      })
+    );
+
     const bars = getWaveBars();
     const center = Math.max(1, (bars.length - 1) / 2);
     bars.forEach((bar, index) => {
@@ -304,6 +312,20 @@ NO:
     const bytes = base64ToBytes(base64);
     const samples = pcm16ToFloat32(bytes);
     if (!samples.length) return;
+
+    // --- NEW: compute RMS level for mascot speaking reaction ---
+    let sum = 0;
+    for (let i = 0; i < samples.length; i += 1) {
+      sum += samples[i] * samples[i];
+    }
+    const outputRms = samples.length ? Math.sqrt(sum / samples.length) : 0;
+    const outputLevel = Math.max(0, Math.min(1, (outputRms - 0.01) / 0.16));
+    window.dispatchEvent(
+      new CustomEvent("neyo:voice-output-level", {
+        detail: { level: outputLevel }
+      })
+    );
+
     const sampleRate = getSampleRateFromMime(mimeType);
     const buffer = context.createBuffer(1, samples.length, sampleRate);
     buffer.getChannelData(0).set(samples);
@@ -553,16 +575,11 @@ NO:
 
     if (serverContent.interrupted) {
       stopPlayback();
-      // --- FIX 1: notify interrupted state ---
       setVoiceState("interrupted");
     }
 
-    // Check if this is a model turn (Gemini thinking/responding)
     const modelTurn = serverContent.modelTurn;
     if (modelTurn) {
-      // If there are parts with inline audio, we'll handle them below.
-      // But we set "thinking" only if no audio parts have been played yet?
-      // We'll set thinking here, and audio playback will set speaking.
       setVoiceState("thinking");
     }
 
@@ -583,7 +600,6 @@ NO:
   async function startConversation() {
     if (connecting || active || stopping) return;
 
-    // --- UI bridge: open voice mode and set listening ---
     window.NeyoVoiceMode?.open?.();
     setVoiceState("listening");
 
@@ -596,7 +612,6 @@ NO:
         throw new Error("Microphone unavailable.");
       }
 
-      // Unlock output on user gesture.
       await ensureOutputContext();
 
       const credentials = await fetchVoiceToken();
@@ -671,8 +686,6 @@ NO:
         socket = null;
       }
       syncUi();
-
-      // --- FIX 2: close the voice UI on start failure ---
       window.NeyoVoiceMode?.close?.({ stopVoice: false });
       setVoiceState("idle");
     }
@@ -709,7 +722,6 @@ NO:
     syncUi();
     stopping = false;
 
-    // --- UI bridge: close voice mode ---
     window.NeyoVoiceMode?.close?.({ stopVoice: false });
     setVoiceState("idle");
 

@@ -1,25 +1,15 @@
 /*
 =========================================================
 NEYO — LIVE VOICE
-FINAL LOCKED BASELINE
+FINAL LOCKED BASELINE + MIC/SPEAKER CONTROLS
 
 Gemini 3.1 Flash Live + Ephemeral Token
 Automatic VAD tuned for natural pauses, hands‑free turn‑taking.
 
-Locked architecture:
-- Continuous mic (never closed during session)
-- Server-side VAD with 850ms silence duration
-- Deterministic state machine based on turn lifecycle
-- Instant interrupt handling (clear queue, state → interrupted → listening after 140ms)
-- No UI flicker from network packet jitter
-- Real mic/output RMS events for mascot
-
-NO:
-- Mock responses
-- Fake speech queue
-- Transcript injection
-- Client-side VAD as primary authority
-- Mic close/reopen per turn
+Controls:
+- Mic mute (track.enabled)
+- Speaker mute (master gain)
+- Both non‑destructive, no socket restart
 =========================================================
 */
 
@@ -68,9 +58,8 @@ NO:
     maxSessionMs: 30 * 60 * 1000,
     playbackLeadSeconds: 0.08,
 
-    // Natural conversation VAD tuning
     vadPrefixPaddingMs: 80,
-    vadSilenceDurationMs: 850, // 0.85s – allows natural pauses
+    vadSilenceDurationMs: 850,
     vadStartSensitivity: "START_SENSITIVITY_HIGH",
     vadEndSensitivity: "END_SENSITIVITY_LOW",
   });
@@ -87,7 +76,6 @@ NO:
   let setupTimer = 0;
   let sessionTimer = 0;
 
-  // Turn lifecycle flags
   let assistantSpeaking = false;
   let assistantResponsePending = false;
 
@@ -96,6 +84,7 @@ NO:
      ===================================================== */
 
   let micStream = null;
+  let micTrack = null;          // for mute control
   let inputContext = null;
   let micSource = null;
   let processorNode = null;
@@ -109,6 +98,7 @@ NO:
      ===================================================== */
 
   let outputContext = null;
+  let masterGain = null;        // master gain node for speaker mute
   let nextPlaybackTime = 0;
   let playbackStarted = false;
   const playingSources = new Set();
@@ -194,7 +184,6 @@ NO:
     const smoothing = target > smoothLevel ? 0.3 : 0.1;
     smoothLevel += (target - smoothLevel) * smoothing;
 
-    // Broadcast mic level for mascot reaction
     window.dispatchEvent(
       new CustomEvent("neyo:voice-mic-level", {
         detail: { level: smoothLevel }
@@ -291,7 +280,7 @@ NO:
   }
 
   /* =====================================================
-     OUTPUT AUDIO
+     OUTPUT AUDIO — with master gain for speaker mute
      ===================================================== */
 
   async function ensureOutputContext() {
@@ -303,6 +292,12 @@ NO:
     if (!AudioContextClass) throw new Error("Audio playback unavailable.");
     outputContext = new AudioContextClass();
     if (outputContext.state === "suspended") await outputContext.resume();
+
+    // --- Create master gain node for speaker control ---
+    masterGain = outputContext.createGain();
+    masterGain.gain.value = 1; // default: unmuted
+    masterGain.connect(outputContext.destination);
+
     nextPlaybackTime = outputContext.currentTime;
     playbackStarted = false;
     return outputContext;
@@ -341,7 +336,8 @@ NO:
 
     const source = context.createBufferSource();
     source.buffer = buffer;
-    source.connect(context.destination);
+    // Connect through master gain
+    source.connect(masterGain || context.destination);
 
     // --- Transition to Speaking on first audio chunk of this turn ---
     if (!assistantSpeaking) {
@@ -391,6 +387,37 @@ NO:
   }
 
   /* =====================================================
+     MIC MUTE CONTROL
+     ===================================================== */
+
+  function setMuted(muted) {
+    if (micTrack) {
+      micTrack.enabled = !muted;
+    }
+    // Fire event for UI
+    window.dispatchEvent(
+      new CustomEvent("neyo:voice-muted", {
+        detail: { muted }
+      })
+    );
+  }
+
+  /* =====================================================
+     SPEAKER MUTE CONTROL
+     ===================================================== */
+
+  function setSpeakerEnabled(enabled) {
+    if (masterGain) {
+      masterGain.gain.value = enabled ? 1 : 0;
+    }
+    window.dispatchEvent(
+      new CustomEvent("neyo:voice-speaker", {
+        detail: { enabled }
+      })
+    );
+  }
+
+  /* =====================================================
      TOKEN
      ===================================================== */
 
@@ -430,6 +457,10 @@ NO:
       },
       video: false,
     });
+
+    // Store audio track for mute control
+    const tracks = micStream.getAudioTracks();
+    if (tracks.length) micTrack = tracks[0];
 
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
     if (!AudioContextClass) throw new Error("Web Audio API unavailable.");
@@ -519,6 +550,7 @@ NO:
         } catch {}
       }
       micStream = null;
+      micTrack = null;
     }
 
     if (inputContext && inputContext.state !== "closed") {
@@ -595,7 +627,6 @@ NO:
 
       setVoiceState("interrupted");
 
-      // UI-only transition: after a short delay, go back to listening
       setTimeout(() => {
         if (active && !assistantSpeaking) {
           setVoiceState("listening");
@@ -616,7 +647,6 @@ NO:
       }
       hasAudio = true;
 
-      // First audio chunk => switch to Speaking (if not already)
       if (!assistantSpeaking) {
         assistantSpeaking = true;
         assistantResponsePending = false;
@@ -626,14 +656,11 @@ NO:
       await playAudioChunk(inline.data, inline.mimeType);
     }
 
-    // --- If we get a modelTurn with no audio and we're not already speaking,
-    //     this is the start of a response (thinking state).
     if (serverContent.modelTurn && !hasAudio && !assistantSpeaking) {
       assistantResponsePending = true;
       setVoiceState("thinking");
     }
 
-    // --- Turn complete: wait for playback to finish then go back to listening ---
     if (serverContent.turnComplete) {
       assistantResponsePending = false;
 
@@ -690,7 +717,6 @@ NO:
             generationConfig: {
               responseModalities: ["AUDIO"],
             },
-            // --- Natural conversation VAD tuning ---
             realtimeInputConfig: {
               automaticActivityDetection: {
                 disabled: false,
@@ -856,6 +882,8 @@ NO:
     stop: stopConversation,
     isActive: () => active,
     isConnecting: () => connecting,
+    setMuted,                 // new
+    setSpeakerEnabled,        // new
     engine: "gemini-live-natural-vad",
   });
 })();

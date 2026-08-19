@@ -82,6 +82,10 @@ NO:
   let setupTimer = 0;
   let sessionTimer = 0;
 
+  // --- Deterministic state flags ---
+  let assistantSpeaking = false;
+  let assistantTurnActive = false;
+
   /* =====================================================
      MICROPHONE STATE
      ===================================================== */
@@ -185,7 +189,7 @@ NO:
     const smoothing = target > smoothLevel ? 0.3 : 0.1;
     smoothLevel += (target - smoothLevel) * smoothing;
 
-    // --- NEW: broadcast mic level for mascot ---
+    // Broadcast mic level for mascot
     window.dispatchEvent(
       new CustomEvent("neyo:voice-mic-level", {
         detail: { level: smoothLevel }
@@ -313,7 +317,7 @@ NO:
     const samples = pcm16ToFloat32(bytes);
     if (!samples.length) return;
 
-    // --- NEW: compute RMS level for mascot speaking reaction ---
+    // Compute RMS for mascot output level
     let sum = 0;
     for (let i = 0; i < samples.length; i += 1) {
       sum += samples[i] * samples[i];
@@ -334,8 +338,12 @@ NO:
     source.buffer = buffer;
     source.connect(context.destination);
 
-    // --- State: Speaking ---
-    setVoiceState("speaking");
+    // --- State: Speaking (only first time per turn) ---
+    if (!assistantSpeaking) {
+      assistantSpeaking = true;
+      assistantTurnActive = true;
+      setVoiceState("speaking");
+    }
 
     if (!playbackStarted) {
       nextPlaybackTime = Math.max(
@@ -356,10 +364,7 @@ NO:
       "ended",
       () => {
         playingSources.delete(source);
-        // If no more sources and conversation still active, go back to listening
-        if (active && playingSources.size === 0) {
-          setVoiceState("listening");
-        }
+        // No state change here – handled by turnComplete
       },
       { once: true }
     );
@@ -376,6 +381,8 @@ NO:
     if (outputContext) {
       nextPlaybackTime = outputContext.currentTime;
     }
+    assistantSpeaking = false;
+    assistantTurnActive = false;
   }
 
   /* =====================================================
@@ -536,11 +543,11 @@ NO:
   }
 
   /* =====================================================
-     SERVER MESSAGE
+     SERVER MESSAGE — Deterministic State Machine
      ===================================================== */
 
   async function handleServerMessage(message) {
-    // Setup complete
+    // --- Setup complete ---
     if (message?.setupComplete) {
       console.log("[NEYO Voice] Gemini setup complete");
       clearTimeout(setupTimer);
@@ -551,16 +558,17 @@ NO:
 
       active = true;
       connecting = false;
+
+      assistantSpeaking = false;
+      assistantTurnActive = false;
+
       syncUi();
 
-      // Start waveform
       resetWaveform();
       waveRaf = requestAnimationFrame(animateWave);
 
-      // Set listening state
       setVoiceState("listening");
 
-      // Session timer
       clearTimeout(sessionTimer);
       sessionTimer = setTimeout(() => {
         stopConversation();
@@ -573,23 +581,57 @@ NO:
     const serverContent = message?.serverContent;
     if (!serverContent) return;
 
+    // --- User interrupted NEYO ---
     if (serverContent.interrupted) {
       stopPlayback();
+      assistantSpeaking = false;
+      assistantTurnActive = false;
       setVoiceState("interrupted");
+      return;
     }
 
-    const modelTurn = serverContent.modelTurn;
-    if (modelTurn) {
+    // --- Model turn (response parts) ---
+    const parts = serverContent?.modelTurn?.parts || [];
+    let hasAudio = false;
+
+    for (const part of parts) {
+      const inline = part?.inlineData;
+      if (!inline?.data || !String(inline.mimeType || "").startsWith("audio/")) {
+        continue;
+      }
+      hasAudio = true;
+
+      // First audio chunk => switch to Speaking (if not already)
+      if (!assistantSpeaking) {
+        assistantSpeaking = true;
+        assistantTurnActive = true;
+        setVoiceState("speaking");
+      }
+
+      await playAudioChunk(inline.data, inline.mimeType);
+    }
+
+    // --- Thinking state: model turn without audio (only before first audio) ---
+    if (serverContent.modelTurn && !hasAudio && !assistantSpeaking) {
+      assistantTurnActive = true;
       setVoiceState("thinking");
     }
 
-    const parts = modelTurn?.parts || [];
-    for (const part of parts) {
-      const inline = part?.inlineData;
-      if (!inline?.data) continue;
-      if (String(inline.mimeType || "").startsWith("audio/")) {
-        await playAudioChunk(inline.data, inline.mimeType);
-      }
+    // --- Turn complete: wait for playback to finish then go back to listening ---
+    if (serverContent.turnComplete) {
+      assistantTurnActive = false;
+
+      const waitForPlayback = () => {
+        if (playingSources.size > 0) {
+          setTimeout(waitForPlayback, 30);
+          return;
+        }
+        assistantSpeaking = false;
+        if (active) {
+          setVoiceState("listening");
+        }
+      };
+      waitForPlayback();
     }
   }
 

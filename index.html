@@ -95,6 +95,10 @@
   <link rel="stylesheet" href="/css/components/send-state.css?v=2">
   <link rel="stylesheet" href="/css/components/mobile-shell.css?v=2">
 
+  <!-- ===== VOICE MODE + MASCOT (EDIT 1) ===== -->
+  <link rel="stylesheet" href="/css/components/voice-mode.css?v=1">
+  <link rel="stylesheet" href="/css/components/mascot.css?v=1">
+
   <!-- KaTeX -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css">
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js"></script>
@@ -1302,6 +1306,146 @@
   </div>
 
   <!-- ========================================================= -->
+  <!-- NEYO VOICE MODE  (EDIT 2)                               -->
+  <!-- ========================================================= -->
+
+  <div
+    id="neyoVoiceMode"
+    class="voice-mode-shell"
+    aria-hidden="true"
+  >
+    <div
+      class="voice-mode-stage"
+      role="dialog"
+      aria-label="NEYO voice conversation"
+    >
+
+      <!-- =========================
+           MASCOT
+           ========================= -->
+      <div class="voice-mode-mascot-slot">
+
+        <div
+          id="neyoMascot"
+          data-phase="idle"
+          data-tone="friendly"
+          data-eye="arc"
+          data-mouth="smile"
+          data-muted="false"
+          data-speaker="on"
+          data-camera="off"
+        >
+
+          <div class="neyo-mascot-face">
+
+            <div class="neyo-mascot-features">
+
+              <!-- Left eye -->
+              <div
+                id="neyoMascotLeftEye"
+                class="neyo-eye neyo-eye-left"
+              >
+                <span class="neyo-eye-core"></span>
+              </div>
+
+              <!-- Right eye -->
+              <div
+                id="neyoMascotRightEye"
+                class="neyo-eye neyo-eye-right"
+              >
+                <span class="neyo-eye-core"></span>
+              </div>
+
+              <!-- Mouth -->
+              <div
+                id="neyoMascotMouth"
+                class="neyo-mouth"
+              >
+                <span class="neyo-mouth-bar"></span>
+                <span class="neyo-mouth-bar"></span>
+                <span class="neyo-mouth-bar"></span>
+                <span class="neyo-mouth-bar"></span>
+                <span class="neyo-mouth-bar"></span>
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
+
+
+        <!-- Camera preview -->
+        <div
+          id="neyoCameraPreview"
+          class="voice-mode-camera-preview"
+          aria-hidden="true"
+        >
+          <video
+            id="neyoCameraVideo"
+            autoplay
+            muted
+            playsinline
+          ></video>
+        </div>
+
+      </div>
+
+
+      <!-- =========================
+           STATUS
+           ========================= -->
+      <div
+        id="neyoMascotStatus"
+        class="voice-mode-status"
+        aria-live="polite"
+      >
+        Ready
+      </div>
+
+
+      <!-- =========================
+           CONTROLS
+           ========================= -->
+      <div class="voice-mode-controls">
+
+        <button
+          id="voiceModeMicBtn"
+          class="voice-mode-control is-active"
+          type="button"
+          aria-label="Mute microphone"
+          aria-pressed="true"
+        ></button>
+
+        <button
+          id="voiceModeCameraBtn"
+          class="voice-mode-control"
+          type="button"
+          aria-label="Turn camera on"
+          aria-pressed="false"
+        ></button>
+
+        <button
+          id="voiceModeSpeakerBtn"
+          class="voice-mode-control is-active"
+          type="button"
+          aria-label="Turn speaker off"
+          aria-pressed="true"
+        ></button>
+
+        <button
+          id="voiceModeEndBtn"
+          class="voice-mode-control voice-mode-end"
+          type="button"
+          aria-label="End voice conversation"
+        ></button>
+
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ========================================================= -->
   <!-- SCRIPTS — FULL ORDER WITH SEND-STATE RESTORED & ADS v3   -->
   <!-- ========================================================= -->
 
@@ -1323,8 +1467,14 @@
   <!-- Composer scrollbar (NEW) -->
   <script type="module" src="/js/components/composer-scrollbar.js?v=1"></script>
 
-  <!-- Voice — Gemini Live Native Audio -->
-  <script type="module" src="/js/components/voice.js?v=40"></script>
+  <!-- Voice — Gemini Live Native Audio (EDIT 3: v40 → v90) -->
+  <script type="module" src="/js/components/voice.js?v=90"></script>
+
+  <!-- Voice Mascot (EDIT 3: new) -->
+  <script type="module" src="/js/components/mascot.js?v=1"></script>
+
+  <!-- Voice Mode UI (EDIT 3: new) -->
+  <script type="module" src="/js/components/voice-mode.js?v=1"></script>
 
   <!-- Native tooltips (restored) -->
   <script type="module" src="/js/components/native-tooltips.js?v=1"></script>

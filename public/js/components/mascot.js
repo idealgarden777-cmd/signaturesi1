@@ -1,31 +1,30 @@
 /*
 =========================================================
-NEYO — MASCOT ENGINE
-Production-grade state + expression controller
+NEYO — PREMIUM MASCOT ENGINE
+Production expression + state controller
 
 Owns:
-- mascot state
-- phase transitions
-- tone mapping
-- eye mode
-- mouth mode
-- blinking
-- mic/output energy
-- mascot status sync
-- public API
+- phase states
+- 12 expression tones
+- eye / mouth mapping
+- expression hold timing
+- blink variants
+- mic / output energy
+- micro expressions
+- premium stable transitions
 
 Does NOT own:
-- Gemini connection
+- Gemini
+- WebSocket
 - microphone capture
 - audio playback
-- camera stream
+- camera
 - voice mode layout
 =========================================================
 */
 
 (() => {
   "use strict";
-
 
   /* =====================================================
      DOM
@@ -46,7 +45,6 @@ Does NOT own:
   const statusEl =
     document.getElementById("neyoMascotStatus");
 
-
   if (
     !mascot ||
     !leftEye ||
@@ -65,105 +63,129 @@ Does NOT own:
      ENUMS
      ===================================================== */
 
-  const PHASES =
-    Object.freeze([
-      "idle",
-      "listening",
-      "thinking",
-      "speaking",
-      "interrupted",
-      "error",
-      "muted"
-    ]);
+  const PHASES = Object.freeze([
+    "idle",
+    "listening",
+    "thinking",
+    "speaking",
+    "interrupted",
+    "error",
+    "muted"
+  ]);
 
+  const TONES = Object.freeze([
+    "friendly",
+    "happy",
+    "excited",
+    "calm",
+    "focused",
+    "curious",
+    "surprised",
+    "confused",
+    "skeptical",
+    "empathetic",
+    "playful",
+    "serious"
+  ]);
 
-  const TONES =
-    Object.freeze([
-      "friendly",
-      "happy",
-      "calm",
-      "focused",
-      "curious",
-      "excited",
-      "serious",
-      "surprised",
-      "confused"
-    ]);
+  const EYES = Object.freeze([
+    "arc",
+    "soft-arc",
+    "oval",
+    "pill",
+    "round",
+    "square",
+    "diamond",
+    "loop",
+    "double-loop",
+    "half",
+    "wink-left",
+    "wink-right",
+    "asymmetric"
+  ]);
 
-
-  const EYE_MODES =
-    Object.freeze([
-      "arc",
-      "oval",
-      "round",
-      "square",
-      "loop",
-      "half"
-    ]);
-
-
-  const MOUTH_MODES =
-    Object.freeze([
-      "smile",
-      "listening",
-      "neutral",
-      "speak-soft",
-      "speak-active",
-      "serious",
-      "surprise",
-      "error"
-    ]);
+  const MOUTHS = Object.freeze([
+    "smile",
+    "smile-wide",
+    "neutral",
+    "listening",
+    "speak-soft",
+    "speak-medium",
+    "speak-active",
+    "serious",
+    "curious",
+    "surprise",
+    "confused",
+    "smirk",
+    "error"
+  ]);
 
 
   /* =====================================================
      CONFIG
      ===================================================== */
 
-  const CONFIG =
-    Object.freeze({
+  const CONFIG = Object.freeze({
+    expressionHoldMs:
+      700,
 
-      blinkIdleMin:
-        4200,
+    majorExpressionHoldMs:
+      1100,
 
-      blinkIdleMax:
-        7200,
+    interruptHoldMs:
+      140,
 
-      blinkListeningMin:
-        5800,
+    blinkIdleMin:
+      4200,
 
-      blinkListeningMax:
-        9000,
+    blinkIdleMax:
+      7200,
 
-      blinkSpeakingMin:
-        4800,
+    blinkListeningMin:
+      5600,
 
-      blinkSpeakingMax:
-        7600,
+    blinkListeningMax:
+      9000,
 
-      blinkCloseMs:
-        70,
+    blinkSpeakingMin:
+      4800,
 
-      blinkHoldMs:
-        35,
+    blinkSpeakingMax:
+      7600,
 
-      blinkOpenMs:
-        90,
+    blinkCloseMs:
+      70,
 
-      interruptedHoldMs:
-        145,
+    blinkHoldMs:
+      30,
 
-      micSmoothing:
-        0.22,
+    blinkOpenMs:
+      90,
 
-      outputSmoothing:
-        0.28,
+    doubleBlinkGapMs:
+      120,
 
-      energyFloor:
-        0.015,
+    slowBlinkHoldMs:
+      110,
 
-      maxEnergy:
-        1
-    });
+    microExpressionMinMs:
+      5200,
+
+    microExpressionMaxMs:
+      9800,
+
+    micSmoothing:
+      0.22,
+
+    outputSmoothing:
+      0.28,
+
+    energyFloor:
+      0.015,
+
+    maxEnergy:
+      1
+  });
 
 
   /* =====================================================
@@ -171,7 +193,6 @@ Does NOT own:
      ===================================================== */
 
   const state = {
-
     open:
       false,
 
@@ -203,18 +224,24 @@ Does NOT own:
       false,
 
     blinking:
-      false
+      false,
+
+    blinkVariant:
+      "normal",
+
+    expressionLockedUntil:
+      0,
+
+    microExpression:
+      null
   };
 
 
-  let blinkTimer =
-    0;
-
-  let blinkAnimationTimer =
-    0;
-
-  let interruptedTimer =
-    0;
+  let blinkTimer = 0;
+  let blinkAnimationTimer = 0;
+  let microTimer = 0;
+  let interruptTimer = 0;
+  let pendingTone = null;
 
 
   /* =====================================================
@@ -222,10 +249,8 @@ Does NOT own:
      ===================================================== */
 
   function clamp01(value) {
-
     const number =
       Number(value) || 0;
-
 
     return Math.max(
       0,
@@ -238,10 +263,8 @@ Does NOT own:
 
 
   function normalizeEnergy(value) {
-
     const level =
       clamp01(value);
-
 
     if (
       level <=
@@ -249,7 +272,6 @@ Does NOT own:
     ) {
       return 0;
     }
-
 
     return clamp01(
       (
@@ -268,47 +290,36 @@ Does NOT own:
     min,
     max
   ) {
-
     return (
       min +
       Math.random() *
-      (
-        max -
-        min
-      )
+      (max - min)
     );
+  }
+
+
+  function randomChoice(items) {
+    return items[
+      Math.floor(
+        Math.random() *
+        items.length
+      )
+    ];
   }
 
 
   function validPhase(value) {
-
-    return PHASES.includes(
-      value
-    );
+    return PHASES.includes(value);
   }
 
 
   function validTone(value) {
-
-    return TONES.includes(
-      value
-    );
+    return TONES.includes(value);
   }
 
 
-  function validEye(value) {
-
-    return EYE_MODES.includes(
-      value
-    );
-  }
-
-
-  function validMouth(value) {
-
-    return MOUTH_MODES.includes(
-      value
-    );
+  function now() {
+    return performance.now();
   }
 
 
@@ -317,40 +328,29 @@ Does NOT own:
      ===================================================== */
 
   function getStatusText() {
-
     if (state.muted) {
-
       return "Microphone muted";
     }
 
-
     switch (state.phase) {
-
       case "listening":
         return "Listening…";
-
 
       case "thinking":
         return "Thinking…";
 
-
       case "speaking":
         return "NEYO is speaking";
-
 
       case "interrupted":
         return "Listening…";
 
-
       case "error":
         return "Something went wrong";
-
 
       case "muted":
         return "Microphone muted";
 
-
-      case "idle":
       default:
         return "Ready";
     }
@@ -358,282 +358,312 @@ Does NOT own:
 
 
   /* =====================================================
-     EXPRESSION MAPPING
+     EXPRESSION PROFILES
      ===================================================== */
 
-  function resolveIdleExpression() {
+  const EXPRESSIONS = Object.freeze({
 
-    switch (state.tone) {
+    idle: {
+      friendly: {
+        eye: "arc",
+        mouth: "smile"
+      },
 
-      case "calm":
-        return {
-          eye:
-            "half",
+      happy: {
+        eye: "soft-arc",
+        mouth: "smile-wide"
+      },
 
-          mouth:
-            "smile"
-        };
+      calm: {
+        eye: "half",
+        mouth: "smile"
+      },
+
+      playful: {
+        eye: "asymmetric",
+        mouth: "smirk"
+      },
+
+      curious: {
+        eye: "asymmetric",
+        mouth: "curious"
+      },
+
+      serious: {
+        eye: "half",
+        mouth: "neutral"
+      },
+
+      default: {
+        eye: "arc",
+        mouth: "smile"
+      }
+    },
 
 
-      case "focused":
-        return {
-          eye:
-            "oval",
+    listening: {
+      friendly: {
+        eye: "oval",
+        mouth: "listening"
+      },
 
-          mouth:
-            "neutral"
-        };
+      focused: {
+        eye: "pill",
+        mouth: "listening"
+      },
+
+      curious: {
+        eye: "asymmetric",
+        mouth: "curious"
+      },
+
+      calm: {
+        eye: "half",
+        mouth: "listening"
+      },
+
+      empathetic: {
+        eye: "soft-arc",
+        mouth: "listening"
+      },
+
+      skeptical: {
+        eye: "half",
+        mouth: "smirk"
+      },
+
+      default: {
+        eye: "oval",
+        mouth: "listening"
+      }
+    },
 
 
-      case "curious":
-        return {
-          eye:
-            "oval",
+    thinking: {
+      focused: {
+        eye: "square",
+        mouth: "neutral"
+      },
 
-          mouth:
-            "smile"
-        };
+      curious: {
+        eye: "loop",
+        mouth: "neutral"
+      },
+
+      serious: {
+        eye: "diamond",
+        mouth: "serious"
+      },
+
+      calm: {
+        eye: "square",
+        mouth: "neutral"
+      },
+
+      skeptical: {
+        eye: "asymmetric",
+        mouth: "smirk"
+      },
+
+      default: {
+        eye: "loop",
+        mouth: "neutral"
+      }
+    },
 
 
-      case "happy":
-      case "friendly":
-      default:
-        return {
-          eye:
-            "arc",
+    speaking: {
+      friendly: {
+        eye: "arc",
+        mouth: "speak-soft"
+      },
 
-          mouth:
-            "smile"
-        };
+      happy: {
+        eye: "soft-arc",
+        mouth: "speak-medium"
+      },
+
+      excited: {
+        eye: "round",
+        mouth: "speak-active"
+      },
+
+      calm: {
+        eye: "half",
+        mouth: "speak-soft"
+      },
+
+      focused: {
+        eye: "pill",
+        mouth: "speak-medium"
+      },
+
+      curious: {
+        eye: "asymmetric",
+        mouth: "curious"
+      },
+
+      surprised: {
+        eye: "round",
+        mouth: "surprise"
+      },
+
+      confused: {
+        eye: "asymmetric",
+        mouth: "confused"
+      },
+
+      skeptical: {
+        eye: "half",
+        mouth: "smirk"
+      },
+
+      empathetic: {
+        eye: "soft-arc",
+        mouth: "speak-soft"
+      },
+
+      playful: {
+        eye: "asymmetric",
+        mouth: "speak-medium"
+      },
+
+      serious: {
+        eye: "half",
+        mouth: "serious"
+      },
+
+      default: {
+        eye: "arc",
+        mouth: "speak-soft"
+      }
     }
-  }
+  });
 
 
-  function resolveListeningExpression() {
+  /* =====================================================
+     RESOLVE EXPRESSION
+     ===================================================== */
 
-    if (state.tone === "curious") {
-
+  function resolveExpression() {
+    if (state.muted) {
       return {
-        eye:
-          "round",
-
-        mouth:
-          "listening"
+        eye: "half",
+        mouth: "neutral"
       };
     }
 
-
-    if (
-      state.tone ===
-      "focused"
-    ) {
-
+    if (state.phase === "interrupted") {
       return {
-        eye:
-          "oval",
-
-        mouth:
-          "listening"
+        eye: "round",
+        mouth: "neutral"
       };
     }
 
+    if (state.phase === "error") {
+      return {
+        eye: "asymmetric",
+        mouth: "error"
+      };
+    }
+
+    const phaseMap =
+      EXPRESSIONS[state.phase] ||
+      EXPRESSIONS.idle;
+
+    const result =
+      phaseMap[state.tone] ||
+      phaseMap.default;
 
     return {
-      eye:
-        "oval",
-
-      mouth:
-        "listening"
+      ...result
     };
   }
 
 
-  function resolveThinkingExpression() {
+  /* =====================================================
+     MICRO EXPRESSIONS
+     ===================================================== */
 
-    switch (state.tone) {
+  function scheduleMicroExpression() {
+    clearTimeout(microTimer);
 
-      case "calm":
-        return {
-          eye:
-            "square",
-
-          mouth:
-            "neutral"
-        };
-
-
-      case "curious":
-        return {
-          eye:
-            "loop",
-
-          mouth:
-            "neutral"
-        };
-
-
-      case "focused":
-      default:
-        return {
-          eye:
-            "loop",
-
-          mouth:
-            "neutral"
-        };
+    if (
+      !state.open ||
+      state.phase === "thinking" ||
+      state.phase === "error" ||
+      state.phase === "interrupted"
+    ) {
+      return;
     }
+
+    microTimer =
+      setTimeout(
+        triggerMicroExpression,
+        randomBetween(
+          CONFIG.microExpressionMinMs,
+          CONFIG.microExpressionMaxMs
+        )
+      );
   }
 
 
-  function resolveSpeakingExpression() {
-
-    switch (state.tone) {
-
-      case "happy":
-        return {
-          eye:
-            "arc",
-
-          mouth:
-            "speak-active"
-        };
-
-
-      case "excited":
-        return {
-          eye:
-            "round",
-
-          mouth:
-            "speak-active"
-        };
-
-
-      case "calm":
-        return {
-          eye:
-            "half",
-
-          mouth:
-            "speak-soft"
-        };
-
-
-      case "focused":
-        return {
-          eye:
-            "oval",
-
-          mouth:
-            "serious"
-        };
-
-
-      case "serious":
-        return {
-          eye:
-            "half",
-
-          mouth:
-            "serious"
-        };
-
-
-      case "curious":
-        return {
-          eye:
-            "oval",
-
-          mouth:
-            "speak-soft"
-        };
-
-
-      case "surprised":
-        return {
-          eye:
-            "round",
-
-          mouth:
-            "surprise"
-        };
-
-
-      case "friendly":
-      default:
-        return {
-          eye:
-            "arc",
-
-          mouth:
-            "speak-soft"
-        };
-    }
-  }
-
-
-  function resolveExpression() {
-
-    if (state.muted) {
-
-      return {
-        eye:
-          "half",
-
-        mouth:
-          "neutral"
-      };
+  function triggerMicroExpression() {
+    if (
+      !state.open ||
+      state.blinking
+    ) {
+      scheduleMicroExpression();
+      return;
     }
 
+    let micro = null;
 
-    switch (state.phase) {
-
-      case "listening":
-        return resolveListeningExpression();
-
-
-      case "thinking":
-        return resolveThinkingExpression();
-
-
-      case "speaking":
-        return resolveSpeakingExpression();
-
-
-      case "interrupted":
-        return {
-          eye:
-            "round",
-
-          mouth:
-            "neutral"
-        };
-
-
-      case "error":
-        return {
-          eye:
-            "square",
-
-          mouth:
-            "error"
-        };
-
-
-      case "muted":
-        return {
-          eye:
-            "half",
-
-          mouth:
-            "neutral"
-        };
-
-
-      case "idle":
-      default:
-        return resolveIdleExpression();
+    if (state.phase === "idle") {
+      micro = randomChoice([
+        "look-left",
+        "look-right",
+        "soft-wink",
+        "tiny-smirk"
+      ]);
     }
+
+    if (state.phase === "listening") {
+      micro = randomChoice([
+        "attention",
+        "look-center"
+      ]);
+    }
+
+    if (state.phase === "speaking") {
+      micro = randomChoice([
+        "soft-wink",
+        "micro-nod"
+      ]);
+    }
+
+    if (!micro) {
+      scheduleMicroExpression();
+      return;
+    }
+
+    state.microExpression =
+      micro;
+
+    mascot.dataset.micro =
+      micro;
+
+    setTimeout(
+      () => {
+        state.microExpression =
+          null;
+
+        delete mascot.dataset.micro;
+
+        scheduleMicroExpression();
+      },
+      420
+    );
   }
 
 
@@ -642,32 +672,14 @@ Does NOT own:
      ===================================================== */
 
   function render() {
-
     const expression =
       resolveExpression();
 
+    state.eyeMode =
+      expression.eye;
 
-    if (
-      validEye(
-        expression.eye
-      )
-    ) {
-
-      state.eyeMode =
-        expression.eye;
-    }
-
-
-    if (
-      validMouth(
-        expression.mouth
-      )
-    ) {
-
-      state.mouthMode =
-        expression.mouth;
-    }
-
+    state.mouthMode =
+      expression.mouth;
 
     mascot.dataset.phase =
       state.phase;
@@ -682,9 +694,7 @@ Does NOT own:
       state.mouthMode;
 
     mascot.dataset.muted =
-      String(
-        state.muted
-      );
+      String(state.muted);
 
     mascot.dataset.speaker =
       state.speakerOn
@@ -696,18 +706,18 @@ Does NOT own:
         ? "on"
         : "off";
 
+    mascot.dataset.blink =
+      state.blinkVariant;
 
     mascot.style.setProperty(
       "--neyo-mic-level",
       state.micLevel.toFixed(3)
     );
 
-
     mascot.style.setProperty(
       "--neyo-output-level",
       state.outputLevel.toFixed(3)
     );
-
 
     leftEye.dataset.mode =
       state.eyeMode;
@@ -718,23 +728,18 @@ Does NOT own:
     mouth.dataset.mode =
       state.mouthMode;
 
-
     if (statusEl) {
-
       const text =
         getStatusText();
-
 
       if (
         statusEl.textContent !==
         text
       ) {
-
         statusEl.textContent =
           text;
       }
     }
-
 
     window.dispatchEvent(
       new CustomEvent(
@@ -750,33 +755,43 @@ Does NOT own:
 
 
   /* =====================================================
-     BLINK
+     EXPRESSION HOLD
+     ===================================================== */
+
+  function lockExpression(
+    duration =
+      CONFIG.expressionHoldMs
+  ) {
+    state.expressionLockedUntil =
+      now() + duration;
+  }
+
+
+  function canChangeExpression() {
+    return (
+      now() >=
+      state.expressionLockedUntil
+    );
+  }
+
+
+  /* =====================================================
+     BLINK ENGINE
      ===================================================== */
 
   function clearBlink() {
+    clearTimeout(blinkTimer);
+    clearTimeout(blinkAnimationTimer);
 
-    clearTimeout(
-      blinkTimer
-    );
-
-
-    clearTimeout(
-      blinkAnimationTimer
-    );
-
-
-    blinkTimer =
-      0;
-
-    blinkAnimationTimer =
-      0;
-
+    blinkTimer = 0;
+    blinkAnimationTimer = 0;
 
     mascot.classList.remove(
       "is-blinking",
-      "is-blink-hold"
+      "is-blink-hold",
+      "is-double-blink",
+      "is-slow-blink"
     );
-
 
     state.blinking =
       false;
@@ -784,15 +799,12 @@ Does NOT own:
 
 
   function getBlinkDelay() {
-
     switch (state.phase) {
-
       case "listening":
         return randomBetween(
           CONFIG.blinkListeningMin,
           CONFIG.blinkListeningMax
         );
-
 
       case "speaking":
         return randomBetween(
@@ -800,8 +812,6 @@ Does NOT own:
           CONFIG.blinkSpeakingMax
         );
 
-
-      case "idle":
       default:
         return randomBetween(
           CONFIG.blinkIdleMin,
@@ -811,16 +821,28 @@ Does NOT own:
   }
 
 
+  function chooseBlinkVariant() {
+    const roll =
+      Math.random();
+
+    if (roll < 0.90) {
+      return "normal";
+    }
+
+    if (roll < 0.96) {
+      return "slow";
+    }
+
+    if (roll < 0.99) {
+      return "double";
+    }
+
+    return "wink";
+  }
+
+
   function scheduleBlink() {
-
-    clearTimeout(
-      blinkTimer
-    );
-
-
-    blinkTimer =
-      0;
-
+    clearTimeout(blinkTimer);
 
     if (
       !state.open ||
@@ -828,10 +850,8 @@ Does NOT own:
       state.phase === "error" ||
       state.phase === "interrupted"
     ) {
-
       return;
     }
-
 
     blinkTimer =
       setTimeout(
@@ -841,82 +861,182 @@ Does NOT own:
   }
 
 
-  function triggerBlink() {
-
-    if (
-      state.blinking ||
-      !state.open
-    ) {
-
-      scheduleBlink();
-
-      return;
-    }
-
-
+  function doSingleBlink(
+    slow = false
+  ) {
     state.blinking =
       true;
-
 
     mascot.classList.add(
       "is-blinking"
     );
 
+    if (slow) {
+      mascot.classList.add(
+        "is-slow-blink"
+      );
+    }
 
     setTimeout(
       () => {
-
-        if (
-          !state.blinking
-        ) {
-          return;
-        }
-
-
         mascot.classList.add(
           "is-blink-hold"
         );
-
       },
       CONFIG.blinkCloseMs
     );
 
-
     blinkAnimationTimer =
       setTimeout(
         () => {
-
           mascot.classList.remove(
             "is-blinking",
-            "is-blink-hold"
+            "is-blink-hold",
+            "is-slow-blink"
           );
-
 
           state.blinking =
             false;
 
-
           scheduleBlink();
-
         },
         CONFIG.blinkCloseMs +
-        CONFIG.blinkHoldMs +
+        (
+          slow
+            ? CONFIG.slowBlinkHoldMs
+            : CONFIG.blinkHoldMs
+        ) +
         CONFIG.blinkOpenMs
       );
   }
 
 
+  function doDoubleBlink() {
+    state.blinking =
+      true;
+
+    mascot.classList.add(
+      "is-double-blink"
+    );
+
+    const blinkOnce = () => {
+      mascot.classList.add(
+        "is-blinking"
+      );
+
+      setTimeout(
+        () => {
+          mascot.classList.remove(
+            "is-blinking"
+          );
+        },
+        CONFIG.blinkCloseMs +
+        CONFIG.blinkOpenMs
+      );
+    };
+
+    blinkOnce();
+
+    setTimeout(
+      blinkOnce,
+      CONFIG.doubleBlinkGapMs
+    );
+
+    setTimeout(
+      () => {
+        mascot.classList.remove(
+          "is-double-blink"
+        );
+
+        state.blinking =
+          false;
+
+        scheduleBlink();
+      },
+      CONFIG.doubleBlinkGapMs +
+      240
+    );
+  }
+
+
+  function doWink() {
+    state.blinking =
+      true;
+
+    const side =
+      Math.random() > 0.5
+        ? "left"
+        : "right";
+
+    mascot.classList.add(
+      side === "left"
+        ? "is-wink-left"
+        : "is-wink-right"
+    );
+
+    setTimeout(
+      () => {
+        mascot.classList.remove(
+          "is-wink-left",
+          "is-wink-right"
+        );
+
+        state.blinking =
+          false;
+
+        scheduleBlink();
+      },
+      220
+    );
+  }
+
+
+  function triggerBlink() {
+    if (
+      state.blinking ||
+      !state.open
+    ) {
+      scheduleBlink();
+      return;
+    }
+
+    const variant =
+      chooseBlinkVariant();
+
+    state.blinkVariant =
+      variant;
+
+    mascot.dataset.blink =
+      variant;
+
+    if (variant === "slow") {
+      doSingleBlink(true);
+      return;
+    }
+
+    if (variant === "double") {
+      doDoubleBlink();
+      return;
+    }
+
+    if (variant === "wink") {
+      doWink();
+      return;
+    }
+
+    doSingleBlink(false);
+  }
+
+
   /* =====================================================
-     PHASE
+     PHASE CONTROL
      ===================================================== */
 
   function setPhase(
     phase,
     options = {}
   ) {
-
     if (!validPhase(phase)) {
-
       console.warn(
         "[NEYO Mascot] Invalid phase:",
         phase
@@ -925,68 +1045,55 @@ Does NOT own:
       return;
     }
 
-
-    clearTimeout(
-      interruptedTimer
-    );
-
-
-    interruptedTimer =
-      0;
-
+    clearTimeout(interruptTimer);
 
     state.phase =
       phase;
 
-
     if (
       options.tone &&
-      validTone(
-        options.tone
-      )
+      validTone(options.tone)
     ) {
-
       state.tone =
         options.tone;
     }
 
-
     if (
-      phase !==
-      "listening"
+      phase !== "listening"
     ) {
-
       state.micLevel =
         0;
     }
 
-
     if (
-      phase !==
-      "speaking"
+      phase !== "speaking"
     ) {
-
       state.outputLevel =
         0;
     }
 
+    lockExpression(
+      options.major
+        ? CONFIG.majorExpressionHoldMs
+        : CONFIG.expressionHoldMs
+    );
 
     render();
 
     scheduleBlink();
+    scheduleMicroExpression();
   }
 
 
   /* =====================================================
-     TONE
+     TONE CONTROL
      ===================================================== */
 
-  function setTone(tone) {
-
-    if (
-      !validTone(tone)
-    ) {
-
+  function setTone(
+    tone,
+    options = {}
+  ) {
+    if (!validTone(tone)) {
       console.warn(
         "[NEYO Mascot] Invalid tone:",
         tone
@@ -995,26 +1102,63 @@ Does NOT own:
       return;
     }
 
+    if (
+      !canChangeExpression() &&
+      !options.force
+    ) {
+      pendingTone =
+        tone;
+
+      const wait =
+        Math.max(
+          0,
+          state.expressionLockedUntil -
+          now()
+        );
+
+      setTimeout(
+        () => {
+          if (pendingTone) {
+            const next =
+              pendingTone;
+
+            pendingTone =
+              null;
+
+            setTone(
+              next,
+              {
+                force: true
+              }
+            );
+          }
+        },
+        wait + 10
+      );
+
+      return;
+    }
 
     state.tone =
       tone;
 
+    lockExpression(
+      options.major
+        ? CONFIG.majorExpressionHoldMs
+        : CONFIG.expressionHoldMs
+    );
 
     render();
   }
 
 
   /* =====================================================
-     MIC ENERGY
+     ENERGY
      ===================================================== */
 
   function setMicLevel(value) {
-
     const target =
-      normalizeEnergy(
-        value
-      );
-
+      normalizeEnergy(value);
 
     state.micLevel +=
       (
@@ -1023,28 +1167,18 @@ Does NOT own:
       ) *
       CONFIG.micSmoothing;
 
-
     if (
       state.phase ===
       "listening"
     ) {
-
       render();
     }
   }
 
 
-  /* =====================================================
-     OUTPUT ENERGY
-     ===================================================== */
-
   function setOutputLevel(value) {
-
     const target =
-      normalizeEnergy(
-        value
-      );
-
+      normalizeEnergy(value);
 
     state.outputLevel +=
       (
@@ -1053,72 +1187,48 @@ Does NOT own:
       ) *
       CONFIG.outputSmoothing;
 
-
     if (
       state.phase ===
       "speaking"
     ) {
-
       render();
     }
   }
 
 
   /* =====================================================
-     MIC
+     CONTROLS
      ===================================================== */
 
   function setMuted(value) {
-
     state.muted =
       Boolean(value);
 
-
     if (state.muted) {
-
       state.micLevel =
         0;
     }
 
-
     render();
-
-    scheduleBlink();
   }
 
 
-  /* =====================================================
-     SPEAKER
-     ===================================================== */
-
   function setSpeakerOn(value) {
-
     state.speakerOn =
       Boolean(value);
 
-
-    if (
-      !state.speakerOn
-    ) {
-
+    if (!state.speakerOn) {
       state.outputLevel =
         0;
     }
 
-
     render();
   }
 
 
-  /* =====================================================
-     CAMERA
-     ===================================================== */
-
   function setCameraOn(value) {
-
     state.cameraOn =
       Boolean(value);
-
 
     render();
   }
@@ -1129,14 +1239,13 @@ Does NOT own:
      ===================================================== */
 
   function interrupt() {
-
-    clearTimeout(
-      interruptedTimer
-    );
-
+    clearTimeout(interruptTimer);
 
     state.phase =
       "interrupted";
+
+    state.tone =
+      "surprised";
 
     state.micLevel =
       0;
@@ -1144,14 +1253,15 @@ Does NOT own:
     state.outputLevel =
       0;
 
+    lockExpression(
+      CONFIG.expressionHoldMs
+    );
 
     render();
 
-
-    interruptedTimer =
+    interruptTimer =
       setTimeout(
         () => {
-
           setPhase(
             "listening",
             {
@@ -1159,9 +1269,8 @@ Does NOT own:
                 "focused"
             }
           );
-
         },
-        CONFIG.interruptedHoldMs
+        CONFIG.interruptHoldMs
       );
   }
 
@@ -1171,9 +1280,7 @@ Does NOT own:
      ===================================================== */
 
   function showError() {
-
     clearBlink();
-
 
     state.phase =
       "error";
@@ -1187,17 +1294,19 @@ Does NOT own:
     state.outputLevel =
       0;
 
+    lockExpression(
+      CONFIG.majorExpressionHoldMs
+    );
 
     render();
   }
 
 
   /* =====================================================
-     OPEN
+     OPEN / CLOSE
      ===================================================== */
 
   function open() {
-
     state.open =
       true;
 
@@ -1213,39 +1322,25 @@ Does NOT own:
     state.outputLevel =
       0;
 
-
     mascot.classList.add(
       "is-open"
     );
 
-
     render();
 
     scheduleBlink();
+    scheduleMicroExpression();
   }
 
 
-  /* =====================================================
-     CLOSE
-     ===================================================== */
-
   function close() {
-
     state.open =
       false;
 
-
     clearBlink();
 
-
-    clearTimeout(
-      interruptedTimer
-    );
-
-
-    interruptedTimer =
-      0;
-
+    clearTimeout(microTimer);
+    clearTimeout(interruptTimer);
 
     state.phase =
       "idle";
@@ -1268,11 +1363,16 @@ Does NOT own:
     state.cameraOn =
       false;
 
+    state.microExpression =
+      null;
 
     mascot.classList.remove(
-      "is-open"
+      "is-open",
+      "is-wink-left",
+      "is-wink-right"
     );
 
+    delete mascot.dataset.micro;
 
     render();
   }
@@ -1284,92 +1384,17 @@ Does NOT own:
 
   window.addEventListener(
     "neyo:voice-open",
-    () => {
-
-      open();
-    }
+    open
   );
-
 
   window.addEventListener(
     "neyo:voice-close",
-    () => {
-
-      close();
-    }
+    close
   );
-
-
-  window.addEventListener(
-    "neyo:voice-listening",
-    event => {
-
-      setPhase(
-        "listening",
-        {
-          tone:
-            event?.detail?.tone ||
-            "focused"
-        }
-      );
-    }
-  );
-
-
-  window.addEventListener(
-    "neyo:voice-thinking",
-    event => {
-
-      setPhase(
-        "thinking",
-        {
-          tone:
-            event?.detail?.tone ||
-            "focused"
-        }
-      );
-    }
-  );
-
-
-  window.addEventListener(
-    "neyo:voice-speaking",
-    event => {
-
-      setPhase(
-        "speaking",
-        {
-          tone:
-            event?.detail?.tone ||
-            "friendly"
-        }
-      );
-    }
-  );
-
-
-  window.addEventListener(
-    "neyo:voice-interrupted",
-    () => {
-
-      interrupt();
-    }
-  );
-
-
-  window.addEventListener(
-    "neyo:voice-error",
-    () => {
-
-      showError();
-    }
-  );
-
 
   window.addEventListener(
     "neyo:voice-idle",
     event => {
-
       setPhase(
         "idle",
         {
@@ -1381,55 +1406,99 @@ Does NOT own:
     }
   );
 
+  window.addEventListener(
+    "neyo:voice-listening",
+    event => {
+      setPhase(
+        "listening",
+        {
+          tone:
+            event?.detail?.tone ||
+            "focused"
+        }
+      );
+    }
+  );
+
+  window.addEventListener(
+    "neyo:voice-thinking",
+    event => {
+      setPhase(
+        "thinking",
+        {
+          tone:
+            event?.detail?.tone ||
+            "focused",
+          major:
+            true
+        }
+      );
+    }
+  );
+
+  window.addEventListener(
+    "neyo:voice-speaking",
+    event => {
+      setPhase(
+        "speaking",
+        {
+          tone:
+            event?.detail?.tone ||
+            "friendly"
+        }
+      );
+    }
+  );
+
+  window.addEventListener(
+    "neyo:voice-interrupted",
+    interrupt
+  );
+
+  window.addEventListener(
+    "neyo:voice-error",
+    showError
+  );
 
   window.addEventListener(
     "neyo:voice-mic-level",
     event => {
-
       setMicLevel(
         event?.detail?.level
       );
     }
   );
 
-
   window.addEventListener(
     "neyo:voice-output-level",
     event => {
-
       setOutputLevel(
         event?.detail?.level
       );
     }
   );
 
-
   window.addEventListener(
     "neyo:voice-muted",
     event => {
-
       setMuted(
         event?.detail?.muted
       );
     }
   );
 
-
   window.addEventListener(
     "neyo:voice-speaker",
     event => {
-
       setSpeakerOn(
         event?.detail?.enabled
       );
     }
   );
 
-
   window.addEventListener(
     "neyo:voice-camera",
     event => {
-
       setCameraOn(
         event?.detail?.enabled
       );
@@ -1443,27 +1512,20 @@ Does NOT own:
 
   window.NeyoMascot =
     Object.freeze({
-
       open,
-
       close,
 
       setPhase,
-
       setTone,
 
       setMicLevel,
-
       setOutputLevel,
 
       setMuted,
-
       setSpeakerOn,
-
       setCameraOn,
 
       interrupt,
-
       showError,
 
       blink:
@@ -1482,9 +1544,8 @@ Does NOT own:
 
   render();
 
-
   console.log(
-    "[NEYO Mascot] Production engine loaded"
+    "[NEYO Mascot] Premium expression engine loaded"
   );
 
 })();

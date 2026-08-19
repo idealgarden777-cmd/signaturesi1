@@ -1,26 +1,26 @@
 /*
 =========================================================
-NEYO — LIVE VOICE BASELINE
-STABLE RECOVERY VERSION
+NEYO — LIVE VOICE
+STABLE BASELINE
 
-Goal:
-- Get voice conversation working first
-- Keep Gemini Live connection simple
-- Keep mic streaming simple
-- Keep playback smooth enough
-- No AudioWorklet yet
-- No custom VAD
-- No search grounding
-- No transcription endpoint
+Gemini Live + Ephemeral Token
 
 Flow:
 Mic
 → /api/voice-token
-→ Gemini Live WebSocket
+→ BidiGenerateContentConstrained
 → setupComplete
 → microphone PCM 16 kHz
 → Gemini native audio
-→ browser playback
+→ smooth browser playback
+
+NO:
+- SpeechRecognition
+- MediaRecorder
+- /api/transcribe
+- AudioWorklet
+- custom VAD
+- Search grounding
 =========================================================
 */
 
@@ -30,27 +30,30 @@ Mic
 
   /* =====================================================
      BUTTON ISOLATION
-     Keeps existing neo.js untouched.
      ===================================================== */
 
   function isolateButton(element) {
     if (!element) return null;
 
-    const clone = element.cloneNode(true);
+    const clone =
+      element.cloneNode(true);
+
     element.replaceWith(clone);
 
     return clone;
   }
 
 
-  const micBtn = isolateButton(
-    document.getElementById("micBtn")
-  );
+  const micBtn =
+    isolateButton(
+      document.getElementById("micBtn")
+    );
 
 
-  const stopRecBtn = isolateButton(
-    document.getElementById("stopRecBtn")
-  );
+  const stopRecBtn =
+    isolateButton(
+      document.getElementById("stopRecBtn")
+    );
 
 
   /* =====================================================
@@ -58,14 +61,21 @@ Mic
      ===================================================== */
 
   const composerInputRow =
-    document.querySelector(".composer-input-row");
+    document.querySelector(
+      ".composer-input-row"
+    );
 
 
   const waveform =
-    document.getElementById("waveDotsBar");
+    document.getElementById(
+      "waveDotsBar"
+    );
 
 
-  if (!micBtn || !composerInputRow) {
+  if (
+    !micBtn ||
+    !composerInputRow
+  ) {
     console.warn(
       "[NEYO Voice] Required DOM missing."
     );
@@ -78,96 +88,129 @@ Mic
      CONFIG
      ===================================================== */
 
-  const CONFIG = Object.freeze({
-    tokenEndpoint:
-      "/api/voice-token",
+  const CONFIG =
+    Object.freeze({
 
-    websocketEndpoint:
-      "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained",
+      tokenEndpoint:
+        "/api/voice-token",
 
-    inputSampleRate:
-      16000,
+      /*
+      IMPORTANT:
+      Ephemeral tokens use the Constrained endpoint.
+      */
 
-    outputSampleRate:
-      24000,
+      websocketEndpoint:
+        "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained",
 
-    processorBufferSize:
-      4096,
+      inputSampleRate:
+        16000,
 
-    analyserFftSize:
-      256,
+      outputSampleRate:
+        24000,
 
-    setupTimeoutMs:
-      10000,
+      processorBufferSize:
+        4096,
 
-    maxSessionMs:
-      30 * 60 * 1000,
+      analyserFftSize:
+        256,
 
-    playbackLeadSeconds:
-      0.08
-  });
+      setupTimeoutMs:
+        10000,
+
+      maxSessionMs:
+        30 * 60 * 1000,
+
+      playbackLeadSeconds:
+        0.08
+    });
 
 
   /* =====================================================
      SESSION STATE
      ===================================================== */
 
-  let socket = null;
+  let socket =
+    null;
 
-  let connecting = false;
-  let active = false;
-  let setupComplete = false;
-  let stopping = false;
+  let connecting =
+    false;
 
-  let setupTimer = 0;
-  let sessionTimer = 0;
+  let active =
+    false;
+
+  let setupComplete =
+    false;
+
+  let stopping =
+    false;
+
+  let setupTimer =
+    0;
+
+  let sessionTimer =
+    0;
 
 
   /* =====================================================
      MICROPHONE STATE
      ===================================================== */
 
-  let micStream = null;
+  let micStream =
+    null;
 
-  let inputContext = null;
+  let inputContext =
+    null;
 
-  let micSource = null;
+  let micSource =
+    null;
 
-  let processorNode = null;
+  let processorNode =
+    null;
 
-  let silentGain = null;
+  let silentGain =
+    null;
 
-  let analyser = null;
+  let analyser =
+    null;
 
-  let analyserData = null;
+  let analyserData =
+    null;
 
-  let browserInputRate = 48000;
+  let browserInputRate =
+    48000;
 
 
   /* =====================================================
      OUTPUT STATE
      ===================================================== */
 
-  let outputContext = null;
+  let outputContext =
+    null;
 
-  let nextPlaybackTime = 0;
+  let nextPlaybackTime =
+    0;
 
-  let playbackStarted = false;
+  let playbackStarted =
+    false;
 
-  const playingSources = new Set();
+
+  const playingSources =
+    new Set();
 
 
   /* =====================================================
-     WAVE STATE
+     WAVEFORM STATE
      ===================================================== */
 
-  let waveRaf = 0;
+  let waveRaf =
+    0;
 
-  let smoothLevel = 0;
+  let smoothLevel =
+    0;
 
 
   console.log(
-    "[NEYO Voice] Stable baseline loaded"
+    "[NEYO Voice] Stable Live baseline loaded"
   );
 
 
@@ -176,6 +219,7 @@ Mic
      ===================================================== */
 
   function syncUi() {
+
     composerInputRow.classList.toggle(
       "is-transcribing",
       connecting || active
@@ -195,6 +239,7 @@ Mic
 
 
     if (connecting) {
+
       micBtn.dataset.tooltip =
         "Connecting";
 
@@ -204,6 +249,7 @@ Mic
       );
 
     } else if (active) {
+
       micBtn.dataset.tooltip =
         "End voice conversation";
 
@@ -213,6 +259,7 @@ Mic
       );
 
     } else {
+
       micBtn.dataset.tooltip =
         "Voice conversation";
 
@@ -224,6 +271,7 @@ Mic
 
 
     if (stopRecBtn) {
+
       stopRecBtn.disabled =
         connecting;
 
@@ -240,26 +288,46 @@ Mic
      ===================================================== */
 
   function getWaveBars() {
-    if (!waveform) return [];
+
+    if (!waveform) {
+      return [];
+    }
+
 
     return Array.from(
-      waveform.querySelectorAll("span")
+      waveform.querySelectorAll(
+        "span"
+      )
     );
   }
 
 
   function resetWaveform() {
-    smoothLevel = 0;
 
-    for (const bar of getWaveBars()) {
-      bar.style.height = "3px";
-      bar.style.opacity = "0.32";
+    smoothLevel =
+      0;
+
+
+    for (
+      const bar
+      of getWaveBars()
+    ) {
+
+      bar.style.height =
+        "3px";
+
+      bar.style.opacity =
+        "0.32";
     }
   }
 
 
-  function getRms() {
-    if (!analyser || !analyserData) {
+  function calculateRms() {
+
+    if (
+      !analyser ||
+      !analyserData
+    ) {
       return 0;
     }
 
@@ -269,7 +337,8 @@ Mic
     );
 
 
-    let sum = 0;
+    let sum =
+      0;
 
 
     for (
@@ -277,14 +346,16 @@ Mic
       i < analyserData.length;
       i += 1
     ) {
-      const value =
+
+      const sample =
         (
           analyserData[i] -
           128
         ) / 128;
 
 
-      sum += value * value;
+      sum +=
+        sample * sample;
     }
 
 
@@ -296,10 +367,14 @@ Mic
 
 
   function animateWave(timestamp) {
-    if (!active) return;
+
+    if (!active) {
+      return;
+    }
 
 
-    const rms = getRms();
+    const rms =
+      calculateRms();
 
 
     const target =
@@ -307,12 +382,13 @@ Mic
         0,
         Math.min(
           1,
-          (rms - 0.012) / 0.11
+          (rms - 0.012) /
+          0.11
         )
       );
 
 
-    const speed =
+    const smoothing =
       target > smoothLevel
         ? 0.30
         : 0.10;
@@ -322,10 +398,12 @@ Mic
       (
         target -
         smoothLevel
-      ) * speed;
+      ) *
+      smoothing;
 
 
-    const bars = getWaveBars();
+    const bars =
+      getWaveBars();
 
 
     const center =
@@ -336,12 +414,17 @@ Mic
 
 
     bars.forEach(
-      (bar, index) => {
+      (
+        bar,
+        index
+      ) => {
+
         const distance =
           Math.abs(
             index -
             center
-          ) / center;
+          ) /
+          center;
 
 
         const weight =
@@ -354,7 +437,8 @@ Mic
           Math.sin(
             timestamp * 0.005 +
             index * 0.85
-          ) * 0.16;
+          ) *
+          0.16;
 
 
         const energy =
@@ -393,7 +477,7 @@ Mic
 
 
   /* =====================================================
-     RESAMPLE
+     RESAMPLING
      ===================================================== */
 
   function resampleFloat32(
@@ -401,8 +485,15 @@ Mic
     sourceRate,
     targetRate
   ) {
-    if (sourceRate === targetRate) {
-      return new Float32Array(input);
+
+    if (
+      sourceRate ===
+      targetRate
+    ) {
+
+      return new Float32Array(
+        input
+      );
     }
 
 
@@ -432,6 +523,7 @@ Mic
       i < outputLength;
       i += 1
     ) {
+
       const start =
         Math.floor(
           i * ratio
@@ -444,14 +536,18 @@ Mic
           Math.min(
             input.length,
             Math.floor(
-              (i + 1) * ratio
+              (i + 1) *
+              ratio
             )
           )
         );
 
 
-      let sum = 0;
-      let count = 0;
+      let sum =
+        0;
+
+      let count =
+        0;
 
 
       for (
@@ -459,8 +555,12 @@ Mic
         j < end;
         j += 1
       ) {
-        sum += input[j];
-        count += 1;
+
+        sum +=
+          input[j];
+
+        count +=
+          1;
       }
 
 
@@ -476,13 +576,15 @@ Mic
 
 
   /* =====================================================
-     FLOAT32 → PCM16
+     FLOAT32 → PCM16 LE
      ===================================================== */
 
   function float32ToPcm16(samples) {
+
     const bytes =
       new Uint8Array(
-        samples.length * 2
+        samples.length *
+        2
       );
 
 
@@ -497,6 +599,7 @@ Mic
       i < samples.length;
       i += 1
     ) {
+
       const sample =
         Math.max(
           -1,
@@ -530,9 +633,11 @@ Mic
      ===================================================== */
 
   function pcm16ToFloat32(bytes) {
+
     const count =
       Math.floor(
-        bytes.byteLength / 2
+        bytes.byteLength /
+        2
       );
 
 
@@ -555,6 +660,7 @@ Mic
       i < count;
       i += 1
     ) {
+
       const sample =
         view.getInt16(
           i * 2,
@@ -581,9 +687,13 @@ Mic
      ===================================================== */
 
   function bytesToBase64(bytes) {
-    let binary = "";
 
-    const chunkSize = 32768;
+    let binary =
+      "";
+
+
+    const chunkSize =
+      32768;
 
 
     for (
@@ -591,6 +701,7 @@ Mic
       i < bytes.length;
       i += chunkSize
     ) {
+
       const chunk =
         bytes.subarray(
           i,
@@ -608,13 +719,18 @@ Mic
     }
 
 
-    return btoa(binary);
+    return btoa(
+      binary
+    );
   }
 
 
   function base64ToBytes(value) {
+
     const binary =
-      atob(value);
+      atob(
+        value
+      );
 
 
     const bytes =
@@ -628,6 +744,7 @@ Mic
       i < binary.length;
       i += 1
     ) {
+
       bytes[i] =
         binary.charCodeAt(i);
     }
@@ -642,15 +759,18 @@ Mic
      ===================================================== */
 
   async function ensureOutputContext() {
+
     if (
       outputContext &&
       outputContext.state !==
-        "closed"
+      "closed"
     ) {
+
       if (
         outputContext.state ===
-          "suspended"
+        "suspended"
       ) {
+
         await outputContext.resume();
       }
 
@@ -665,6 +785,7 @@ Mic
 
 
     if (!AudioContextClass) {
+
       throw new Error(
         "Audio playback unavailable."
       );
@@ -677,8 +798,9 @@ Mic
 
     if (
       outputContext.state ===
-        "suspended"
+      "suspended"
     ) {
+
       await outputContext.resume();
     }
 
@@ -698,6 +820,7 @@ Mic
   function getSampleRateFromMime(
     mimeType
   ) {
+
     const match =
       String(
         mimeType || ""
@@ -712,7 +835,9 @@ Mic
 
 
     const rate =
-      Number(match[1]);
+      Number(
+        match[1]
+      );
 
 
     return (
@@ -728,7 +853,10 @@ Mic
     base64,
     mimeType
   ) {
-    if (!base64) return;
+
+    if (!base64) {
+      return;
+    }
 
 
     const context =
@@ -747,7 +875,9 @@ Mic
       );
 
 
-    if (!samples.length) return;
+    if (!samples.length) {
+      return;
+    }
 
 
     const sampleRate =
@@ -783,6 +913,7 @@ Mic
 
 
     if (!playbackStarted) {
+
       nextPlaybackTime =
         Math.max(
           context.currentTime +
@@ -791,13 +922,15 @@ Mic
         );
 
 
-      playbackStarted = true;
+      playbackStarted =
+        true;
 
     } else if (
       nextPlaybackTime <
       context.currentTime +
       0.01
     ) {
+
       nextPlaybackTime =
         context.currentTime +
         CONFIG.playbackLeadSeconds;
@@ -813,12 +946,15 @@ Mic
       buffer.duration;
 
 
-    playingSources.add(source);
+    playingSources.add(
+      source
+    );
 
 
     source.addEventListener(
       "ended",
       () => {
+
         playingSources.delete(
           source
         );
@@ -831,10 +967,12 @@ Mic
 
 
   function stopPlayback() {
+
     for (
       const source
       of playingSources
     ) {
+
       try {
         source.stop();
       } catch {}
@@ -844,10 +982,12 @@ Mic
     playingSources.clear();
 
 
-    playbackStarted = false;
+    playbackStarted =
+      false;
 
 
     if (outputContext) {
+
       nextPlaybackTime =
         outputContext.currentTime;
     }
@@ -859,6 +999,7 @@ Mic
      ===================================================== */
 
   async function fetchVoiceToken() {
+
     const response =
       await fetch(
         CONFIG.tokenEndpoint,
@@ -881,16 +1022,22 @@ Mic
       await response.text();
 
 
-    let data = null;
+    let data =
+      null;
 
 
     try {
+
       data =
-        JSON.parse(raw);
+        JSON.parse(
+          raw
+        );
+
     } catch {}
 
 
     if (!response.ok) {
+
       throw new Error(
         data?.error ||
         raw ||
@@ -903,6 +1050,7 @@ Mic
       !data?.token ||
       !data?.model
     ) {
+
       throw new Error(
         "Invalid voice token response."
       );
@@ -918,14 +1066,19 @@ Mic
      ===================================================== */
 
   async function startMicrophone() {
-    if (micStream) return;
+
+    if (micStream) {
+      return;
+    }
 
 
     micStream =
       await navigator
         .mediaDevices
         .getUserMedia({
+
           audio: {
+
             channelCount:
               1,
 
@@ -950,6 +1103,7 @@ Mic
 
 
     if (!AudioContextClass) {
+
       throw new Error(
         "Web Audio API unavailable."
       );
@@ -962,8 +1116,9 @@ Mic
 
     if (
       inputContext.state ===
-        "suspended"
+      "suspended"
     ) {
+
       await inputContext.resume();
     }
 
@@ -979,12 +1134,9 @@ Mic
         );
 
 
-    /* ---------------------------------------------
-       WAVE ANALYSER
-       --------------------------------------------- */
-
     analyser =
-      inputContext.createAnalyser();
+      inputContext
+        .createAnalyser();
 
 
     analyser.fftSize =
@@ -1006,9 +1158,10 @@ Mic
     );
 
 
-    /* ---------------------------------------------
-       SIMPLE WORKING CAPTURE
-       --------------------------------------------- */
+    /*
+    Stable baseline.
+    ScriptProcessor warning is acceptable for now.
+    */
 
     processorNode =
       inputContext
@@ -1024,7 +1177,8 @@ Mic
         .createGain();
 
 
-    silentGain.gain.value = 0;
+    silentGain.gain.value =
+      0;
 
 
     micSource.connect(
@@ -1044,12 +1198,13 @@ Mic
 
     processorNode.onaudioprocess =
       event => {
+
         if (
           !active ||
           !setupComplete ||
           !socket ||
           socket.readyState !==
-            WebSocket.OPEN
+          WebSocket.OPEN
         ) {
           return;
         }
@@ -1076,8 +1231,11 @@ Mic
 
         socket.send(
           JSON.stringify({
+
             realtimeInput: {
+
               audio: {
+
                 data:
                   bytesToBase64(
                     pcm
@@ -1110,7 +1268,9 @@ Mic
      ===================================================== */
 
   async function stopMicrophone() {
+
     if (processorNode) {
+
       processorNode.onaudioprocess =
         null;
 
@@ -1120,79 +1280,96 @@ Mic
       } catch {}
 
 
-      processorNode = null;
+      processorNode =
+        null;
     }
 
 
     if (micSource) {
+
       try {
         micSource.disconnect();
       } catch {}
 
 
-      micSource = null;
+      micSource =
+        null;
     }
 
 
     if (analyser) {
+
       try {
         analyser.disconnect();
       } catch {}
 
 
-      analyser = null;
+      analyser =
+        null;
     }
 
 
     if (silentGain) {
+
       try {
         silentGain.disconnect();
       } catch {}
 
 
-      silentGain = null;
+      silentGain =
+        null;
     }
 
 
-    analyserData = null;
+    analyserData =
+      null;
 
 
     if (micStream) {
+
       for (
         const track
         of micStream.getTracks()
       ) {
+
         try {
           track.stop();
         } catch {}
       }
 
 
-      micStream = null;
+      micStream =
+        null;
     }
 
 
     if (
       inputContext &&
       inputContext.state !==
-        "closed"
+      "closed"
     ) {
+
       try {
+
         await inputContext.close();
+
       } catch {}
     }
 
 
-    inputContext = null;
+    inputContext =
+      null;
 
 
     if (waveRaf) {
+
       cancelAnimationFrame(
         waveRaf
       );
 
 
-      waveRaf = 0;
+      waveRaf =
+        0;
     }
 
 
@@ -1201,16 +1378,18 @@ Mic
 
 
   /* =====================================================
-     SOCKET MESSAGE DECODING
+     SOCKET DECODER
      ===================================================== */
 
   async function decodeSocketMessage(
     data
   ) {
+
     if (
       typeof data ===
       "string"
     ) {
+
       return data;
     }
 
@@ -1218,6 +1397,7 @@ Mic
     if (
       data instanceof Blob
     ) {
+
       return data.text();
     }
 
@@ -1225,18 +1405,24 @@ Mic
     if (
       data instanceof ArrayBuffer
     ) {
+
       return new TextDecoder(
         "utf-8"
-      ).decode(data);
+      ).decode(
+        data
+      );
     }
 
 
     if (
       ArrayBuffer.isView(data)
     ) {
+
       return new TextDecoder(
         "utf-8"
-      ).decode(data);
+      ).decode(
+        data
+      );
     }
 
 
@@ -1253,7 +1439,11 @@ Mic
   async function handleServerMessage(
     message
   ) {
-    if (message?.setupComplete) {
+
+    if (
+      message?.setupComplete
+    ) {
+
       console.log(
         "[NEYO Voice] Gemini setup complete"
       );
@@ -1264,17 +1454,22 @@ Mic
       );
 
 
-      setupTimer = 0;
+      setupTimer =
+        0;
 
 
-      setupComplete = true;
+      setupComplete =
+        true;
 
 
       await startMicrophone();
 
 
-      active = true;
-      connecting = false;
+      active =
+        true;
+
+      connecting =
+        false;
 
 
       syncUi();
@@ -1297,7 +1492,9 @@ Mic
       sessionTimer =
         setTimeout(
           () => {
+
             stopConversation();
+
           },
           CONFIG.maxSessionMs
         );
@@ -1324,9 +1521,15 @@ Mic
     if (
       serverContent.interrupted
     ) {
+
       stopPlayback();
     }
 
+
+    /*
+    Gemini 3.1 may return multiple parts.
+    Process all of them.
+    */
 
     const parts =
       serverContent
@@ -1339,6 +1542,7 @@ Mic
       const part
       of parts
     ) {
+
       const inline =
         part?.inlineData;
 
@@ -1356,6 +1560,7 @@ Mic
           "audio/"
         )
       ) {
+
         await playAudioChunk(
           inline.data,
           inline.mimeType
@@ -1366,10 +1571,11 @@ Mic
 
 
   /* =====================================================
-     START CONVERSATION
+     START
      ===================================================== */
 
   async function startConversation() {
+
     if (
       connecting ||
       active ||
@@ -1379,24 +1585,34 @@ Mic
     }
 
 
-    connecting = true;
-    setupComplete = false;
+    connecting =
+      true;
+
+
+    setupComplete =
+      false;
 
 
     syncUi();
 
 
     try {
+
       if (
         !navigator
           .mediaDevices
           ?.getUserMedia
       ) {
+
         throw new Error(
           "Microphone unavailable."
         );
       }
 
+
+      /*
+      Unlock output on user gesture.
+      */
 
       await ensureOutputContext();
 
@@ -1431,6 +1647,7 @@ Mic
 
       socket.onopen =
         () => {
+
           console.log(
             "[NEYO Voice] WebSocket opened"
           );
@@ -1438,22 +1655,21 @@ Mic
 
           /*
           IMPORTANT:
-          Keep setup minimal.
+          Constrained token setup.
 
-          Token already constrains model/audio.
-          No VAD.
-          No search.
-          No voice config.
-          No system instruction.
+          Keep this minimal until baseline
+          is confirmed working.
           */
 
-
           const setupMessage = {
+
             setup: {
+
               model:
                 `models/${credentials.model}`,
 
               generationConfig: {
+
                 responseModalities: [
                   "AUDIO"
                 ]
@@ -1482,7 +1698,11 @@ Mic
           setupTimer =
             setTimeout(
               () => {
-                if (!setupComplete) {
+
+                if (
+                  !setupComplete
+                ) {
+
                   console.error(
                     "[NEYO Voice] Setup timed out"
                   );
@@ -1498,7 +1718,9 @@ Mic
 
       socket.onmessage =
         async event => {
+
           try {
+
             const raw =
               await decodeSocketMessage(
                 event.data
@@ -1506,7 +1728,9 @@ Mic
 
 
             const message =
-              JSON.parse(raw);
+              JSON.parse(
+                raw
+              );
 
 
             await handleServerMessage(
@@ -1515,6 +1739,7 @@ Mic
 
 
           } catch (error) {
+
             console.error(
               "[NEYO Voice] Invalid server message:",
               error
@@ -1525,6 +1750,7 @@ Mic
 
       socket.onerror =
         event => {
+
           console.error(
             "[NEYO Voice] WebSocket error:",
             event
@@ -1534,14 +1760,16 @@ Mic
 
       socket.onclose =
         event => {
+
           console.log(
-            "[NEYO Voice] WebSocket closed",
+            "[NEYO Voice] SOCKET CLOSED",
             {
               code:
                 event.code,
 
               reason:
-                event.reason,
+                event.reason ||
+                "(no reason)",
 
               clean:
                 event.wasClean
@@ -1556,6 +1784,7 @@ Mic
               connecting
             )
           ) {
+
             stopConversation({
               closeSocket:
                 false
@@ -1565,15 +1794,21 @@ Mic
 
 
     } catch (error) {
+
       console.error(
         "[NEYO Voice] Start failed:",
         error
       );
 
 
-      connecting = false;
-      active = false;
-      setupComplete = false;
+      connecting =
+        false;
+
+      active =
+        false;
+
+      setupComplete =
+        false;
 
 
       clearTimeout(
@@ -1581,7 +1816,8 @@ Mic
       );
 
 
-      setupTimer = 0;
+      setupTimer =
+        0;
 
 
       await stopMicrophone();
@@ -1591,12 +1827,14 @@ Mic
 
 
       if (socket) {
+
         try {
           socket.close();
         } catch {}
 
 
-        socket = null;
+        socket =
+          null;
       }
 
 
@@ -1606,12 +1844,13 @@ Mic
 
 
   /* =====================================================
-     STOP CONVERSATION
+     STOP
      ===================================================== */
 
   async function stopConversation({
     closeSocket = true
   } = {}) {
+
     if (stopping) {
       return;
     }
@@ -1626,12 +1865,18 @@ Mic
     }
 
 
-    stopping = true;
+    stopping =
+      true;
 
 
-    active = false;
-    connecting = false;
-    setupComplete = false;
+    active =
+      false;
+
+    connecting =
+      false;
+
+    setupComplete =
+      false;
 
 
     clearTimeout(
@@ -1639,7 +1884,8 @@ Mic
     );
 
 
-    setupTimer = 0;
+    setupTimer =
+      0;
 
 
     clearTimeout(
@@ -1647,7 +1893,8 @@ Mic
     );
 
 
-    sessionTimer = 0;
+    sessionTimer =
+      0;
 
 
     await stopMicrophone();
@@ -1660,22 +1907,27 @@ Mic
       closeSocket &&
       socket
     ) {
+
       try {
+
         socket.close(
           1000,
           "User ended voice conversation"
         );
+
       } catch {}
     }
 
 
-    socket = null;
+    socket =
+      null;
 
 
     syncUi();
 
 
-    stopping = false;
+    stopping =
+      false;
 
 
     console.log(
@@ -1691,6 +1943,7 @@ Mic
   micBtn.addEventListener(
     "click",
     event => {
+
       event.preventDefault();
       event.stopPropagation();
       event.stopImmediatePropagation();
@@ -1705,9 +1958,11 @@ Mic
 
 
       if (active) {
+
         stopConversation();
 
       } else {
+
         startConversation();
       }
     },
@@ -1718,6 +1973,7 @@ Mic
   stopRecBtn?.addEventListener(
     "click",
     event => {
+
       event.preventDefault();
       event.stopPropagation();
       event.stopImmediatePropagation();
@@ -1732,14 +1988,16 @@ Mic
   document.addEventListener(
     "keydown",
     event => {
+
       if (
         event.key ===
-          "Escape" &&
+        "Escape" &&
         (
           active ||
           connecting
         )
       ) {
+
         stopConversation();
       }
     }
@@ -1749,7 +2007,9 @@ Mic
   window.addEventListener(
     "pagehide",
     () => {
+
       stopConversation();
+
     },
     {
       once: true
@@ -1768,6 +2028,7 @@ Mic
 
   window.NeyoVoice =
     Object.freeze({
+
       start:
         startConversation,
 
@@ -1781,6 +2042,7 @@ Mic
         () => connecting,
 
       engine:
-        "gemini-live-stable-baseline"
+        "gemini-live-stable-constrained"
     });
+
 })();

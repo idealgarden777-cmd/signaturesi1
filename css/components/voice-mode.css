@@ -1,0 +1,718 @@
+/*
+=========================================================
+NEYO — VOICE MODE SHELL
+Clean / Minimal / Premium
+
+Owns:
+- centered voice mode layout
+- original background preservation
+- status text
+- control row
+- open / close motion
+- desktop / mobile responsiveness
+
+Does NOT own:
+- mascot face
+- eye animation
+- mouth animation
+- Gemini logic
+=========================================================
+*/
+
+
+/* =====================================================
+   ROOT VOICE MODE
+   ===================================================== */
+
+.voice-mode-shell {
+    position: fixed;
+    inset: 0;
+    z-index: 1200;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    pointer-events: none;
+
+    opacity: 0;
+    visibility: hidden;
+
+    transition:
+        opacity 220ms ease,
+        visibility 220ms ease;
+}
+
+
+/*
+Original NEYO background remains visible.
+
+No black overlay.
+No full-screen color replacement.
+*/
+
+.voice-mode-shell::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+
+    background: transparent;
+
+    pointer-events: none;
+}
+
+
+/* =====================================================
+   OPEN STATE
+   ===================================================== */
+
+.voice-mode-shell.is-open {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+}
+
+
+/* =====================================================
+   INNER STAGE
+   ===================================================== */
+
+.voice-mode-stage {
+    position: relative;
+    z-index: 1;
+
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+
+    width: min(92vw, 520px);
+
+    padding:
+        24px
+        24px
+        28px;
+
+    transform:
+        translateY(8px)
+        scale(0.965);
+
+    opacity: 0;
+
+    transition:
+        transform 240ms cubic-bezier(0.22, 1, 0.36, 1),
+        opacity 200ms ease;
+}
+
+
+.voice-mode-shell.is-open
+.voice-mode-stage {
+    transform:
+        translateY(0)
+        scale(1);
+
+    opacity: 1;
+}
+
+
+/* =====================================================
+   MASCOT SLOT
+   ===================================================== */
+
+.voice-mode-mascot-slot {
+    position: relative;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    width: 220px;
+    height: 220px;
+
+    flex: 0 0 auto;
+}
+
+
+/*
+Mascot itself will be styled in mascot.css.
+*/
+
+.voice-mode-mascot-slot
+#neyoMascot {
+    width: 100%;
+    height: 100%;
+}
+
+
+/* =====================================================
+   STATUS
+   ===================================================== */
+
+.voice-mode-status {
+    margin-top: 20px;
+
+    min-height: 22px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    font-size: 15px;
+    line-height: 1.4;
+    font-weight: 500;
+
+    letter-spacing: -0.01em;
+
+    color:
+        rgba(20, 20, 22, 0.62);
+
+    text-align: center;
+
+    user-select: none;
+
+    transition:
+        opacity 150ms ease,
+        transform 150ms ease;
+}
+
+
+/*
+Optional transition classes
+voice-mode.js may use these later.
+*/
+
+.voice-mode-status.is-changing {
+    opacity: 0;
+    transform: translateY(-3px);
+}
+
+
+.voice-mode-status.is-entering {
+    opacity: 0;
+    transform: translateY(3px);
+}
+
+
+/* =====================================================
+   CONTROLS
+   ===================================================== */
+
+.voice-mode-controls {
+    margin-top: 24px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    gap: 10px;
+
+    width: 100%;
+}
+
+
+/* =====================================================
+   CONTROL BUTTON
+   ===================================================== */
+
+.voice-mode-control {
+    position: relative;
+
+    width: 46px;
+    height: 46px;
+
+    min-width: 46px;
+    min-height: 46px;
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    border: 1px solid
+        rgba(15, 15, 18, 0.08);
+
+    border-radius: 50%;
+
+    background:
+        rgba(255, 255, 255, 0.76);
+
+    -webkit-backdrop-filter:
+        blur(14px);
+
+    backdrop-filter:
+        blur(14px);
+
+    box-shadow:
+        0 3px 10px
+        rgba(0, 0, 0, 0.045);
+
+    color:
+        rgba(20, 20, 22, 0.82);
+
+    padding: 0;
+
+    cursor: pointer;
+
+    outline: none;
+
+    -webkit-tap-highlight-color:
+        transparent;
+
+    transition:
+        background 140ms ease,
+        border-color 140ms ease,
+        box-shadow 140ms ease,
+        transform 140ms ease,
+        opacity 140ms ease;
+}
+
+
+/* =====================================================
+   ICONS
+   ===================================================== */
+
+.voice-mode-control svg {
+    width: 19px;
+    height: 19px;
+
+    stroke-width: 1.9;
+
+    pointer-events: none;
+}
+
+
+/* =====================================================
+   HOVER
+   ===================================================== */
+
+@media (hover: hover) {
+
+    .voice-mode-control:hover {
+        background:
+            rgba(255, 255, 255, 0.94);
+
+        border-color:
+            rgba(15, 15, 18, 0.12);
+
+        box-shadow:
+            0 5px 14px
+            rgba(0, 0, 0, 0.065);
+
+        transform:
+            translateY(-1px);
+    }
+}
+
+
+/* =====================================================
+   ACTIVE PRESS
+   ===================================================== */
+
+.voice-mode-control:active {
+    transform: scale(0.96);
+}
+
+
+/* =====================================================
+   FOCUS
+   ===================================================== */
+
+.voice-mode-control:focus-visible {
+    outline:
+        2px solid
+        rgba(70, 90, 255, 0.42);
+
+    outline-offset:
+        3px;
+}
+
+
+/* =====================================================
+   CONTROL STATES
+   ===================================================== */
+
+.voice-mode-control.is-active {
+    background:
+        rgba(242, 243, 248, 0.98);
+
+    border-color:
+        rgba(15, 15, 18, 0.12);
+
+    color:
+        rgba(15, 15, 18, 0.96);
+}
+
+
+.voice-mode-control.is-muted {
+    opacity: 0.66;
+}
+
+
+/* =====================================================
+   END BUTTON
+   ===================================================== */
+
+.voice-mode-control.voice-mode-end {
+    margin-left: 2px;
+
+    background:
+        rgba(255, 255, 255, 0.82);
+
+    color:
+        rgba(205, 46, 46, 0.92);
+
+    border-color:
+        rgba(205, 46, 46, 0.10);
+}
+
+
+@media (hover: hover) {
+
+    .voice-mode-control.voice-mode-end:hover {
+        background:
+            rgba(255, 245, 245, 0.98);
+
+        border-color:
+            rgba(205, 46, 46, 0.16);
+    }
+}
+
+
+/* =====================================================
+   CAMERA PREVIEW
+   ===================================================== */
+
+.voice-mode-camera-preview {
+    position: absolute;
+
+    right: -10px;
+    bottom: 10px;
+
+    width: 104px;
+    height: 132px;
+
+    border-radius: 18px;
+
+    overflow: hidden;
+
+    background:
+        rgba(245, 245, 247, 0.92);
+
+    border:
+        1px solid
+        rgba(15, 15, 18, 0.07);
+
+    box-shadow:
+        0 8px 26px
+        rgba(0, 0, 0, 0.10);
+
+    opacity: 0;
+    visibility: hidden;
+
+    transform:
+        translateY(6px)
+        scale(0.96);
+
+    transition:
+        opacity 180ms ease,
+        transform 180ms ease,
+        visibility 180ms ease;
+}
+
+
+.voice-mode-camera-preview.is-visible {
+    opacity: 1;
+    visibility: visible;
+
+    transform:
+        translateY(0)
+        scale(1);
+}
+
+
+.voice-mode-camera-preview video {
+    width: 100%;
+    height: 100%;
+
+    display: block;
+
+    object-fit: cover;
+
+    transform: scaleX(-1);
+}
+
+
+/* =====================================================
+   OPTIONAL TINY LABEL
+   ===================================================== */
+
+.voice-mode-substatus {
+    margin-top: 7px;
+
+    font-size: 12px;
+    line-height: 1.3;
+
+    color:
+        rgba(20, 20, 22, 0.38);
+
+    text-align: center;
+
+    min-height: 16px;
+}
+
+
+/* =====================================================
+   DISABLED
+   ===================================================== */
+
+.voice-mode-control:disabled {
+    opacity: 0.42;
+    cursor: default;
+    pointer-events: none;
+}
+
+
+/* =====================================================
+   TABLET
+   ===================================================== */
+
+@media (
+    min-width: 768px
+)
+and (
+    max-width: 1100px
+) {
+
+    .voice-mode-mascot-slot {
+        width: 200px;
+        height: 200px;
+    }
+
+
+    .voice-mode-stage {
+        width:
+            min(90vw, 480px);
+    }
+}
+
+
+/* =====================================================
+   MOBILE
+   ===================================================== */
+
+@media (max-width: 767px) {
+
+    .voice-mode-shell {
+        align-items: center;
+    }
+
+
+    .voice-mode-stage {
+        width: 100%;
+
+        max-width: 100%;
+
+        padding:
+            18px
+            18px
+            calc(
+                22px +
+                env(
+                    safe-area-inset-bottom,
+                    0px
+                )
+            );
+    }
+
+
+    .voice-mode-mascot-slot {
+        width: 168px;
+        height: 168px;
+    }
+
+
+    .voice-mode-status {
+        margin-top: 18px;
+
+        font-size: 14px;
+
+        min-height: 20px;
+    }
+
+
+    .voice-mode-controls {
+        margin-top: 22px;
+
+        gap: 9px;
+    }
+
+
+    .voice-mode-control {
+        width: 46px;
+        height: 46px;
+
+        min-width: 46px;
+        min-height: 46px;
+    }
+
+
+    .voice-mode-control svg {
+        width: 18px;
+        height: 18px;
+    }
+
+
+    .voice-mode-camera-preview {
+        width: 88px;
+        height: 112px;
+
+        right: -4px;
+        bottom: 0;
+
+        border-radius: 16px;
+    }
+}
+
+
+/* =====================================================
+   SMALL PHONE
+   ===================================================== */
+
+@media (max-width: 390px) {
+
+    .voice-mode-mascot-slot {
+        width: 154px;
+        height: 154px;
+    }
+
+
+    .voice-mode-stage {
+        padding-left: 14px;
+        padding-right: 14px;
+    }
+
+
+    .voice-mode-controls {
+        gap: 8px;
+    }
+
+
+    .voice-mode-control {
+        width: 44px;
+        height: 44px;
+
+        min-width: 44px;
+        min-height: 44px;
+    }
+}
+
+
+/* =====================================================
+   SHORT MOBILE LANDSCAPE
+   ===================================================== */
+
+@media (
+    max-height: 520px
+)
+and (
+    orientation: landscape
+) {
+
+    .voice-mode-stage {
+        padding-top: 10px;
+        padding-bottom: 10px;
+    }
+
+
+    .voice-mode-mascot-slot {
+        width: 126px;
+        height: 126px;
+    }
+
+
+    .voice-mode-status {
+        margin-top: 10px;
+    }
+
+
+    .voice-mode-controls {
+        margin-top: 12px;
+    }
+}
+
+
+/* =====================================================
+   REDUCED MOTION
+   ===================================================== */
+
+@media (
+    prefers-reduced-motion: reduce
+) {
+
+    .voice-mode-shell,
+    .voice-mode-stage,
+    .voice-mode-status,
+    .voice-mode-control,
+    .voice-mode-camera-preview {
+        transition:
+            none !important;
+    }
+
+
+    .voice-mode-stage {
+        transform:
+            none !important;
+    }
+}
+
+
+/* =====================================================
+   DARK APPEARANCE
+   ===================================================== */
+
+html[data-theme="dark"]
+.voice-mode-status,
+body.dark
+.voice-mode-status {
+    color:
+        rgba(245, 245, 247, 0.68);
+}
+
+
+html[data-theme="dark"]
+.voice-mode-control,
+body.dark
+.voice-mode-control {
+    background:
+        rgba(42, 42, 46, 0.74);
+
+    border-color:
+        rgba(255, 255, 255, 0.08);
+
+    color:
+        rgba(250, 250, 252, 0.88);
+
+    box-shadow:
+        0 4px 14px
+        rgba(0, 0, 0, 0.16);
+}
+
+
+html[data-theme="dark"]
+.voice-mode-control.is-active,
+body.dark
+.voice-mode-control.is-active {
+    background:
+        rgba(58, 58, 63, 0.92);
+
+    color:
+        rgba(255, 255, 255, 0.96);
+}
+
+
+html[data-theme="dark"]
+.voice-mode-control.voice-mode-end,
+body.dark
+.voice-mode-control.voice-mode-end {
+    color:
+        rgba(255, 116, 116, 0.95);
+}

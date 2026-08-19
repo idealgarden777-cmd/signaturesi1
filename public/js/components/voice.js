@@ -1,23 +1,23 @@
 /*
 =========================================================
-NEYO — GEMINI LIVE VOICE
-AUDIOWORKLET + SMOOTH PLAYBACK VERSION
+NEYO — LIVE VOICE CONVERSATION
+AudioWorklet + Gemini Live
+
+Purpose:
+- Real voice conversation
+- NOT dictation
+- Smooth microphone capture
+- Automatic conversational turn detection
+- Smooth native audio playback
 
 Requires:
 public/js/worklets/voice-input-processor.js
 
 Keeps:
-- current /api/voice-token
-- current Gemini Live WebSocket
-- current composer UI
-- current neo.js isolation
-
-Improves:
-- removes ScriptProcessorNode
-- smoother mic capture
-- ~100 ms network audio packets
-- playback pre-buffer
-- cleaner interruption handling
+- /api/voice-token
+- direct Gemini Live WebSocket
+- existing NEYO composer UI
+- neo.js untouched
 =========================================================
 */
 
@@ -30,7 +30,10 @@ Improves:
        ===================================================== */
 
     function isolateButton(element) {
-        if (!element) return null;
+
+        if (!element) {
+            return null;
+        }
 
         const clone =
             element.cloneNode(true);
@@ -73,6 +76,7 @@ Improves:
         !micBtn ||
         !composerInputRow
     ) {
+
         console.warn(
             "[NEYO Voice] Required DOM missing."
         );
@@ -85,55 +89,69 @@ Improves:
        CONFIG
        ===================================================== */
 
-    const CONFIG = Object.freeze({
+    const CONFIG =
+        Object.freeze({
 
-        tokenEndpoint:
-            "/api/voice-token",
+            tokenEndpoint:
+                "/api/voice-token",
 
-        websocketEndpoint:
-            "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained",
+            websocketEndpoint:
+                "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained",
 
-        workletUrl:
-            "/js/worklets/voice-input-processor.js",
+            workletUrl:
+                "/js/worklets/voice-input-processor.js",
 
-        workletName:
-            "neyo-voice-input-processor",
+            workletName:
+                "neyo-voice-input-processor",
 
-        inputSampleRate:
-            16000,
+            inputSampleRate:
+                16000,
 
-        outputSampleRate:
-            24000,
+            outputSampleRate:
+                24000,
 
-        /*
-        1600 samples @ 16 kHz = 100 ms.
-        Google recommends ~100 ms audio chunks
-        for low-latency Live streaming.
-        */
+            /*
+            1600 samples @ 16kHz = ~100ms.
+            */
 
-        networkChunkSamples:
-            1600,
+            networkChunkSamples:
+                1600,
 
-        workletChunkSize:
-            2048,
+            workletChunkSize:
+                2048,
 
-        analyserFftSize:
-            256,
+            analyserFftSize:
+                256,
 
-        setupTimeoutMs:
-            10000,
+            setupTimeoutMs:
+                10000,
 
-        maxSessionMs:
-            30 * 60 * 1000,
+            maxSessionMs:
+                30 * 60 * 1000,
 
-        /*
-        Small playback lead prevents tiny network
-        timing variations from creating audible gaps.
-        */
+            /*
+            Small output pre-buffer.
 
-        playbackLeadSeconds:
-            0.08
-    });
+            Helps hide small network timing variations
+            without creating noticeable latency.
+            */
+
+            playbackLeadSeconds:
+                0.10,
+
+            /*
+            Natural conversation pause.
+
+            User can briefly pause while speaking
+            without NEYO assuming the turn is finished.
+            */
+
+            silenceDurationMs:
+                700,
+
+            prefixPaddingMs:
+                250
+        });
 
 
     /* =====================================================
@@ -192,8 +210,8 @@ Improves:
 
 
     /*
-    Resampled 16 kHz samples waiting to be
-    packetized into ~100 ms network chunks.
+    16 kHz samples waiting for a complete
+    ~100 ms network packet.
     */
 
     let pendingInput =
@@ -213,6 +231,7 @@ Improves:
     let playbackStarted =
         false;
 
+
     const playingSources =
         new Set();
 
@@ -229,7 +248,7 @@ Improves:
 
 
     console.log(
-        "[NEYO Voice] AudioWorklet Live engine loaded"
+        "[NEYO Voice] Conversation engine loaded"
     );
 
 
@@ -456,7 +475,7 @@ Improves:
                     0.46;
 
 
-                const motion =
+                const movement =
                     0.84 +
                     Math.sin(
                         timestamp *
@@ -474,7 +493,7 @@ Improves:
                             1,
                             smoothLevel *
                             weight *
-                            motion
+                            movement
                         )
                     );
 
@@ -667,21 +686,21 @@ Improves:
             "";
 
 
-        const CHUNK =
+        const chunkSize =
             32768;
 
 
         for (
             let i = 0;
             i < bytes.length;
-            i += CHUNK
+            i += chunkSize
         ) {
 
-            const part =
+            const chunk =
                 bytes.subarray(
                     i,
                     Math.min(
-                        i + CHUNK,
+                        i + chunkSize,
                         bytes.length
                     )
                 );
@@ -689,7 +708,7 @@ Improves:
 
             binary +=
                 String.fromCharCode(
-                    ...part
+                    ...chunk
                 );
         }
 
@@ -703,7 +722,9 @@ Improves:
     function base64ToBytes(value) {
 
         const binary =
-            atob(value);
+            atob(
+                value
+            );
 
 
         const bytes =
@@ -719,7 +740,9 @@ Improves:
         ) {
 
             bytes[i] =
-                binary.charCodeAt(i);
+                binary.charCodeAt(
+                    i
+                );
         }
 
 
@@ -943,8 +966,43 @@ Improves:
     }
 
 
+    function getSampleRateFromMime(
+        mimeType
+    ) {
+
+        const match =
+            String(
+                mimeType || ""
+            ).match(
+                /rate=(\d+)/i
+            );
+
+
+        if (!match) {
+
+            return CONFIG
+                .outputSampleRate;
+        }
+
+
+        const rate =
+            Number(
+                match[1]
+            );
+
+
+        return (
+            Number.isFinite(rate) &&
+            rate > 0
+        )
+            ? rate
+            : CONFIG.outputSampleRate;
+    }
+
+
     async function playAudioChunk(
-        base64
+        base64,
+        mimeType
     ) {
 
         if (!base64) {
@@ -973,19 +1031,23 @@ Improves:
         }
 
 
+        const sampleRate =
+            getSampleRateFromMime(
+                mimeType
+            );
+
+
         const buffer =
             context.createBuffer(
                 1,
                 samples.length,
-                CONFIG.outputSampleRate
+                sampleRate
             );
 
 
         buffer
             .getChannelData(0)
-            .set(
-                samples
-            );
+            .set(samples);
 
 
         const source =
@@ -1002,9 +1064,9 @@ Improves:
 
 
         /*
-        First chunk gets a tiny pre-buffer.
-        After that every chunk is placed exactly
-        after the previous scheduled chunk.
+        First audio chunk gets a small lead.
+
+        Following chunks are scheduled continuously.
         */
 
         if (!playbackStarted) {
@@ -1023,12 +1085,12 @@ Improves:
         } else if (
             nextPlaybackTime <
             context.currentTime +
-            0.01
+            0.015
         ) {
 
             /*
-            Network fell behind.
-            Recover without stacking old audio.
+            If network briefly falls behind,
+            restart slightly ahead of realtime.
             */
 
             nextPlaybackTime =
@@ -1111,6 +1173,7 @@ Improves:
                         "same-origin",
 
                     headers: {
+
                         "Accept":
                             "application/json"
                     }
@@ -1133,7 +1196,9 @@ Improves:
                     raw
                 );
 
-        } catch {}
+        } catch {
+            // handled below
+        }
 
 
         if (!response.ok) {
@@ -1162,7 +1227,7 @@ Improves:
 
 
     /* =====================================================
-       START MICROPHONE — AUDIOWORKLET
+       MICROPHONE — AUDIOWORKLET
        ===================================================== */
 
     async function startMicrophone() {
@@ -1227,10 +1292,6 @@ Improves:
             inputContext.sampleRate;
 
 
-        /*
-        Load AudioWorklet module.
-        */
-
         await inputContext
             .audioWorklet
             .addModule(
@@ -1246,7 +1307,7 @@ Improves:
 
 
         /* ---------------------------------------------
-           Analyser
+           ANALYSER
            --------------------------------------------- */
 
         analyser =
@@ -1258,7 +1319,8 @@ Improves:
             CONFIG.analyserFftSize;
 
 
-        analyser.smoothingTimeConstant =
+        analyser
+            .smoothingTimeConstant =
             0.82;
 
 
@@ -1274,7 +1336,7 @@ Improves:
 
 
         /* ---------------------------------------------
-           AudioWorklet
+           AUDIO WORKLET
            --------------------------------------------- */
 
         workletNode =
@@ -1282,6 +1344,7 @@ Improves:
                 inputContext,
                 CONFIG.workletName,
                 {
+
                     numberOfInputs:
                         1,
 
@@ -1307,8 +1370,8 @@ Improves:
 
 
         /*
-        AudioWorklet needs to remain in an active
-        graph, but we do not want mic monitor audio.
+        Keep worklet graph alive without playing
+        microphone audio through speakers.
         */
 
         silentGain.gain.value =
@@ -1385,6 +1448,7 @@ Improves:
 
 
         workletNode.port.postMessage({
+
             type:
                 "start"
         });
@@ -1417,10 +1481,12 @@ Improves:
 
             try {
 
-                workletNode.port.postMessage({
-                    type:
-                        "stop"
-                });
+                workletNode.port
+                    .postMessage({
+
+                        type:
+                            "stop"
+                    });
 
             } catch {}
 
@@ -1543,6 +1609,7 @@ Improves:
             typeof data ===
             "string"
         ) {
+
             return data;
         }
 
@@ -1550,6 +1617,7 @@ Improves:
         if (
             data instanceof Blob
         ) {
+
             return data.text();
         }
 
@@ -1567,7 +1635,9 @@ Improves:
 
 
         if (
-            ArrayBuffer.isView(data)
+            ArrayBuffer.isView(
+                data
+            )
         ) {
 
             return new TextDecoder(
@@ -1585,12 +1655,16 @@ Improves:
 
 
     /* =====================================================
-       HANDLE SERVER MESSAGE
+       GEMINI SERVER MESSAGE
        ===================================================== */
 
     async function handleServerMessage(
         message
     ) {
+
+        /* ---------------------------------------------
+           SETUP COMPLETE
+           --------------------------------------------- */
 
         if (
             message?.setupComplete
@@ -1671,8 +1745,10 @@ Improves:
 
 
         /*
-        Stop queued audio immediately when Gemini
-        reports user interruption.
+        User started speaking while NEYO
+        was talking.
+
+        Stop queued model audio immediately.
         */
 
         if (
@@ -1691,6 +1767,10 @@ Improves:
                 ?.parts ||
             [];
 
+
+        /*
+        Process every returned part.
+        */
 
         for (
             const part
@@ -1718,7 +1798,8 @@ Improves:
             ) {
 
                 await playAudioChunk(
-                    inline.data
+                    inline.data,
+                    inline.mimeType
                 );
             }
         }
@@ -1726,7 +1807,7 @@ Improves:
 
 
     /* =====================================================
-       START SESSION
+       START CONVERSATION
        ===================================================== */
 
     async function startConversation() {
@@ -1742,6 +1823,7 @@ Improves:
 
         connecting =
             true;
+
 
         setupComplete =
             false;
@@ -1764,8 +1846,17 @@ Improves:
             }
 
 
+            /*
+            Unlock audio output during the
+            original user click.
+            */
+
             await ensureOutputContext();
 
+
+            /* -----------------------------------------
+               GET EPHEMERAL TOKEN
+               ----------------------------------------- */
 
             const credentials =
                 await fetchVoiceToken();
@@ -1776,6 +1867,10 @@ Improves:
                 credentials.model
             );
 
+
+            /* -----------------------------------------
+               OPEN GEMINI LIVE SOCKET
+               ----------------------------------------- */
 
             const socketUrl =
                 `${CONFIG.websocketEndpoint}?access_token=${
@@ -1795,12 +1890,24 @@ Improves:
                 "arraybuffer";
 
 
+            /* -----------------------------------------
+               SOCKET OPEN
+               ----------------------------------------- */
+
             socket.onopen =
                 () => {
 
                     console.log(
                         "[NEYO Voice] WebSocket opened"
                     );
+
+
+                    /*
+                    This is a voice CONVERSATION.
+
+                    Not transcription.
+                    Not dictation.
+                    */
 
 
                     const setupMessage = {
@@ -1810,11 +1917,78 @@ Improves:
                             model:
                                 `models/${credentials.model}`,
 
-                            generationConfig: {
 
-                                responseModalities: [
-                                    "AUDIO"
+                            /*
+                            Native spoken response.
+                            */
+
+                            responseModalities: [
+                                "AUDIO"
+                            ],
+
+
+                            /*
+                            Explicit conversational identity.
+                            */
+
+                            systemInstruction: {
+
+                                parts: [
+
+                                    {
+
+                                        text:
+`You are NEYO in a real-time spoken conversation.
+
+This is a live voice conversation, not dictation and not transcription.
+
+Your job is to understand what the user says and respond naturally.
+
+Rules:
+
+- Never merely repeat or transcribe what the user said.
+- Do not behave like a speech-to-text system.
+- If the user asks a question, answer the question.
+- If the user makes a request, respond to the request.
+- Continue naturally across multiple conversational turns.
+- Listen to the meaning and intent, not just individual words.
+- Speak naturally and conversationally.
+- Keep responses reasonably concise unless the user asks for detail.
+- Match the user's language naturally.
+- If the user speaks Urdu, respond naturally in Urdu.
+- If the user speaks English, respond naturally in English.
+- If the user mixes English, Urdu, Hindi, Hinglish, or Roman Urdu, respond naturally in that mixed conversational style when appropriate.
+- Do not announce that you are transcribing.
+- Do not read the user's words back unless they explicitly ask you to repeat them.
+- If something is genuinely unclear, ask one short clarification question.
+- Avoid unnecessary filler.
+- Act like a real conversational voice assistant named NEYO.`
+                                    }
                                 ]
+                            },
+
+
+                            /*
+                            Automatic conversational turn detection.
+
+                            ~700 ms silence allows normal breathing
+                            and brief thinking pauses without splitting
+                            every sentence into separate turns.
+                            */
+
+                            realtimeInputConfig: {
+
+                                automaticActivityDetection: {
+
+                                    disabled:
+                                        false,
+
+                                    prefixPaddingMs:
+                                        CONFIG.prefixPaddingMs,
+
+                                    silenceDurationMs:
+                                        CONFIG.silenceDurationMs
+                                }
                             }
                         }
                     };
@@ -1828,7 +2002,7 @@ Improves:
 
 
                     console.log(
-                        "[NEYO Voice] Setup sent"
+                        "[NEYO Voice] Conversation setup sent"
                     );
 
 
@@ -1857,6 +2031,10 @@ Improves:
                         );
                 };
 
+
+            /* -----------------------------------------
+               SOCKET MESSAGE
+               ----------------------------------------- */
 
             socket.onmessage =
                 async event => {
@@ -1890,6 +2068,10 @@ Improves:
                 };
 
 
+            /* -----------------------------------------
+               SOCKET ERROR
+               ----------------------------------------- */
+
             socket.onerror =
                 event => {
 
@@ -1900,12 +2082,17 @@ Improves:
                 };
 
 
+            /* -----------------------------------------
+               SOCKET CLOSE
+               ----------------------------------------- */
+
             socket.onclose =
                 event => {
 
                     console.log(
                         "[NEYO Voice] WebSocket closed",
                         {
+
                             code:
                                 event.code,
 
@@ -1927,6 +2114,7 @@ Improves:
                     ) {
 
                         stopConversation({
+
                             closeSocket:
                                 false
                         });
@@ -1945,11 +2133,22 @@ Improves:
             connecting =
                 false;
 
+
             active =
                 false;
 
+
             setupComplete =
                 false;
+
+
+            clearTimeout(
+                setupTimer
+            );
+
+
+            setupTimer =
+                0;
 
 
             await stopMicrophone();
@@ -1976,11 +2175,13 @@ Improves:
 
 
     /* =====================================================
-       STOP SESSION
+       STOP CONVERSATION
        ===================================================== */
 
     async function stopConversation({
+
         closeSocket = true
+
     } = {}) {
 
         if (stopping) {
@@ -2004,8 +2205,10 @@ Improves:
         active =
             false;
 
+
         connecting =
             false;
+
 
         setupComplete =
             false;
@@ -2069,7 +2272,7 @@ Improves:
 
 
     /* =====================================================
-       BUTTONS
+       MIC BUTTON
        ===================================================== */
 
     micBtn.addEventListener(
@@ -2103,6 +2306,10 @@ Improves:
         true
     );
 
+
+    /* =====================================================
+       STOP BUTTON
+       ===================================================== */
 
     stopRecBtn?.addEventListener(
         "click",
@@ -2145,7 +2352,7 @@ Improves:
 
 
     /* =====================================================
-       CLEANUP
+       PAGE CLEANUP
        ===================================================== */
 
     window.addEventListener(
@@ -2167,8 +2374,13 @@ Improves:
 
     resetWaveform();
 
+
     syncUi();
 
+
+    /* =====================================================
+       PUBLIC API
+       ===================================================== */
 
     window.NeyoVoice =
         Object.freeze({
@@ -2188,7 +2400,7 @@ Improves:
                     connecting,
 
             engine:
-                "gemini-live-audioworklet"
+                "gemini-live-conversation-audioworklet"
         });
 
 })();

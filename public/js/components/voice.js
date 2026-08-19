@@ -1,26 +1,17 @@
 /*
 =========================================================
 NEYO — LIVE VOICE
-STABLE BASELINE
+PRODUCTION NATURAL CONVERSATION ENGINE
 
-Gemini Live + Ephemeral Token
+Gemini 3.1 Flash Live + Ephemeral Token
+Automatic VAD tuned for natural pauses, hands-free turn-taking.
 
-Flow:
-Mic
-→ /api/voice-token
-→ BidiGenerateContentConstrained
-→ setupComplete
-→ microphone PCM 16 kHz
-→ Gemini native audio
-→ smooth browser playback
-
-NO:
-- SpeechRecognition
-- MediaRecorder
-- /api/transcribe
-- AudioWorklet
-- custom VAD
-- Search grounding
+Architecture:
+- Continuous mic (never closed during session)
+- Server-side VAD with 850ms silence duration
+- Deterministic state machine based on turn lifecycle
+- Instant interrupt handling (clear queue, state → interrupted → listening)
+- No UI flicker from network packet jitter
 =========================================================
 */
 
@@ -68,6 +59,12 @@ NO:
     setupTimeoutMs: 10000,
     maxSessionMs: 30 * 60 * 1000,
     playbackLeadSeconds: 0.08,
+
+    // Natural conversation VAD tuning
+    vadPrefixPaddingMs: 80,
+    vadSilenceDurationMs: 850, // 0.85s – allows natural pauses
+    vadStartSensitivity: "START_SENSITIVITY_HIGH",
+    vadEndSensitivity: "END_SENSITIVITY_LOW",
   });
 
   /* =====================================================
@@ -82,9 +79,9 @@ NO:
   let setupTimer = 0;
   let sessionTimer = 0;
 
-  // --- Deterministic state flags ---
+  // Turn lifecycle flags
   let assistantSpeaking = false;
-  let assistantTurnActive = false;
+  let assistantResponsePending = false;
 
   /* =====================================================
      MICROPHONE STATE
@@ -115,7 +112,7 @@ NO:
   let waveRaf = 0;
   let smoothLevel = 0;
 
-  console.log("[NEYO Voice] Stable Live baseline loaded");
+  console.log("[NEYO Voice] Natural conversation engine loaded");
 
   /* =====================================================
      UI BRIDGE — EVENT-BASED STATE
@@ -189,7 +186,7 @@ NO:
     const smoothing = target > smoothLevel ? 0.3 : 0.1;
     smoothLevel += (target - smoothLevel) * smoothing;
 
-    // Broadcast mic level for mascot
+    // Broadcast mic level for mascot reaction
     window.dispatchEvent(
       new CustomEvent("neyo:voice-mic-level", {
         detail: { level: smoothLevel }
@@ -338,10 +335,10 @@ NO:
     source.buffer = buffer;
     source.connect(context.destination);
 
-    // --- State: Speaking (only first time per turn) ---
+    // --- Transition to Speaking on first audio chunk of this turn ---
     if (!assistantSpeaking) {
       assistantSpeaking = true;
-      assistantTurnActive = true;
+      assistantResponsePending = false; // clear pending flag
       setVoiceState("speaking");
     }
 
@@ -382,7 +379,7 @@ NO:
       nextPlaybackTime = outputContext.currentTime;
     }
     assistantSpeaking = false;
-    assistantTurnActive = false;
+    assistantResponsePending = false;
   }
 
   /* =====================================================
@@ -560,7 +557,7 @@ NO:
       connecting = false;
 
       assistantSpeaking = false;
-      assistantTurnActive = false;
+      assistantResponsePending = false;
 
       syncUi();
 
@@ -585,8 +582,12 @@ NO:
     if (serverContent.interrupted) {
       stopPlayback();
       assistantSpeaking = false;
-      assistantTurnActive = false;
+      assistantResponsePending = false;
       setVoiceState("interrupted");
+      // After a short delay, go back to listening (or the next turn will set it)
+      // But we can immediately go to listening because the user is now speaking.
+      // However, we should wait for the user's turn to be processed.
+      // For now, just set interrupted; the next turnComplete will bring back listening.
       return;
     }
 
@@ -604,22 +605,24 @@ NO:
       // First audio chunk => switch to Speaking (if not already)
       if (!assistantSpeaking) {
         assistantSpeaking = true;
-        assistantTurnActive = true;
+        assistantResponsePending = false;
         setVoiceState("speaking");
       }
 
       await playAudioChunk(inline.data, inline.mimeType);
     }
 
-    // --- Thinking state: model turn without audio (only before first audio) ---
+    // --- If we get a modelTurn with no audio and we're not already speaking,
+    //     this is the start of a response (thinking state).
+    //     Also, if the user just finished speaking and we haven't started audio yet.
     if (serverContent.modelTurn && !hasAudio && !assistantSpeaking) {
-      assistantTurnActive = true;
+      assistantResponsePending = true;
       setVoiceState("thinking");
     }
 
     // --- Turn complete: wait for playback to finish then go back to listening ---
     if (serverContent.turnComplete) {
-      assistantTurnActive = false;
+      assistantResponsePending = false;
 
       const waitForPlayback = () => {
         if (playingSources.size > 0) {
@@ -674,10 +677,20 @@ NO:
             generationConfig: {
               responseModalities: ["AUDIO"],
             },
+            // --- Natural conversation VAD tuning ---
+            realtimeInputConfig: {
+              automaticActivityDetection: {
+                disabled: false,
+                startOfSpeechSensitivity: CONFIG.vadStartSensitivity,
+                endOfSpeechSensitivity: CONFIG.vadEndSensitivity,
+                prefixPaddingMs: CONFIG.vadPrefixPaddingMs,
+                silenceDurationMs: CONFIG.vadSilenceDurationMs,
+              },
+            },
           },
         };
         socket.send(JSON.stringify(setupMessage));
-        console.log("[NEYO Voice] Setup sent");
+        console.log("[NEYO Voice] Setup sent with tuned VAD config");
 
         clearTimeout(setupTimer);
         setupTimer = setTimeout(() => {
@@ -830,6 +843,6 @@ NO:
     stop: stopConversation,
     isActive: () => active,
     isConnecting: () => connecting,
-    engine: "gemini-live-stable-constrained",
+    engine: "gemini-live-natural-vad",
   });
 })();

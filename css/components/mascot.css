@@ -1,0 +1,1206 @@
+/*
+=========================================================
+NEYO — MASCOT VISUAL SYSTEM
+Production Mascot Styling
+
+Owns:
+- rounded-square mascot face
+- eye shapes
+- mouth bars
+- blink
+- idle/listening/thinking/speaking/error visuals
+- tone variations
+- premium motion
+
+Does NOT own:
+- voice engine
+- Gemini
+- layout shell
+- camera
+=========================================================
+*/
+
+
+/* =====================================================
+   ROOT MASCOT
+   ===================================================== */
+
+#neyoMascot {
+    --neyo-mic-level: 0;
+    --neyo-output-level: 0;
+
+    position: relative;
+
+    width: 100%;
+    height: 100%;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    opacity: 1;
+
+    transform:
+        translateZ(0);
+
+    user-select: none;
+
+    -webkit-user-select: none;
+}
+
+
+/* =====================================================
+   FACE
+   ===================================================== */
+
+.neyo-mascot-face {
+    position: relative;
+
+    width: 82%;
+    aspect-ratio: 1;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    border-radius: 29%;
+
+    background:
+        linear-gradient(
+            145deg,
+            rgba(255, 255, 255, 0.99),
+            rgba(245, 245, 247, 0.98)
+        );
+
+    border:
+        1px solid
+        rgba(20, 20, 24, 0.055);
+
+    box-shadow:
+        0 12px 34px
+        rgba(0, 0, 0, 0.075),
+        inset 0 1px 0
+        rgba(255, 255, 255, 0.9);
+
+    overflow: hidden;
+
+    transform:
+        translateY(0)
+        scale(1);
+
+    transform-origin: center;
+
+    transition:
+        transform 220ms
+        cubic-bezier(0.22, 1, 0.36, 1),
+        box-shadow 220ms ease,
+        border-radius 260ms ease;
+}
+
+
+/* =====================================================
+   INNER FACE AREA
+   ===================================================== */
+
+.neyo-mascot-features {
+    position: absolute;
+    inset: 0;
+
+    width: 100%;
+    height: 100%;
+
+    pointer-events: none;
+}
+
+
+/* =====================================================
+   IDLE BREATHING
+   ===================================================== */
+
+#neyoMascot[data-phase="idle"]
+.neyo-mascot-face {
+    animation:
+        neyoMascotIdleBreath
+        3.2s
+        ease-in-out
+        infinite;
+}
+
+
+@keyframes neyoMascotIdleBreath {
+
+    0%,
+    100% {
+        transform:
+            translateY(0)
+            scale(1);
+    }
+
+    50% {
+        transform:
+            translateY(-2px)
+            scale(1.008);
+    }
+}
+
+
+/* =====================================================
+   LISTENING
+   ===================================================== */
+
+#neyoMascot[data-phase="listening"]
+.neyo-mascot-face {
+    transform:
+        scale(
+            calc(
+                1 +
+                (
+                    var(--neyo-mic-level)
+                    * 0.015
+                )
+            )
+        );
+
+    box-shadow:
+        0 14px 36px
+        rgba(0, 0, 0, 0.08),
+        0 0
+        calc(
+            8px +
+            (
+                var(--neyo-mic-level)
+                * 12px
+            )
+        )
+        rgba(
+            90,
+            105,
+            255,
+            calc(
+                0.02 +
+                (
+                    var(--neyo-mic-level)
+                    * 0.10
+                )
+            )
+        );
+}
+
+
+/* =====================================================
+   THINKING
+   ===================================================== */
+
+#neyoMascot[data-phase="thinking"]
+.neyo-mascot-face {
+    transform:
+        scale(0.995);
+
+    box-shadow:
+        0 12px 32px
+        rgba(0, 0, 0, 0.07);
+}
+
+
+/* =====================================================
+   SPEAKING
+   ===================================================== */
+
+#neyoMascot[data-phase="speaking"]
+.neyo-mascot-face {
+    transform:
+        scale(
+            calc(
+                1 +
+                (
+                    var(--neyo-output-level)
+                    * 0.012
+                )
+            )
+        );
+}
+
+
+/* =====================================================
+   INTERRUPTED
+   ===================================================== */
+
+#neyoMascot[data-phase="interrupted"]
+.neyo-mascot-face {
+    animation:
+        neyoMascotInterrupt
+        150ms
+        ease-out
+        1;
+}
+
+
+@keyframes neyoMascotInterrupt {
+
+    0% {
+        transform: scale(1);
+    }
+
+    45% {
+        transform: scale(0.985);
+    }
+
+    100% {
+        transform: scale(1);
+    }
+}
+
+
+/* =====================================================
+   ERROR
+   ===================================================== */
+
+#neyoMascot[data-phase="error"]
+.neyo-mascot-face {
+    animation:
+        neyoMascotErrorShake
+        220ms
+        ease-out
+        1;
+}
+
+
+@keyframes neyoMascotErrorShake {
+
+    0% {
+        transform: translateX(0);
+    }
+
+    30% {
+        transform: translateX(-2px);
+    }
+
+    65% {
+        transform: translateX(2px);
+    }
+
+    100% {
+        transform: translateX(0);
+    }
+}
+
+
+/* =====================================================
+   EYE BASE
+   ===================================================== */
+
+.neyo-eye {
+    position: absolute;
+
+    top: 34%;
+
+    width: 22%;
+    height: 18%;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    transform-origin: center;
+
+    transition:
+        transform 180ms
+        cubic-bezier(0.22, 1, 0.36, 1),
+        opacity 160ms ease;
+}
+
+
+.neyo-eye-left {
+    left: 21%;
+}
+
+
+.neyo-eye-right {
+    right: 21%;
+}
+
+
+/* =====================================================
+   EYE CORE
+   ===================================================== */
+
+.neyo-eye-core {
+    position: relative;
+
+    width: 100%;
+    height: 100%;
+
+    display: block;
+
+    transform-origin: center;
+
+    transition:
+        width 220ms
+        cubic-bezier(0.22, 1, 0.36, 1),
+        height 220ms
+        cubic-bezier(0.22, 1, 0.36, 1),
+        border-radius 220ms
+        cubic-bezier(0.22, 1, 0.36, 1),
+        transform 220ms
+        cubic-bezier(0.22, 1, 0.36, 1),
+        background 180ms ease,
+        border 180ms ease;
+}
+
+
+/* =====================================================
+   ARC EYES
+   ===================================================== */
+
+#neyoMascot[data-eye="arc"]
+.neyo-eye-core {
+    width: 100%;
+    height: 65%;
+
+    background: transparent;
+
+    border:
+        7px solid
+        rgba(18, 18, 21, 0.96);
+
+    border-left-color:
+        transparent;
+
+    border-right-color:
+        transparent;
+
+    border-bottom-color:
+        transparent;
+
+    border-radius:
+        50%
+        50%
+        0
+        0;
+
+    transform:
+        translateY(3px);
+}
+
+
+/* =====================================================
+   OVAL EYES
+   ===================================================== */
+
+#neyoMascot[data-eye="oval"]
+.neyo-eye-core {
+    width: 42%;
+    height: 92%;
+
+    background:
+        rgba(18, 18, 21, 0.96);
+
+    border:
+        none;
+
+    border-radius: 999px;
+
+    transform: none;
+}
+
+
+/* =====================================================
+   ROUND EYES
+   ===================================================== */
+
+#neyoMascot[data-eye="round"]
+.neyo-eye-core {
+    width: 68%;
+    height: 68%;
+
+    background:
+        rgba(18, 18, 21, 0.96);
+
+    border:
+        none;
+
+    border-radius: 50%;
+
+    transform: none;
+}
+
+
+/* =====================================================
+   SQUARE EYES
+   ===================================================== */
+
+#neyoMascot[data-eye="square"]
+.neyo-eye-core {
+    width: 66%;
+    height: 66%;
+
+    background:
+        rgba(18, 18, 21, 0.96);
+
+    border:
+        none;
+
+    border-radius: 25%;
+
+    transform: none;
+}
+
+
+/* =====================================================
+   HALF EYES
+   ===================================================== */
+
+#neyoMascot[data-eye="half"]
+.neyo-eye-core {
+    width: 78%;
+    height: 26%;
+
+    background:
+        rgba(18, 18, 21, 0.96);
+
+    border:
+        none;
+
+    border-radius: 999px;
+
+    transform:
+        translateY(2px);
+}
+
+
+/* =====================================================
+   LOOP EYES
+   ===================================================== */
+
+#neyoMascot[data-eye="loop"]
+.neyo-eye-core {
+    width: 72%;
+    height: 72%;
+
+    background:
+        transparent;
+
+    border:
+        5px solid
+        rgba(18, 18, 21, 0.95);
+
+    border-radius:
+        42%
+        58%
+        52%
+        48%;
+
+    animation:
+        neyoEyeLoop
+        1.2s
+        cubic-bezier(0.4, 0, 0.2, 1)
+        infinite;
+}
+
+
+#neyoMascot[data-eye="loop"]
+.neyo-eye-right
+.neyo-eye-core {
+    animation-delay:
+        -0.35s;
+}
+
+
+@keyframes neyoEyeLoop {
+
+    0% {
+        transform:
+            rotate(0deg)
+            scale(1);
+
+        border-radius:
+            42%
+            58%
+            52%
+            48%;
+    }
+
+    35% {
+        transform:
+            rotate(90deg)
+            scale(0.92);
+
+        border-radius:
+            55%
+            45%
+            40%
+            60%;
+    }
+
+    70% {
+        transform:
+            rotate(190deg)
+            scale(1.02);
+
+        border-radius:
+            48%
+            52%
+            60%
+            40%;
+    }
+
+    100% {
+        transform:
+            rotate(360deg)
+            scale(1);
+
+        border-radius:
+            42%
+            58%
+            52%
+            48%;
+    }
+}
+
+
+/* =====================================================
+   BLINK
+   ===================================================== */
+
+#neyoMascot.is-blinking
+.neyo-eye {
+    transform:
+        scaleY(0.12);
+}
+
+
+#neyoMascot.is-blink-hold
+.neyo-eye {
+    transform:
+        scaleY(0.06);
+}
+
+
+/* =====================================================
+   CURIOUS ASYMMETRY
+   ===================================================== */
+
+#neyoMascot[data-tone="curious"]
+.neyo-eye-left {
+    transform:
+        translateY(1px)
+        rotate(-4deg);
+}
+
+
+#neyoMascot[data-tone="curious"]
+.neyo-eye-right {
+    transform:
+        translateY(-2px)
+        rotate(5deg);
+}
+
+
+/* =====================================================
+   HAPPY EYES
+   ===================================================== */
+
+#neyoMascot[data-tone="happy"]
+.neyo-eye {
+    transform:
+        translateY(1px);
+}
+
+
+/* =====================================================
+   FOCUSED EYES
+   ===================================================== */
+
+#neyoMascot[data-tone="focused"]
+.neyo-eye {
+    transform:
+        scaleX(0.94);
+}
+
+
+/* =====================================================
+   MOUTH BASE
+   ===================================================== */
+
+.neyo-mouth {
+    position: absolute;
+
+    left: 50%;
+    top: 61%;
+
+    width: 38%;
+    height: 22%;
+
+    transform:
+        translateX(-50%);
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    gap: 5%;
+
+    transition:
+        transform 180ms ease,
+        width 180ms ease,
+        opacity 180ms ease;
+}
+
+
+/* =====================================================
+   MOUTH BARS
+   ===================================================== */
+
+.neyo-mouth-bar {
+    position: relative;
+
+    width: 10%;
+    min-width: 4px;
+
+    height: 22%;
+
+    border-radius: 999px;
+
+    background:
+        rgba(18, 18, 21, 0.96);
+
+    transform-origin: center bottom;
+
+    transition:
+        height 110ms linear,
+        transform 160ms ease,
+        border-radius 180ms ease;
+}
+
+
+/* =====================================================
+   SMILE MOUTH
+   ===================================================== */
+
+#neyoMascot[data-mouth="smile"]
+.neyo-mouth {
+    transform:
+        translateX(-50%)
+        translateY(-1px);
+}
+
+
+#neyoMascot[data-mouth="smile"]
+.neyo-mouth-bar:nth-child(1),
+#neyoMascot[data-mouth="smile"]
+.neyo-mouth-bar:nth-child(5) {
+    height: 28%;
+}
+
+
+#neyoMascot[data-mouth="smile"]
+.neyo-mouth-bar:nth-child(2),
+#neyoMascot[data-mouth="smile"]
+.neyo-mouth-bar:nth-child(4) {
+    height: 48%;
+}
+
+
+#neyoMascot[data-mouth="smile"]
+.neyo-mouth-bar:nth-child(3) {
+    height: 62%;
+}
+
+
+/* =====================================================
+   LISTENING MOUTH
+   ===================================================== */
+
+#neyoMascot[data-mouth="listening"]
+.neyo-mouth-bar:nth-child(1),
+#neyoMascot[data-mouth="listening"]
+.neyo-mouth-bar:nth-child(5) {
+    height:
+        calc(
+            17% +
+            (
+                var(--neyo-mic-level)
+                * 8%
+            )
+        );
+}
+
+
+#neyoMascot[data-mouth="listening"]
+.neyo-mouth-bar:nth-child(2),
+#neyoMascot[data-mouth="listening"]
+.neyo-mouth-bar:nth-child(4) {
+    height:
+        calc(
+            22% +
+            (
+                var(--neyo-mic-level)
+                * 12%
+            )
+        );
+}
+
+
+#neyoMascot[data-mouth="listening"]
+.neyo-mouth-bar:nth-child(3) {
+    height:
+        calc(
+            27% +
+            (
+                var(--neyo-mic-level)
+                * 15%
+            )
+        );
+}
+
+
+/* =====================================================
+   NEUTRAL MOUTH
+   ===================================================== */
+
+#neyoMascot[data-mouth="neutral"]
+.neyo-mouth {
+    width: 30%;
+}
+
+
+#neyoMascot[data-mouth="neutral"]
+.neyo-mouth-bar {
+    height: 22%;
+}
+
+
+/* =====================================================
+   SPEAKING MOUTH
+   ===================================================== */
+
+#neyoMascot[data-mouth="speak-soft"]
+.neyo-mouth-bar,
+#neyoMascot[data-mouth="speak-active"]
+.neyo-mouth-bar,
+#neyoMascot[data-mouth="serious"]
+.neyo-mouth-bar {
+    transition:
+        height 70ms linear;
+}
+
+
+/* OUTER 35% */
+
+#neyoMascot[data-mouth="speak-soft"]
+.neyo-mouth-bar:nth-child(1),
+#neyoMascot[data-mouth="speak-soft"]
+.neyo-mouth-bar:nth-child(5) {
+    height:
+        calc(
+            18% +
+            (
+                var(--neyo-output-level)
+                * 28%
+            )
+        );
+}
+
+
+/* 70% */
+
+#neyoMascot[data-mouth="speak-soft"]
+.neyo-mouth-bar:nth-child(2),
+#neyoMascot[data-mouth="speak-soft"]
+.neyo-mouth-bar:nth-child(4) {
+    height:
+        calc(
+            24% +
+            (
+                var(--neyo-output-level)
+                * 48%
+            )
+        );
+}
+
+
+/* CENTER 100% */
+
+#neyoMascot[data-mouth="speak-soft"]
+.neyo-mouth-bar:nth-child(3) {
+    height:
+        calc(
+            30% +
+            (
+                var(--neyo-output-level)
+                * 64%
+            )
+        );
+}
+
+
+/* =====================================================
+   ACTIVE SPEAKING
+   ===================================================== */
+
+#neyoMascot[data-mouth="speak-active"]
+.neyo-mouth {
+    width: 42%;
+}
+
+
+#neyoMascot[data-mouth="speak-active"]
+.neyo-mouth-bar:nth-child(1),
+#neyoMascot[data-mouth="speak-active"]
+.neyo-mouth-bar:nth-child(5) {
+    height:
+        calc(
+            20% +
+            (
+                var(--neyo-output-level)
+                * 34%
+            )
+        );
+}
+
+
+#neyoMascot[data-mouth="speak-active"]
+.neyo-mouth-bar:nth-child(2),
+#neyoMascot[data-mouth="speak-active"]
+.neyo-mouth-bar:nth-child(4) {
+    height:
+        calc(
+            28% +
+            (
+                var(--neyo-output-level)
+                * 54%
+            )
+        );
+}
+
+
+#neyoMascot[data-mouth="speak-active"]
+.neyo-mouth-bar:nth-child(3) {
+    height:
+        calc(
+            34% +
+            (
+                var(--neyo-output-level)
+                * 66%
+            )
+        );
+}
+
+
+/* =====================================================
+   SERIOUS SPEAKING
+   ===================================================== */
+
+#neyoMascot[data-mouth="serious"]
+.neyo-mouth {
+    width: 28%;
+}
+
+
+#neyoMascot[data-mouth="serious"]
+.neyo-mouth-bar:nth-child(1),
+#neyoMascot[data-mouth="serious"]
+.neyo-mouth-bar:nth-child(5) {
+    height:
+        calc(
+            17% +
+            (
+                var(--neyo-output-level)
+                * 18%
+            )
+        );
+}
+
+
+#neyoMascot[data-mouth="serious"]
+.neyo-mouth-bar:nth-child(2),
+#neyoMascot[data-mouth="serious"]
+.neyo-mouth-bar:nth-child(4) {
+    height:
+        calc(
+            22% +
+            (
+                var(--neyo-output-level)
+                * 32%
+            )
+        );
+}
+
+
+#neyoMascot[data-mouth="serious"]
+.neyo-mouth-bar:nth-child(3) {
+    height:
+        calc(
+            26% +
+            (
+                var(--neyo-output-level)
+                * 42%
+            )
+        );
+}
+
+
+/* =====================================================
+   SURPRISE MOUTH
+   ===================================================== */
+
+#neyoMascot[data-mouth="surprise"]
+.neyo-mouth {
+    width: 24%;
+}
+
+
+#neyoMascot[data-mouth="surprise"]
+.neyo-mouth-bar {
+    height: 60%;
+}
+
+
+#neyoMascot[data-mouth="surprise"]
+.neyo-mouth-bar:nth-child(1),
+#neyoMascot[data-mouth="surprise"]
+.neyo-mouth-bar:nth-child(5) {
+    opacity: 0.2;
+}
+
+
+#neyoMascot[data-mouth="surprise"]
+.neyo-mouth-bar:nth-child(2),
+#neyoMascot[data-mouth="surprise"]
+.neyo-mouth-bar:nth-child(4) {
+    height: 72%;
+}
+
+
+/* =====================================================
+   ERROR MOUTH
+   ===================================================== */
+
+#neyoMascot[data-mouth="error"]
+.neyo-mouth {
+    width: 31%;
+
+    transform:
+        translateX(-50%)
+        rotate(-2deg);
+}
+
+
+#neyoMascot[data-mouth="error"]
+.neyo-mouth-bar:nth-child(1) {
+    height: 18%;
+}
+
+
+#neyoMascot[data-mouth="error"]
+.neyo-mouth-bar:nth-child(2) {
+    height: 28%;
+}
+
+
+#neyoMascot[data-mouth="error"]
+.neyo-mouth-bar:nth-child(3) {
+    height: 18%;
+}
+
+
+#neyoMascot[data-mouth="error"]
+.neyo-mouth-bar:nth-child(4) {
+    height: 31%;
+}
+
+
+#neyoMascot[data-mouth="error"]
+.neyo-mouth-bar:nth-child(5) {
+    height: 20%;
+}
+
+
+/* =====================================================
+   THINKING EYE EMPHASIS
+   ===================================================== */
+
+#neyoMascot[data-phase="thinking"]
+.neyo-eye {
+    transition-duration:
+        260ms;
+}
+
+
+/* =====================================================
+   SPEAKING MICRO ENERGY
+   ===================================================== */
+
+#neyoMascot[data-phase="speaking"]
+.neyo-mouth {
+    transform:
+        translateX(-50%)
+        scale(
+            calc(
+                1 +
+                (
+                    var(--neyo-output-level)
+                    * 0.025
+                )
+            )
+        );
+}
+
+
+/* =====================================================
+   LISTENING ATTENTION
+   ===================================================== */
+
+#neyoMascot[data-phase="listening"]
+.neyo-eye {
+    transform:
+        translateY(
+            calc(
+                var(--neyo-mic-level)
+                * -1px
+            )
+        );
+}
+
+
+/* =====================================================
+   MUTED
+   ===================================================== */
+
+#neyoMascot[data-muted="true"]
+.neyo-mascot-face {
+    opacity: 0.82;
+}
+
+
+#neyoMascot[data-muted="true"]
+.neyo-mouth {
+    opacity: 0.65;
+}
+
+
+/* =====================================================
+   SPEAKER OFF
+   ===================================================== */
+
+#neyoMascot[data-speaker="off"]
+.neyo-mouth {
+    opacity: 0.68;
+}
+
+
+/* =====================================================
+   CAMERA ON
+   ===================================================== */
+
+#neyoMascot[data-camera="on"]
+.neyo-mascot-face {
+    box-shadow:
+        0 12px 34px
+        rgba(0, 0, 0, 0.075),
+        0 0 0 1px
+        rgba(70, 90, 255, 0.06);
+}
+
+
+/* =====================================================
+   DARK MODE
+   ===================================================== */
+
+html[data-theme="dark"]
+.neyo-mascot-face,
+body.dark
+.neyo-mascot-face {
+    background:
+        linear-gradient(
+            145deg,
+            rgba(245, 245, 247, 0.98),
+            rgba(225, 225, 230, 0.96)
+        );
+
+    border-color:
+        rgba(255, 255, 255, 0.09);
+
+    box-shadow:
+        0 12px 36px
+        rgba(0, 0, 0, 0.28);
+}
+
+
+/* =====================================================
+   MOBILE
+   ===================================================== */
+
+@media (max-width: 767px) {
+
+    .neyo-mascot-face {
+        border-radius: 28%;
+    }
+
+
+    .neyo-eye-core {
+        transition-duration:
+            190ms;
+    }
+
+
+    .neyo-mouth {
+        gap: 4.5%;
+    }
+
+
+    .neyo-mouth-bar {
+        min-width: 3px;
+    }
+}
+
+
+/* =====================================================
+   SMALL PHONE
+   ===================================================== */
+
+@media (max-width: 390px) {
+
+    .neyo-eye-core {
+        transform-origin: center;
+    }
+
+
+    .neyo-mouth {
+        width: 36%;
+    }
+}
+
+
+/* =====================================================
+   REDUCED MOTION
+   ===================================================== */
+
+@media (
+    prefers-reduced-motion: reduce
+) {
+
+    #neyoMascot[data-phase="idle"]
+    .neyo-mascot-face,
+
+    #neyoMascot[data-eye="loop"]
+    .neyo-eye-core,
+
+    #neyoMascot[data-phase="interrupted"]
+    .neyo-mascot-face,
+
+    #neyoMascot[data-phase="error"]
+    .neyo-mascot-face {
+        animation: none !important;
+    }
+
+
+    .neyo-mascot-face,
+    .neyo-eye,
+    .neyo-eye-core,
+    .neyo-mouth,
+    .neyo-mouth-bar {
+        transition-duration:
+            1ms !important;
+    }
+}

@@ -1,17 +1,25 @@
 /*
 =========================================================
 NEYO — LIVE VOICE
-PRODUCTION NATURAL CONVERSATION ENGINE
+FINAL LOCKED BASELINE
 
 Gemini 3.1 Flash Live + Ephemeral Token
-Automatic VAD tuned for natural pauses, hands-free turn-taking.
+Automatic VAD tuned for natural pauses, hands‑free turn‑taking.
 
-Architecture:
+Locked architecture:
 - Continuous mic (never closed during session)
 - Server-side VAD with 850ms silence duration
 - Deterministic state machine based on turn lifecycle
-- Instant interrupt handling (clear queue, state → interrupted → listening)
+- Instant interrupt handling (clear queue, state → interrupted → listening after 140ms)
 - No UI flicker from network packet jitter
+- Real mic/output RMS events for mascot
+
+NO:
+- Mock responses
+- Fake speech queue
+- Transcript injection
+- Client-side VAD as primary authority
+- Mic close/reopen per turn
 =========================================================
 */
 
@@ -112,7 +120,7 @@ Architecture:
   let waveRaf = 0;
   let smoothLevel = 0;
 
-  console.log("[NEYO Voice] Natural conversation engine loaded");
+  console.log("[NEYO Voice] Final locked baseline loaded");
 
   /* =====================================================
      UI BRIDGE — EVENT-BASED STATE
@@ -338,7 +346,7 @@ Architecture:
     // --- Transition to Speaking on first audio chunk of this turn ---
     if (!assistantSpeaking) {
       assistantSpeaking = true;
-      assistantResponsePending = false; // clear pending flag
+      assistantResponsePending = false;
       setVoiceState("speaking");
     }
 
@@ -581,13 +589,19 @@ Architecture:
     // --- User interrupted NEYO ---
     if (serverContent.interrupted) {
       stopPlayback();
+
       assistantSpeaking = false;
       assistantResponsePending = false;
+
       setVoiceState("interrupted");
-      // After a short delay, go back to listening (or the next turn will set it)
-      // But we can immediately go to listening because the user is now speaking.
-      // However, we should wait for the user's turn to be processed.
-      // For now, just set interrupted; the next turnComplete will bring back listening.
+
+      // UI-only transition: after a short delay, go back to listening
+      setTimeout(() => {
+        if (active && !assistantSpeaking) {
+          setVoiceState("listening");
+        }
+      }, 140);
+
       return;
     }
 
@@ -614,7 +628,6 @@ Architecture:
 
     // --- If we get a modelTurn with no audio and we're not already speaking,
     //     this is the start of a response (thinking state).
-    //     Also, if the user just finished speaking and we haven't started audio yet.
     if (serverContent.modelTurn && !hasAudio && !assistantSpeaking) {
       assistantResponsePending = true;
       setVoiceState("thinking");

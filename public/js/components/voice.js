@@ -1391,14 +1391,21 @@ NO:
             "[NEYO Voice] WebSocket opened"
           );
 
+          /* ================================================
+             FIXED SETUP BLOCK — responseModalities
+             moved inside generationConfig
+             ================================================ */
+
           const setupMessage = {
             setup: {
               model:
                 `models/${credentials.model}`,
 
-              responseModalities: [
-                "AUDIO"
-              ],
+              generationConfig: {
+                responseModalities: [
+                  "AUDIO"
+                ]
+              },
 
               systemInstruction: {
                 parts: [

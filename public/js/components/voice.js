@@ -1,2222 +1,1714 @@
 /*
 =========================================================
 NEYO — LIVE VOICE CONVERSATION
-Gemini 3.1 Flash Live Preview
+Gemini 3.1 Flash Live + AudioWorklet
+
+Requires:
+public/js/worklets/voice-input-processor.js
 
 Flow:
-Mic
+Mic click
 → /api/voice-token
-→ constrained Gemini Live WebSocket
-→ setup
+→ Gemini Live WebSocket
 → setupComplete
 → AudioWorklet mic capture
-→ 16 kHz PCM realtime input
-→ 24 kHz PCM native audio reply
+→ 16 kHz PCM input
+→ native audio reply
+→ smooth browser playback
 
 NO:
 - SpeechRecognition
 - MediaRecorder
 - /api/transcribe
-- browser Gemini SDK
+- frontend Gemini SDK
 =========================================================
 */
 
 (() => {
-    "use strict";
+  "use strict";
 
+  /* =====================================================
+     BUTTON ISOLATION
+     ===================================================== */
 
-    /* =====================================================
-       BUTTON ISOLATION
-       ===================================================== */
+  function isolateButton(element) {
+    if (!element) return null;
 
-    function isolateButton(element) {
-        if (!element) return null;
+    const clone = element.cloneNode(true);
+    element.replaceWith(clone);
 
-        const clone =
-            element.cloneNode(true);
+    return clone;
+  }
 
-        element.replaceWith(clone);
+  const micBtn = isolateButton(
+    document.getElementById("micBtn")
+  );
 
-        return clone;
-    }
+  const stopRecBtn = isolateButton(
+    document.getElementById("stopRecBtn")
+  );
 
+  /* =====================================================
+     DOM
+     ===================================================== */
 
-    const micBtn =
-        isolateButton(
-            document.getElementById("micBtn")
-        );
+  const composerInputRow =
+    document.querySelector(".composer-input-row");
 
+  const waveform =
+    document.getElementById("waveDotsBar");
 
-    const stopRecBtn =
-        isolateButton(
-            document.getElementById("stopRecBtn")
-        );
+  if (!micBtn || !composerInputRow) {
+    console.warn(
+      "[NEYO Voice] Required DOM missing."
+    );
+    return;
+  }
 
+  /* =====================================================
+     CONFIG
+     ===================================================== */
 
-    /* =====================================================
-       DOM
-       ===================================================== */
+  const CONFIG = Object.freeze({
+    tokenEndpoint:
+      "/api/voice-token",
 
-    const composerInputRow =
-        document.querySelector(
-            ".composer-input-row"
-        );
+    websocketEndpoint:
+      "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent",
 
+    workletUrl:
+      "/js/worklets/voice-input-processor.js",
 
-    const waveform =
-        document.getElementById(
-            "waveDotsBar"
-        );
+    workletName:
+      "neyo-voice-input-processor",
 
+    inputSampleRate:
+      16000,
 
-    if (
-        !micBtn ||
-        !composerInputRow
-    ) {
-        console.warn(
-            "[NEYO Voice] Required DOM missing."
-        );
+    outputSampleRate:
+      24000,
 
-        return;
-    }
+    networkChunkSamples:
+      1600,
 
+    workletChunkSize:
+      2048,
 
-    /* =====================================================
-       CONFIG
-       ===================================================== */
+    analyserFftSize:
+      256,
 
-    const CONFIG =
-        Object.freeze({
+    setupTimeoutMs:
+      10000,
 
-            tokenEndpoint:
-                "/api/voice-token",
+    maxSessionMs:
+      30 * 60 * 1000,
 
-            websocketEndpoint:
-                "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained",
+    playbackLeadSeconds:
+      0.12
+  });
 
-            workletUrl:
-                "/js/worklets/voice-input-processor.js",
+  /* =====================================================
+     SESSION STATE
+     ===================================================== */
 
-            workletName:
-                "neyo-voice-input-processor",
+  let socket = null;
 
-            inputSampleRate:
-                16000,
+  let connecting = false;
+  let active = false;
+  let setupComplete = false;
+  let stopping = false;
 
-            outputSampleRate:
-                24000,
+  let setupTimer = 0;
+  let sessionTimer = 0;
 
-            networkChunkSamples:
-                1600,
+  /* =====================================================
+     INPUT AUDIO
+     ===================================================== */
 
-            workletChunkSize:
-                2048,
+  let micStream = null;
+  let inputContext = null;
+  let micSource = null;
+  let workletNode = null;
+  let silentGain = null;
 
-            analyserFftSize:
-                256,
+  let analyser = null;
+  let analyserData = null;
 
-            setupTimeoutMs:
-                10000,
+  let browserInputRate = 48000;
 
-            maxSessionMs:
-                30 * 60 * 1000,
+  let pendingInput =
+    new Float32Array(0);
 
-            playbackLeadSeconds:
-                0.10
-        });
+  /* =====================================================
+     OUTPUT AUDIO
+     ===================================================== */
 
+  let outputContext = null;
 
-    /* =====================================================
-       SESSION STATE
-       ===================================================== */
+  let nextPlaybackTime = 0;
+  let playbackStarted = false;
 
-    let socket =
-        null;
+  const playingSources =
+    new Set();
 
-    let connecting =
-        false;
+  /* =====================================================
+     WAVEFORM
+     ===================================================== */
 
-    let active =
-        false;
+  let waveRaf = 0;
+  let smoothLevel = 0;
 
-    let setupComplete =
-        false;
+  console.log(
+    "[NEYO Voice] Gemini 3.1 Live module loaded"
+  );
 
-    let stopping =
-        false;
+  /* =====================================================
+     UI
+     ===================================================== */
 
-    let setupTimer =
-        0;
-
-    let sessionTimer =
-        0;
-
-
-    /* =====================================================
-       INPUT AUDIO STATE
-       ===================================================== */
-
-    let micStream =
-        null;
-
-    let inputContext =
-        null;
-
-    let micSource =
-        null;
-
-    let workletNode =
-        null;
-
-    let silentGain =
-        null;
-
-    let analyser =
-        null;
-
-    let analyserData =
-        null;
-
-    let browserInputRate =
-        48000;
-
-    let pendingInput =
-        new Float32Array(0);
-
-
-    /* =====================================================
-       OUTPUT AUDIO STATE
-       ===================================================== */
-
-    let outputContext =
-        null;
-
-    let nextPlaybackTime =
-        0;
-
-    let playbackStarted =
-        false;
-
-    const playingSources =
-        new Set();
-
-
-    /* =====================================================
-       WAVE STATE
-       ===================================================== */
-
-    let waveRaf =
-        0;
-
-    let smoothLevel =
-        0;
-
-
-    console.log(
-        "[NEYO Voice] Gemini 3.1 Live engine loaded"
+  function syncUi() {
+    composerInputRow.classList.toggle(
+      "is-transcribing",
+      connecting || active
     );
 
+    composerInputRow.classList.toggle(
+      "is-processing-transcription",
+      connecting
+    );
 
-    /* =====================================================
-       UI
-       ===================================================== */
+    micBtn.setAttribute(
+      "aria-pressed",
+      String(active)
+    );
 
-    function syncUi() {
+    if (connecting) {
+      micBtn.dataset.tooltip =
+        "Connecting";
 
-        composerInputRow.classList.toggle(
-            "is-transcribing",
-            connecting ||
-            active
-        );
+      micBtn.setAttribute(
+        "aria-label",
+        "Connecting voice conversation"
+      );
+    } else if (active) {
+      micBtn.dataset.tooltip =
+        "End voice conversation";
 
+      micBtn.setAttribute(
+        "aria-label",
+        "End voice conversation"
+      );
+    } else {
+      micBtn.dataset.tooltip =
+        "Voice conversation";
 
-        composerInputRow.classList.toggle(
-            "is-processing-transcription",
-            connecting
-        );
-
-
-        micBtn.setAttribute(
-            "aria-pressed",
-            String(active)
-        );
-
-
-        if (connecting) {
-
-            micBtn.dataset.tooltip =
-                "Connecting";
-
-            micBtn.setAttribute(
-                "aria-label",
-                "Connecting voice conversation"
-            );
-
-        } else if (active) {
-
-            micBtn.dataset.tooltip =
-                "End voice conversation";
-
-            micBtn.setAttribute(
-                "aria-label",
-                "End voice conversation"
-            );
-
-        } else {
-
-            micBtn.dataset.tooltip =
-                "Voice conversation";
-
-            micBtn.setAttribute(
-                "aria-label",
-                "Start voice conversation"
-            );
-        }
-
-
-        if (stopRecBtn) {
-
-            stopRecBtn.disabled =
-                connecting;
-
-            stopRecBtn.setAttribute(
-                "aria-busy",
-                String(connecting)
-            );
-        }
+      micBtn.setAttribute(
+        "aria-label",
+        "Start voice conversation"
+      );
     }
 
+    if (stopRecBtn) {
+      stopRecBtn.disabled =
+        connecting;
 
-    /* =====================================================
-       WAVEFORM
-       ===================================================== */
+      stopRecBtn.setAttribute(
+        "aria-busy",
+        String(connecting)
+      );
+    }
+  }
 
-    function getWaveBars() {
+  /* =====================================================
+     WAVEFORM
+     ===================================================== */
 
-        if (!waveform) {
-            return [];
-        }
-
-
-        return Array.from(
-            waveform.querySelectorAll(
-                "span"
-            )
-        );
+  function getWaveBars() {
+    if (!waveform) {
+      return [];
     }
 
+    return Array.from(
+      waveform.querySelectorAll("span")
+    );
+  }
 
-    function resetWaveform() {
+  function resetWaveform() {
+    smoothLevel = 0;
 
-        smoothLevel =
-            0;
-
-
-        for (
-            const bar
-            of getWaveBars()
-        ) {
-
-            bar.style.height =
-                "3px";
-
-            bar.style.opacity =
-                "0.32";
-        }
+    for (const bar of getWaveBars()) {
+      bar.style.height = "3px";
+      bar.style.opacity = "0.32";
     }
+  }
 
-
-    function calculateRms() {
-
-        if (
-            !analyser ||
-            !analyserData
-        ) {
-            return 0;
-        }
-
-
-        analyser.getByteTimeDomainData(
-            analyserData
-        );
-
-
-        let sum =
-            0;
-
-
-        for (
-            let i = 0;
-            i < analyserData.length;
-            i += 1
-        ) {
-
-            const sample =
-                (
-                    analyserData[i] -
-                    128
-                ) / 128;
-
-
-            sum +=
-                sample *
-                sample;
-        }
-
-
-        return Math.sqrt(
-            sum /
-            analyserData.length
-        );
-    }
-
-
-    function animateWave(timestamp) {
-
-        if (!active) {
-            return;
-        }
-
-
-        const rms =
-            calculateRms();
-
-
-        const target =
-            Math.max(
-                0,
-                Math.min(
-                    1,
-                    (rms - 0.012) /
-                    0.11
-                )
-            );
-
-
-        const smoothing =
-            target >
-            smoothLevel
-                ? 0.30
-                : 0.10;
-
-
-        smoothLevel +=
-            (
-                target -
-                smoothLevel
-            ) *
-            smoothing;
-
-
-        const bars =
-            getWaveBars();
-
-
-        const center =
-            Math.max(
-                1,
-                (bars.length - 1) /
-                2
-            );
-
-
-        bars.forEach(
-            (
-                bar,
-                index
-            ) => {
-
-                const distance =
-                    Math.abs(
-                        index -
-                        center
-                    ) /
-                    center;
-
-
-                const weight =
-                    1 -
-                    distance *
-                    0.46;
-
-
-                const movement =
-                    0.84 +
-                    Math.sin(
-                        timestamp *
-                        0.0048 +
-                        index *
-                        0.82
-                    ) *
-                    0.16;
-
-
-                const energy =
-                    Math.max(
-                        0,
-                        Math.min(
-                            1,
-                            smoothLevel *
-                            weight *
-                            movement
-                        )
-                    );
-
-
-                bar.style.height =
-                    `${(
-                        3 +
-                        energy *
-                        21
-                    ).toFixed(2)}px`;
-
-
-                bar.style.opacity =
-                    `${(
-                        0.32 +
-                        energy *
-                        0.63
-                    ).toFixed(3)}`;
-            }
-        );
-
-
-        waveRaf =
-            requestAnimationFrame(
-                animateWave
-            );
-    }
-
-
-    /* =====================================================
-       RESAMPLING
-       ===================================================== */
-
-    function resampleFloat32(
-        input,
-        sourceRate,
-        targetRate
+  function calculateRms() {
+    if (
+      !analyser ||
+      !analyserData
     ) {
-
-        if (
-            sourceRate ===
-            targetRate
-        ) {
-
-            return new Float32Array(
-                input
-            );
-        }
-
-
-        const ratio =
-            sourceRate /
-            targetRate;
-
-
-        const outputLength =
-            Math.max(
-                1,
-                Math.floor(
-                    input.length /
-                    ratio
-                )
-            );
-
-
-        const output =
-            new Float32Array(
-                outputLength
-            );
-
-
-        for (
-            let i = 0;
-            i < outputLength;
-            i += 1
-        ) {
-
-            const start =
-                Math.floor(
-                    i *
-                    ratio
-                );
-
-
-            const end =
-                Math.max(
-                    start + 1,
-                    Math.min(
-                        input.length,
-                        Math.floor(
-                            (i + 1) *
-                            ratio
-                        )
-                    )
-                );
-
-
-            let sum =
-                0;
-
-            let count =
-                0;
-
-
-            for (
-                let j = start;
-                j < end;
-                j += 1
-            ) {
-
-                sum +=
-                    input[j];
-
-                count +=
-                    1;
-            }
-
-
-            output[i] =
-                count
-                    ? sum / count
-                    : 0;
-        }
-
-
-        return output;
+      return 0;
     }
 
-
-    /* =====================================================
-       FLOAT32 → PCM16
-       ===================================================== */
-
-    function float32ToPcm16(samples) {
-
-        const bytes =
-            new Uint8Array(
-                samples.length *
-                2
-            );
-
-
-        const view =
-            new DataView(
-                bytes.buffer
-            );
-
-
-        for (
-            let i = 0;
-            i < samples.length;
-            i += 1
-        ) {
-
-            const sample =
-                Math.max(
-                    -1,
-                    Math.min(
-                        1,
-                        samples[i]
-                    )
-                );
-
-
-            const integer =
-                sample < 0
-                    ? sample * 32768
-                    : sample * 32767;
-
-
-            view.setInt16(
-                i * 2,
-                integer,
-                true
-            );
-        }
-
-
-        return bytes;
-    }
-
-
-    /* =====================================================
-       BASE64
-       ===================================================== */
-
-    function bytesToBase64(bytes) {
-
-        let binary =
-            "";
-
-
-        const CHUNK =
-            32768;
-
-
-        for (
-            let i = 0;
-            i < bytes.length;
-            i += CHUNK
-        ) {
-
-            const part =
-                bytes.subarray(
-                    i,
-                    Math.min(
-                        i + CHUNK,
-                        bytes.length
-                    )
-                );
-
-
-            binary +=
-                String.fromCharCode(
-                    ...part
-                );
-        }
-
-
-        return btoa(
-            binary
-        );
-    }
-
-
-    function base64ToBytes(value) {
-
-        const binary =
-            atob(value);
-
-
-        const bytes =
-            new Uint8Array(
-                binary.length
-            );
-
-
-        for (
-            let i = 0;
-            i < binary.length;
-            i += 1
-        ) {
-
-            bytes[i] =
-                binary.charCodeAt(i);
-        }
-
-
-        return bytes;
-    }
-
-
-    /* =====================================================
-       PCM16 → FLOAT32
-       ===================================================== */
-
-    function pcm16ToFloat32(bytes) {
-
-        const count =
-            Math.floor(
-                bytes.byteLength /
-                2
-            );
-
-
-        const samples =
-            new Float32Array(
-                count
-            );
-
-
-        const view =
-            new DataView(
-                bytes.buffer,
-                bytes.byteOffset,
-                bytes.byteLength
-            );
-
-
-        for (
-            let i = 0;
-            i < count;
-            i += 1
-        ) {
-
-            const sample =
-                view.getInt16(
-                    i * 2,
-                    true
-                );
-
-
-            samples[i] =
-                sample /
-                (
-                    sample < 0
-                        ? 32768
-                        : 32767
-                );
-        }
-
-
-        return samples;
-    }
-
-
-    /* =====================================================
-       INPUT BUFFER
-       ===================================================== */
-
-    function appendInputSamples(samples) {
-
-        if (!samples.length) {
-            return;
-        }
-
-
-        const combined =
-            new Float32Array(
-                pendingInput.length +
-                samples.length
-            );
-
-
-        combined.set(
-            pendingInput,
-            0
-        );
-
-
-        combined.set(
-            samples,
-            pendingInput.length
-        );
-
-
-        pendingInput =
-            combined;
-
-
-        while (
-            pendingInput.length >=
-            CONFIG.networkChunkSamples
-        ) {
-
-            const packet =
-                pendingInput.slice(
-                    0,
-                    CONFIG.networkChunkSamples
-                );
-
-
-            pendingInput =
-                pendingInput.slice(
-                    CONFIG.networkChunkSamples
-                );
-
-
-            sendAudioPacket(
-                packet
-            );
-        }
-    }
-
-
-    function sendAudioPacket(samples) {
-
-        if (
-            !socket ||
-            socket.readyState !==
-                WebSocket.OPEN ||
-            !setupComplete ||
-            !active
-        ) {
-            return;
-        }
-
-
-        const pcm =
-            float32ToPcm16(
-                samples
-            );
-
-
-        socket.send(
-            JSON.stringify({
-
-                realtimeInput: {
-
-                    audio: {
-
-                        data:
-                            bytesToBase64(
-                                pcm
-                            ),
-
-                        mimeType:
-                            "audio/pcm;rate=16000"
-                    }
-                }
-            })
-        );
-    }
-
-
-    /* =====================================================
-       OUTPUT AUDIO
-       ===================================================== */
-
-    async function ensureOutputContext() {
-
-        if (
-            outputContext &&
-            outputContext.state !==
-                "closed"
-        ) {
-
-            if (
-                outputContext.state ===
-                    "suspended"
-            ) {
-
-                await outputContext.resume();
-            }
-
-
-            return outputContext;
-        }
-
-
-        const AudioContextClass =
-            window.AudioContext ||
-            window.webkitAudioContext;
-
-
-        if (!AudioContextClass) {
-
-            throw new Error(
-                "Audio playback unavailable."
-            );
-        }
-
-
-        outputContext =
-            new AudioContextClass();
-
-
-        if (
-            outputContext.state ===
-                "suspended"
-        ) {
-
-            await outputContext.resume();
-        }
-
-
-        nextPlaybackTime =
-            outputContext.currentTime;
-
-
-        playbackStarted =
-            false;
-
-
-        return outputContext;
-    }
-
-
-    function getSampleRateFromMime(
-        mimeType
+    analyser.getByteTimeDomainData(
+      analyserData
+    );
+
+    let sum = 0;
+
+    for (
+      let i = 0;
+      i < analyserData.length;
+      i += 1
     ) {
+      const sample =
+        (
+          analyserData[i] -
+          128
+        ) / 128;
 
-        const match =
-            String(
-                mimeType || ""
-            ).match(
-                /rate=(\d+)/i
-            );
+      sum += sample * sample;
+    }
 
+    return Math.sqrt(
+      sum /
+      analyserData.length
+    );
+  }
 
-        if (!match) {
-            return CONFIG.outputSampleRate;
-        }
+  function animateWave(timestamp) {
+    if (!active) {
+      return;
+    }
 
+    const rms =
+      calculateRms();
 
-        const rate =
-            Number(
-                match[1]
-            );
-
-
-        return (
-            Number.isFinite(rate) &&
-            rate > 0
+    const target =
+      Math.max(
+        0,
+        Math.min(
+          1,
+          (rms - 0.012) / 0.11
         )
-            ? rate
-            : CONFIG.outputSampleRate;
-    }
+      );
 
+    const smoothing =
+      target > smoothLevel
+        ? 0.30
+        : 0.10;
 
-    async function playAudioChunk(
-        base64,
-        mimeType
+    smoothLevel +=
+      (
+        target -
+        smoothLevel
+      ) *
+      smoothing;
+
+    const bars =
+      getWaveBars();
+
+    const center =
+      Math.max(
+        1,
+        (bars.length - 1) / 2
+      );
+
+    bars.forEach(
+      (
+        bar,
+        index
+      ) => {
+        const distance =
+          Math.abs(
+            index -
+            center
+          ) /
+          center;
+
+        const weight =
+          1 -
+          distance * 0.46;
+
+        const movement =
+          0.84 +
+          Math.sin(
+            timestamp * 0.0048 +
+            index * 0.82
+          ) *
+          0.16;
+
+        const energy =
+          Math.max(
+            0,
+            Math.min(
+              1,
+              smoothLevel *
+              weight *
+              movement
+            )
+          );
+
+        bar.style.height =
+          `${(
+            3 +
+            energy * 21
+          ).toFixed(2)}px`;
+
+        bar.style.opacity =
+          `${(
+            0.32 +
+            energy * 0.63
+          ).toFixed(3)}`;
+      }
+    );
+
+    waveRaf =
+      requestAnimationFrame(
+        animateWave
+      );
+  }
+
+  /* =====================================================
+     RESAMPLE
+     ===================================================== */
+
+  function resampleFloat32(
+    input,
+    sourceRate,
+    targetRate
+  ) {
+    if (
+      sourceRate ===
+      targetRate
     ) {
+      return new Float32Array(
+        input
+      );
+    }
 
-        if (!base64) {
-            return;
-        }
+    const ratio =
+      sourceRate /
+      targetRate;
 
+    const outputLength =
+      Math.max(
+        1,
+        Math.floor(
+          input.length /
+          ratio
+        )
+      );
 
-        const context =
-            await ensureOutputContext();
+    const output =
+      new Float32Array(
+        outputLength
+      );
 
-
-        const bytes =
-            base64ToBytes(
-                base64
-            );
-
-
-        const samples =
-            pcm16ToFloat32(
-                bytes
-            );
-
-
-        if (!samples.length) {
-            return;
-        }
-
-
-        const sampleRate =
-            getSampleRateFromMime(
-                mimeType
-            );
-
-
-        const buffer =
-            context.createBuffer(
-                1,
-                samples.length,
-                sampleRate
-            );
-
-
-        buffer
-            .getChannelData(0)
-            .set(samples);
-
-
-        const source =
-            context.createBufferSource();
-
-
-        source.buffer =
-            buffer;
-
-
-        source.connect(
-            context.destination
+    for (
+      let i = 0;
+      i < outputLength;
+      i += 1
+    ) {
+      const start =
+        Math.floor(
+          i * ratio
         );
 
-
-        if (!playbackStarted) {
-
-            nextPlaybackTime =
-                Math.max(
-                    context.currentTime +
-                    CONFIG.playbackLeadSeconds,
-                    nextPlaybackTime
-                );
-
-
-            playbackStarted =
-                true;
-
-        } else if (
-            nextPlaybackTime <
-            context.currentTime +
-            0.015
-        ) {
-
-            nextPlaybackTime =
-                context.currentTime +
-                CONFIG.playbackLeadSeconds;
-        }
-
-
-        source.start(
-            nextPlaybackTime
+      const end =
+        Math.max(
+          start + 1,
+          Math.min(
+            input.length,
+            Math.floor(
+              (i + 1) *
+              ratio
+            )
+          )
         );
 
+      let sum = 0;
+      let count = 0;
 
-        nextPlaybackTime +=
-            buffer.duration;
+      for (
+        let j = start;
+        j < end;
+        j += 1
+      ) {
+        sum += input[j];
+        count += 1;
+      }
 
+      output[i] =
+        count
+          ? sum / count
+          : 0;
+    }
 
-        playingSources.add(
-            source
+    return output;
+  }
+
+  /* =====================================================
+     PCM CONVERSION
+     ===================================================== */
+
+  function float32ToPcm16(samples) {
+    const bytes =
+      new Uint8Array(
+        samples.length * 2
+      );
+
+    const view =
+      new DataView(
+        bytes.buffer
+      );
+
+    for (
+      let i = 0;
+      i < samples.length;
+      i += 1
+    ) {
+      const sample =
+        Math.max(
+          -1,
+          Math.min(
+            1,
+            samples[i]
+          )
         );
 
+      const integer =
+        sample < 0
+          ? sample * 32768
+          : sample * 32767;
 
-        source.addEventListener(
-            "ended",
-            () => {
+      view.setInt16(
+        i * 2,
+        integer,
+        true
+      );
+    }
 
-                playingSources.delete(
-                    source
-                );
-            },
-            {
-                once: true
-            }
+    return bytes;
+  }
+
+  function pcm16ToFloat32(bytes) {
+    const count =
+      Math.floor(
+        bytes.byteLength / 2
+      );
+
+    const samples =
+      new Float32Array(
+        count
+      );
+
+    const view =
+      new DataView(
+        bytes.buffer,
+        bytes.byteOffset,
+        bytes.byteLength
+      );
+
+    for (
+      let i = 0;
+      i < count;
+      i += 1
+    ) {
+      const sample =
+        view.getInt16(
+          i * 2,
+          true
+        );
+
+      samples[i] =
+        sample /
+        (
+          sample < 0
+            ? 32768
+            : 32767
         );
     }
 
+    return samples;
+  }
 
-    function stopPlayback() {
+  /* =====================================================
+     BASE64
+     ===================================================== */
 
-        for (
-            const source
-            of playingSources
-        ) {
+  function bytesToBase64(bytes) {
+    let binary = "";
 
-            try {
-                source.stop();
-            } catch {}
-        }
+    const chunkSize =
+      32768;
 
+    for (
+      let i = 0;
+      i < bytes.length;
+      i += chunkSize
+    ) {
+      const chunk =
+        bytes.subarray(
+          i,
+          Math.min(
+            i + chunkSize,
+            bytes.length
+          )
+        );
 
-        playingSources.clear();
-
-
-        playbackStarted =
-            false;
-
-
-        if (outputContext) {
-
-            nextPlaybackTime =
-                outputContext.currentTime;
-        }
+      binary +=
+        String.fromCharCode(
+          ...chunk
+        );
     }
 
+    return btoa(binary);
+  }
 
-    /* =====================================================
-       TOKEN
-       ===================================================== */
+  function base64ToBytes(value) {
+    const binary =
+      atob(value);
 
-    async function fetchVoiceToken() {
+    const bytes =
+      new Uint8Array(
+        binary.length
+      );
 
-        const response =
-            await fetch(
-                CONFIG.tokenEndpoint,
-                {
-                    method:
-                        "POST",
-
-                    credentials:
-                        "same-origin",
-
-                    headers: {
-                        "Accept":
-                            "application/json"
-                    }
-                }
-            );
-
-
-        const raw =
-            await response.text();
-
-
-        let data =
-            null;
-
-
-        try {
-
-            data =
-                JSON.parse(
-                    raw
-                );
-
-        } catch {}
-
-
-        if (!response.ok) {
-
-            throw new Error(
-                data?.error ||
-                raw ||
-                `Voice token failed (${response.status})`
-            );
-        }
-
-
-        if (
-            !data?.token ||
-            !data?.model
-        ) {
-
-            throw new Error(
-                "Invalid voice token response."
-            );
-        }
-
-
-        return data;
+    for (
+      let i = 0;
+      i < binary.length;
+      i += 1
+    ) {
+      bytes[i] =
+        binary.charCodeAt(i);
     }
 
+    return bytes;
+  }
 
-    /* =====================================================
-       MICROPHONE / AUDIOWORKLET
-       ===================================================== */
+  /* =====================================================
+     INPUT NETWORK BUFFER
+     ===================================================== */
 
-    async function startMicrophone() {
+  function appendInputSamples(samples) {
+    if (!samples.length) {
+      return;
+    }
 
-        if (micStream) {
-            return;
+    const combined =
+      new Float32Array(
+        pendingInput.length +
+        samples.length
+      );
+
+    combined.set(
+      pendingInput,
+      0
+    );
+
+    combined.set(
+      samples,
+      pendingInput.length
+    );
+
+    pendingInput =
+      combined;
+
+    while (
+      pendingInput.length >=
+      CONFIG.networkChunkSamples
+    ) {
+      const packet =
+        pendingInput.slice(
+          0,
+          CONFIG.networkChunkSamples
+        );
+
+      pendingInput =
+        pendingInput.slice(
+          CONFIG.networkChunkSamples
+        );
+
+      sendAudioPacket(
+        packet
+      );
+    }
+  }
+
+  function sendAudioPacket(samples) {
+    if (
+      !socket ||
+      socket.readyState !==
+        WebSocket.OPEN ||
+      !setupComplete ||
+      !active
+    ) {
+      return;
+    }
+
+    const pcm =
+      float32ToPcm16(
+        samples
+      );
+
+    socket.send(
+      JSON.stringify({
+        realtimeInput: {
+          audio: {
+            data:
+              bytesToBase64(
+                pcm
+              ),
+
+            mimeType:
+              "audio/pcm;rate=16000"
+          }
         }
+      })
+    );
+  }
 
+  /* =====================================================
+     OUTPUT AUDIO
+     ===================================================== */
 
-        micStream =
-            await navigator
-                .mediaDevices
-                .getUserMedia({
+  async function ensureOutputContext() {
+    if (
+      outputContext &&
+      outputContext.state !==
+        "closed"
+    ) {
+      if (
+        outputContext.state ===
+        "suspended"
+      ) {
+        await outputContext.resume();
+      }
 
-                    audio: {
+      return outputContext;
+    }
 
-                        channelCount:
-                            1,
+    const AudioContextClass =
+      window.AudioContext ||
+      window.webkitAudioContext;
 
-                        echoCancellation:
-                            true,
+    if (!AudioContextClass) {
+      throw new Error(
+        "Audio playback unavailable."
+      );
+    }
 
-                        noiseSuppression:
-                            true,
+    outputContext =
+      new AudioContextClass();
 
-                        autoGainControl:
-                            true
-                    },
+    if (
+      outputContext.state ===
+        "suspended"
+    ) {
+      await outputContext.resume();
+    }
 
-                    video:
-                        false
-                });
+    nextPlaybackTime =
+      outputContext.currentTime;
 
+    playbackStarted =
+      false;
 
-        const AudioContextClass =
-            window.AudioContext ||
-            window.webkitAudioContext;
+    return outputContext;
+  }
 
+  function getSampleRateFromMime(
+    mimeType
+  ) {
+    const match =
+      String(
+        mimeType || ""
+      ).match(
+        /rate=(\d+)/i
+      );
 
-        if (!AudioContextClass) {
+    if (!match) {
+      return CONFIG.outputSampleRate;
+    }
 
-            throw new Error(
-                "Web Audio API unavailable."
-            );
+    const rate =
+      Number(match[1]);
+
+    return (
+      Number.isFinite(rate) &&
+      rate > 0
+    )
+      ? rate
+      : CONFIG.outputSampleRate;
+  }
+
+  async function playAudioChunk(
+    base64,
+    mimeType
+  ) {
+    if (!base64) {
+      return;
+    }
+
+    const context =
+      await ensureOutputContext();
+
+    const bytes =
+      base64ToBytes(
+        base64
+      );
+
+    const samples =
+      pcm16ToFloat32(
+        bytes
+      );
+
+    if (!samples.length) {
+      return;
+    }
+
+    const sampleRate =
+      getSampleRateFromMime(
+        mimeType
+      );
+
+    const buffer =
+      context.createBuffer(
+        1,
+        samples.length,
+        sampleRate
+      );
+
+    buffer
+      .getChannelData(0)
+      .set(samples);
+
+    const source =
+      context.createBufferSource();
+
+    source.buffer =
+      buffer;
+
+    source.connect(
+      context.destination
+    );
+
+    if (!playbackStarted) {
+      nextPlaybackTime =
+        Math.max(
+          context.currentTime +
+          CONFIG.playbackLeadSeconds,
+          nextPlaybackTime
+        );
+
+      playbackStarted =
+        true;
+    } else if (
+      nextPlaybackTime <
+      context.currentTime +
+      0.015
+    ) {
+      nextPlaybackTime =
+        context.currentTime +
+        CONFIG.playbackLeadSeconds;
+    }
+
+    source.start(
+      nextPlaybackTime
+    );
+
+    nextPlaybackTime +=
+      buffer.duration;
+
+    playingSources.add(
+      source
+    );
+
+    source.addEventListener(
+      "ended",
+      () => {
+        playingSources.delete(
+          source
+        );
+      },
+      {
+        once: true
+      }
+    );
+  }
+
+  function stopPlayback() {
+    for (
+      const source
+      of playingSources
+    ) {
+      try {
+        source.stop();
+      } catch {}
+    }
+
+    playingSources.clear();
+
+    playbackStarted =
+      false;
+
+    if (outputContext) {
+      nextPlaybackTime =
+        outputContext.currentTime;
+    }
+  }
+
+  /* =====================================================
+     TOKEN
+     ===================================================== */
+
+  async function fetchVoiceToken() {
+    const response =
+      await fetch(
+        CONFIG.tokenEndpoint,
+        {
+          method:
+            "POST",
+
+          credentials:
+            "same-origin",
+
+          headers: {
+            "Accept":
+              "application/json"
+          }
         }
+      );
 
+    const raw =
+      await response.text();
 
-        inputContext =
-            new AudioContextClass();
+    let data = null;
 
+    try {
+      data =
+        JSON.parse(raw);
+    } catch {}
 
-        if (
-            inputContext.state ===
-                "suspended"
-        ) {
+    if (!response.ok) {
+      throw new Error(
+        data?.error ||
+        raw ||
+        `Voice token failed (${response.status})`
+      );
+    }
 
-            await inputContext.resume();
-        }
+    if (
+      !data?.token ||
+      !data?.model
+    ) {
+      throw new Error(
+        "Invalid voice token response."
+      );
+    }
 
+    return data;
+  }
 
-        browserInputRate =
-            inputContext.sampleRate;
+  /* =====================================================
+     MICROPHONE / AUDIOWORKLET
+     ===================================================== */
 
+  async function startMicrophone() {
+    if (micStream) {
+      return;
+    }
 
-        await inputContext
-            .audioWorklet
-            .addModule(
-                CONFIG.workletUrl
-            );
+    micStream =
+      await navigator
+        .mediaDevices
+        .getUserMedia({
+          audio: {
+            channelCount:
+              1,
 
+            echoCancellation:
+              true,
 
-        micSource =
-            inputContext
-                .createMediaStreamSource(
-                    micStream
-                );
+            noiseSuppression:
+              true,
 
+            autoGainControl:
+              true
+          },
 
-        analyser =
-            inputContext
-                .createAnalyser();
-
-
-        analyser.fftSize =
-            CONFIG.analyserFftSize;
-
-
-        analyser
-            .smoothingTimeConstant =
-            0.82;
-
-
-        analyserData =
-            new Uint8Array(
-                analyser.fftSize
-            );
-
-
-        micSource.connect(
-            analyser
-        );
-
-
-        workletNode =
-            new AudioWorkletNode(
-                inputContext,
-                CONFIG.workletName,
-                {
-
-                    numberOfInputs:
-                        1,
-
-                    numberOfOutputs:
-                        1,
-
-                    outputChannelCount: [
-                        1
-                    ],
-
-                    processorOptions: {
-
-                        chunkSize:
-                            CONFIG.workletChunkSize
-                    }
-                }
-            );
-
-
-        silentGain =
-            inputContext
-                .createGain();
-
-
-        silentGain.gain.value =
-            0;
-
-
-        micSource.connect(
-            workletNode
-        );
-
-
-        workletNode.connect(
-            silentGain
-        );
-
-
-        silentGain.connect(
-            inputContext.destination
-        );
-
-
-        pendingInput =
-            new Float32Array(0);
-
-
-        workletNode.port.onmessage =
-            event => {
-
-                if (
-                    !active ||
-                    !setupComplete
-                ) {
-                    return;
-                }
-
-
-                if (
-                    event?.data?.type !==
-                    "audio"
-                ) {
-                    return;
-                }
-
-
-                const incoming =
-                    event.data.samples;
-
-
-                if (!incoming) {
-                    return;
-                }
-
-
-                const samples =
-                    incoming instanceof Float32Array
-                        ? incoming
-                        : new Float32Array(
-                            incoming
-                        );
-
-
-                const resampled =
-                    resampleFloat32(
-                        samples,
-                        browserInputRate,
-                        CONFIG.inputSampleRate
-                    );
-
-
-                appendInputSamples(
-                    resampled
-                );
-            };
-
-
-        workletNode.port.postMessage({
-            type:
-                "start"
+          video:
+            false
         });
 
+    const AudioContextClass =
+      window.AudioContext ||
+      window.webkitAudioContext;
 
-        console.log(
-            "[NEYO Voice] AudioWorklet microphone active",
-            {
-                browserRate:
-                    browserInputRate,
-
-                liveRate:
-                    CONFIG.inputSampleRate
-            }
-        );
+    if (!AudioContextClass) {
+      throw new Error(
+        "Web Audio API unavailable."
+      );
     }
 
+    inputContext =
+      new AudioContextClass();
 
-    async function stopMicrophone() {
-
-        pendingInput =
-            new Float32Array(0);
-
-
-        if (workletNode) {
-
-            try {
-
-                workletNode.port
-                    .postMessage({
-                        type:
-                            "stop"
-                    });
-
-            } catch {}
-
-
-            workletNode.port.onmessage =
-                null;
-
-
-            try {
-                workletNode.disconnect();
-            } catch {}
-
-
-            workletNode =
-                null;
-        }
-
-
-        if (micSource) {
-
-            try {
-                micSource.disconnect();
-            } catch {}
-
-
-            micSource =
-                null;
-        }
-
-
-        if (analyser) {
-
-            try {
-                analyser.disconnect();
-            } catch {}
-
-
-            analyser =
-                null;
-        }
-
-
-        if (silentGain) {
-
-            try {
-                silentGain.disconnect();
-            } catch {}
-
-
-            silentGain =
-                null;
-        }
-
-
-        analyserData =
-            null;
-
-
-        if (micStream) {
-
-            for (
-                const track
-                of micStream.getTracks()
-            ) {
-
-                try {
-                    track.stop();
-                } catch {}
-            }
-
-
-            micStream =
-                null;
-        }
-
-
-        if (
-            inputContext &&
-            inputContext.state !==
-                "closed"
-        ) {
-
-            try {
-
-                await inputContext.close();
-
-            } catch {}
-        }
-
-
-        inputContext =
-            null;
-
-
-        if (waveRaf) {
-
-            cancelAnimationFrame(
-                waveRaf
-            );
-
-
-            waveRaf =
-                0;
-        }
-
-
-        resetWaveform();
-    }
-
-
-    /* =====================================================
-       SOCKET MESSAGE DECODING
-       ===================================================== */
-
-    async function decodeSocketMessage(
-        data
+    if (
+      inputContext.state ===
+        "suspended"
     ) {
+      await inputContext.resume();
+    }
 
-        if (
-            typeof data ===
-            "string"
-        ) {
+    browserInputRate =
+      inputContext.sampleRate;
 
-            return data;
-        }
+    await inputContext
+      .audioWorklet
+      .addModule(
+        CONFIG.workletUrl
+      );
 
-
-        if (
-            data instanceof Blob
-        ) {
-
-            return data.text();
-        }
-
-
-        if (
-            data instanceof ArrayBuffer
-        ) {
-
-            return new TextDecoder(
-                "utf-8"
-            ).decode(
-                data
-            );
-        }
-
-
-        if (
-            ArrayBuffer.isView(
-                data
-            )
-        ) {
-
-            return new TextDecoder(
-                "utf-8"
-            ).decode(
-                data
-            );
-        }
-
-
-        throw new Error(
-            "Unsupported Gemini message type."
+    micSource =
+      inputContext
+        .createMediaStreamSource(
+          micStream
         );
+
+    analyser =
+      inputContext
+        .createAnalyser();
+
+    analyser.fftSize =
+      CONFIG.analyserFftSize;
+
+    analyser
+      .smoothingTimeConstant =
+      0.82;
+
+    analyserData =
+      new Uint8Array(
+        analyser.fftSize
+      );
+
+    micSource.connect(
+      analyser
+    );
+
+    workletNode =
+      new AudioWorkletNode(
+        inputContext,
+        CONFIG.workletName,
+        {
+          numberOfInputs:
+            1,
+
+          numberOfOutputs:
+            1,
+
+          outputChannelCount: [
+            1
+          ],
+
+          processorOptions: {
+            chunkSize:
+              CONFIG.workletChunkSize
+          }
+        }
+      );
+
+    silentGain =
+      inputContext
+        .createGain();
+
+    silentGain.gain.value =
+      0;
+
+    micSource.connect(
+      workletNode
+    );
+
+    workletNode.connect(
+      silentGain
+    );
+
+    silentGain.connect(
+      inputContext.destination
+    );
+
+    pendingInput =
+      new Float32Array(0);
+
+    workletNode.port.onmessage =
+      event => {
+        if (
+          !active ||
+          !setupComplete
+        ) {
+          return;
+        }
+
+        if (
+          event?.data?.type !==
+          "audio"
+        ) {
+          return;
+        }
+
+        const incoming =
+          event.data.samples;
+
+        if (!incoming) {
+          return;
+        }
+
+        const samples =
+          incoming instanceof
+          Float32Array
+            ? incoming
+            : new Float32Array(
+              incoming
+            );
+
+        const resampled =
+          resampleFloat32(
+            samples,
+            browserInputRate,
+            CONFIG.inputSampleRate
+          );
+
+        appendInputSamples(
+          resampled
+        );
+      };
+
+    workletNode.port.postMessage({
+      type:
+        "start"
+    });
+
+    console.log(
+      "[NEYO Voice] AudioWorklet microphone active",
+      {
+        browserRate:
+          browserInputRate,
+
+        liveRate:
+          CONFIG.inputSampleRate
+      }
+    );
+  }
+
+  async function stopMicrophone() {
+    pendingInput =
+      new Float32Array(0);
+
+    if (workletNode) {
+      try {
+        workletNode.port.postMessage({
+          type:
+            "stop"
+        });
+      } catch {}
+
+      workletNode.port.onmessage =
+        null;
+
+      try {
+        workletNode.disconnect();
+      } catch {}
+
+      workletNode = null;
     }
 
+    if (micSource) {
+      try {
+        micSource.disconnect();
+      } catch {}
 
-    /* =====================================================
-       SERVER MESSAGE
-       ===================================================== */
-
-    async function handleServerMessage(
-        message
-    ) {
-
-        if (
-            message?.setupComplete
-        ) {
-
-            console.log(
-                "[NEYO Voice] Gemini setup complete"
-            );
-
-
-            clearTimeout(
-                setupTimer
-            );
-
-
-            setupTimer =
-                0;
-
-
-            setupComplete =
-                true;
-
-
-            await startMicrophone();
-
-
-            active =
-                true;
-
-            connecting =
-                false;
-
-
-            syncUi();
-
-
-            resetWaveform();
-
-
-            waveRaf =
-                requestAnimationFrame(
-                    animateWave
-                );
-
-
-            clearTimeout(
-                sessionTimer
-            );
-
-
-            sessionTimer =
-                setTimeout(
-                    () => {
-
-                        stopConversation();
-
-                    },
-                    CONFIG.maxSessionMs
-                );
-
-
-            console.log(
-                "[NEYO Voice] Conversation active"
-            );
-
-
-            return;
-        }
-
-
-        const serverContent =
-            message?.serverContent;
-
-
-        if (!serverContent) {
-            return;
-        }
-
-
-        if (
-            serverContent.interrupted
-        ) {
-
-            stopPlayback();
-
-            return;
-        }
-
-
-        const parts =
-            serverContent
-                ?.modelTurn
-                ?.parts ||
-            [];
-
-
-        for (
-            const part
-            of parts
-        ) {
-
-            const inline =
-                part?.inlineData;
-
-
-            if (
-                !inline?.data
-            ) {
-                continue;
-            }
-
-
-            if (
-                String(
-                    inline.mimeType ||
-                    ""
-                ).startsWith(
-                    "audio/"
-                )
-            ) {
-
-                await playAudioChunk(
-                    inline.data,
-                    inline.mimeType
-                );
-            }
-        }
+      micSource = null;
     }
 
+    if (analyser) {
+      try {
+        analyser.disconnect();
+      } catch {}
 
-    /* =====================================================
-       START CONVERSATION
-       ===================================================== */
+      analyser = null;
+    }
 
-    async function startConversation() {
+    if (silentGain) {
+      try {
+        silentGain.disconnect();
+      } catch {}
 
-        if (
-            connecting ||
-            active ||
-            stopping
-        ) {
-            return;
-        }
+      silentGain = null;
+    }
 
+    analyserData = null;
 
-        connecting =
-            true;
-
-
-        setupComplete =
-            false;
-
-
-        syncUi();
-
-
+    if (micStream) {
+      for (
+        const track
+        of micStream.getTracks()
+      ) {
         try {
+          track.stop();
+        } catch {}
+      }
 
-            if (
-                !navigator
-                    .mediaDevices
-                    ?.getUserMedia
-            ) {
+      micStream = null;
+    }
 
-                throw new Error(
-                    "Microphone unavailable."
-                );
-            }
+    if (
+      inputContext &&
+      inputContext.state !==
+        "closed"
+    ) {
+      try {
+        await inputContext.close();
+      } catch {}
+    }
 
+    inputContext = null;
 
-            await ensureOutputContext();
+    if (waveRaf) {
+      cancelAnimationFrame(
+        waveRaf
+      );
 
+      waveRaf = 0;
+    }
 
-            const credentials =
-                await fetchVoiceToken();
+    resetWaveform();
+  }
 
+  /* =====================================================
+     SOCKET MESSAGE DECODING
+     ===================================================== */
 
-            console.log(
-                "[NEYO Voice] Token received",
-                credentials.model
-            );
+  async function decodeSocketMessage(
+    data
+  ) {
+    if (
+      typeof data ===
+      "string"
+    ) {
+      return data;
+    }
 
+    if (
+      data instanceof Blob
+    ) {
+      return data.text();
+    }
 
-            const socketUrl =
-                `${CONFIG.websocketEndpoint}?access_token=${
-                    encodeURIComponent(
-                        credentials.token
-                    )
-                }`;
+    if (
+      data instanceof ArrayBuffer
+    ) {
+      return new TextDecoder(
+        "utf-8"
+      ).decode(data);
+    }
 
+    if (
+      ArrayBuffer.isView(data)
+    ) {
+      return new TextDecoder(
+        "utf-8"
+      ).decode(data);
+    }
 
-            socket =
-                new WebSocket(
-                    socketUrl
-                );
+    throw new Error(
+      "Unsupported Gemini message type."
+    );
+  }
 
+  /* =====================================================
+     SERVER MESSAGE
+     ===================================================== */
 
-            socket.binaryType =
-                "arraybuffer";
+  async function handleServerMessage(
+    message
+  ) {
+    if (
+      message?.setupComplete
+    ) {
+      console.log(
+        "[NEYO Voice] Gemini setup complete"
+      );
 
+      clearTimeout(
+        setupTimer
+      );
 
-            socket.onopen =
-                () => {
+      setupTimer = 0;
 
-                    console.log(
-                        "[NEYO Voice] WebSocket opened"
-                    );
+      setupComplete =
+        true;
 
+      await startMicrophone();
 
-                    /*
-                    Official minimal Gemini 3.1 Live
-                    setup shape.
-                    */
+      active =
+        true;
 
-                    const setupMessage = {
+      connecting =
+        false;
 
-                        setup: {
+      syncUi();
 
-                            model:
-                                `models/${credentials.model}`,
+      resetWaveform();
 
-                            responseModalities: [
-                                "AUDIO"
-                            ],
+      waveRaf =
+        requestAnimationFrame(
+          animateWave
+        );
 
-                            systemInstruction: {
+      clearTimeout(
+        sessionTimer
+      );
 
-                                parts: [
-                                    {
-                                        text:
+      sessionTimer =
+        setTimeout(
+          () => {
+            stopConversation();
+          },
+          CONFIG.maxSessionMs
+        );
+
+      console.log(
+        "[NEYO Voice] Conversation active"
+      );
+
+      return;
+    }
+
+    const serverContent =
+      message?.serverContent;
+
+    if (!serverContent) {
+      return;
+    }
+
+    if (
+      serverContent.interrupted
+    ) {
+      stopPlayback();
+    }
+
+    const parts =
+      serverContent
+        ?.modelTurn
+        ?.parts ||
+      [];
+
+    for (
+      const part
+      of parts
+    ) {
+      const inline =
+        part?.inlineData;
+
+      if (!inline?.data) {
+        continue;
+      }
+
+      if (
+        String(
+          inline.mimeType ||
+          ""
+        ).startsWith(
+          "audio/"
+        )
+      ) {
+        await playAudioChunk(
+          inline.data,
+          inline.mimeType
+        );
+      }
+    }
+  }
+
+  /* =====================================================
+     START
+     ===================================================== */
+
+  async function startConversation() {
+    if (
+      connecting ||
+      active ||
+      stopping
+    ) {
+      return;
+    }
+
+    connecting = true;
+    setupComplete = false;
+
+    syncUi();
+
+    try {
+      if (
+        !navigator
+          .mediaDevices
+          ?.getUserMedia
+      ) {
+        throw new Error(
+          "Microphone unavailable."
+        );
+      }
+
+      await ensureOutputContext();
+
+      const credentials =
+        await fetchVoiceToken();
+
+      console.log(
+        "[NEYO Voice] Token received",
+        credentials.model
+      );
+
+      const socketUrl =
+        `${CONFIG.websocketEndpoint}?access_token=${
+          encodeURIComponent(
+            credentials.token
+          )
+        }`;
+
+      socket =
+        new WebSocket(
+          socketUrl
+        );
+
+      socket.binaryType =
+        "arraybuffer";
+
+      socket.onopen =
+        () => {
+          console.log(
+            "[NEYO Voice] WebSocket opened"
+          );
+
+          const setupMessage = {
+            setup: {
+              model:
+                `models/${credentials.model}`,
+
+              responseModalities: [
+                "AUDIO"
+              ],
+
+              systemInstruction: {
+                parts: [
+                  {
+                    text:
 `You are NEYO, a real-time conversational voice assistant.
 
 This is a live spoken conversation, not dictation and not transcription.
 
-Listen to the user's intent and respond naturally.
+Listen carefully, understand the user's intent, and answer naturally.
 
-Do not repeat the user's words unless they explicitly ask you to repeat them.
+Do not repeat the user's words unless they explicitly ask you to.
 Answer questions directly.
 Respond naturally to requests.
-Continue normally across conversational turns.
-Keep replies concise unless more detail is useful.
-Match the user's language and conversational style.
-If the user speaks Urdu, English, Hindi, Hinglish, or Roman Urdu, respond naturally in that style.
-If something is genuinely unclear, ask one short clarification question.
+Continue normally across multiple conversational turns.
+Keep replies concise unless detail is useful.
+Match the user's language naturally.
+If the user speaks Urdu, English, Hindi, Hinglish, or Roman Urdu, respond naturally in that conversational style.
+If something is unclear, ask one short clarification question.
 Avoid unnecessary filler.`
-                                    }
-                                ]
-                            }
-                        }
-                    };
-
-
-                    socket.send(
-                        JSON.stringify(
-                            setupMessage
-                        )
-                    );
-
-
-                    console.log(
-                        "[NEYO Voice] Conversation setup sent"
-                    );
-
-
-                    clearTimeout(
-                        setupTimer
-                    );
-
-
-                    setupTimer =
-                        setTimeout(
-                            () => {
-
-                                if (
-                                    !setupComplete
-                                ) {
-
-                                    console.error(
-                                        "[NEYO Voice] setup timed out"
-                                    );
-
-
-                                    stopConversation();
-                                }
-                            },
-                            CONFIG.setupTimeoutMs
-                        );
-                };
-
-
-            socket.onmessage =
-                async event => {
-
-                    try {
-
-                        const raw =
-                            await decodeSocketMessage(
-                                event.data
-                            );
-
-
-                        const message =
-                            JSON.parse(
-                                raw
-                            );
-
-
-                        await handleServerMessage(
-                            message
-                        );
-
-
-                    } catch (error) {
-
-                        console.error(
-                            "[NEYO Voice] Invalid Gemini message:",
-                            error
-                        );
-                    }
-                };
-
-
-            socket.onerror =
-                event => {
-
-                    console.error(
-                        "[NEYO Voice] WebSocket error:",
-                        event
-                    );
-                };
-
-
-            socket.onclose =
-                event => {
-
-                    console.log(
-                        "[NEYO Voice] WebSocket closed",
-                        {
-                            code:
-                                event.code,
-
-                            reason:
-                                event.reason,
-
-                            clean:
-                                event.wasClean
-                        }
-                    );
-
-
-                    if (
-                        !stopping &&
-                        (
-                            active ||
-                            connecting
-                        )
-                    ) {
-
-                        stopConversation({
-                            closeSocket:
-                                false
-                        });
-                    }
-                };
-
-
-        } catch (error) {
-
-            console.error(
-                "[NEYO Voice] Start failed:",
-                error
-            );
-
-
-            connecting =
-                false;
-
-            active =
-                false;
-
-            setupComplete =
-                false;
-
-
-            clearTimeout(
-                setupTimer
-            );
-
-
-            setupTimer =
-                0;
-
-
-            await stopMicrophone();
-
-
-            stopPlayback();
-
-
-            if (socket) {
-
-                try {
-                    socket.close();
-                } catch {}
-
-
-                socket =
-                    null;
+                  }
+                ]
+              }
             }
+          };
 
+          socket.send(
+            JSON.stringify(
+              setupMessage
+            )
+          );
 
-            syncUi();
-        }
-    }
+          console.log(
+            "[NEYO Voice] Conversation setup sent"
+          );
 
-
-    /* =====================================================
-       STOP
-       ===================================================== */
-
-    async function stopConversation({
-        closeSocket = true
-    } = {}) {
-
-        if (stopping) {
-            return;
-        }
-
-
-        if (
-            !active &&
-            !connecting &&
-            !socket
-        ) {
-            return;
-        }
-
-
-        stopping =
-            true;
-
-
-        active =
-            false;
-
-        connecting =
-            false;
-
-        setupComplete =
-            false;
-
-
-        clearTimeout(
+          clearTimeout(
             setupTimer
-        );
+          );
 
+          setupTimer =
+            setTimeout(
+              () => {
+                if (
+                  !setupComplete
+                ) {
+                  console.error(
+                    "[NEYO Voice] setup timed out"
+                  );
 
-        setupTimer =
-            0;
+                  stopConversation();
+                }
+              },
+              CONFIG.setupTimeoutMs
+            );
+        };
 
+      socket.onmessage =
+        async event => {
+          try {
+            const raw =
+              await decodeSocketMessage(
+                event.data
+              );
 
-        clearTimeout(
-            sessionTimer
-        );
+            const message =
+              JSON.parse(raw);
 
+            await handleServerMessage(
+              message
+            );
+          } catch (error) {
+            console.error(
+              "[NEYO Voice] Invalid Gemini message:",
+              error
+            );
+          }
+        };
 
-        sessionTimer =
-            0;
+      socket.onerror =
+        event => {
+          console.error(
+            "[NEYO Voice] WebSocket error:",
+            event
+          );
+        };
 
+      socket.onclose =
+        event => {
+          console.error(
+            "[NEYO Voice] SOCKET CLOSED"
+          );
 
-        await stopMicrophone();
+          console.error(
+            "Close code:",
+            event.code
+          );
 
+          console.error(
+            "Close reason:",
+            event.reason ||
+            "(no reason)"
+          );
 
-        stopPlayback();
+          console.error(
+            "Was clean:",
+            event.wasClean
+          );
 
+          console.error(
+            "Model:",
+            credentials.model
+          );
 
-        if (
-            closeSocket &&
-            socket
-        ) {
+          if (
+            !stopping &&
+            (
+              active ||
+              connecting
+            )
+          ) {
+            stopConversation({
+              closeSocket:
+                false
+            });
+          }
+        };
+    } catch (error) {
+      console.error(
+        "[NEYO Voice] Start failed:",
+        error
+      );
 
-            try {
+      connecting = false;
+      active = false;
+      setupComplete = false;
 
-                socket.close(
-                    1000,
-                    "User ended voice conversation"
-                );
+      clearTimeout(
+        setupTimer
+      );
 
-            } catch {}
-        }
+      setupTimer = 0;
 
+      await stopMicrophone();
 
-        socket =
-            null;
+      stopPlayback();
 
+      if (socket) {
+        try {
+          socket.close();
+        } catch {}
 
-        syncUi();
+        socket = null;
+      }
 
+      syncUi();
+    }
+  }
 
-        stopping =
-            false;
+  /* =====================================================
+     STOP
+     ===================================================== */
 
-
-        console.log(
-            "[NEYO Voice] Conversation stopped"
-        );
+  async function stopConversation({
+    closeSocket = true
+  } = {}) {
+    if (stopping) {
+      return;
     }
 
+    if (
+      !active &&
+      !connecting &&
+      !socket
+    ) {
+      return;
+    }
 
-    /* =====================================================
-       BUTTONS
-       ===================================================== */
+    stopping = true;
 
-    micBtn.addEventListener(
-        "click",
-        event => {
+    active = false;
+    connecting = false;
+    setupComplete = false;
 
-            event.preventDefault();
-
-            event.stopPropagation();
-
-            event.stopImmediatePropagation();
-
-
-            if (
-                connecting ||
-                stopping
-            ) {
-                return;
-            }
-
-
-            if (active) {
-
-                stopConversation();
-
-            } else {
-
-                startConversation();
-            }
-        },
-        true
+    clearTimeout(
+      setupTimer
     );
 
+    setupTimer = 0;
 
-    stopRecBtn?.addEventListener(
-        "click",
-        event => {
-
-            event.preventDefault();
-
-            event.stopPropagation();
-
-            event.stopImmediatePropagation();
-
-
-            stopConversation();
-        },
-        true
+    clearTimeout(
+      sessionTimer
     );
 
+    sessionTimer = 0;
 
-    /* =====================================================
-       ESCAPE
-       ===================================================== */
+    await stopMicrophone();
 
-    document.addEventListener(
-        "keydown",
-        event => {
+    stopPlayback();
 
-            if (
-                event.key ===
-                    "Escape" &&
-                (
-                    active ||
-                    connecting
-                )
-            ) {
+    if (
+      closeSocket &&
+      socket
+    ) {
+      try {
+        socket.close(
+          1000,
+          "User ended voice conversation"
+        );
+      } catch {}
+    }
 
-                stopConversation();
-            }
-        }
-    );
-
-
-    /* =====================================================
-       CLEANUP
-       ===================================================== */
-
-    window.addEventListener(
-        "pagehide",
-        () => {
-
-            stopConversation();
-
-        },
-        {
-            once: true
-        }
-    );
-
-
-    /* =====================================================
-       INIT
-       ===================================================== */
-
-    resetWaveform();
+    socket = null;
 
     syncUi();
 
+    stopping = false;
 
-    window.NeyoVoice =
-        Object.freeze({
+    console.log(
+      "[NEYO Voice] Conversation stopped"
+    );
+  }
 
-            start:
-                startConversation,
+  /* =====================================================
+     EVENTS
+     ===================================================== */
 
-            stop:
-                stopConversation,
+  micBtn.addEventListener(
+    "click",
+    event => {
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
 
-            isActive:
-                () =>
-                    active,
+      if (
+        connecting ||
+        stopping
+      ) {
+        return;
+      }
 
-            isConnecting:
-                () =>
-                    connecting,
+      if (active) {
+        stopConversation();
+      } else {
+        startConversation();
+      }
+    },
+    true
+  );
 
-            engine:
-                "gemini-3.1-live-conversation"
-        });
+  stopRecBtn?.addEventListener(
+    "click",
+    event => {
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
 
+      stopConversation();
+    },
+    true
+  );
+
+  document.addEventListener(
+    "keydown",
+    event => {
+      if (
+        event.key ===
+          "Escape" &&
+        (
+          active ||
+          connecting
+        )
+      ) {
+        stopConversation();
+      }
+    }
+  );
+
+  window.addEventListener(
+    "pagehide",
+    () => {
+      stopConversation();
+    },
+    {
+      once: true
+    }
+  );
+
+  /* =====================================================
+     INIT
+     ===================================================== */
+
+  resetWaveform();
+  syncUi();
+
+  window.NeyoVoice =
+    Object.freeze({
+      start:
+        startConversation,
+
+      stop:
+        stopConversation,
+
+      isActive:
+        () => active,
+
+      isConnecting:
+        () => connecting,
+
+      engine:
+        "gemini-3.1-live-audioworklet"
+    });
 })();

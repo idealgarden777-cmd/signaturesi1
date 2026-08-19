@@ -1,34 +1,36 @@
 /*
 =========================================================
-NEYO — LIVE VOICE CONVERSATION
-Gemini 3.1 Flash Live + AudioWorklet
+NEYO — LIVE VOICE BASELINE
+STABLE RECOVERY VERSION
 
-Requires:
-public/js/worklets/voice-input-processor.js
+Goal:
+- Get voice conversation working first
+- Keep Gemini Live connection simple
+- Keep mic streaming simple
+- Keep playback smooth enough
+- No AudioWorklet yet
+- No custom VAD
+- No search grounding
+- No transcription endpoint
 
 Flow:
-Mic click
+Mic
 → /api/voice-token
 → Gemini Live WebSocket
 → setupComplete
-→ AudioWorklet mic capture
-→ 16 kHz PCM input
-→ native audio reply
-→ smooth browser playback
-
-NO:
-- SpeechRecognition
-- MediaRecorder
-- /api/transcribe
-- frontend Gemini SDK
+→ microphone PCM 16 kHz
+→ Gemini native audio
+→ browser playback
 =========================================================
 */
 
 (() => {
   "use strict";
 
+
   /* =====================================================
      BUTTON ISOLATION
+     Keeps existing neo.js untouched.
      ===================================================== */
 
   function isolateButton(element) {
@@ -40,13 +42,16 @@ NO:
     return clone;
   }
 
+
   const micBtn = isolateButton(
     document.getElementById("micBtn")
   );
 
+
   const stopRecBtn = isolateButton(
     document.getElementById("stopRecBtn")
   );
+
 
   /* =====================================================
      DOM
@@ -55,15 +60,19 @@ NO:
   const composerInputRow =
     document.querySelector(".composer-input-row");
 
+
   const waveform =
     document.getElementById("waveDotsBar");
+
 
   if (!micBtn || !composerInputRow) {
     console.warn(
       "[NEYO Voice] Required DOM missing."
     );
+
     return;
   }
+
 
   /* =====================================================
      CONFIG
@@ -74,13 +83,7 @@ NO:
       "/api/voice-token",
 
     websocketEndpoint:
-      "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent",
-
-    workletUrl:
-      "/js/worklets/voice-input-processor.js",
-
-    workletName:
-      "neyo-voice-input-processor",
+      "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained",
 
     inputSampleRate:
       16000,
@@ -88,11 +91,8 @@ NO:
     outputSampleRate:
       24000,
 
-    networkChunkSamples:
-      1600,
-
-    workletChunkSize:
-      2048,
+    processorBufferSize:
+      4096,
 
     analyserFftSize:
       256,
@@ -104,8 +104,9 @@ NO:
       30 * 60 * 1000,
 
     playbackLeadSeconds:
-      0.12
+      0.08
   });
+
 
   /* =====================================================
      SESSION STATE
@@ -121,46 +122,54 @@ NO:
   let setupTimer = 0;
   let sessionTimer = 0;
 
+
   /* =====================================================
-     INPUT AUDIO
+     MICROPHONE STATE
      ===================================================== */
 
   let micStream = null;
+
   let inputContext = null;
+
   let micSource = null;
-  let workletNode = null;
+
+  let processorNode = null;
+
   let silentGain = null;
 
   let analyser = null;
+
   let analyserData = null;
 
   let browserInputRate = 48000;
 
-  let pendingInput =
-    new Float32Array(0);
 
   /* =====================================================
-     OUTPUT AUDIO
+     OUTPUT STATE
      ===================================================== */
 
   let outputContext = null;
 
   let nextPlaybackTime = 0;
+
   let playbackStarted = false;
 
-  const playingSources =
-    new Set();
+  const playingSources = new Set();
+
 
   /* =====================================================
-     WAVEFORM
+     WAVE STATE
      ===================================================== */
 
   let waveRaf = 0;
+
   let smoothLevel = 0;
 
+
   console.log(
-    "[NEYO Voice] Gemini 3.1 Live module loaded"
+    "[NEYO Voice] Stable baseline loaded"
   );
+
 
   /* =====================================================
      UI
@@ -172,15 +181,18 @@ NO:
       connecting || active
     );
 
+
     composerInputRow.classList.toggle(
       "is-processing-transcription",
       connecting
     );
 
+
     micBtn.setAttribute(
       "aria-pressed",
       String(active)
     );
+
 
     if (connecting) {
       micBtn.dataset.tooltip =
@@ -188,8 +200,9 @@ NO:
 
       micBtn.setAttribute(
         "aria-label",
-        "Connecting voice conversation"
+        "Connecting voice"
       );
+
     } else if (active) {
       micBtn.dataset.tooltip =
         "End voice conversation";
@@ -198,6 +211,7 @@ NO:
         "aria-label",
         "End voice conversation"
       );
+
     } else {
       micBtn.dataset.tooltip =
         "Voice conversation";
@@ -207,6 +221,7 @@ NO:
         "Start voice conversation"
       );
     }
+
 
     if (stopRecBtn) {
       stopRecBtn.disabled =
@@ -219,19 +234,19 @@ NO:
     }
   }
 
+
   /* =====================================================
      WAVEFORM
      ===================================================== */
 
   function getWaveBars() {
-    if (!waveform) {
-      return [];
-    }
+    if (!waveform) return [];
 
     return Array.from(
       waveform.querySelectorAll("span")
     );
   }
+
 
   function resetWaveform() {
     smoothLevel = 0;
@@ -242,33 +257,36 @@ NO:
     }
   }
 
-  function calculateRms() {
-    if (
-      !analyser ||
-      !analyserData
-    ) {
+
+  function getRms() {
+    if (!analyser || !analyserData) {
       return 0;
     }
+
 
     analyser.getByteTimeDomainData(
       analyserData
     );
 
+
     let sum = 0;
+
 
     for (
       let i = 0;
       i < analyserData.length;
       i += 1
     ) {
-      const sample =
+      const value =
         (
           analyserData[i] -
           128
         ) / 128;
 
-      sum += sample * sample;
+
+      sum += value * value;
     }
+
 
     return Math.sqrt(
       sum /
@@ -276,13 +294,13 @@ NO:
     );
   }
 
-  function animateWave(timestamp) {
-    if (!active) {
-      return;
-    }
 
-    const rms =
-      calculateRms();
+  function animateWave(timestamp) {
+    if (!active) return;
+
+
+    const rms = getRms();
+
 
     const target =
       Math.max(
@@ -293,20 +311,22 @@ NO:
         )
       );
 
-    const smoothing =
+
+    const speed =
       target > smoothLevel
         ? 0.30
         : 0.10;
+
 
     smoothLevel +=
       (
         target -
         smoothLevel
-      ) *
-      smoothing;
+      ) * speed;
 
-    const bars =
-      getWaveBars();
+
+    const bars = getWaveBars();
+
 
     const center =
       Math.max(
@@ -314,29 +334,28 @@ NO:
         (bars.length - 1) / 2
       );
 
+
     bars.forEach(
-      (
-        bar,
-        index
-      ) => {
+      (bar, index) => {
         const distance =
           Math.abs(
             index -
             center
-          ) /
-          center;
+          ) / center;
+
 
         const weight =
           1 -
-          distance * 0.46;
+          distance * 0.45;
+
 
         const movement =
           0.84 +
           Math.sin(
-            timestamp * 0.0048 +
-            index * 0.82
-          ) *
-          0.16;
+            timestamp * 0.005 +
+            index * 0.85
+          ) * 0.16;
+
 
         const energy =
           Math.max(
@@ -349,11 +368,13 @@ NO:
             )
           );
 
+
         bar.style.height =
           `${(
             3 +
             energy * 21
           ).toFixed(2)}px`;
+
 
         bar.style.opacity =
           `${(
@@ -363,11 +384,13 @@ NO:
       }
     );
 
+
     waveRaf =
       requestAnimationFrame(
         animateWave
       );
   }
+
 
   /* =====================================================
      RESAMPLE
@@ -378,18 +401,15 @@ NO:
     sourceRate,
     targetRate
   ) {
-    if (
-      sourceRate ===
-      targetRate
-    ) {
-      return new Float32Array(
-        input
-      );
+    if (sourceRate === targetRate) {
+      return new Float32Array(input);
     }
+
 
     const ratio =
       sourceRate /
       targetRate;
+
 
     const outputLength =
       Math.max(
@@ -400,10 +420,12 @@ NO:
         )
       );
 
+
     const output =
       new Float32Array(
         outputLength
       );
+
 
     for (
       let i = 0;
@@ -415,20 +437,22 @@ NO:
           i * ratio
         );
 
+
       const end =
         Math.max(
           start + 1,
           Math.min(
             input.length,
             Math.floor(
-              (i + 1) *
-              ratio
+              (i + 1) * ratio
             )
           )
         );
 
+
       let sum = 0;
       let count = 0;
+
 
       for (
         let j = start;
@@ -439,17 +463,20 @@ NO:
         count += 1;
       }
 
+
       output[i] =
         count
           ? sum / count
           : 0;
     }
 
+
     return output;
   }
 
+
   /* =====================================================
-     PCM CONVERSION
+     FLOAT32 → PCM16
      ===================================================== */
 
   function float32ToPcm16(samples) {
@@ -458,10 +485,12 @@ NO:
         samples.length * 2
       );
 
+
     const view =
       new DataView(
         bytes.buffer
       );
+
 
     for (
       let i = 0;
@@ -477,10 +506,12 @@ NO:
           )
         );
 
+
       const integer =
         sample < 0
           ? sample * 32768
           : sample * 32767;
+
 
       view.setInt16(
         i * 2,
@@ -489,8 +520,14 @@ NO:
       );
     }
 
+
     return bytes;
   }
+
+
+  /* =====================================================
+     PCM16 → FLOAT32
+     ===================================================== */
 
   function pcm16ToFloat32(bytes) {
     const count =
@@ -498,10 +535,12 @@ NO:
         bytes.byteLength / 2
       );
 
+
     const samples =
       new Float32Array(
         count
       );
+
 
     const view =
       new DataView(
@@ -509,6 +548,7 @@ NO:
         bytes.byteOffset,
         bytes.byteLength
       );
+
 
     for (
       let i = 0;
@@ -521,6 +561,7 @@ NO:
           true
         );
 
+
       samples[i] =
         sample /
         (
@@ -530,8 +571,10 @@ NO:
         );
     }
 
+
     return samples;
   }
+
 
   /* =====================================================
      BASE64
@@ -540,8 +583,8 @@ NO:
   function bytesToBase64(bytes) {
     let binary = "";
 
-    const chunkSize =
-      32768;
+    const chunkSize = 32768;
+
 
     for (
       let i = 0;
@@ -557,23 +600,28 @@ NO:
           )
         );
 
+
       binary +=
         String.fromCharCode(
           ...chunk
         );
     }
 
+
     return btoa(binary);
   }
+
 
   function base64ToBytes(value) {
     const binary =
       atob(value);
 
+
     const bytes =
       new Uint8Array(
         binary.length
       );
+
 
     for (
       let i = 0;
@@ -584,90 +632,10 @@ NO:
         binary.charCodeAt(i);
     }
 
+
     return bytes;
   }
 
-  /* =====================================================
-     INPUT NETWORK BUFFER
-     ===================================================== */
-
-  function appendInputSamples(samples) {
-    if (!samples.length) {
-      return;
-    }
-
-    const combined =
-      new Float32Array(
-        pendingInput.length +
-        samples.length
-      );
-
-    combined.set(
-      pendingInput,
-      0
-    );
-
-    combined.set(
-      samples,
-      pendingInput.length
-    );
-
-    pendingInput =
-      combined;
-
-    while (
-      pendingInput.length >=
-      CONFIG.networkChunkSamples
-    ) {
-      const packet =
-        pendingInput.slice(
-          0,
-          CONFIG.networkChunkSamples
-        );
-
-      pendingInput =
-        pendingInput.slice(
-          CONFIG.networkChunkSamples
-        );
-
-      sendAudioPacket(
-        packet
-      );
-    }
-  }
-
-  function sendAudioPacket(samples) {
-    if (
-      !socket ||
-      socket.readyState !==
-        WebSocket.OPEN ||
-      !setupComplete ||
-      !active
-    ) {
-      return;
-    }
-
-    const pcm =
-      float32ToPcm16(
-        samples
-      );
-
-    socket.send(
-      JSON.stringify({
-        realtimeInput: {
-          audio: {
-            data:
-              bytesToBase64(
-                pcm
-              ),
-
-            mimeType:
-              "audio/pcm;rate=16000"
-          }
-        }
-      })
-    );
-  }
 
   /* =====================================================
      OUTPUT AUDIO
@@ -681,17 +649,20 @@ NO:
     ) {
       if (
         outputContext.state ===
-        "suspended"
+          "suspended"
       ) {
         await outputContext.resume();
       }
 
+
       return outputContext;
     }
+
 
     const AudioContextClass =
       window.AudioContext ||
       window.webkitAudioContext;
+
 
     if (!AudioContextClass) {
       throw new Error(
@@ -699,8 +670,10 @@ NO:
       );
     }
 
+
     outputContext =
       new AudioContextClass();
+
 
     if (
       outputContext.state ===
@@ -709,14 +682,18 @@ NO:
       await outputContext.resume();
     }
 
+
     nextPlaybackTime =
       outputContext.currentTime;
+
 
     playbackStarted =
       false;
 
+
     return outputContext;
   }
+
 
   function getSampleRateFromMime(
     mimeType
@@ -728,12 +705,15 @@ NO:
         /rate=(\d+)/i
       );
 
+
     if (!match) {
       return CONFIG.outputSampleRate;
     }
 
+
     const rate =
       Number(match[1]);
+
 
     return (
       Number.isFinite(rate) &&
@@ -743,35 +723,38 @@ NO:
       : CONFIG.outputSampleRate;
   }
 
+
   async function playAudioChunk(
     base64,
     mimeType
   ) {
-    if (!base64) {
-      return;
-    }
+    if (!base64) return;
+
 
     const context =
       await ensureOutputContext();
+
 
     const bytes =
       base64ToBytes(
         base64
       );
 
+
     const samples =
       pcm16ToFloat32(
         bytes
       );
 
-    if (!samples.length) {
-      return;
-    }
+
+    if (!samples.length) return;
+
 
     const sampleRate =
       getSampleRateFromMime(
         mimeType
       );
+
 
     const buffer =
       context.createBuffer(
@@ -780,19 +763,24 @@ NO:
         sampleRate
       );
 
+
     buffer
       .getChannelData(0)
       .set(samples);
 
+
     const source =
       context.createBufferSource();
+
 
     source.buffer =
       buffer;
 
+
     source.connect(
       context.destination
     );
+
 
     if (!playbackStarted) {
       nextPlaybackTime =
@@ -802,28 +790,31 @@ NO:
           nextPlaybackTime
         );
 
-      playbackStarted =
-        true;
+
+      playbackStarted = true;
+
     } else if (
       nextPlaybackTime <
       context.currentTime +
-      0.015
+      0.01
     ) {
       nextPlaybackTime =
         context.currentTime +
         CONFIG.playbackLeadSeconds;
     }
 
+
     source.start(
       nextPlaybackTime
     );
 
+
     nextPlaybackTime +=
       buffer.duration;
 
-    playingSources.add(
-      source
-    );
+
+    playingSources.add(source);
+
 
     source.addEventListener(
       "ended",
@@ -838,6 +829,7 @@ NO:
     );
   }
 
+
   function stopPlayback() {
     for (
       const source
@@ -848,16 +840,19 @@ NO:
       } catch {}
     }
 
+
     playingSources.clear();
 
-    playbackStarted =
-      false;
+
+    playbackStarted = false;
+
 
     if (outputContext) {
       nextPlaybackTime =
         outputContext.currentTime;
     }
   }
+
 
   /* =====================================================
      TOKEN
@@ -881,15 +876,19 @@ NO:
         }
       );
 
+
     const raw =
       await response.text();
 
+
     let data = null;
+
 
     try {
       data =
         JSON.parse(raw);
     } catch {}
+
 
     if (!response.ok) {
       throw new Error(
@@ -898,6 +897,7 @@ NO:
         `Voice token failed (${response.status})`
       );
     }
+
 
     if (
       !data?.token ||
@@ -908,17 +908,18 @@ NO:
       );
     }
 
+
     return data;
   }
 
+
   /* =====================================================
-     MICROPHONE / AUDIOWORKLET
+     MICROPHONE
      ===================================================== */
 
   async function startMicrophone() {
-    if (micStream) {
-      return;
-    }
+    if (micStream) return;
+
 
     micStream =
       await navigator
@@ -942,9 +943,11 @@ NO:
             false
         });
 
+
     const AudioContextClass =
       window.AudioContext ||
       window.webkitAudioContext;
+
 
     if (!AudioContextClass) {
       throw new Error(
@@ -952,8 +955,10 @@ NO:
       );
     }
 
+
     inputContext =
       new AudioContextClass();
+
 
     if (
       inputContext.state ===
@@ -962,14 +967,10 @@ NO:
       await inputContext.resume();
     }
 
+
     browserInputRate =
       inputContext.sampleRate;
 
-    await inputContext
-      .audioWorklet
-      .addModule(
-        CONFIG.workletUrl
-      );
 
     micSource =
       inputContext
@@ -977,120 +978,122 @@ NO:
           micStream
         );
 
+
+    /* ---------------------------------------------
+       WAVE ANALYSER
+       --------------------------------------------- */
+
     analyser =
-      inputContext
-        .createAnalyser();
+      inputContext.createAnalyser();
+
 
     analyser.fftSize =
       CONFIG.analyserFftSize;
 
-    analyser
-      .smoothingTimeConstant =
+
+    analyser.smoothingTimeConstant =
       0.82;
+
 
     analyserData =
       new Uint8Array(
         analyser.fftSize
       );
 
+
     micSource.connect(
       analyser
     );
 
-    workletNode =
-      new AudioWorkletNode(
-        inputContext,
-        CONFIG.workletName,
-        {
-          numberOfInputs:
-            1,
 
-          numberOfOutputs:
-            1,
+    /* ---------------------------------------------
+       SIMPLE WORKING CAPTURE
+       --------------------------------------------- */
 
-          outputChannelCount: [
-            1
-          ],
+    processorNode =
+      inputContext
+        .createScriptProcessor(
+          CONFIG.processorBufferSize,
+          1,
+          1
+        );
 
-          processorOptions: {
-            chunkSize:
-              CONFIG.workletChunkSize
-          }
-        }
-      );
 
     silentGain =
       inputContext
         .createGain();
 
-    silentGain.gain.value =
-      0;
+
+    silentGain.gain.value = 0;
+
 
     micSource.connect(
-      workletNode
+      processorNode
     );
 
-    workletNode.connect(
+
+    processorNode.connect(
       silentGain
     );
+
 
     silentGain.connect(
       inputContext.destination
     );
 
-    pendingInput =
-      new Float32Array(0);
 
-    workletNode.port.onmessage =
+    processorNode.onaudioprocess =
       event => {
         if (
           !active ||
-          !setupComplete
+          !setupComplete ||
+          !socket ||
+          socket.readyState !==
+            WebSocket.OPEN
         ) {
           return;
         }
 
-        if (
-          event?.data?.type !==
-          "audio"
-        ) {
-          return;
-        }
 
-        const incoming =
-          event.data.samples;
+        const input =
+          event.inputBuffer
+            .getChannelData(0);
 
-        if (!incoming) {
-          return;
-        }
-
-        const samples =
-          incoming instanceof
-          Float32Array
-            ? incoming
-            : new Float32Array(
-              incoming
-            );
 
         const resampled =
           resampleFloat32(
-            samples,
+            input,
             browserInputRate,
             CONFIG.inputSampleRate
           );
 
-        appendInputSamples(
-          resampled
+
+        const pcm =
+          float32ToPcm16(
+            resampled
+          );
+
+
+        socket.send(
+          JSON.stringify({
+            realtimeInput: {
+              audio: {
+                data:
+                  bytesToBase64(
+                    pcm
+                  ),
+
+                mimeType:
+                  "audio/pcm;rate=16000"
+              }
+            }
+          })
         );
       };
 
-    workletNode.port.postMessage({
-      type:
-        "start"
-    });
 
     console.log(
-      "[NEYO Voice] AudioWorklet microphone active",
+      "[NEYO Voice] Microphone active",
       {
         browserRate:
           browserInputRate,
@@ -1101,53 +1104,58 @@ NO:
     );
   }
 
+
+  /* =====================================================
+     STOP MICROPHONE
+     ===================================================== */
+
   async function stopMicrophone() {
-    pendingInput =
-      new Float32Array(0);
-
-    if (workletNode) {
-      try {
-        workletNode.port.postMessage({
-          type:
-            "stop"
-        });
-      } catch {}
-
-      workletNode.port.onmessage =
+    if (processorNode) {
+      processorNode.onaudioprocess =
         null;
 
+
       try {
-        workletNode.disconnect();
+        processorNode.disconnect();
       } catch {}
 
-      workletNode = null;
+
+      processorNode = null;
     }
+
 
     if (micSource) {
       try {
         micSource.disconnect();
       } catch {}
 
+
       micSource = null;
     }
+
 
     if (analyser) {
       try {
         analyser.disconnect();
       } catch {}
 
+
       analyser = null;
     }
+
 
     if (silentGain) {
       try {
         silentGain.disconnect();
       } catch {}
 
+
       silentGain = null;
     }
 
+
     analyserData = null;
+
 
     if (micStream) {
       for (
@@ -1159,8 +1167,10 @@ NO:
         } catch {}
       }
 
+
       micStream = null;
     }
+
 
     if (
       inputContext &&
@@ -1172,18 +1182,23 @@ NO:
       } catch {}
     }
 
+
     inputContext = null;
+
 
     if (waveRaf) {
       cancelAnimationFrame(
         waveRaf
       );
 
+
       waveRaf = 0;
     }
 
+
     resetWaveform();
   }
+
 
   /* =====================================================
      SOCKET MESSAGE DECODING
@@ -1199,11 +1214,13 @@ NO:
       return data;
     }
 
+
     if (
       data instanceof Blob
     ) {
       return data.text();
     }
+
 
     if (
       data instanceof ArrayBuffer
@@ -1213,6 +1230,7 @@ NO:
       ).decode(data);
     }
 
+
     if (
       ArrayBuffer.isView(data)
     ) {
@@ -1221,10 +1239,12 @@ NO:
       ).decode(data);
     }
 
+
     throw new Error(
       "Unsupported Gemini message type."
     );
   }
+
 
   /* =====================================================
      SERVER MESSAGE
@@ -1233,42 +1253,46 @@ NO:
   async function handleServerMessage(
     message
   ) {
-    if (
-      message?.setupComplete
-    ) {
+    if (message?.setupComplete) {
       console.log(
         "[NEYO Voice] Gemini setup complete"
       );
+
 
       clearTimeout(
         setupTimer
       );
 
+
       setupTimer = 0;
 
-      setupComplete =
-        true;
+
+      setupComplete = true;
+
 
       await startMicrophone();
 
-      active =
-        true;
 
-      connecting =
-        false;
+      active = true;
+      connecting = false;
+
 
       syncUi();
 
+
       resetWaveform();
+
 
       waveRaf =
         requestAnimationFrame(
           animateWave
         );
 
+
       clearTimeout(
         sessionTimer
       );
+
 
       sessionTimer =
         setTimeout(
@@ -1278,19 +1302,24 @@ NO:
           CONFIG.maxSessionMs
         );
 
+
       console.log(
         "[NEYO Voice] Conversation active"
       );
 
+
       return;
     }
+
 
     const serverContent =
       message?.serverContent;
 
+
     if (!serverContent) {
       return;
     }
+
 
     if (
       serverContent.interrupted
@@ -1298,11 +1327,13 @@ NO:
       stopPlayback();
     }
 
+
     const parts =
       serverContent
         ?.modelTurn
         ?.parts ||
       [];
+
 
     for (
       const part
@@ -1311,9 +1342,11 @@ NO:
       const inline =
         part?.inlineData;
 
+
       if (!inline?.data) {
         continue;
       }
+
 
       if (
         String(
@@ -1331,8 +1364,9 @@ NO:
     }
   }
 
+
   /* =====================================================
-     START
+     START CONVERSATION
      ===================================================== */
 
   async function startConversation() {
@@ -1344,10 +1378,13 @@ NO:
       return;
     }
 
+
     connecting = true;
     setupComplete = false;
 
+
     syncUi();
+
 
     try {
       if (
@@ -1360,15 +1397,19 @@ NO:
         );
       }
 
+
       await ensureOutputContext();
+
 
       const credentials =
         await fetchVoiceToken();
+
 
       console.log(
         "[NEYO Voice] Token received",
         credentials.model
       );
+
 
       const socketUrl =
         `${CONFIG.websocketEndpoint}?access_token=${
@@ -1377,13 +1418,16 @@ NO:
           )
         }`;
 
+
       socket =
         new WebSocket(
           socketUrl
         );
 
+
       socket.binaryType =
         "arraybuffer";
+
 
       socket.onopen =
         () => {
@@ -1391,10 +1435,18 @@ NO:
             "[NEYO Voice] WebSocket opened"
           );
 
-          /* ================================================
-             FIXED SETUP BLOCK — responseModalities
-             moved inside generationConfig
-             ================================================ */
+
+          /*
+          IMPORTANT:
+          Keep setup minimal.
+
+          Token already constrains model/audio.
+          No VAD.
+          No search.
+          No voice config.
+          No system instruction.
+          */
+
 
           const setupMessage = {
             setup: {
@@ -1405,32 +1457,10 @@ NO:
                 responseModalities: [
                   "AUDIO"
                 ]
-              },
-
-              systemInstruction: {
-                parts: [
-                  {
-                    text:
-`You are NEYO, a real-time conversational voice assistant.
-
-This is a live spoken conversation, not dictation and not transcription.
-
-Listen carefully, understand the user's intent, and answer naturally.
-
-Do not repeat the user's words unless they explicitly ask you to.
-Answer questions directly.
-Respond naturally to requests.
-Continue normally across multiple conversational turns.
-Keep replies concise unless detail is useful.
-Match the user's language naturally.
-If the user speaks Urdu, English, Hindi, Hinglish, or Roman Urdu, respond naturally in that conversational style.
-If something is unclear, ask one short clarification question.
-Avoid unnecessary filler.`
-                  }
-                ]
               }
             }
           };
+
 
           socket.send(
             JSON.stringify(
@@ -1438,23 +1468,25 @@ Avoid unnecessary filler.`
             )
           );
 
+
           console.log(
-            "[NEYO Voice] Conversation setup sent"
+            "[NEYO Voice] Setup sent"
           );
+
 
           clearTimeout(
             setupTimer
           );
 
+
           setupTimer =
             setTimeout(
               () => {
-                if (
-                  !setupComplete
-                ) {
+                if (!setupComplete) {
                   console.error(
-                    "[NEYO Voice] setup timed out"
+                    "[NEYO Voice] Setup timed out"
                   );
+
 
                   stopConversation();
                 }
@@ -1462,6 +1494,7 @@ Avoid unnecessary filler.`
               CONFIG.setupTimeoutMs
             );
         };
+
 
       socket.onmessage =
         async event => {
@@ -1471,19 +1504,24 @@ Avoid unnecessary filler.`
                 event.data
               );
 
+
             const message =
               JSON.parse(raw);
+
 
             await handleServerMessage(
               message
             );
+
+
           } catch (error) {
             console.error(
-              "[NEYO Voice] Invalid Gemini message:",
+              "[NEYO Voice] Invalid server message:",
               error
             );
           }
         };
+
 
       socket.onerror =
         event => {
@@ -1493,32 +1531,23 @@ Avoid unnecessary filler.`
           );
         };
 
+
       socket.onclose =
         event => {
-          console.error(
-            "[NEYO Voice] SOCKET CLOSED"
+          console.log(
+            "[NEYO Voice] WebSocket closed",
+            {
+              code:
+                event.code,
+
+              reason:
+                event.reason,
+
+              clean:
+                event.wasClean
+            }
           );
 
-          console.error(
-            "Close code:",
-            event.code
-          );
-
-          console.error(
-            "Close reason:",
-            event.reason ||
-            "(no reason)"
-          );
-
-          console.error(
-            "Was clean:",
-            event.wasClean
-          );
-
-          console.error(
-            "Model:",
-            credentials.model
-          );
 
           if (
             !stopping &&
@@ -1533,40 +1562,51 @@ Avoid unnecessary filler.`
             });
           }
         };
+
+
     } catch (error) {
       console.error(
         "[NEYO Voice] Start failed:",
         error
       );
 
+
       connecting = false;
       active = false;
       setupComplete = false;
+
 
       clearTimeout(
         setupTimer
       );
 
+
       setupTimer = 0;
+
 
       await stopMicrophone();
 
+
       stopPlayback();
+
 
       if (socket) {
         try {
           socket.close();
         } catch {}
 
+
         socket = null;
       }
+
 
       syncUi();
     }
   }
 
+
   /* =====================================================
-     STOP
+     STOP CONVERSATION
      ===================================================== */
 
   async function stopConversation({
@@ -1576,6 +1616,7 @@ Avoid unnecessary filler.`
       return;
     }
 
+
     if (
       !active &&
       !connecting &&
@@ -1584,27 +1625,36 @@ Avoid unnecessary filler.`
       return;
     }
 
+
     stopping = true;
+
 
     active = false;
     connecting = false;
     setupComplete = false;
 
+
     clearTimeout(
       setupTimer
     );
 
+
     setupTimer = 0;
+
 
     clearTimeout(
       sessionTimer
     );
 
+
     sessionTimer = 0;
+
 
     await stopMicrophone();
 
+
     stopPlayback();
+
 
     if (
       closeSocket &&
@@ -1618,16 +1668,21 @@ Avoid unnecessary filler.`
       } catch {}
     }
 
+
     socket = null;
+
 
     syncUi();
 
+
     stopping = false;
+
 
     console.log(
       "[NEYO Voice] Conversation stopped"
     );
   }
+
 
   /* =====================================================
      EVENTS
@@ -1640,6 +1695,7 @@ Avoid unnecessary filler.`
       event.stopPropagation();
       event.stopImmediatePropagation();
 
+
       if (
         connecting ||
         stopping
@@ -1647,14 +1703,17 @@ Avoid unnecessary filler.`
         return;
       }
 
+
       if (active) {
         stopConversation();
+
       } else {
         startConversation();
       }
     },
     true
   );
+
 
   stopRecBtn?.addEventListener(
     "click",
@@ -1663,10 +1722,12 @@ Avoid unnecessary filler.`
       event.stopPropagation();
       event.stopImmediatePropagation();
 
+
       stopConversation();
     },
     true
   );
+
 
   document.addEventListener(
     "keydown",
@@ -1684,6 +1745,7 @@ Avoid unnecessary filler.`
     }
   );
 
+
   window.addEventListener(
     "pagehide",
     () => {
@@ -1694,12 +1756,15 @@ Avoid unnecessary filler.`
     }
   );
 
+
   /* =====================================================
      INIT
      ===================================================== */
 
   resetWaveform();
+
   syncUi();
+
 
   window.NeyoVoice =
     Object.freeze({
@@ -1716,6 +1781,6 @@ Avoid unnecessary filler.`
         () => connecting,
 
       engine:
-        "gemini-3.1-live-audioworklet"
+        "gemini-live-stable-baseline"
     });
 })();

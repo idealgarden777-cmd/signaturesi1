@@ -2,24 +2,23 @@
 =========================================================
 NEYO — GEMINI LIVE VOICE
 DIRECT WEBSOCKET / NATIVE AUDIO
-STABLE MINIMAL VERSION
 
 Flow:
-Mic click
+Mic
 → POST /api/voice-token
 → ephemeral token
-→ Gemini constrained WebSocket
+→ Gemini Live WebSocket
 → setup
 → setupComplete
-→ mic PCM 16 kHz
-→ Gemini PCM audio
+→ raw PCM 16 kHz microphone
+→ Gemini native audio
 → browser playback
 
 NO:
 - SpeechRecognition
 - MediaRecorder
 - /api/transcribe
-- browser Gemini SDK
+- frontend Gemini SDK
 =========================================================
 */
 
@@ -29,13 +28,16 @@ NO:
 
     /* =====================================================
        BUTTON ISOLATION
-       neo.js stays untouched
+       Keeps neo.js untouched.
        ===================================================== */
 
     function isolateButton(element) {
-        if (!element) return null;
+        if (!element) {
+            return null;
+        }
 
-        const clone = element.cloneNode(true);
+        const clone =
+            element.cloneNode(true);
 
         element.replaceWith(clone);
 
@@ -76,7 +78,7 @@ NO:
         !composerInputRow
     ) {
         console.warn(
-            "[NEYO Voice] required DOM missing"
+            "[NEYO Voice] Required DOM missing."
         );
 
         return;
@@ -87,93 +89,113 @@ NO:
        CONFIG
        ===================================================== */
 
-    const CONFIG = Object.freeze({
+    const CONFIG =
+        Object.freeze({
 
-        tokenEndpoint:
-            "/api/voice-token",
+            tokenEndpoint:
+                "/api/voice-token",
 
-        websocketEndpoint:
-            "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained",
+            websocketEndpoint:
+                "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained",
 
-        inputSampleRate:
-            16000,
+            inputSampleRate:
+                16000,
 
-        outputSampleRate:
-            24000,
+            outputSampleRate:
+                24000,
 
-        processorBufferSize:
-            4096,
+            processorBufferSize:
+                4096,
 
-        analyserFftSize:
-            256,
+            analyserFftSize:
+                256,
 
-        maxSessionMs:
-            30 * 60 * 1000,
+            setupTimeoutMs:
+                10000,
 
-        setupTimeoutMs:
-            10000
-    });
+            maxSessionMs:
+                30 * 60 * 1000
+        });
 
 
     /* =====================================================
        SESSION STATE
        ===================================================== */
 
-    let socket = null;
+    let socket =
+        null;
 
-    let connecting = false;
+    let connecting =
+        false;
 
-    let active = false;
+    let active =
+        false;
 
-    let setupComplete = false;
+    let setupComplete =
+        false;
 
-    let stopping = false;
+    let stopping =
+        false;
 
-    let sessionTimer = 0;
+    let setupTimer =
+        0;
 
-    let setupTimer = 0;
+    let sessionTimer =
+        0;
 
 
     /* =====================================================
        INPUT AUDIO STATE
        ===================================================== */
 
-    let micStream = null;
+    let micStream =
+        null;
 
-    let inputContext = null;
+    let inputContext =
+        null;
 
-    let micSource = null;
+    let micSource =
+        null;
 
-    let processor = null;
+    let processor =
+        null;
 
-    let silentGain = null;
+    let silentGain =
+        null;
 
-    let analyser = null;
+    let analyser =
+        null;
 
-    let analyserData = null;
+    let analyserData =
+        null;
 
-    let browserInputRate = 48000;
+    let browserInputRate =
+        48000;
 
 
     /* =====================================================
        OUTPUT AUDIO STATE
        ===================================================== */
 
-    let outputContext = null;
+    let outputContext =
+        null;
 
-    let nextPlaybackTime = 0;
+    let nextPlaybackTime =
+        0;
 
     const playingSources =
         new Set();
 
 
     /* =====================================================
-       WAVE STATE
+       WAVEFORM STATE
        ===================================================== */
 
-    let waveRaf = 0;
+    let waveRaf =
+        0;
 
-    let smoothLevel = 0;
+    let smoothLevel =
+        0;
 
 
     console.log(
@@ -189,7 +211,8 @@ NO:
 
         composerInputRow.classList.toggle(
             "is-transcribing",
-            connecting || active
+            connecting ||
+            active
         );
 
 
@@ -271,10 +294,14 @@ NO:
 
     function resetWaveform() {
 
-        smoothLevel = 0;
+        smoothLevel =
+            0;
 
 
-        for (const bar of getWaveBars()) {
+        for (
+            const bar
+            of getWaveBars()
+        ) {
 
             bar.style.height =
                 "3px";
@@ -300,7 +327,8 @@ NO:
         );
 
 
-        let sum = 0;
+        let sum =
+            0;
 
 
         for (
@@ -316,7 +344,9 @@ NO:
                 ) / 128;
 
 
-            sum += sample * sample;
+            sum +=
+                sample *
+                sample;
         }
 
 
@@ -327,7 +357,9 @@ NO:
     }
 
 
-    function animateWave(timestamp) {
+    function animateWave(
+        timestamp
+    ) {
 
         if (!active) {
             return;
@@ -350,7 +382,8 @@ NO:
 
 
         const smoothing =
-            target > smoothLevel
+            target >
+            smoothLevel
                 ? 0.32
                 : 0.12;
 
@@ -444,7 +477,7 @@ NO:
 
 
     /* =====================================================
-       RESAMPLING
+       AUDIO RESAMPLING
        ===================================================== */
 
     function resampleFloat32(
@@ -454,8 +487,10 @@ NO:
     ) {
 
         if (
-            sourceRate === targetRate
+            sourceRate ===
+            targetRate
         ) {
+
             return new Float32Array(
                 input
             );
@@ -491,7 +526,8 @@ NO:
 
             const start =
                 Math.floor(
-                    i * ratio
+                    i *
+                    ratio
                 );
 
 
@@ -508,9 +544,11 @@ NO:
                 );
 
 
-            let sum = 0;
+            let sum =
+                0;
 
-            let count = 0;
+            let count =
+                0;
 
 
             for (
@@ -519,9 +557,11 @@ NO:
                 j += 1
             ) {
 
-                sum += input[j];
+                sum +=
+                    input[j];
 
-                count += 1;
+                count +=
+                    1;
             }
 
 
@@ -537,10 +577,12 @@ NO:
 
 
     /* =====================================================
-       FLOAT32 → PCM16 LE
+       FLOAT32 → PCM16 LITTLE ENDIAN
        ===================================================== */
 
-    function float32ToPcm16(samples) {
+    function float32ToPcm16(
+        samples
+    ) {
 
         const bytes =
             new Uint8Array(
@@ -593,24 +635,30 @@ NO:
        BASE64
        ===================================================== */
 
-    function bytesToBase64(bytes) {
+    function bytesToBase64(
+        bytes
+    ) {
 
-        let binary = "";
+        let binary =
+            "";
 
-        const CHUNK = 32768;
+
+        const chunkSize =
+            32768;
 
 
         for (
             let i = 0;
             i < bytes.length;
-            i += CHUNK
+            i += chunkSize
         ) {
 
-            const part =
+            const chunk =
                 bytes.subarray(
                     i,
                     Math.min(
-                        i + CHUNK,
+                        i +
+                        chunkSize,
                         bytes.length
                     )
                 );
@@ -618,19 +666,25 @@ NO:
 
             binary +=
                 String.fromCharCode(
-                    ...part
+                    ...chunk
                 );
         }
 
 
-        return btoa(binary);
+        return btoa(
+            binary
+        );
     }
 
 
-    function base64ToBytes(value) {
+    function base64ToBytes(
+        value
+    ) {
 
         const binary =
-            atob(value);
+            atob(
+                value
+            );
 
 
         const bytes =
@@ -658,7 +712,9 @@ NO:
        PCM16 → FLOAT32
        ===================================================== */
 
-    function pcm16ToFloat32(bytes) {
+    function pcm16ToFloat32(
+        bytes
+    ) {
 
         const count =
             Math.floor(
@@ -710,6 +766,7 @@ NO:
 
     /* =====================================================
        OUTPUT AUDIO
+       Gemini Live output is PCM, normally 24 kHz.
        ===================================================== */
 
     async function ensureOutputContext() {
@@ -724,7 +781,9 @@ NO:
                 outputContext.state ===
                 "suspended"
             ) {
-                await outputContext.resume();
+
+                await outputContext
+                    .resume();
             }
 
 
@@ -740,7 +799,7 @@ NO:
         if (!AudioContextClass) {
 
             throw new Error(
-                "Audio playback is unavailable."
+                "Audio playback unavailable."
             );
         }
 
@@ -754,7 +813,8 @@ NO:
             "suspended"
         ) {
 
-            await outputContext.resume();
+            await outputContext
+                .resume();
         }
 
 
@@ -766,9 +826,43 @@ NO:
     }
 
 
+    function getSampleRateFromMime(
+        mimeType
+    ) {
+
+        const match =
+            String(
+                mimeType || ""
+            ).match(
+                /rate=(\d+)/i
+            );
+
+
+        if (!match) {
+
+            return CONFIG
+                .outputSampleRate;
+        }
+
+
+        const rate =
+            Number(
+                match[1]
+            );
+
+
+        return (
+            Number.isFinite(rate) &&
+            rate > 0
+        )
+            ? rate
+            : CONFIG.outputSampleRate;
+    }
+
+
     async function playAudioChunk(
         base64,
-        mimeType = ""
+        mimeType
     ) {
 
         if (!base64) {
@@ -797,17 +891,10 @@ NO:
         }
 
 
-        const rateMatch =
-            String(mimeType)
-                .match(
-                    /rate=(\d+)/i
-                );
-
-
         const sampleRate =
-            rateMatch
-                ? Number(rateMatch[1])
-                : CONFIG.outputSampleRate;
+            getSampleRateFromMime(
+                mimeType
+            );
 
 
         const audioBuffer =
@@ -820,7 +907,9 @@ NO:
 
         audioBuffer
             .getChannelData(0)
-            .set(samples);
+            .set(
+                samples
+            );
 
 
         const source =
@@ -908,7 +997,8 @@ NO:
             await fetch(
                 CONFIG.tokenEndpoint,
                 {
-                    method: "POST",
+                    method:
+                        "POST",
 
                     credentials:
                         "same-origin",
@@ -925,12 +1015,20 @@ NO:
             await response.text();
 
 
-        let data = null;
+        let data =
+            null;
 
 
         try {
-            data = JSON.parse(raw);
-        } catch {}
+
+            data =
+                JSON.parse(
+                    raw
+                );
+
+        } catch {
+            // handled below
+        }
 
 
         if (!response.ok) {
@@ -949,7 +1047,7 @@ NO:
         ) {
 
             throw new Error(
-                "Invalid voice-token response."
+                "Invalid voice token response."
             );
         }
 
@@ -959,7 +1057,7 @@ NO:
 
 
     /* =====================================================
-       SEND AUDIO
+       SEND REALTIME AUDIO
        ===================================================== */
 
     function sendAudioChunk(
@@ -977,23 +1075,28 @@ NO:
         }
 
 
-        socket.send(
-            JSON.stringify({
+        const message = {
 
-                realtimeInput: {
+            realtimeInput: {
 
-                    audio: {
+                audio: {
 
-                        data:
-                            bytesToBase64(
-                                pcmBytes
-                            ),
+                    data:
+                        bytesToBase64(
+                            pcmBytes
+                        ),
 
-                        mimeType:
-                            "audio/pcm;rate=16000"
-                    }
+                    mimeType:
+                        "audio/pcm;rate=16000"
                 }
-            })
+            }
+        };
+
+
+        socket.send(
+            JSON.stringify(
+                message
+            )
         );
     }
 
@@ -1055,6 +1158,7 @@ NO:
             inputContext.state ===
             "suspended"
         ) {
+
             await inputContext.resume();
         }
 
@@ -1069,6 +1173,10 @@ NO:
                     micStream
                 );
 
+
+        /* ---------------------------------------------
+           Wave analyser
+           --------------------------------------------- */
 
         analyser =
             inputContext
@@ -1089,6 +1197,10 @@ NO:
             analyser
         );
 
+
+        /* ---------------------------------------------
+           PCM capture
+           --------------------------------------------- */
 
         processor =
             inputContext
@@ -1136,7 +1248,9 @@ NO:
 
                 const input =
                     event.inputBuffer
-                        .getChannelData(0);
+                        .getChannelData(
+                            0
+                        );
 
 
                 const resampled =
@@ -1185,7 +1299,8 @@ NO:
             } catch {}
 
 
-            processor = null;
+            processor =
+                null;
         }
 
 
@@ -1196,7 +1311,8 @@ NO:
             } catch {}
 
 
-            micSource = null;
+            micSource =
+                null;
         }
 
 
@@ -1207,7 +1323,8 @@ NO:
             } catch {}
 
 
-            analyser = null;
+            analyser =
+                null;
         }
 
 
@@ -1218,11 +1335,13 @@ NO:
             } catch {}
 
 
-            silentGain = null;
+            silentGain =
+                null;
         }
 
 
-        analyserData = null;
+        analyserData =
+            null;
 
 
         if (micStream) {
@@ -1238,7 +1357,8 @@ NO:
             }
 
 
-            micStream = null;
+            micStream =
+                null;
         }
 
 
@@ -1249,12 +1369,15 @@ NO:
         ) {
 
             try {
+
                 await inputContext.close();
+
             } catch {}
         }
 
 
-        inputContext = null;
+        inputContext =
+            null;
 
 
         if (waveRaf) {
@@ -1264,7 +1387,8 @@ NO:
             );
 
 
-            waveRaf = 0;
+            waveRaf =
+                0;
         }
 
 
@@ -1273,19 +1397,77 @@ NO:
 
 
     /* =====================================================
-       SERVER MESSAGE
+       WEBSOCKET MESSAGE DECODING
+       Critical fix for Blob / ArrayBuffer responses.
+       ===================================================== */
+
+    async function decodeSocketMessage(
+        data
+    ) {
+
+        if (
+            typeof data ===
+            "string"
+        ) {
+            return data;
+        }
+
+
+        if (
+            data instanceof Blob
+        ) {
+
+            return data.text();
+        }
+
+
+        if (
+            data instanceof ArrayBuffer
+        ) {
+
+            return new TextDecoder(
+                "utf-8"
+            ).decode(
+                data
+            );
+        }
+
+
+        if (
+            ArrayBuffer.isView(
+                data
+            )
+        ) {
+
+            return new TextDecoder(
+                "utf-8"
+            ).decode(
+                data
+            );
+        }
+
+
+        throw new Error(
+            "Unsupported Gemini WebSocket message type."
+        );
+    }
+
+
+    /* =====================================================
+       HANDLE GEMINI MESSAGE
        ===================================================== */
 
     async function handleServerMessage(
         message
     ) {
 
-        /*
-        Critical:
-        Do nothing else until setupComplete.
-        */
+        /* ---------------------------------------------
+           SETUP COMPLETE
+           --------------------------------------------- */
 
-        if (message?.setupComplete) {
+        if (
+            message?.setupComplete
+        ) {
 
             console.log(
                 "[NEYO Voice] Gemini setup complete"
@@ -1297,18 +1479,22 @@ NO:
             );
 
 
-            setupTimer = 0;
+            setupTimer =
+                0;
 
 
-            setupComplete = true;
+            setupComplete =
+                true;
 
 
             await startMicrophone();
 
 
-            active = true;
+            active =
+                true;
 
-            connecting = false;
+            connecting =
+                false;
 
 
             syncUi();
@@ -1348,6 +1534,10 @@ NO:
         }
 
 
+        /* ---------------------------------------------
+           SERVER CONTENT
+           --------------------------------------------- */
+
         const serverContent =
             message?.serverContent;
 
@@ -1356,6 +1546,10 @@ NO:
             return;
         }
 
+
+        /* ---------------------------------------------
+           INTERRUPTION
+           --------------------------------------------- */
 
         if (
             serverContent.interrupted
@@ -1369,6 +1563,10 @@ NO:
             stopPlayback();
         }
 
+
+        /* ---------------------------------------------
+           MODEL AUDIO
+           --------------------------------------------- */
 
         const parts =
             serverContent
@@ -1409,7 +1607,7 @@ NO:
                     error => {
 
                         console.error(
-                            "[NEYO Voice] playback failed:",
+                            "[NEYO Voice] Playback failed:",
                             error
                         );
                     }
@@ -1420,7 +1618,7 @@ NO:
 
 
     /* =====================================================
-       START
+       START CONVERSATION
        ===================================================== */
 
     async function startConversation() {
@@ -1434,9 +1632,11 @@ NO:
         }
 
 
-        connecting = true;
+        connecting =
+            true;
 
-        setupComplete = false;
+        setupComplete =
+            false;
 
 
         syncUi();
@@ -1457,12 +1657,16 @@ NO:
 
 
             /*
-            Unlock browser audio output from the
-            user's click gesture.
+            Unlock browser playback from the user's
+            click gesture.
             */
 
             await ensureOutputContext();
 
+
+            /* -----------------------------------------
+               Token
+               ----------------------------------------- */
 
             const credentials =
                 await fetchVoiceToken();
@@ -1473,6 +1677,10 @@ NO:
                 credentials.model
             );
 
+
+            /* -----------------------------------------
+               WebSocket
+               ----------------------------------------- */
 
             const socketUrl =
                 `${CONFIG.websocketEndpoint}?access_token=${
@@ -1488,6 +1696,15 @@ NO:
                 );
 
 
+            /*
+            Browser may otherwise expose binary frames
+            as Blob. ArrayBuffer is easier to decode.
+            */
+
+            socket.binaryType =
+                "arraybuffer";
+
+
             socket.onopen =
                 () => {
 
@@ -1497,9 +1714,7 @@ NO:
 
 
                     /*
-                    IMPORTANT FIX:
-                    responseModalities belongs inside
-                    generationConfig.
+                    First WebSocket message must be setup.
                     */
 
                     const setupMessage = {
@@ -1551,42 +1766,44 @@ NO:
 
                                     stopConversation();
                                 }
+
                             },
                             CONFIG.setupTimeoutMs
                         );
                 };
 
 
+            /* -----------------------------------------
+               CRITICAL FIX:
+               Blob / ArrayBuffer → UTF-8 → JSON
+               ----------------------------------------- */
+
             socket.onmessage =
-                event => {
+                async event => {
 
                     try {
 
-                        const message =
-                            JSON.parse(
+                        const raw =
+                            await decodeSocketMessage(
                                 event.data
                             );
 
 
-                        handleServerMessage(
+                        const message =
+                            JSON.parse(
+                                raw
+                            );
+
+
+                        await handleServerMessage(
                             message
-                        ).catch(
-                            error => {
-
-                                console.error(
-                                    "[NEYO Voice] message handling failed:",
-                                    error
-                                );
-
-
-                                stopConversation();
-                            }
                         );
+
 
                     } catch (error) {
 
                         console.error(
-                            "[NEYO Voice] invalid Gemini message:",
+                            "[NEYO Voice] Invalid Gemini message:",
                             error
                         );
                     }
@@ -1659,11 +1876,14 @@ NO:
             );
 
 
-            connecting = false;
+            connecting =
+                false;
 
-            active = false;
+            active =
+                false;
 
-            setupComplete = false;
+            setupComplete =
+                false;
 
 
             clearTimeout(
@@ -1671,7 +1891,8 @@ NO:
             );
 
 
-            setupTimer = 0;
+            setupTimer =
+                0;
 
 
             await stopMicrophone();
@@ -1687,7 +1908,8 @@ NO:
                 } catch {}
 
 
-                socket = null;
+                socket =
+                    null;
             }
 
 
@@ -1712,7 +1934,7 @@ NO:
 
 
     /* =====================================================
-       STOP
+       STOP CONVERSATION
        ===================================================== */
 
     async function stopConversation({
@@ -1733,14 +1955,18 @@ NO:
         }
 
 
-        stopping = true;
+        stopping =
+            true;
 
 
-        active = false;
+        active =
+            false;
 
-        connecting = false;
+        connecting =
+            false;
 
-        setupComplete = false;
+        setupComplete =
+            false;
 
 
         clearTimeout(
@@ -1748,7 +1974,8 @@ NO:
         );
 
 
-        setupTimer = 0;
+        setupTimer =
+            0;
 
 
         clearTimeout(
@@ -1756,7 +1983,8 @@ NO:
         );
 
 
-        sessionTimer = 0;
+        sessionTimer =
+            0;
 
 
         await stopMicrophone();
@@ -1781,13 +2009,15 @@ NO:
         }
 
 
-        socket = null;
+        socket =
+            null;
 
 
         syncUi();
 
 
-        stopping = false;
+        stopping =
+            false;
 
 
         console.log(
@@ -1850,7 +2080,7 @@ NO:
 
 
     /* =====================================================
-       ESC
+       ESCAPE
        ===================================================== */
 
     document.addEventListener(
@@ -1873,7 +2103,7 @@ NO:
 
 
     /* =====================================================
-       CLEANUP
+       PAGE CLEANUP
        ===================================================== */
 
     window.addEventListener(
@@ -1912,10 +2142,12 @@ NO:
                 stopConversation,
 
             isActive:
-                () => active,
+                () =>
+                    active,
 
             isConnecting:
-                () => connecting,
+                () =>
+                    connecting,
 
             engine:
                 "gemini-live-direct-websocket"

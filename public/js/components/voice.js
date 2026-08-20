@@ -1,31 +1,40 @@
 /*
 =========================================================
-NEYO — LIVE VOICE
-FINAL PRODUCTION BASELINE
+NEYO — GEMINI LIVE VOICE ENGINE v4
+
+Production baseline
 
 Features:
 - Gemini 3.1 Flash Live
-- Ephemeral token
-- BidiGenerateContentConstrained
-- Fixed Kore voice
+- Ephemeral token authentication
+- Character-aware voice
+- Neyo = female Kore voice
 - Continuous microphone
-- Server-side VAD
-- Natural 850ms silence window
-- Deterministic listening / thinking / speaking
-- Interruption / barge-in
+- Server VAD
+- Natural interruption / barge-in
 - Real mic RMS
 - Real output RMS
 - Hidden input transcription
-- Hidden output transcription
-- Mascot tone events
+- Hidden assistant transcription
+- Mascot mood intelligence bridge
 - Mic mute
 - Speaker mute
+- Clean listening / thinking / speaking states
 
-NO:
-- Browser SpeechRecognition
-- MediaRecorder transcription
-- Mock responses
-- Transcript injection into chat
+Character flow:
+neyo.js
+  ↓
+NeyoCharacter.getActive()
+  ↓
+voice.preferredVoice
+  ↓
+Gemini Live speechConfig
+
+Does NOT own:
+- mascot geometry
+- mascot intelligence
+- voice-mode UI
+- camera
 =========================================================
 */
 
@@ -40,8 +49,12 @@ NO:
   function isolateButton(element) {
     if (!element) return null;
 
-    const clone = element.cloneNode(true);
-    element.replaceWith(clone);
+    const clone =
+      element.cloneNode(true);
+
+    element.replaceWith(
+      clone
+    );
 
     return clone;
   }
@@ -49,12 +62,16 @@ NO:
 
   const micBtn =
     isolateButton(
-      document.getElementById("micBtn")
+      document.getElementById(
+        "micBtn"
+      )
     );
 
   const stopRecBtn =
     isolateButton(
-      document.getElementById("stopRecBtn")
+      document.getElementById(
+        "stopRecBtn"
+      )
     );
 
 
@@ -73,7 +90,10 @@ NO:
     );
 
 
-  if (!micBtn || !composerInputRow) {
+  if (
+    !micBtn ||
+    !composerInputRow
+  ) {
     console.warn(
       "[NEYO Voice] Required DOM missing."
     );
@@ -94,6 +114,9 @@ NO:
 
       websocketEndpoint:
         "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained",
+
+      defaultVoice:
+        "Kore",
 
       inputSampleRate:
         16000,
@@ -126,10 +149,7 @@ NO:
         "START_SENSITIVITY_HIGH",
 
       vadEndSensitivity:
-        "END_SENSITIVITY_LOW",
-
-      voiceName:
-        "Kore"
+        "END_SENSITIVITY_LOW"
     });
 
 
@@ -164,6 +184,17 @@ NO:
 
   let assistantResponsePending =
     false;
+
+
+  /* =====================================================
+     CHARACTER SESSION
+     ===================================================== */
+
+  let sessionCharacterId =
+    "neyo";
+
+  let sessionVoiceName =
+    CONFIG.defaultVoice;
 
 
   /* =====================================================
@@ -230,7 +261,7 @@ NO:
 
 
   /* =====================================================
-     WAVEFORM STATE
+     WAVEFORM
      ===================================================== */
 
   let waveRaf =
@@ -240,22 +271,101 @@ NO:
     0;
 
 
-  console.log(
-    `[NEYO Voice] Production engine loaded (${CONFIG.voiceName})`
-  );
+  /* =====================================================
+     CHARACTER HELPERS
+     ===================================================== */
+
+  function getActiveCharacter() {
+
+    const helper =
+      window.NeyoCharacter;
+
+
+    if (
+      helper?.getActive
+    ) {
+
+      const character =
+        helper.getActive();
+
+      if (character) {
+        return character;
+      }
+    }
+
+
+    const activeId =
+      window
+        .NeyoCharacters
+        ?.active ||
+      "neyo";
+
+
+    return (
+      window
+        .NeyoCharacters
+        ?.[activeId]
+      ||
+      window
+        .NeyoCharacters
+        ?.neyo
+      ||
+      null
+    );
+  }
+
+
+  function getActiveVoiceName() {
+
+    const character =
+      getActiveCharacter();
+
+
+    const preferred =
+      character
+        ?.voice
+        ?.preferredVoice;
+
+
+    if (
+      typeof preferred ===
+        "string" &&
+      preferred.trim()
+    ) {
+
+      return preferred.trim();
+    }
+
+
+    return CONFIG.defaultVoice;
+  }
+
+
+  function getActiveCharacterId() {
+
+    return (
+      getActiveCharacter()
+        ?.id ||
+      window
+        .NeyoCharacters
+        ?.active ||
+      "neyo"
+    );
+  }
 
 
   /* =====================================================
-     EVENT BRIDGE
+     EVENTS
      ===================================================== */
 
-  function setVoiceState(
-    state,
+  function emit(
+    name,
     detail = {}
   ) {
+
     window.dispatchEvent(
       new CustomEvent(
-        `neyo:voice-${state}`,
+        name,
         {
           detail
         }
@@ -264,46 +374,73 @@ NO:
   }
 
 
+  function setVoiceState(
+    phase,
+    detail = {}
+  ) {
+
+    emit(
+      `neyo:voice-${phase}`,
+      {
+        character:
+          sessionCharacterId,
+
+        ...detail
+      }
+    );
+  }
+
+
   function emitUserText(text) {
+
     const value =
-      String(text || "")
+      String(
+        text || ""
+      )
         .trim();
 
-    if (!value) return;
+
+    if (!value) {
+      return;
+    }
 
 
-    window.dispatchEvent(
-      new CustomEvent(
-        "neyo:voice-user-text",
-        {
-          detail: {
-            text:
-              value
-          }
-        }
-      )
+    emit(
+      "neyo:voice-user-text",
+      {
+        text:
+          value,
+
+        character:
+          sessionCharacterId
+      }
     );
   }
 
 
   function emitAssistantText(text) {
+
     const value =
-      String(text || "")
+      String(
+        text || ""
+      )
         .trim();
 
-    if (!value) return;
+
+    if (!value) {
+      return;
+    }
 
 
-    window.dispatchEvent(
-      new CustomEvent(
-        "neyo:voice-assistant-text",
-        {
-          detail: {
-            text:
-              value
-          }
-        }
-      )
+    emit(
+      "neyo:voice-assistant-text",
+      {
+        text:
+          value,
+
+        character:
+          sessionCharacterId
+      }
     );
   }
 
@@ -417,6 +554,15 @@ NO:
       bar.style.opacity =
         "0.32";
     }
+
+
+    emit(
+      "neyo:voice-mic-level",
+      {
+        level:
+          0
+      }
+    );
   }
 
 
@@ -426,6 +572,7 @@ NO:
       !analyser ||
       !analyserData
     ) {
+
       return 0;
     }
 
@@ -450,11 +597,13 @@ NO:
         (
           analyserData[i] -
           128
-        ) / 128;
+        ) /
+        128;
 
 
       sum +=
-        sample * sample;
+        sample *
+        sample;
     }
 
 
@@ -481,14 +630,18 @@ NO:
         0,
         Math.min(
           1,
-          (rms - 0.012) /
+          (
+            rms -
+            0.012
+          ) /
           0.11
         )
       );
 
 
     const smoothing =
-      target > smoothLevel
+      target >
+      smoothLevel
         ? 0.30
         : 0.10;
 
@@ -501,20 +654,12 @@ NO:
       smoothing;
 
 
-    /*
-    Mascot listening energy
-    */
-
-    window.dispatchEvent(
-      new CustomEvent(
-        "neyo:voice-mic-level",
-        {
-          detail: {
-            level:
-              smoothLevel
-          }
-        }
-      )
+    emit(
+      "neyo:voice-mic-level",
+      {
+        level:
+          smoothLevel
+      }
     );
 
 
@@ -525,7 +670,11 @@ NO:
     const center =
       Math.max(
         1,
-        (bars.length - 1) / 2
+        (
+          bars.length -
+          1
+        ) /
+        2
       );
 
 
@@ -545,14 +694,17 @@ NO:
 
         const weight =
           1 -
-          distance * 0.45;
+          distance *
+          0.45;
 
 
         const movement =
           0.84 +
           Math.sin(
-            timestamp * 0.005 +
-            index * 0.85
+            timestamp *
+            0.005 +
+            index *
+            0.85
           ) *
           0.16;
 
@@ -572,14 +724,16 @@ NO:
         bar.style.height =
           `${(
             3 +
-            energy * 21
+            energy *
+            21
           ).toFixed(2)}px`;
 
 
         bar.style.opacity =
           `${(
             0.32 +
-            energy * 0.63
+            energy *
+            0.63
           ).toFixed(3)}`;
       }
     );
@@ -606,6 +760,7 @@ NO:
       sourceRate ===
       targetRate
     ) {
+
       return new Float32Array(
         input
       );
@@ -641,7 +796,8 @@ NO:
 
       const start =
         Math.floor(
-          i * ratio
+          i *
+          ratio
         );
 
 
@@ -651,7 +807,10 @@ NO:
           Math.min(
             input.length,
             Math.floor(
-              (i + 1) *
+              (
+                i +
+                1
+              ) *
               ratio
             )
           )
@@ -681,7 +840,8 @@ NO:
 
       output[i] =
         count
-          ? sum / count
+          ? sum /
+            count
           : 0;
     }
 
@@ -727,8 +887,10 @@ NO:
 
       const integer =
         sample < 0
-          ? sample * 32768
-          : sample * 32767;
+          ? sample *
+            32768
+          : sample *
+            32767;
 
 
       view.setInt16(
@@ -821,16 +983,18 @@ NO:
         bytes.subarray(
           i,
           Math.min(
-            i + chunkSize,
+            i +
+            chunkSize,
             bytes.length
           )
         );
 
 
       binary +=
-        String.fromCharCode(
-          ...chunk
-        );
+        String
+          .fromCharCode(
+            ...chunk
+          );
     }
 
 
@@ -843,9 +1007,7 @@ NO:
   function base64ToBytes(value) {
 
     const binary =
-      atob(
-        value
-      );
+      atob(value);
 
 
     const bytes =
@@ -870,7 +1032,7 @@ NO:
 
 
   /* =====================================================
-     OUTPUT AUDIO
+     OUTPUT CONTEXT
      ===================================================== */
 
   async function ensureOutputContext() {
@@ -878,7 +1040,7 @@ NO:
     if (
       outputContext &&
       outputContext.state !==
-      "closed"
+        "closed"
     ) {
 
       if (
@@ -900,6 +1062,7 @@ NO:
 
 
     if (!AudioContextClass) {
+
       throw new Error(
         "Audio playback unavailable."
       );
@@ -914,12 +1077,14 @@ NO:
       outputContext.state ===
       "suspended"
     ) {
+
       await outputContext.resume();
     }
 
 
     masterGain =
-      outputContext.createGain();
+      outputContext
+        .createGain();
 
 
     masterGain.gain.value =
@@ -956,6 +1121,7 @@ NO:
 
 
     if (!match) {
+
       return CONFIG.outputSampleRate;
     }
 
@@ -974,6 +1140,10 @@ NO:
       : CONFIG.outputSampleRate;
   }
 
+
+  /* =====================================================
+     PLAYBACK
+     ===================================================== */
 
   async function playAudioChunk(
     base64,
@@ -1001,13 +1171,15 @@ NO:
       );
 
 
-    if (!samples.length) {
+    if (
+      !samples.length
+    ) {
       return;
     }
 
 
     /*
-    Real assistant output RMS
+    Real assistant audio RMS
     */
 
     let sum =
@@ -1019,6 +1191,7 @@ NO:
       i < samples.length;
       i += 1
     ) {
+
       sum +=
         samples[i] *
         samples[i];
@@ -1037,22 +1210,21 @@ NO:
         0,
         Math.min(
           1,
-          (outputRms - 0.01) /
+          (
+            outputRms -
+            0.01
+          ) /
           0.16
         )
       );
 
 
-    window.dispatchEvent(
-      new CustomEvent(
-        "neyo:voice-output-level",
-        {
-          detail: {
-            level:
-              outputLevel
-          }
-        }
-      )
+    emit(
+      "neyo:voice-output-level",
+      {
+        level:
+          outputLevel
+      }
     );
 
 
@@ -1090,12 +1262,9 @@ NO:
     );
 
 
-    /*
-    First real audio chunk
-    = Speaking
-    */
-
-    if (!assistantSpeaking) {
+    if (
+      !assistantSpeaking
+    ) {
 
       assistantSpeaking =
         true;
@@ -1103,13 +1272,16 @@ NO:
       assistantResponsePending =
         false;
 
+
       setVoiceState(
         "speaking"
       );
     }
 
 
-    if (!playbackStarted) {
+    if (
+      !playbackStarted
+    ) {
 
       nextPlaybackTime =
         Math.max(
@@ -1158,7 +1330,8 @@ NO:
 
       },
       {
-        once: true
+        once:
+          true
       }
     );
   }
@@ -1184,7 +1357,9 @@ NO:
       false;
 
 
-    if (outputContext) {
+    if (
+      outputContext
+    ) {
 
       nextPlaybackTime =
         outputContext.currentTime;
@@ -1198,15 +1373,12 @@ NO:
       false;
 
 
-    window.dispatchEvent(
-      new CustomEvent(
-        "neyo:voice-output-level",
-        {
-          detail: {
-            level: 0
-          }
-        }
-      )
+    emit(
+      "neyo:voice-output-level",
+      {
+        level:
+          0
+      }
     );
   }
 
@@ -1218,7 +1390,9 @@ NO:
   function setMuted(muted) {
 
     const value =
-      Boolean(muted);
+      Boolean(
+        muted
+      );
 
 
     if (micTrack) {
@@ -1228,31 +1402,33 @@ NO:
     }
 
 
-    window.dispatchEvent(
-      new CustomEvent(
-        "neyo:voice-muted",
-        {
-          detail: {
-            muted:
-              value
-          }
-        }
-      )
+    emit(
+      "neyo:voice-muted",
+      {
+        muted:
+          value
+      }
     );
   }
 
 
   /* =====================================================
-     SPEAKER MUTE
+     SPEAKER
      ===================================================== */
 
-  function setSpeakerEnabled(enabled) {
+  function setSpeakerEnabled(
+    enabled
+  ) {
 
     const value =
-      Boolean(enabled);
+      Boolean(
+        enabled
+      );
 
 
-    if (masterGain) {
+    if (
+      masterGain
+    ) {
 
       masterGain.gain.value =
         value
@@ -1261,16 +1437,12 @@ NO:
     }
 
 
-    window.dispatchEvent(
-      new CustomEvent(
-        "neyo:voice-speaker",
-        {
-          detail: {
-            enabled:
-              value
-          }
-        }
-      )
+    emit(
+      "neyo:voice-speaker",
+      {
+        enabled:
+          value
+      }
     );
   }
 
@@ -1308,12 +1480,18 @@ NO:
 
 
     try {
+
       data =
-        JSON.parse(raw);
+        JSON.parse(
+          raw
+        );
+
     } catch {}
 
 
-    if (!response.ok) {
+    if (
+      !response.ok
+    ) {
 
       throw new Error(
         data?.error ||
@@ -1355,6 +1533,7 @@ NO:
         .getUserMedia({
 
           audio: {
+
             channelCount:
               1,
 
@@ -1500,7 +1679,8 @@ NO:
 
 
         const input =
-          event.inputBuffer
+          event
+            .inputBuffer
             .getChannelData(0);
 
 
@@ -1551,7 +1731,9 @@ NO:
 
   async function stopMicrophone() {
 
-    if (processorNode) {
+    if (
+      processorNode
+    ) {
 
       processorNode.onaudioprocess =
         null;
@@ -1567,7 +1749,9 @@ NO:
     }
 
 
-    if (micSource) {
+    if (
+      micSource
+    ) {
 
       try {
         micSource.disconnect();
@@ -1579,7 +1763,9 @@ NO:
     }
 
 
-    if (analyser) {
+    if (
+      analyser
+    ) {
 
       try {
         analyser.disconnect();
@@ -1591,7 +1777,9 @@ NO:
     }
 
 
-    if (silentGain) {
+    if (
+      silentGain
+    ) {
 
       try {
         silentGain.disconnect();
@@ -1607,7 +1795,9 @@ NO:
       null;
 
 
-    if (micStream) {
+    if (
+      micStream
+    ) {
 
       for (
         const track
@@ -1631,7 +1821,7 @@ NO:
     if (
       inputContext &&
       inputContext.state !==
-      "closed"
+        "closed"
     ) {
 
       try {
@@ -1644,11 +1834,14 @@ NO:
       null;
 
 
-    if (waveRaf) {
+    if (
+      waveRaf
+    ) {
 
       cancelAnimationFrame(
         waveRaf
       );
+
 
       waveRaf =
         0;
@@ -1671,6 +1864,7 @@ NO:
       typeof data ===
       "string"
     ) {
+
       return data;
     }
 
@@ -1678,6 +1872,7 @@ NO:
     if (
       data instanceof Blob
     ) {
+
       return data.text();
     }
 
@@ -1688,17 +1883,23 @@ NO:
 
       return new TextDecoder(
         "utf-8"
-      ).decode(data);
+      ).decode(
+        data
+      );
     }
 
 
     if (
-      ArrayBuffer.isView(data)
+      ArrayBuffer.isView(
+        data
+      )
     ) {
 
       return new TextDecoder(
         "utf-8"
-      ).decode(data);
+      ).decode(
+        data
+      );
     }
 
 
@@ -1712,6 +1913,44 @@ NO:
      TRANSCRIPTION
      ===================================================== */
 
+  function appendTranscript(
+    current,
+    chunk
+  ) {
+
+    const value =
+      String(
+        chunk || ""
+      ).trim();
+
+
+    if (!value) {
+
+      return current;
+    }
+
+
+    if (!current) {
+
+      return value;
+    }
+
+
+    /*
+    Gemini transcript chunks may already
+    include punctuation/spaces.
+    Keep accumulation simple.
+    */
+
+    return `${current} ${value}`
+      .replace(
+        /\s+/g,
+        " "
+      )
+      .trim();
+  }
+
+
   function handleTranscription(
     serverContent
   ) {
@@ -1722,15 +1961,15 @@ NO:
         ?.text;
 
 
-    if (inputText) {
+    if (
+      inputText
+    ) {
 
-      userTranscriptBuffer +=
-        (
-          userTranscriptBuffer
-            ? " "
-            : ""
-        ) +
-        inputText;
+      userTranscriptBuffer =
+        appendTranscript(
+          userTranscriptBuffer,
+          inputText
+        );
 
 
       emitUserText(
@@ -1745,15 +1984,15 @@ NO:
         ?.text;
 
 
-    if (outputText) {
+    if (
+      outputText
+    ) {
 
-      assistantTranscriptBuffer +=
-        (
-          assistantTranscriptBuffer
-            ? " "
-            : ""
-        ) +
-        outputText;
+      assistantTranscriptBuffer =
+        appendTranscript(
+          assistantTranscriptBuffer,
+          outputText
+        );
 
 
       emitAssistantText(
@@ -1776,11 +2015,19 @@ NO:
        --------------------------------------------- */
 
     if (
-      message?.setupComplete
+      message
+        ?.setupComplete
     ) {
 
       console.log(
-        "[NEYO Voice] Gemini setup complete"
+        "[NEYO Voice] Gemini setup complete",
+        {
+          character:
+            sessionCharacterId,
+
+          voice:
+            sessionVoiceName
+        }
       );
 
 
@@ -1823,7 +2070,6 @@ NO:
 
       syncUi();
 
-
       resetWaveform();
 
 
@@ -1846,15 +2092,12 @@ NO:
       sessionTimer =
         setTimeout(
           () => {
+
             stopConversation();
+
           },
           CONFIG.maxSessionMs
         );
-
-
-      console.log(
-        "[NEYO Voice] Conversation active"
-      );
 
 
       return;
@@ -1862,7 +2105,8 @@ NO:
 
 
     const serverContent =
-      message?.serverContent;
+      message
+        ?.serverContent;
 
 
     if (!serverContent) {
@@ -1870,18 +2114,13 @@ NO:
     }
 
 
-    /*
-    Hidden transcription for tone engine.
-    Never rendered into chat UI.
-    */
-
     handleTranscription(
       serverContent
     );
 
 
     /* ---------------------------------------------
-       INTERRUPTION
+       INTERRUPTED
        --------------------------------------------- */
 
     if (
@@ -1889,13 +2128,6 @@ NO:
     ) {
 
       stopPlayback();
-
-
-      assistantSpeaking =
-        false;
-
-      assistantResponsePending =
-        false;
 
 
       assistantTranscriptBuffer =
@@ -1956,11 +2188,13 @@ NO:
       if (
         !inline?.data ||
         !String(
-          inline.mimeType || ""
+          inline.mimeType ||
+          ""
         ).startsWith(
           "audio/"
         )
       ) {
+
         continue;
       }
 
@@ -1969,7 +2203,9 @@ NO:
         true;
 
 
-      if (!assistantSpeaking) {
+      if (
+        !assistantSpeaking
+      ) {
 
         assistantSpeaking =
           true;
@@ -2027,13 +2263,15 @@ NO:
         () => {
 
           if (
-            playingSources.size > 0
+            playingSources.size >
+            0
           ) {
 
             setTimeout(
               waitForPlayback,
               30
             );
+
 
             return;
           }
@@ -2050,15 +2288,12 @@ NO:
             "";
 
 
-          window.dispatchEvent(
-            new CustomEvent(
-              "neyo:voice-output-level",
-              {
-                detail: {
-                  level: 0
-                }
-              }
-            )
+          emit(
+            "neyo:voice-output-level",
+            {
+              level:
+                0
+            }
           );
 
 
@@ -2077,6 +2312,116 @@ NO:
 
 
   /* =====================================================
+     SETUP MESSAGE
+     ===================================================== */
+
+  function buildSetupMessage(
+    credentials
+  ) {
+
+    /*
+    Voice is locked once per Live session.
+    Character change should start a fresh session.
+    */
+
+    sessionCharacterId =
+      getActiveCharacterId();
+
+
+    sessionVoiceName =
+      getActiveVoiceName();
+
+
+    console.log(
+      "[NEYO Voice] Session identity",
+      {
+        character:
+          sessionCharacterId,
+
+        voice:
+          sessionVoiceName
+      }
+    );
+
+
+    return {
+
+      setup: {
+
+        model:
+          `models/${credentials.model}`,
+
+
+        generationConfig: {
+
+          responseModalities: [
+            "AUDIO"
+          ],
+
+
+          speechConfig: {
+
+            voiceConfig: {
+
+              prebuiltVoiceConfig: {
+
+                voiceName:
+                  sessionVoiceName
+              }
+            }
+          }
+        },
+
+
+        /*
+        Hidden transcription feeds
+        mascot-intelligence.js.
+
+        Not shown in chat UI.
+        */
+
+        inputAudioTranscription:
+          {},
+
+
+        outputAudioTranscription:
+          {},
+
+
+        realtimeInputConfig: {
+
+          automaticActivityDetection: {
+
+            disabled:
+              false,
+
+
+            startOfSpeechSensitivity:
+              CONFIG
+                .vadStartSensitivity,
+
+
+            endOfSpeechSensitivity:
+              CONFIG
+                .vadEndSensitivity,
+
+
+            prefixPaddingMs:
+              CONFIG
+                .vadPrefixPaddingMs,
+
+
+            silenceDurationMs:
+              CONFIG
+                .vadSilenceDurationMs
+          }
+        }
+      }
+    };
+  }
+
+
+  /* =====================================================
      START
      ===================================================== */
 
@@ -2087,19 +2432,21 @@ NO:
       active ||
       stopping
     ) {
+
       return;
     }
 
+
+    /*
+    Open screen first.
+    Character should already be selected
+    before this point.
+    */
 
     window
       .NeyoVoiceMode
       ?.open
       ?.();
-
-
-    setVoiceState(
-      "listening"
-    );
 
 
     connecting =
@@ -2132,6 +2479,10 @@ NO:
         );
       }
 
+
+      /*
+      User gesture unlocks audio.
+      */
 
       await ensureOutputContext();
 
@@ -2172,83 +2523,10 @@ NO:
           );
 
 
-          /*
-          IMPORTANT:
-          inputAudioTranscription and
-          outputAudioTranscription are
-          setup-level fields.
-          */
-
-          const setupMessage = {
-
-            setup: {
-
-              model:
-                `models/${credentials.model}`,
-
-
-              generationConfig: {
-
-                responseModalities: [
-                  "AUDIO"
-                ],
-
-
-                speechConfig: {
-
-                  voiceConfig: {
-
-                    prebuiltVoiceConfig: {
-
-                      voiceName:
-                        CONFIG.voiceName
-                    }
-                  }
-                }
-              },
-
-
-              /*
-              Hidden transcription.
-
-              These are NOT inside
-              generationConfig.
-              */
-
-              inputAudioTranscription:
-                {},
-
-
-              outputAudioTranscription:
-                {},
-
-
-              realtimeInputConfig: {
-
-                automaticActivityDetection: {
-
-                  disabled:
-                    false,
-
-
-                  startOfSpeechSensitivity:
-                    CONFIG.vadStartSensitivity,
-
-
-                  endOfSpeechSensitivity:
-                    CONFIG.vadEndSensitivity,
-
-
-                  prefixPaddingMs:
-                    CONFIG.vadPrefixPaddingMs,
-
-
-                  silenceDurationMs:
-                    CONFIG.vadSilenceDurationMs
-                }
-              }
-            }
-          };
+          const setupMessage =
+            buildSetupMessage(
+              credentials
+            );
 
 
           socket.send(
@@ -2261,14 +2539,18 @@ NO:
           console.log(
             "[NEYO Voice] Setup sent",
             {
+              character:
+                sessionCharacterId,
+
               voice:
-                CONFIG.voiceName,
+                sessionVoiceName,
 
               transcription:
                 true,
 
               vadSilenceMs:
-                CONFIG.vadSilenceDurationMs
+                CONFIG
+                  .vadSilenceDurationMs
             }
           );
 
@@ -2321,7 +2603,6 @@ NO:
               message
             );
 
-
           } catch (error) {
 
             console.error(
@@ -2351,7 +2632,7 @@ NO:
         event => {
 
           console.log(
-            "[NEYO Voice] SOCKET CLOSED",
+            "[NEYO Voice] WebSocket closed",
             {
               code:
                 event.code,
@@ -2411,7 +2692,6 @@ NO:
 
       await stopMicrophone();
 
-
       stopPlayback();
 
 
@@ -2442,7 +2722,10 @@ NO:
         ?.close
         ?.({
           stopVoice:
-            false
+            false,
+
+          emitClose:
+            true
         });
 
 
@@ -2471,6 +2754,7 @@ NO:
       !connecting &&
       !socket
     ) {
+
       return;
     }
 
@@ -2509,7 +2793,6 @@ NO:
 
     await stopMicrophone();
 
-
     stopPlayback();
 
 
@@ -2547,12 +2830,20 @@ NO:
       false;
 
 
+    /*
+    voice-mode.js owns visual close.
+    stopVoice:false avoids recursion.
+    */
+
     window
       .NeyoVoiceMode
       ?.close
       ?.({
         stopVoice:
-          false
+          false,
+
+        emitClose:
+          true
       });
 
 
@@ -2568,7 +2859,55 @@ NO:
 
 
   /* =====================================================
-     EVENTS
+     CHARACTER CHANGE
+
+     Voice cannot safely swap inside the
+     existing Live session.
+
+     Character selector can listen to this
+     and restart voice when needed later.
+     ===================================================== */
+
+  window.addEventListener(
+    "neyo:character-change",
+    event => {
+
+      const id =
+        event
+          ?.detail
+          ?.id;
+
+
+      if (!id) {
+        return;
+      }
+
+
+      console.log(
+        "[NEYO Voice] Character changed:",
+        id
+      );
+
+
+      if (
+        active ||
+        connecting
+      ) {
+
+        emit(
+          "neyo:voice-character-restart-required",
+          {
+            character:
+              id
+          }
+        );
+      }
+    }
+  );
+
+
+  /* =====================================================
+     BUTTON EVENTS
      ===================================================== */
 
   micBtn.addEventListener(
@@ -2586,6 +2925,7 @@ NO:
         connecting ||
         stopping
       ) {
+
         return;
       }
 
@@ -2598,6 +2938,7 @@ NO:
 
         startConversation();
       }
+
     },
     true
   );
@@ -2616,6 +2957,7 @@ NO:
 
 
         stopConversation();
+
       },
       true
     );
@@ -2655,17 +2997,8 @@ NO:
 
 
   /* =====================================================
-     INIT
+     PUBLIC API
      ===================================================== */
-
-  resetWaveform();
-
-  syncUi();
-
-  setVoiceState(
-    "idle"
-  );
-
 
   window.NeyoVoice =
     Object.freeze({
@@ -2676,23 +3009,55 @@ NO:
       stop:
         stopConversation,
 
-      isActive:
-        () => active,
-
-      isConnecting:
-        () => connecting,
-
       setMuted,
 
       setSpeakerEnabled,
 
+      isActive:
+        () =>
+          active,
+
+      isConnecting:
+        () =>
+          connecting,
+
+      getSessionInfo:
+        () => ({
+          active,
+          connecting,
+
+          character:
+            sessionCharacterId,
+
+          voice:
+            sessionVoiceName
+        }),
+
+      getActiveVoiceName,
+
       engine:
-        "gemini-live-natural-vad-tone"
+        "gemini-live-character-aware-v4"
     });
 
 
+  /* =====================================================
+     INIT
+     ===================================================== */
+
+  resetWaveform();
+
+  syncUi();
+
+
   console.log(
-    "[NEYO Voice] Ready"
+    "[NEYO Voice] Character-aware engine v4 ready",
+    {
+      character:
+        getActiveCharacterId(),
+
+      voice:
+        getActiveVoiceName()
+    }
   );
 
 })();

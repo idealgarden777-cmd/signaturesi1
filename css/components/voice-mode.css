@@ -1,117 +1,182 @@
 /*
 =========================================================
-NEYO — VOICE MODE SHELL
-Clean / Minimal / Premium
+NEYO — VOICE MODE UI v3
 
-Owns:
-- centered voice mode layout
-- original background preservation
-- status text
-- control row
-- open / close motion
-- desktop / mobile responsiveness
-
-Does NOT own:
-- mascot face
-- eye animation
-- mouth animation
-- Gemini logic
+Purpose:
+- Centered premium voice conversation screen
+- Preserve original app background
+- No fake black overlay
+- Smooth open / close motion
+- Responsive desktop + mobile
+- Premium status transitions
+- Minimal controls
+- Camera preview
+- Clean visual hierarchy
 =========================================================
 */
 
 
 /* =====================================================
-   ROOT VOICE MODE
+   ROOT SHELL
    ===================================================== */
 
 .voice-mode-shell {
-    position: fixed;
-    inset: 0;
-    z-index: 1200;
+  position: fixed;
+  inset: 0;
 
-    display: flex;
-    align-items: center;
-    justify-content: center;
+  z-index: 9999;
 
-    pointer-events: none;
+  display: grid;
+  place-items: center;
 
-    opacity: 0;
-    visibility: hidden;
+  padding:
+    max(18px, env(safe-area-inset-top))
+    max(18px, env(safe-area-inset-right))
+    max(20px, env(safe-area-inset-bottom))
+    max(18px, env(safe-area-inset-left));
 
-    transition:
-        opacity 220ms ease,
-        visibility 220ms ease;
-}
+  pointer-events: none;
 
+  opacity: 0;
+  visibility: hidden;
 
-/*
-Original NEYO background remains visible.
+  background: transparent;
 
-No black overlay.
-No full-screen color replacement.
-*/
-
-.voice-mode-shell::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-
-    background: transparent;
-
-    pointer-events: none;
+  transition:
+    opacity 220ms ease,
+    visibility 0s linear 220ms;
 }
 
 
 /* =====================================================
-   OPEN STATE
+   OPEN
    ===================================================== */
 
 .voice-mode-shell.is-open {
-    opacity: 1;
-    visibility: visible;
-    pointer-events: auto;
+  visibility: visible;
+
+  transition:
+    opacity 220ms ease,
+    visibility 0s linear 0s;
+}
+
+
+.voice-mode-shell.is-visible {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 
 /* =====================================================
-   INNER STAGE
+   CLOSING
    ===================================================== */
 
-.voice-mode-stage {
-    position: relative;
-    z-index: 1;
-
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-
-    width: min(92vw, 520px);
-
-    padding:
-        24px
-        24px
-        28px;
-
-    transform:
-        translateY(8px)
-        scale(0.965);
-
-    opacity: 0;
-
-    transition:
-        transform 240ms cubic-bezier(0.22, 1, 0.36, 1),
-        opacity 200ms ease;
+.voice-mode-shell.is-closing {
+  opacity: 0;
+  pointer-events: none;
 }
 
 
-.voice-mode-shell.is-open
-.voice-mode-stage {
-    transform:
-        translateY(0)
-        scale(1);
+/* =====================================================
+   ORIGINAL APP BACKGROUND PRESERVED
 
-    opacity: 1;
+   We only add a very light atmospheric layer.
+   No black screen.
+   ===================================================== */
+
+.voice-mode-shell::before {
+  content: "";
+
+  position: absolute;
+  inset: 0;
+
+  pointer-events: none;
+
+  background:
+    radial-gradient(
+      circle at 50% 44%,
+      rgba(255, 255, 255, 0.26),
+      transparent 34%
+    );
+
+  opacity: 0;
+
+  transition:
+    opacity 320ms ease;
+}
+
+
+.voice-mode-shell.is-visible::before {
+  opacity: 1;
+}
+
+
+/* =====================================================
+   STAGE
+   ===================================================== */
+
+.voice-mode-stage {
+  position: relative;
+
+  width:
+    min(
+      100%,
+      680px
+    );
+
+  min-height:
+    min(
+      640px,
+      calc(
+        100dvh -
+        48px
+      )
+    );
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  padding:
+    34px
+    24px
+    26px;
+
+  outline: none;
+
+  opacity: 0;
+
+  transform:
+    translateY(12px)
+    scale(0.975);
+
+  transform-origin: center;
+
+  transition:
+    opacity 260ms ease,
+    transform 420ms
+    cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+
+.voice-mode-shell.is-visible
+.voice-mode-stage {
+  opacity: 1;
+
+  transform:
+    translateY(0)
+    scale(1);
+}
+
+
+.voice-mode-shell.is-closing
+.voice-mode-stage {
+  opacity: 0;
+
+  transform:
+    translateY(8px)
+    scale(0.985);
 }
 
 
@@ -120,27 +185,118 @@ No full-screen color replacement.
    ===================================================== */
 
 .voice-mode-mascot-slot {
-    position: relative;
+  position: relative;
 
-    display: flex;
-    align-items: center;
-    justify-content: center;
+  width:
+    clamp(
+      230px,
+      36vw,
+      360px
+    );
 
-    width: 220px;
-    height: 220px;
+  aspect-ratio: 1;
 
-    flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+
+  flex: 0 0 auto;
+
+  isolation: isolate;
+
+  transform:
+    translateY(0);
+
+  transition:
+    transform 320ms
+    cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 
-/*
-Mascot itself will be styled in mascot.css.
-*/
+/* =====================================================
+   PHASE SPACING
+   ===================================================== */
 
-.voice-mode-mascot-slot
-#neyoMascot {
-    width: 100%;
-    height: 100%;
+.voice-mode-shell[data-phase="thinking"]
+.voice-mode-mascot-slot {
+  transform:
+    translateY(-2px);
+}
+
+
+.voice-mode-shell[data-phase="speaking"]
+.voice-mode-mascot-slot {
+  transform:
+    translateY(-1px);
+}
+
+
+/* =====================================================
+   ATMOSPHERIC HALO
+
+   Very subtle.
+   ===================================================== */
+
+.voice-mode-mascot-slot::before {
+  content: "";
+
+  position: absolute;
+
+  width: 92%;
+  aspect-ratio: 1;
+
+  border-radius: 50%;
+
+  background:
+    radial-gradient(
+      circle,
+      rgba(255, 255, 255, 0.34) 0%,
+      rgba(255, 255, 255, 0.10) 42%,
+      transparent 70%
+    );
+
+  filter:
+    blur(12px);
+
+  opacity: 0.72;
+
+  transform:
+    scale(0.92);
+
+  transition:
+    opacity 300ms ease,
+    transform 420ms
+    cubic-bezier(0.22, 1, 0.36, 1);
+
+  pointer-events: none;
+
+  z-index: -1;
+}
+
+
+.voice-mode-shell[data-phase="listening"]
+.voice-mode-mascot-slot::before {
+  opacity: 0.82;
+
+  transform:
+    scale(0.98);
+}
+
+
+.voice-mode-shell[data-phase="speaking"]
+.voice-mode-mascot-slot::before {
+  opacity: 0.88;
+
+  transform:
+    scale(1.015);
+}
+
+
+.voice-mode-shell[data-phase="thinking"]
+.voice-mode-mascot-slot::before {
+  opacity: 0.68;
+
+  transform:
+    scale(0.94);
 }
 
 
@@ -149,47 +305,116 @@ Mascot itself will be styled in mascot.css.
    ===================================================== */
 
 .voice-mode-status {
-    margin-top: 20px;
+  position: relative;
 
-    min-height: 22px;
+  min-height: 24px;
 
-    display: flex;
-    align-items: center;
-    justify-content: center;
+  margin-top:
+    18px;
 
-    font-size: 15px;
-    line-height: 1.4;
-    font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 
-    letter-spacing: -0.01em;
+  color:
+    rgba(
+      24,
+      24,
+      28,
+      0.66
+    );
 
-    color:
-        rgba(20, 20, 22, 0.62);
+  font-family:
+    Inter,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
 
-    text-align: center;
+  font-size:
+    14px;
 
-    user-select: none;
+  font-weight:
+    500;
 
-    transition:
-        opacity 150ms ease,
-        transform 150ms ease;
+  line-height:
+    1.4;
+
+  letter-spacing:
+    -0.01em;
+
+  text-align: center;
+
+  transform:
+    translateY(0);
+
+  opacity: 1;
+
+  transition:
+    opacity 160ms ease,
+    transform 220ms
+    cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 
-/*
-Optional transition classes
-voice-mode.js may use these later.
-*/
+/* =====================================================
+   STATUS TRANSITION
+   ===================================================== */
 
-.voice-mode-status.is-changing {
-    opacity: 0;
-    transform: translateY(-3px);
+.voice-mode-status.is-leaving {
+  opacity: 0;
+
+  transform:
+    translateY(-3px);
 }
 
 
 .voice-mode-status.is-entering {
-    opacity: 0;
-    transform: translateY(3px);
+  opacity: 0;
+
+  transform:
+    translateY(3px);
+}
+
+
+/* =====================================================
+   PHASE STATUS CHARACTER
+   ===================================================== */
+
+.voice-mode-shell[data-phase="listening"]
+.voice-mode-status {
+  color:
+    rgba(
+      24,
+      24,
+      28,
+      0.72
+    );
+}
+
+
+.voice-mode-shell[data-phase="thinking"]
+.voice-mode-status {
+  color:
+    rgba(
+      24,
+      24,
+      28,
+      0.58
+    );
+}
+
+
+.voice-mode-shell[data-phase="speaking"]
+.voice-mode-status {
+  color:
+    rgba(
+      24,
+      24,
+      28,
+      0.76
+    );
 }
 
 
@@ -198,15 +423,85 @@ voice-mode.js may use these later.
    ===================================================== */
 
 .voice-mode-controls {
-    margin-top: 24px;
+  position: relative;
 
-    display: flex;
-    align-items: center;
-    justify-content: center;
+  margin-top:
+    28px;
 
-    gap: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 
-    width: 100%;
+  gap:
+    10px;
+
+  padding:
+    7px;
+
+  border-radius:
+    999px;
+
+  background:
+    rgba(
+      255,
+      255,
+      255,
+      0.56
+    );
+
+  border:
+    1px solid
+    rgba(
+      20,
+      20,
+      24,
+      0.055
+    );
+
+  box-shadow:
+    0 12px 34px
+    rgba(
+      0,
+      0,
+      0,
+      0.065
+    ),
+
+    inset 0 1px 0
+    rgba(
+      255,
+      255,
+      255,
+      0.82
+    );
+
+  backdrop-filter:
+    blur(18px);
+
+  -webkit-backdrop-filter:
+    blur(18px);
+
+  opacity: 0;
+
+  transform:
+    translateY(8px)
+    scale(0.98);
+
+  transition:
+    opacity 280ms ease 80ms,
+    transform 420ms
+    cubic-bezier(0.22, 1, 0.36, 1)
+    80ms;
+}
+
+
+.voice-mode-shell.is-visible
+.voice-mode-controls {
+  opacity: 1;
+
+  transform:
+    translateY(0)
+    scale(1);
 }
 
 
@@ -215,135 +510,219 @@ voice-mode.js may use these later.
    ===================================================== */
 
 .voice-mode-control {
-    position: relative;
+  appearance: none;
 
-    width: 46px;
-    height: 46px;
+  width:
+    46px;
 
-    min-width: 46px;
-    min-height: 46px;
+  height:
+    46px;
 
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
+  display: grid;
+  place-items: center;
 
-    border: 1px solid
-        rgba(15, 15, 18, 0.08);
+  padding: 0;
 
-    border-radius: 50%;
+  border:
+    1px solid
+    rgba(
+      20,
+      20,
+      24,
+      0.06
+    );
 
-    background:
-        rgba(255, 255, 255, 0.76);
+  border-radius:
+    50%;
 
-    -webkit-backdrop-filter:
-        blur(14px);
+  background:
+    rgba(
+      255,
+      255,
+      255,
+      0.68
+    );
 
-    backdrop-filter:
-        blur(14px);
+  color:
+    rgba(
+      18,
+      18,
+      21,
+      0.88
+    );
 
-    box-shadow:
-        0 3px 10px
-        rgba(0, 0, 0, 0.045);
+  cursor: pointer;
 
-    color:
-        rgba(20, 20, 22, 0.82);
+  outline: none;
 
-    padding: 0;
+  box-shadow:
+    0 5px 14px
+    rgba(
+      0,
+      0,
+      0,
+      0.045
+    );
 
-    cursor: pointer;
+  transform:
+    translateY(0)
+    scale(1);
 
-    outline: none;
-
-    -webkit-tap-highlight-color:
-        transparent;
-
-    transition:
-        background 140ms ease,
-        border-color 140ms ease,
-        box-shadow 140ms ease,
-        transform 140ms ease,
-        opacity 140ms ease;
+  transition:
+    background 180ms ease,
+    color 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    transform 160ms
+    cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 160ms ease;
 }
 
-
-/* =====================================================
-   ICONS
-   ===================================================== */
 
 .voice-mode-control svg {
-    width: 19px;
-    height: 19px;
+  width:
+    20px;
 
-    stroke-width: 1.9;
+  height:
+    20px;
 
-    pointer-events: none;
+  display: block;
+
+  pointer-events: none;
 }
 
 
 /* =====================================================
-   HOVER
+   CONTROL HOVER
    ===================================================== */
 
 @media (hover: hover) {
 
-    .voice-mode-control:hover {
-        background:
-            rgba(255, 255, 255, 0.94);
+  .voice-mode-control:hover {
+    background:
+      rgba(
+        255,
+        255,
+        255,
+        0.92
+      );
 
-        border-color:
-            rgba(15, 15, 18, 0.12);
+    border-color:
+      rgba(
+        20,
+        20,
+        24,
+        0.09
+      );
 
-        box-shadow:
-            0 5px 14px
-            rgba(0, 0, 0, 0.065);
+    box-shadow:
+      0 8px 20px
+      rgba(
+        0,
+        0,
+        0,
+        0.07
+      );
 
-        transform:
-            translateY(-1px);
-    }
+    transform:
+      translateY(-1px)
+      scale(1.015);
+  }
 }
 
 
 /* =====================================================
-   ACTIVE PRESS
+   CONTROL ACTIVE PRESS
    ===================================================== */
 
 .voice-mode-control:active {
-    transform: scale(0.96);
+  transform:
+    scale(0.94);
 }
 
 
 /* =====================================================
-   FOCUS
+   KEYBOARD FOCUS
    ===================================================== */
 
 .voice-mode-control:focus-visible {
-    outline:
-        2px solid
-        rgba(70, 90, 255, 0.42);
+  box-shadow:
+    0 0 0 3px
+    rgba(
+      80,
+      95,
+      255,
+      0.16
+    ),
 
-    outline-offset:
-        3px;
+    0 5px 14px
+    rgba(
+      0,
+      0,
+      0,
+      0.05
+    );
 }
 
 
 /* =====================================================
-   CONTROL STATES
+   ACTIVE CONTROL
    ===================================================== */
 
 .voice-mode-control.is-active {
-    background:
-        rgba(242, 243, 248, 0.98);
+  background:
+    rgba(
+      20,
+      20,
+      24,
+      0.93
+    );
 
-    border-color:
-        rgba(15, 15, 18, 0.12);
+  border-color:
+    rgba(
+      20,
+      20,
+      24,
+      0.90
+    );
 
-    color:
-        rgba(15, 15, 18, 0.96);
+  color:
+    white;
+
+  box-shadow:
+    0 7px 18px
+    rgba(
+      0,
+      0,
+      0,
+      0.13
+    );
 }
 
 
+/* =====================================================
+   MUTED CONTROL
+   ===================================================== */
+
 .voice-mode-control.is-muted {
-    opacity: 0.66;
+  background:
+    rgba(
+      255,
+      255,
+      255,
+      0.52
+    );
+
+  color:
+    rgba(
+      18,
+      18,
+      21,
+      0.48
+    );
+
+  box-shadow:
+    none;
 }
 
 
@@ -352,28 +731,47 @@ voice-mode.js may use these later.
    ===================================================== */
 
 .voice-mode-control.voice-mode-end {
-    margin-left: 2px;
+  background:
+    rgba(
+      20,
+      20,
+      24,
+      0.93
+    );
 
-    background:
-        rgba(255, 255, 255, 0.82);
+  color:
+    white;
 
-    color:
-        rgba(205, 46, 46, 0.92);
+  border-color:
+    rgba(
+      20,
+      20,
+      24,
+      0.92
+    );
 
-    border-color:
-        rgba(205, 46, 46, 0.10);
+  box-shadow:
+    0 7px 18px
+    rgba(
+      0,
+      0,
+      0,
+      0.14
+    );
 }
 
 
 @media (hover: hover) {
 
-    .voice-mode-control.voice-mode-end:hover {
-        background:
-            rgba(255, 245, 245, 0.98);
-
-        border-color:
-            rgba(205, 46, 46, 0.16);
-    }
+  .voice-mode-control.voice-mode-end:hover {
+    background:
+      rgba(
+        8,
+        8,
+        10,
+        0.98
+      );
+  }
 }
 
 
@@ -382,116 +780,117 @@ voice-mode.js may use these later.
    ===================================================== */
 
 .voice-mode-camera-preview {
-    position: absolute;
+  position: absolute;
 
-    right: -10px;
-    bottom: 10px;
+  right:
+    -24px;
 
-    width: 104px;
-    height: 132px;
+  bottom:
+    -8px;
 
-    border-radius: 18px;
+  width:
+    104px;
 
-    overflow: hidden;
+  aspect-ratio:
+    3 / 4;
 
-    background:
-        rgba(245, 245, 247, 0.92);
+  overflow:
+    hidden;
 
-    border:
-        1px solid
-        rgba(15, 15, 18, 0.07);
+  border-radius:
+    20px;
 
-    box-shadow:
-        0 8px 26px
-        rgba(0, 0, 0, 0.10);
+  background:
+    rgba(
+      20,
+      20,
+      24,
+      0.08
+    );
 
-    opacity: 0;
-    visibility: hidden;
+  border:
+    1px solid
+    rgba(
+      255,
+      255,
+      255,
+      0.72
+    );
 
-    transform:
-        translateY(6px)
-        scale(0.96);
+  box-shadow:
+    0 16px 38px
+    rgba(
+      0,
+      0,
+      0,
+      0.16
+    );
 
-    transition:
-        opacity 180ms ease,
-        transform 180ms ease,
-        visibility 180ms ease;
+  opacity: 0;
+
+  visibility: hidden;
+
+  transform:
+    translateY(8px)
+    scale(0.92);
+
+  transform-origin:
+    bottom right;
+
+  transition:
+    opacity 220ms ease,
+    transform 320ms
+    cubic-bezier(0.22, 1, 0.36, 1),
+    visibility 0s linear 220ms;
+
+  pointer-events: none;
 }
 
 
 .voice-mode-camera-preview.is-visible {
-    opacity: 1;
-    visibility: visible;
+  opacity: 1;
 
-    transform:
-        translateY(0)
-        scale(1);
+  visibility: visible;
+
+  transform:
+    translateY(0)
+    scale(1);
+
+  transition:
+    opacity 220ms ease,
+    transform 320ms
+    cubic-bezier(0.22, 1, 0.36, 1),
+    visibility 0s linear 0s;
 }
 
 
 .voice-mode-camera-preview video {
-    width: 100%;
-    height: 100%;
+  width:
+    100%;
 
-    display: block;
+  height:
+    100%;
 
-    object-fit: cover;
+  display:
+    block;
 
-    transform: scaleX(-1);
+  object-fit:
+    cover;
+
+  transform:
+    scaleX(-1);
 }
 
 
 /* =====================================================
-   OPTIONAL TINY LABEL
+   VOICE MODE GLOBAL STATE
+
+   Keep app visible underneath.
    ===================================================== */
 
-.voice-mode-substatus {
-    margin-top: 7px;
-
-    font-size: 12px;
-    line-height: 1.3;
-
-    color:
-        rgba(20, 20, 22, 0.38);
-
-    text-align: center;
-
-    min-height: 16px;
-}
-
-
-/* =====================================================
-   DISABLED
-   ===================================================== */
-
-.voice-mode-control:disabled {
-    opacity: 0.42;
-    cursor: default;
-    pointer-events: none;
-}
-
-
-/* =====================================================
-   TABLET
-   ===================================================== */
-
-@media (
-    min-width: 768px
-)
-and (
-    max-width: 1100px
-) {
-
-    .voice-mode-mascot-slot {
-        width: 200px;
-        height: 200px;
-    }
-
-
-    .voice-mode-stage {
-        width:
-            min(90vw, 480px);
-    }
+html.neyo-voice-mode-open {
+  overflow:
+    hidden;
 }
 
 
@@ -501,75 +900,97 @@ and (
 
 @media (max-width: 767px) {
 
-    .voice-mode-shell {
-        align-items: center;
-    }
+  .voice-mode-shell {
+    padding:
+      max(
+        14px,
+        env(safe-area-inset-top)
+      )
+      max(
+        14px,
+        env(safe-area-inset-right)
+      )
+      max(
+        18px,
+        env(safe-area-inset-bottom)
+      )
+      max(
+        14px,
+        env(safe-area-inset-left)
+      );
+  }
 
 
-    .voice-mode-stage {
-        width: 100%;
+  .voice-mode-stage {
+    width:
+      100%;
 
-        max-width: 100%;
+    min-height:
+      calc(
+        100dvh -
+        32px
+      );
 
-        padding:
-            18px
-            18px
-            calc(
-                22px +
-                env(
-                    safe-area-inset-bottom,
-                    0px
-                )
-            );
-    }
-
-
-    .voice-mode-mascot-slot {
-        width: 168px;
-        height: 168px;
-    }
+    padding:
+      24px
+      14px
+      20px;
+  }
 
 
-    .voice-mode-status {
-        margin-top: 18px;
-
-        font-size: 14px;
-
-        min-height: 20px;
-    }
-
-
-    .voice-mode-controls {
-        margin-top: 22px;
-
-        gap: 9px;
-    }
+  .voice-mode-mascot-slot {
+    width:
+      clamp(
+        220px,
+        68vw,
+        320px
+      );
+  }
 
 
-    .voice-mode-control {
-        width: 46px;
-        height: 46px;
+  .voice-mode-status {
+    margin-top:
+      16px;
 
-        min-width: 46px;
-        min-height: 46px;
-    }
-
-
-    .voice-mode-control svg {
-        width: 18px;
-        height: 18px;
-    }
+    font-size:
+      13.5px;
+  }
 
 
-    .voice-mode-camera-preview {
-        width: 88px;
-        height: 112px;
+  .voice-mode-controls {
+    margin-top:
+      24px;
 
-        right: -4px;
-        bottom: 0;
+    gap:
+      8px;
 
-        border-radius: 16px;
-    }
+    padding:
+      6px;
+  }
+
+
+  .voice-mode-control {
+    width:
+      45px;
+
+    height:
+      45px;
+  }
+
+
+  .voice-mode-camera-preview {
+    right:
+      -6px;
+
+    bottom:
+      -10px;
+
+    width:
+      88px;
+
+    border-radius:
+      17px;
+  }
 }
 
 
@@ -579,64 +1000,215 @@ and (
 
 @media (max-width: 390px) {
 
-    .voice-mode-mascot-slot {
-        width: 154px;
-        height: 154px;
-    }
+  .voice-mode-stage {
+    padding-left:
+      8px;
+
+    padding-right:
+      8px;
+  }
 
 
-    .voice-mode-stage {
-        padding-left: 14px;
-        padding-right: 14px;
-    }
+  .voice-mode-mascot-slot {
+    width:
+      min(
+        72vw,
+        285px
+      );
+  }
 
 
-    .voice-mode-controls {
-        gap: 8px;
-    }
+  .voice-mode-controls {
+    gap:
+      7px;
+  }
 
 
-    .voice-mode-control {
-        width: 44px;
-        height: 44px;
+  .voice-mode-control {
+    width:
+      43px;
 
-        min-width: 44px;
-        min-height: 44px;
-    }
+    height:
+      43px;
+  }
+
+
+  .voice-mode-control svg {
+    width:
+      19px;
+
+    height:
+      19px;
+  }
 }
 
 
 /* =====================================================
-   SHORT MOBILE LANDSCAPE
+   SHORT VIEWPORT
    ===================================================== */
 
-@media (
-    max-height: 520px
-)
-and (
-    orientation: landscape
-) {
+@media (max-height: 650px) {
 
-    .voice-mode-stage {
-        padding-top: 10px;
-        padding-bottom: 10px;
-    }
+  .voice-mode-stage {
+    min-height:
+      calc(
+        100dvh -
+        24px
+      );
 
+    padding-top:
+      12px;
 
-    .voice-mode-mascot-slot {
-        width: 126px;
-        height: 126px;
-    }
+    padding-bottom:
+      12px;
+  }
 
 
-    .voice-mode-status {
-        margin-top: 10px;
-    }
+  .voice-mode-mascot-slot {
+    width:
+      clamp(
+        190px,
+        38vh,
+        270px
+      );
+  }
 
 
-    .voice-mode-controls {
-        margin-top: 12px;
-    }
+  .voice-mode-status {
+    margin-top:
+      10px;
+  }
+
+
+  .voice-mode-controls {
+    margin-top:
+      16px;
+  }
+}
+
+
+/* =====================================================
+   DARK MODE
+
+   Original background remains visible.
+   Only local controls adapt.
+   ===================================================== */
+
+html[data-theme="dark"]
+.voice-mode-controls,
+
+body.dark
+.voice-mode-controls {
+  background:
+    rgba(
+      30,
+      30,
+      34,
+      0.44
+    );
+
+  border-color:
+    rgba(
+      255,
+      255,
+      255,
+      0.07
+    );
+
+  box-shadow:
+    0 14px 38px
+    rgba(
+      0,
+      0,
+      0,
+      0.26
+    ),
+
+    inset 0 1px 0
+    rgba(
+      255,
+      255,
+      255,
+      0.06
+    );
+}
+
+
+html[data-theme="dark"]
+.voice-mode-control,
+
+body.dark
+.voice-mode-control {
+  background:
+    rgba(
+      255,
+      255,
+      255,
+      0.08
+    );
+
+  border-color:
+    rgba(
+      255,
+      255,
+      255,
+      0.08
+    );
+
+  color:
+    rgba(
+      255,
+      255,
+      255,
+      0.90
+    );
+}
+
+
+html[data-theme="dark"]
+.voice-mode-control.is-active,
+
+body.dark
+.voice-mode-control.is-active,
+
+html[data-theme="dark"]
+.voice-mode-control.voice-mode-end,
+
+body.dark
+.voice-mode-control.voice-mode-end {
+  background:
+    rgba(
+      255,
+      255,
+      255,
+      0.94
+    );
+
+  color:
+    rgba(
+      14,
+      14,
+      16,
+      0.96
+    );
+
+  border-color:
+    transparent;
+}
+
+
+html[data-theme="dark"]
+.voice-mode-status,
+
+body.dark
+.voice-mode-status {
+  color:
+    rgba(
+      255,
+      255,
+      255,
+      0.66
+    );
 }
 
 
@@ -645,74 +1217,27 @@ and (
    ===================================================== */
 
 @media (
-    prefers-reduced-motion: reduce
+  prefers-reduced-motion: reduce
 ) {
 
-    .voice-mode-shell,
-    .voice-mode-stage,
-    .voice-mode-status,
-    .voice-mode-control,
-    .voice-mode-camera-preview {
-        transition:
-            none !important;
-    }
+  .voice-mode-shell,
+  .voice-mode-stage,
+  .voice-mode-mascot-slot,
+  .voice-mode-mascot-slot::before,
+  .voice-mode-status,
+  .voice-mode-controls,
+  .voice-mode-control,
+  .voice-mode-camera-preview {
+    transition-duration:
+      1ms !important;
+
+    animation:
+      none !important;
+  }
 
 
-    .voice-mode-stage {
-        transform:
-            none !important;
-    }
-}
-
-
-/* =====================================================
-   DARK APPEARANCE
-   ===================================================== */
-
-html[data-theme="dark"]
-.voice-mode-status,
-body.dark
-.voice-mode-status {
-    color:
-        rgba(245, 245, 247, 0.68);
-}
-
-
-html[data-theme="dark"]
-.voice-mode-control,
-body.dark
-.voice-mode-control {
-    background:
-        rgba(42, 42, 46, 0.74);
-
-    border-color:
-        rgba(255, 255, 255, 0.08);
-
-    color:
-        rgba(250, 250, 252, 0.88);
-
-    box-shadow:
-        0 4px 14px
-        rgba(0, 0, 0, 0.16);
-}
-
-
-html[data-theme="dark"]
-.voice-mode-control.is-active,
-body.dark
-.voice-mode-control.is-active {
-    background:
-        rgba(58, 58, 63, 0.92);
-
-    color:
-        rgba(255, 255, 255, 0.96);
-}
-
-
-html[data-theme="dark"]
-.voice-mode-control.voice-mode-end,
-body.dark
-.voice-mode-control.voice-mode-end {
-    color:
-        rgba(255, 116, 116, 0.95);
+  .voice-mode-stage {
+    transform:
+      none !important;
+  }
 }

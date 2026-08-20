@@ -12,8 +12,6 @@
   <!-- Monetag Verification (kept) -->
   <meta name="monetag" content="5c03c9d12ef5dab45df4b58c864f5ae9">
 
-  <!-- Monetag Onclick Tag — REMOVED (now handled by ads.js for Free users only) -->
-
   <meta http-equiv="Content-Security-Policy" content="
     default-src 'self';
     script-src 'self' 'unsafe-inline'
@@ -55,7 +53,6 @@
   <!-- Styles — Final Order (legacy temporarily disabled) -->
   <link rel="stylesheet" href="/neo.css?v=82">
   <link rel="stylesheet" href="/neo-ui-v2.css?v=2">
-  <!-- <link rel="stylesheet" href="/neo-v3.css?v=46"> -->   <!-- ⛔️ DISABLED FOR MIGRATION TEST -->
 
   <!-- Tokens & Foundation -->
   <link rel="stylesheet" href="/css/components/tokens.css?v=1">
@@ -95,9 +92,9 @@
   <link rel="stylesheet" href="/css/components/send-state.css?v=2">
   <link rel="stylesheet" href="/css/components/mobile-shell.css?v=2">
 
-  <!-- ===== VOICE MODE + MASCOT (EDIT 1) ===== -->
-  <link rel="stylesheet" href="/css/components/voice-mode.css?v=1">
-  <link rel="stylesheet" href="/css/components/mascot.css?v=1">
+  <!-- ===== VOICE MODE + MASCOT — FINAL CSS VERSIONS ===== -->
+  <link rel="stylesheet" href="/css/components/voice-mode.css?v=3">
+  <link rel="stylesheet" href="/css/components/mascot.css?v=3">
 
   <!-- KaTeX -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css">
@@ -110,7 +107,6 @@
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.8/purify.min.js"></script>
 
-  <!-- Monetag Vignette - NOW LOADED VIA ads.js MODULE, NOT INLINE -->
 </head>
 
 <body>
@@ -1305,7 +1301,7 @@
   </div>
 
   <!-- ========================================================= -->
-  <!-- NEYO VOICE MODE  (EDIT 2)                               -->
+  <!-- NEYO VOICE MODE — MASCOT MARKUP (UNCHANGED)               -->
   <!-- ========================================================= -->
 
   <div
@@ -1319,9 +1315,7 @@
       aria-label="NEYO voice conversation"
     >
 
-      <!-- =========================
-           MASCOT
-           ========================= -->
+      <!-- MASCOT -->
       <div class="voice-mode-mascot-slot">
 
         <div
@@ -1373,7 +1367,6 @@
 
         </div>
 
-
         <!-- Camera preview -->
         <div
           id="neyoCameraPreview"
@@ -1390,10 +1383,7 @@
 
       </div>
 
-
-      <!-- =========================
-           STATUS
-           ========================= -->
+      <!-- STATUS -->
       <div
         id="neyoMascotStatus"
         class="voice-mode-status"
@@ -1402,10 +1392,7 @@
         Ready
       </div>
 
-
-      <!-- =========================
-           CONTROLS
-           ========================= -->
+      <!-- CONTROLS -->
       <div class="voice-mode-controls">
 
         <button
@@ -1445,7 +1432,7 @@
   </div>
 
   <!-- ========================================================= -->
-  <!-- SCRIPTS — UPDATED ORDER AS REQUESTED                      -->
+  <!-- SCRIPTS — FINAL LOCKED ORDER                              -->
   <!-- ========================================================= -->
 
   <!-- Main working app -->
@@ -1466,21 +1453,31 @@
   <!-- Composer scrollbar (NEW) -->
   <script type="module" src="/js/components/composer-scrollbar.js?v=1"></script>
 
-  <!-- ===== VOICE SCRIPTS — UPDATED ORDER ===== -->
-  <!-- Voice — Gemini Live Native Audio -->
-  <script type="module" src="/js/components/voice.js?v=101"></script>
+  <!-- ===== NEYO VOICE + PREMIUM MASCOT — FINAL STACK ===== -->
 
-  <!-- Voice Mascot (core) -->
-  <script type="module" src="/js/components/mascot.js?v=3"></script>
+  <!-- Gemini Live voice engine -->
+  <script
+    type="module"
+    src="/js/components/voice.js?v=102"
+  ></script>
 
-  <!-- Mascot tone system -->
-  <script type="module" src="/js/components/mascot-tone.js?v=1"></script>
+  <!-- Unified premium face engine -->
+  <script
+    type="module"
+    src="/js/components/mascot.js?v=5"
+  ></script>
 
-  <!-- Mascot motion system -->
-  <script type="module" src="/js/components/mascot-motion.js?v=1"></script>
+  <!-- Mood / conversation intelligence -->
+  <script
+    type="module"
+    src="/js/components/mascot-intelligence.js?v=1"
+  ></script>
 
-  <!-- Voice Mode UI -->
-  <script type="module" src="/js/components/voice-mode.js?v=2"></script>
+  <!-- Voice Mode screen + controls -->
+  <script
+    type="module"
+    src="/js/components/voice-mode.js?v=3"
+  ></script>
 
   <!-- Native tooltips (restored) -->
   <script type="module" src="/js/components/native-tooltips.js?v=1"></script>

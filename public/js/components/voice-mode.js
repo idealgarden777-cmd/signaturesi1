@@ -1,23 +1,24 @@
 /*
 =========================================================
-NEYO — VOICE MODE CONTROLLER
-Production UI Controller
+NEYO — VOICE MODE UI v3
 
 Owns:
-- open / close voice screen
-- status text
-- mic button UI
-- speaker button UI
-- camera toggle + preview
+- voice mode open / close
+- premium status transitions
+- mic button
+- speaker button
+- camera button + preview
 - end button
-- mascot UI events
-- graceful engine hooks
+- keyboard escape
+- focus handling
+- UI-only state
 
 Does NOT own:
-- Gemini WebSocket
-- PCM microphone streaming
-- native audio playback
-- VAD logic
+- Gemini
+- WebSocket
+- VAD
+- mascot mood logic
+- mascot motion
 =========================================================
 */
 
@@ -71,25 +72,44 @@ Does NOT own:
      ===================================================== */
 
   const state = {
-    open: false,
-    closing: false,
+    open:
+      false,
 
-    muted: false,
-    speakerOn: true,
+    closing:
+      false,
 
-    cameraOn: false,
-    cameraStream: null,
+    phase:
+      "idle",
 
-    currentPhase: "idle",
-    currentStatus: "Ready"
+    muted:
+      false,
+
+    speakerOn:
+      true,
+
+    cameraOn:
+      false,
+
+    cameraStream:
+      null,
+
+    lastFocusedElement:
+      null,
+
+    status:
+      "Ready"
   };
 
 
-  let statusTimer = 0;
+  let statusTimer =
+    0;
+
+  let closeTimer =
+    0;
 
 
   /* =====================================================
-     EVENT HELPER
+     HELPERS
      ===================================================== */
 
   function dispatch(
@@ -99,11 +119,19 @@ Does NOT own:
     window.dispatchEvent(
       new CustomEvent(
         name,
-        {
-          detail
-        }
+        { detail }
       )
     );
+  }
+
+
+  function safeFocus(element) {
+    try {
+      element?.focus?.({
+        preventScroll:
+          true
+      });
+    } catch {}
   }
 
 
@@ -111,15 +139,48 @@ Does NOT own:
      STATUS
      ===================================================== */
 
+  const STATUS_MAP =
+    Object.freeze({
+
+      idle:
+        "Ready",
+
+      listening:
+        "Listening…",
+
+      thinking:
+        "Thinking…",
+
+      speaking:
+        "NEYO is speaking",
+
+      interrupted:
+        "Listening…",
+
+      error:
+        "Something went wrong"
+    });
+
+
   function setStatus(
     text,
-    options = {}
+    {
+      immediate = false
+    } = {}
   ) {
-    if (!text) return;
+
+    const value =
+      String(
+        text || ""
+      ).trim();
+
+    if (!value) {
+      return;
+    }
 
 
-    state.currentStatus =
-      text;
+    state.status =
+      value;
 
 
     if (!statusEl) {
@@ -133,37 +194,38 @@ Does NOT own:
 
 
     if (
-      options.immediate ||
-      statusEl.textContent === text
+      immediate ||
+      statusEl.textContent ===
+        value
     ) {
+
       statusEl.classList.remove(
-        "is-changing",
+        "is-leaving",
         "is-entering"
       );
 
       statusEl.textContent =
-        text;
+        value;
 
       return;
     }
 
 
     statusEl.classList.add(
-      "is-changing"
+      "is-leaving"
     );
 
 
     statusTimer =
       setTimeout(
         () => {
-          statusEl.textContent =
-            text;
 
+          statusEl.textContent =
+            value;
 
           statusEl.classList.remove(
-            "is-changing"
+            "is-leaving"
           );
-
 
           statusEl.classList.add(
             "is-entering"
@@ -181,18 +243,17 @@ Does NOT own:
               );
             }
           );
+
         },
-        110
+        90
       );
   }
 
 
-  /* =====================================================
-     STATUS FROM PHASE
-     ===================================================== */
+  function syncStatus() {
 
-  function syncStatusFromPhase() {
     if (state.muted) {
+
       setStatus(
         "Microphone muted"
       );
@@ -201,48 +262,20 @@ Does NOT own:
     }
 
 
-    switch (state.currentPhase) {
-      case "listening":
-        setStatus(
-          "Listening…"
-        );
-        break;
+    if (!state.speakerOn) {
 
+      setStatus(
+        "Audio off"
+      );
 
-      case "thinking":
-        setStatus(
-          "Thinking…"
-        );
-        break;
-
-
-      case "speaking":
-        setStatus(
-          "NEYO is speaking"
-        );
-        break;
-
-
-      case "interrupted":
-        setStatus(
-          "Listening…"
-        );
-        break;
-
-
-      case "error":
-        setStatus(
-          "Something went wrong"
-        );
-        break;
-
-
-      case "idle":
-      default:
-        setStatus(
-          "Ready"
-        );
+      return;
     }
+
+
+    setStatus(
+      STATUS_MAP[state.phase] ||
+      "Ready"
+    );
   }
 
 
@@ -250,170 +283,212 @@ Does NOT own:
      ICONS
      ===================================================== */
 
-  function renderIcons() {
+  function renderMicIcon() {
 
-    if (micBtn) {
-      micBtn.innerHTML =
-        state.muted
-          ? `
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M9 9v3a3 3 0 0 0 4.8 2.4"
-                stroke="currentColor"
-                stroke-linecap="round"
-              />
-              <path d="M15 9V5a3 3 0 0 0-6 0v1"
-                stroke="currentColor"
-                stroke-linecap="round"
-              />
-              <path d="M5 5l14 14"
-                stroke="currentColor"
-                stroke-linecap="round"
-              />
-              <path d="M5 11a7 7 0 0 0 11 5.7"
-                stroke="currentColor"
-                stroke-linecap="round"
-              />
-              <path d="M12 19v3"
-                stroke="currentColor"
-                stroke-linecap="round"
-              />
-            </svg>
-          `
-          : `
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <rect
-                x="9"
-                y="3"
-                width="6"
-                height="11"
-                rx="3"
-                stroke="currentColor"
-              />
-              <path
-                d="M5 11a7 7 0 0 0 14 0"
-                stroke="currentColor"
-                stroke-linecap="round"
-              />
-              <path
-                d="M12 18v4"
-                stroke="currentColor"
-                stroke-linecap="round"
-              />
-            </svg>
-          `;
+    if (!micBtn) {
+      return;
     }
 
 
-    if (cameraBtn) {
-      cameraBtn.innerHTML =
-        state.cameraOn
-          ? `
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <rect
-                x="3"
-                y="6"
-                width="13"
-                height="12"
-                rx="3"
-                stroke="currentColor"
-              />
-              <path
-                d="M16 10l5-3v10l-5-3"
-                stroke="currentColor"
-                stroke-linejoin="round"
-              />
-            </svg>
-          `
-          : `
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <rect
-                x="3"
-                y="6"
-                width="13"
-                height="12"
-                rx="3"
-                stroke="currentColor"
-              />
-              <path
-                d="M16 10l5-3v10l-5-3"
-                stroke="currentColor"
-                stroke-linejoin="round"
-              />
-              <path
-                d="M4 4l16 16"
-                stroke="currentColor"
-                stroke-linecap="round"
-              />
-            </svg>
-          `;
+    micBtn.innerHTML =
+      state.muted
+        ? `
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M9 9v3a3 3 0 0 0 4.2 2.75"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+            />
+            <path d="M15 9V5a3 3 0 0 0-6 0v1"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+            />
+            <path d="M5 5l14 14"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+            />
+            <path d="M5 11a7 7 0 0 0 11.2 5.6"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+            />
+            <path d="M12 19v3"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+            />
+          </svg>
+        `
+        : `
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <rect
+              x="9"
+              y="3"
+              width="6"
+              height="11"
+              rx="3"
+              stroke="currentColor"
+              stroke-width="1.8"
+            />
+            <path
+              d="M5 11a7 7 0 0 0 14 0"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+            />
+            <path
+              d="M12 18v4"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+            />
+          </svg>
+        `;
+  }
+
+
+  function renderSpeakerIcon() {
+
+    if (!speakerBtn) {
+      return;
     }
 
 
-    if (speakerBtn) {
-      speakerBtn.innerHTML =
-        state.speakerOn
-          ? `
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path
-                d="M5 10v4h4l5 4V6l-5 4H5Z"
-                stroke="currentColor"
-                stroke-linejoin="round"
-              />
-              <path
-                d="M17 9a4 4 0 0 1 0 6"
-                stroke="currentColor"
-                stroke-linecap="round"
-              />
-            </svg>
-          `
-          : `
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path
-                d="M5 10v4h4l5 4V6l-5 4H5Z"
-                stroke="currentColor"
-                stroke-linejoin="round"
-              />
-              <path
-                d="M17 9l4 6"
-                stroke="currentColor"
-                stroke-linecap="round"
-              />
-              <path
-                d="M21 9l-4 6"
-                stroke="currentColor"
-                stroke-linecap="round"
-              />
-            </svg>
-          `;
+    speakerBtn.innerHTML =
+      state.speakerOn
+        ? `
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path
+              d="M5 10v4h4l5 4V6l-5 4H5Z"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linejoin="round"
+            />
+            <path
+              d="M17 9a4 4 0 0 1 0 6"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+            />
+          </svg>
+        `
+        : `
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path
+              d="M5 10v4h4l5 4V6l-5 4H5Z"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linejoin="round"
+            />
+            <path
+              d="M17 9l4 6"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+            />
+            <path
+              d="M21 9l-4 6"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+            />
+          </svg>
+        `;
+  }
+
+
+  function renderCameraIcon() {
+
+    if (!cameraBtn) {
+      return;
     }
 
 
-    if (endBtn) {
-      endBtn.innerHTML = `
-        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path
-            d="M5 7l14 14"
-            stroke="currentColor"
-            stroke-linecap="round"
-          />
-          <path
-            d="M19 7L5 21"
-            stroke="currentColor"
-            stroke-linecap="round"
-          />
-        </svg>
-      `;
+    cameraBtn.innerHTML =
+      state.cameraOn
+        ? `
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <rect
+              x="3"
+              y="6"
+              width="13"
+              height="12"
+              rx="3"
+              stroke="currentColor"
+              stroke-width="1.8"
+            />
+            <path
+              d="M16 10l5-3v10l-5-3"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linejoin="round"
+            />
+          </svg>
+        `
+        : `
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <rect
+              x="3"
+              y="6"
+              width="13"
+              height="12"
+              rx="3"
+              stroke="currentColor"
+              stroke-width="1.8"
+            />
+            <path
+              d="M16 10l5-3v10l-5-3"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linejoin="round"
+            />
+            <path
+              d="M4 4l16 16"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+            />
+          </svg>
+        `;
+  }
+
+
+  function renderEndIcon() {
+
+    if (!endBtn) {
+      return;
     }
+
+
+    endBtn.innerHTML = `
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path
+          d="M7 7l10 10"
+          stroke="currentColor"
+          stroke-width="1.9"
+          stroke-linecap="round"
+        />
+        <path
+          d="M17 7L7 17"
+          stroke="currentColor"
+          stroke-width="1.9"
+          stroke-linecap="round"
+        />
+      </svg>
+    `;
   }
 
 
   /* =====================================================
-     CONTROL UI
+     CONTROLS
      ===================================================== */
 
   function syncControls() {
 
     if (micBtn) {
+
       micBtn.classList.toggle(
         "is-active",
         !state.muted
@@ -439,6 +514,7 @@ Does NOT own:
 
 
     if (speakerBtn) {
+
       speakerBtn.classList.toggle(
         "is-active",
         state.speakerOn
@@ -464,6 +540,7 @@ Does NOT own:
 
 
     if (cameraBtn) {
+
       cameraBtn.classList.toggle(
         "is-active",
         state.cameraOn
@@ -483,7 +560,10 @@ Does NOT own:
     }
 
 
-    renderIcons();
+    renderMicIcon();
+    renderSpeakerIcon();
+    renderCameraIcon();
+    renderEndIcon();
   }
 
 
@@ -501,12 +581,28 @@ Does NOT own:
     }
 
 
+    clearTimeout(
+      closeTimer
+    );
+
+
     state.open =
       true;
+
+    state.phase =
+      "idle";
+
+    state.lastFocusedElement =
+      document.activeElement;
 
 
     shell.classList.add(
       "is-open"
+    );
+
+
+    shell.classList.remove(
+      "is-closing"
     );
 
 
@@ -516,14 +612,18 @@ Does NOT own:
     );
 
 
-    state.currentPhase =
-      "idle";
+    document.documentElement
+      .classList
+      .add(
+        "neyo-voice-mode-open"
+      );
 
 
     setStatus(
       "Ready",
       {
-        immediate: true
+        immediate:
+          true
       }
     );
 
@@ -538,7 +638,16 @@ Does NOT own:
 
     requestAnimationFrame(
       () => {
-        stage?.focus?.();
+
+        shell.classList.add(
+          "is-visible"
+        );
+
+
+        safeFocus(
+          endBtn ||
+          stage
+        );
       }
     );
 
@@ -546,203 +655,6 @@ Does NOT own:
     console.log(
       "[NEYO Voice Mode] Open"
     );
-  }
-
-
-  /* =====================================================
-     CLOSE
-     ===================================================== */
-
-  async function close(
-    options = {}
-  ) {
-
-    if (
-      !state.open ||
-      state.closing
-    ) {
-      return;
-    }
-
-
-    state.closing =
-      true;
-
-
-    stopCamera();
-
-
-    if (
-      options.emitClose !==
-      false
-    ) {
-      dispatch(
-        "neyo:voice-close"
-      );
-    }
-
-
-    if (
-      options.stopVoice !==
-      false
-    ) {
-      try {
-        await window
-          .NeyoVoice
-          ?.stop?.();
-      } catch (error) {
-        console.warn(
-          "[NEYO Voice Mode] Voice stop failed:",
-          error
-        );
-      }
-    }
-
-
-    shell.classList.remove(
-      "is-open"
-    );
-
-
-    shell.setAttribute(
-      "aria-hidden",
-      "true"
-    );
-
-
-    setTimeout(
-      () => {
-        state.open =
-          false;
-
-        state.closing =
-          false;
-
-        state.muted =
-          false;
-
-        state.speakerOn =
-          true;
-
-        state.currentPhase =
-          "idle";
-
-
-        syncControls();
-
-
-        setStatus(
-          "Ready",
-          {
-            immediate: true
-          }
-        );
-      },
-      240
-    );
-
-
-    console.log(
-      "[NEYO Voice Mode] Closed"
-    );
-  }
-
-
-  /* =====================================================
-     MIC
-     ===================================================== */
-
-  function toggleMic() {
-
-    state.muted =
-      !state.muted;
-
-
-    /*
-    Actual engine integration hook.
-    voice.js may expose setMuted() later.
-    */
-
-    try {
-      window
-        .NeyoVoice
-        ?.setMuted
-        ?.(
-          state.muted
-        );
-    } catch (error) {
-      console.warn(
-        "[NEYO Voice Mode] Mic toggle hook failed:",
-        error
-      );
-    }
-
-
-    dispatch(
-      "neyo:voice-muted",
-      {
-        muted:
-          state.muted
-      }
-    );
-
-
-    syncControls();
-
-    syncStatusFromPhase();
-  }
-
-
-  /* =====================================================
-     SPEAKER
-     ===================================================== */
-
-  function toggleSpeaker() {
-
-    state.speakerOn =
-      !state.speakerOn;
-
-
-    /*
-    Actual engine integration hook.
-    voice.js may expose setSpeakerEnabled() later.
-    */
-
-    try {
-      window
-        .NeyoVoice
-        ?.setSpeakerEnabled
-        ?.(
-          state.speakerOn
-        );
-    } catch (error) {
-      console.warn(
-        "[NEYO Voice Mode] Speaker toggle hook failed:",
-        error
-      );
-    }
-
-
-    dispatch(
-      "neyo:voice-speaker",
-      {
-        enabled:
-          state.speakerOn
-      }
-    );
-
-
-    syncControls();
-
-
-    if (!state.speakerOn) {
-      setStatus(
-        "Audio off"
-      );
-
-    } else {
-      syncStatusFromPhase();
-    }
   }
 
 
@@ -765,6 +677,7 @@ Does NOT own:
         .mediaDevices
         ?.getUserMedia
     ) {
+
       setStatus(
         "Camera unavailable"
       );
@@ -779,6 +692,7 @@ Does NOT own:
         await navigator
           .mediaDevices
           .getUserMedia({
+
             video: {
               facingMode:
                 "user"
@@ -797,6 +711,7 @@ Does NOT own:
 
 
       if (cameraVideo) {
+
         cameraVideo.srcObject =
           stream;
 
@@ -807,15 +722,18 @@ Does NOT own:
       }
 
 
-      cameraPreview?.classList.add(
-        "is-visible"
-      );
+      cameraPreview
+        ?.classList
+        .add(
+          "is-visible"
+        );
 
 
-      cameraPreview?.setAttribute(
-        "aria-hidden",
-        "false"
-      );
+      cameraPreview
+        ?.setAttribute(
+          "aria-hidden",
+          "false"
+        );
 
 
       dispatch(
@@ -834,28 +752,31 @@ Does NOT own:
 
     } catch (error) {
 
-      console.error(
+      console.warn(
         "[NEYO Voice Mode] Camera failed:",
         error
       );
 
 
-      state.cameraOn =
-        false;
-
       state.cameraStream =
         null;
 
-
-      cameraPreview?.classList.remove(
-        "is-visible"
-      );
+      state.cameraOn =
+        false;
 
 
-      cameraPreview?.setAttribute(
-        "aria-hidden",
-        "true"
-      );
+      cameraPreview
+        ?.classList
+        .remove(
+          "is-visible"
+        );
+
+
+      cameraPreview
+        ?.setAttribute(
+          "aria-hidden",
+          "true"
+        );
 
 
       dispatch(
@@ -885,10 +806,13 @@ Does NOT own:
     if (
       state.cameraStream
     ) {
+
       for (
         const track
-        of state.cameraStream.getTracks()
+        of state.cameraStream
+          .getTracks()
       ) {
+
         try {
           track.stop();
         } catch {}
@@ -904,20 +828,24 @@ Does NOT own:
 
 
     if (cameraVideo) {
+
       cameraVideo.srcObject =
         null;
     }
 
 
-    cameraPreview?.classList.remove(
-      "is-visible"
-    );
+    cameraPreview
+      ?.classList
+      .remove(
+        "is-visible"
+      );
 
 
-    cameraPreview?.setAttribute(
-      "aria-hidden",
-      "true"
-    );
+    cameraPreview
+      ?.setAttribute(
+        "aria-hidden",
+        "true"
+      );
 
 
     dispatch(
@@ -936,7 +864,9 @@ Does NOT own:
   async function toggleCamera() {
 
     if (state.cameraOn) {
+
       stopCamera();
+
       return;
     }
 
@@ -946,8 +876,228 @@ Does NOT own:
 
 
   /* =====================================================
-     END SESSION
+     MIC
      ===================================================== */
+
+  function toggleMic() {
+
+    state.muted =
+      !state.muted;
+
+
+    try {
+
+      window
+        .NeyoVoice
+        ?.setMuted
+        ?.(
+          state.muted
+        );
+
+    } catch (error) {
+
+      console.warn(
+        "[NEYO Voice Mode] Mic hook failed:",
+        error
+      );
+    }
+
+
+    dispatch(
+      "neyo:voice-muted",
+      {
+        muted:
+          state.muted
+      }
+    );
+
+
+    syncControls();
+
+    syncStatus();
+  }
+
+
+  /* =====================================================
+     SPEAKER
+     ===================================================== */
+
+  function toggleSpeaker() {
+
+    state.speakerOn =
+      !state.speakerOn;
+
+
+    try {
+
+      window
+        .NeyoVoice
+        ?.setSpeakerEnabled
+        ?.(
+          state.speakerOn
+        );
+
+    } catch (error) {
+
+      console.warn(
+        "[NEYO Voice Mode] Speaker hook failed:",
+        error
+      );
+    }
+
+
+    dispatch(
+      "neyo:voice-speaker",
+      {
+        enabled:
+          state.speakerOn
+      }
+    );
+
+
+    syncControls();
+
+    syncStatus();
+  }
+
+
+  /* =====================================================
+     CLOSE
+     ===================================================== */
+
+  async function close(
+    {
+      stopVoice = true,
+      emitClose = true
+    } = {}
+  ) {
+
+    if (
+      !state.open ||
+      state.closing
+    ) {
+      return;
+    }
+
+
+    state.closing =
+      true;
+
+
+    stopCamera();
+
+
+    if (emitClose) {
+
+      dispatch(
+        "neyo:voice-close"
+      );
+    }
+
+
+    if (stopVoice) {
+
+      try {
+
+        await window
+          .NeyoVoice
+          ?.stop
+          ?.();
+
+      } catch (error) {
+
+        console.warn(
+          "[NEYO Voice Mode] Voice stop failed:",
+          error
+        );
+      }
+    }
+
+
+    shell.classList.add(
+      "is-closing"
+    );
+
+
+    shell.classList.remove(
+      "is-visible"
+    );
+
+
+    clearTimeout(
+      closeTimer
+    );
+
+
+    closeTimer =
+      setTimeout(
+        () => {
+
+          shell.classList.remove(
+            "is-open",
+            "is-closing"
+          );
+
+
+          shell.setAttribute(
+            "aria-hidden",
+            "true"
+          );
+
+
+          document.documentElement
+            .classList
+            .remove(
+              "neyo-voice-mode-open"
+            );
+
+
+          state.open =
+            false;
+
+          state.closing =
+            false;
+
+          state.phase =
+            "idle";
+
+          state.muted =
+            false;
+
+          state.speakerOn =
+            true;
+
+
+          setStatus(
+            "Ready",
+            {
+              immediate:
+                true
+            }
+          );
+
+
+          syncControls();
+
+
+          safeFocus(
+            state.lastFocusedElement
+          );
+
+
+          state.lastFocusedElement =
+            null;
+
+        },
+        240
+      );
+
+
+    console.log(
+      "[NEYO Voice Mode] Close"
+    );
+  }
+
 
   async function endSession() {
 
@@ -959,16 +1109,32 @@ Does NOT own:
 
 
   /* =====================================================
-     VOICE STATE EVENTS
+     PHASE SYNC
      ===================================================== */
+
+  function setPhase(
+    phase
+  ) {
+
+    state.phase =
+      phase;
+
+
+    shell.dataset.phase =
+      phase;
+
+
+    syncStatus();
+  }
+
 
   window.addEventListener(
     "neyo:voice-idle",
     () => {
-      state.currentPhase =
-        "idle";
 
-      syncStatusFromPhase();
+      setPhase(
+        "idle"
+      );
     }
   );
 
@@ -976,10 +1142,10 @@ Does NOT own:
   window.addEventListener(
     "neyo:voice-listening",
     () => {
-      state.currentPhase =
-        "listening";
 
-      syncStatusFromPhase();
+      setPhase(
+        "listening"
+      );
     }
   );
 
@@ -987,10 +1153,10 @@ Does NOT own:
   window.addEventListener(
     "neyo:voice-thinking",
     () => {
-      state.currentPhase =
-        "thinking";
 
-      syncStatusFromPhase();
+      setPhase(
+        "thinking"
+      );
     }
   );
 
@@ -998,10 +1164,10 @@ Does NOT own:
   window.addEventListener(
     "neyo:voice-speaking",
     () => {
-      state.currentPhase =
-        "speaking";
 
-      syncStatusFromPhase();
+      setPhase(
+        "speaking"
+      );
     }
   );
 
@@ -1009,10 +1175,10 @@ Does NOT own:
   window.addEventListener(
     "neyo:voice-interrupted",
     () => {
-      state.currentPhase =
-        "interrupted";
 
-      syncStatusFromPhase();
+      setPhase(
+        "interrupted"
+      );
     }
   );
 
@@ -1020,10 +1186,10 @@ Does NOT own:
   window.addEventListener(
     "neyo:voice-error",
     () => {
-      state.currentPhase =
-        "error";
 
-      syncStatusFromPhase();
+      setPhase(
+        "error"
+      );
     }
   );
 
@@ -1035,7 +1201,10 @@ Does NOT own:
   micBtn?.addEventListener(
     "click",
     event => {
+
       event.preventDefault();
+
+      event.stopPropagation();
 
       toggleMic();
     }
@@ -1045,7 +1214,10 @@ Does NOT own:
   speakerBtn?.addEventListener(
     "click",
     event => {
+
       event.preventDefault();
+
+      event.stopPropagation();
 
       toggleSpeaker();
     }
@@ -1055,7 +1227,10 @@ Does NOT own:
   cameraBtn?.addEventListener(
     "click",
     event => {
+
       event.preventDefault();
+
+      event.stopPropagation();
 
       toggleCamera();
     }
@@ -1065,7 +1240,10 @@ Does NOT own:
   endBtn?.addEventListener(
     "click",
     event => {
+
       event.preventDefault();
+
+      event.stopPropagation();
 
       endSession();
     }
@@ -1073,7 +1251,7 @@ Does NOT own:
 
 
   /* =====================================================
-     ESCAPE
+     KEYBOARD
      ===================================================== */
 
   document.addEventListener(
@@ -1081,17 +1259,21 @@ Does NOT own:
     event => {
 
       if (
-        !state.open ||
-        event.key !==
-          "Escape"
+        !state.open
       ) {
         return;
       }
 
 
-      event.preventDefault();
+      if (
+        event.key ===
+        "Escape"
+      ) {
 
-      endSession();
+        event.preventDefault();
+
+        endSession();
+      }
     }
   );
 
@@ -1103,10 +1285,12 @@ Does NOT own:
   window.addEventListener(
     "pagehide",
     () => {
+
       stopCamera();
     },
     {
-      once: true
+      once:
+        true
     }
   );
 
@@ -1133,8 +1317,11 @@ Does NOT own:
 
       setStatus,
 
+      setPhase,
+
       isOpen:
-        () => state.open,
+        () =>
+          state.open,
 
       getState:
         () => ({
@@ -1143,6 +1330,9 @@ Does NOT own:
 
           closing:
             state.closing,
+
+          phase:
+            state.phase,
 
           muted:
             state.muted,
@@ -1153,11 +1343,8 @@ Does NOT own:
           cameraOn:
             state.cameraOn,
 
-          currentPhase:
-            state.currentPhase,
-
-          currentStatus:
-            state.currentStatus
+          status:
+            state.status
         })
     });
 
@@ -1172,17 +1359,31 @@ Does NOT own:
   );
 
 
-  cameraPreview?.setAttribute(
-    "aria-hidden",
-    "true"
-  );
+  shell.dataset.phase =
+    "idle";
+
+
+  cameraPreview
+    ?.setAttribute(
+      "aria-hidden",
+      "true"
+    );
 
 
   syncControls();
 
 
+  setStatus(
+    "Ready",
+    {
+      immediate:
+        true
+    }
+  );
+
+
   console.log(
-    "[NEYO Voice Mode] Production controller loaded"
+    "[NEYO Voice Mode] Premium UI v3 loaded"
   );
 
 })();

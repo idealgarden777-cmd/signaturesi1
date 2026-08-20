@@ -1,0 +1,1473 @@
+/*
+=========================================================
+NEYO — CHARACTER PICKER v1
+
+Purpose:
+- Premium centered character selection popup
+- Show only available registered characters
+- Selected character state
+- Clean light UI
+- Original app background preserved
+- Desktop modal
+- Mobile bottom sheet
+=========================================================
+*/
+
+
+/* =====================================================
+   SHELL
+   ===================================================== */
+
+.character-picker-shell {
+  position: fixed;
+  inset: 0;
+
+  z-index: 10050;
+
+  display: grid;
+  place-items: center;
+
+  padding:
+    max(18px, env(safe-area-inset-top))
+    max(18px, env(safe-area-inset-right))
+    max(18px, env(safe-area-inset-bottom))
+    max(18px, env(safe-area-inset-left));
+
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+
+  background:
+    rgba(255, 255, 255, 0.20);
+
+  backdrop-filter:
+    blur(8px);
+
+  -webkit-backdrop-filter:
+    blur(8px);
+
+  transition:
+    opacity 220ms ease,
+    visibility 0s linear 220ms;
+}
+
+
+/* =====================================================
+   OPEN
+   ===================================================== */
+
+.character-picker-shell.is-open {
+  visibility: visible;
+
+  transition:
+    opacity 220ms ease,
+    visibility 0s linear 0s;
+}
+
+
+.character-picker-shell.is-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+
+/* =====================================================
+   CLOSING
+   ===================================================== */
+
+.character-picker-shell.is-closing {
+  opacity: 0;
+  pointer-events: none;
+}
+
+
+/* =====================================================
+   PANEL
+   ===================================================== */
+
+.character-picker-panel {
+  position: relative;
+
+  width:
+    min(
+      100%,
+      520px
+    );
+
+  max-height:
+    min(
+      720px,
+      calc(
+        100dvh -
+        40px
+      )
+    );
+
+  overflow: hidden;
+
+  display: flex;
+  flex-direction: column;
+
+  border-radius: 28px;
+
+  background:
+    rgba(
+      255,
+      255,
+      255,
+      0.94
+    );
+
+  border:
+    1px solid
+    rgba(
+      20,
+      20,
+      24,
+      0.06
+    );
+
+  box-shadow:
+    0 28px 80px
+    rgba(
+      0,
+      0,
+      0,
+      0.14
+    ),
+
+    0 8px 24px
+    rgba(
+      0,
+      0,
+      0,
+      0.06
+    ),
+
+    inset 0 1px 0
+    rgba(
+      255,
+      255,
+      255,
+      0.92
+    );
+
+  backdrop-filter:
+    blur(22px);
+
+  -webkit-backdrop-filter:
+    blur(22px);
+
+  opacity: 0;
+
+  transform:
+    translateY(14px)
+    scale(0.965);
+
+  transform-origin: center;
+
+  transition:
+    opacity 240ms ease,
+    transform 360ms
+    cubic-bezier(.22, 1, .36, 1);
+}
+
+
+.character-picker-shell.is-visible
+.character-picker-panel {
+  opacity: 1;
+
+  transform:
+    translateY(0)
+    scale(1);
+}
+
+
+.character-picker-shell.is-closing
+.character-picker-panel {
+  opacity: 0;
+
+  transform:
+    translateY(8px)
+    scale(0.98);
+}
+
+
+/* =====================================================
+   HEADER
+   ===================================================== */
+
+.character-picker-header {
+  position: relative;
+
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+
+  gap: 18px;
+
+  padding:
+    24px
+    24px
+    16px;
+}
+
+
+.character-picker-heading {
+  min-width: 0;
+}
+
+
+.character-picker-title {
+  margin: 0;
+
+  color:
+    rgba(
+      18,
+      18,
+      21,
+      0.96
+    );
+
+  font-family:
+    Inter,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+
+  font-size:
+    22px;
+
+  font-weight:
+    650;
+
+  line-height:
+    1.18;
+
+  letter-spacing:
+    -0.035em;
+}
+
+
+.character-picker-subtitle {
+  margin:
+    6px
+    0
+    0;
+
+  max-width:
+    360px;
+
+  color:
+    rgba(
+      24,
+      24,
+      28,
+      0.54
+    );
+
+  font-family:
+    Inter,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+
+  font-size:
+    13.5px;
+
+  font-weight:
+    450;
+
+  line-height:
+    1.45;
+
+  letter-spacing:
+    -0.01em;
+}
+
+
+/* =====================================================
+   CLOSE BUTTON
+   ===================================================== */
+
+.character-picker-close {
+  appearance: none;
+
+  width: 36px;
+  height: 36px;
+
+  flex: 0 0 auto;
+
+  display: grid;
+  place-items: center;
+
+  padding: 0;
+
+  border:
+    1px solid
+    rgba(
+      20,
+      20,
+      24,
+      0.06
+    );
+
+  border-radius: 50%;
+
+  background:
+    rgba(
+      245,
+      245,
+      247,
+      0.86
+    );
+
+  color:
+    rgba(
+      18,
+      18,
+      21,
+      0.74
+    );
+
+  cursor: pointer;
+
+  outline: none;
+
+  transition:
+    background 160ms ease,
+    color 160ms ease,
+    transform 150ms ease,
+    border-color 160ms ease;
+}
+
+
+.character-picker-close svg {
+  width: 17px;
+  height: 17px;
+
+  pointer-events: none;
+}
+
+
+@media (hover: hover) {
+
+  .character-picker-close:hover {
+    background:
+      rgba(
+        235,
+        235,
+        238,
+        0.96
+      );
+
+    color:
+      rgba(
+        18,
+        18,
+        21,
+        0.96
+      );
+
+    border-color:
+      rgba(
+        20,
+        20,
+        24,
+        0.09
+      );
+  }
+}
+
+
+.character-picker-close:active {
+  transform:
+    scale(0.92);
+}
+
+
+.character-picker-close:focus-visible {
+  box-shadow:
+    0 0 0 3px
+    rgba(
+      80,
+      95,
+      255,
+      0.15
+    );
+}
+
+
+/* =====================================================
+   LIST
+   ===================================================== */
+
+.character-picker-list {
+  position: relative;
+
+  display: grid;
+
+  grid-template-columns:
+    repeat(
+      2,
+      minmax(0, 1fr)
+    );
+
+  gap: 12px;
+
+  padding:
+    8px
+    18px
+    20px;
+
+  overflow-y: auto;
+
+  overscroll-behavior: contain;
+
+  scrollbar-width: thin;
+
+  scrollbar-color:
+    rgba(
+      20,
+      20,
+      24,
+      0.14
+    )
+    transparent;
+}
+
+
+.character-picker-list::-webkit-scrollbar {
+  width: 7px;
+}
+
+
+.character-picker-list::-webkit-scrollbar-track {
+  background:
+    transparent;
+}
+
+
+.character-picker-list::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+
+  background:
+    rgba(
+      20,
+      20,
+      24,
+      0.12
+    );
+}
+
+
+/* =====================================================
+   CARD
+   ===================================================== */
+
+.character-picker-card {
+  appearance: none;
+
+  position: relative;
+
+  min-width: 0;
+
+  display: flex;
+  flex-direction: column;
+
+  gap: 14px;
+
+  padding:
+    14px;
+
+  text-align: left;
+
+  border:
+    1px solid
+    rgba(
+      20,
+      20,
+      24,
+      0.06
+    );
+
+  border-radius: 22px;
+
+  background:
+    rgba(
+      248,
+      248,
+      250,
+      0.72
+    );
+
+  color:
+    inherit;
+
+  cursor: pointer;
+
+  outline: none;
+
+  box-shadow:
+    0 4px 12px
+    rgba(
+      0,
+      0,
+      0,
+      0.025
+    );
+
+  transform:
+    translateY(0)
+    scale(1);
+
+  transition:
+    background 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    transform 180ms
+    cubic-bezier(.22, 1, .36, 1);
+}
+
+
+@media (hover: hover) {
+
+  .character-picker-card:hover {
+    background:
+      rgba(
+        255,
+        255,
+        255,
+        0.96
+      );
+
+    border-color:
+      rgba(
+        20,
+        20,
+        24,
+        0.095
+      );
+
+    box-shadow:
+      0 10px 24px
+      rgba(
+        0,
+        0,
+        0,
+        0.06
+      );
+
+    transform:
+      translateY(-2px);
+  }
+}
+
+
+.character-picker-card:active {
+  transform:
+    scale(0.985);
+}
+
+
+.character-picker-card:focus-visible {
+  box-shadow:
+    0 0 0 3px
+    rgba(
+      80,
+      95,
+      255,
+      0.14
+    ),
+
+    0 8px 22px
+    rgba(
+      0,
+      0,
+      0,
+      0.05
+    );
+}
+
+
+/* =====================================================
+   SELECTED CARD
+   ===================================================== */
+
+.character-picker-card[data-selected="true"] {
+  background:
+    rgba(
+      255,
+      255,
+      255,
+      0.98
+    );
+
+  border-color:
+    rgba(
+      18,
+      18,
+      21,
+      0.15
+    );
+
+  box-shadow:
+    0 12px 28px
+    rgba(
+      0,
+      0,
+      0,
+      0.07
+    ),
+
+    inset 0 0 0 1px
+    rgba(
+      18,
+      18,
+      21,
+      0.025
+    );
+}
+
+
+/* =====================================================
+   PREVIEW HOLDER
+   ===================================================== */
+
+.character-picker-card-preview {
+  position: relative;
+
+  width: 100%;
+
+  display: grid;
+  place-items: center;
+
+  padding:
+    8px
+    0
+    2px;
+}
+
+
+/* =====================================================
+   CHARACTER PREVIEW
+   ===================================================== */
+
+.character-picker-preview {
+  --preview-ink:
+    rgba(
+      15,
+      15,
+      18,
+      0.96
+    );
+
+  position: relative;
+
+  width: 118px;
+  aspect-ratio: 1;
+
+  display: grid;
+  place-items: center;
+}
+
+
+/* =====================================================
+   PREVIEW FACE
+   ===================================================== */
+
+.character-picker-face {
+  position: relative;
+
+  width: 86%;
+  aspect-ratio: 1;
+
+  overflow: hidden;
+
+  border-radius: 28%;
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(
+        255,
+        255,
+        255,
+        0.995
+      ),
+      rgba(
+        244,
+        244,
+        247,
+        0.985
+      )
+    );
+
+  border:
+    1px solid
+    rgba(
+      20,
+      20,
+      24,
+      0.055
+    );
+
+  box-shadow:
+    0 12px 30px
+    rgba(
+      0,
+      0,
+      0,
+      0.07
+    ),
+
+    inset 0 1px 0
+    rgba(
+      255,
+      255,
+      255,
+      0.94
+    );
+
+  transition:
+    transform 220ms
+    cubic-bezier(.22, 1, .36, 1),
+
+    box-shadow 220ms ease;
+}
+
+
+@media (hover: hover) {
+
+  .character-picker-card:hover
+  .character-picker-face {
+    transform:
+      translateY(-1px)
+      scale(1.015);
+
+    box-shadow:
+      0 15px 34px
+      rgba(
+        0,
+        0,
+        0,
+        0.085
+      );
+  }
+}
+
+
+/* =====================================================
+   NEYO PREVIEW
+   ===================================================== */
+
+.character-picker-preview[data-character="neyo"]
+.character-picker-face {
+  border-radius:
+    28.5%;
+}
+
+
+/* =====================================================
+   PREVIEW EYES
+   ===================================================== */
+
+.character-picker-eye {
+  position: absolute;
+
+  top: 34%;
+
+  width: 20%;
+  height: 12%;
+
+  border-radius:
+    999px;
+
+  background:
+    var(--preview-ink);
+}
+
+
+.character-picker-eye-left {
+  left: 23%;
+}
+
+
+.character-picker-eye-right {
+  right: 23%;
+}
+
+
+/* =====================================================
+   NEYO PREVIEW EYES
+   ===================================================== */
+
+.character-picker-preview[data-character="neyo"]
+.character-picker-eye {
+  height: 10%;
+
+  transform:
+    translateY(2px);
+}
+
+
+/* =====================================================
+   PREVIEW MOUTH
+   ===================================================== */
+
+.character-picker-mouth {
+  position: absolute;
+
+  left: 50%;
+  top: 61%;
+
+  width: 38%;
+  height: 18%;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  gap: 5%;
+
+  transform:
+    translateX(-50%);
+}
+
+
+.character-picker-mouth span {
+  width: 10%;
+
+  min-width: 3px;
+
+  border-radius:
+    999px;
+
+  background:
+    var(--preview-ink);
+}
+
+
+.character-picker-mouth span:nth-child(1),
+.character-picker-mouth span:nth-child(5) {
+  height: 28%;
+}
+
+
+.character-picker-mouth span:nth-child(2),
+.character-picker-mouth span:nth-child(4) {
+  height: 48%;
+}
+
+
+.character-picker-mouth span:nth-child(3) {
+  height: 64%;
+}
+
+
+/* =====================================================
+   CARD COPY
+   ===================================================== */
+
+.character-picker-card-copy {
+  min-width: 0;
+}
+
+
+.character-picker-card-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 10px;
+}
+
+
+.character-picker-card-name {
+  min-width: 0;
+
+  overflow: hidden;
+
+  text-overflow:
+    ellipsis;
+
+  white-space:
+    nowrap;
+
+  color:
+    rgba(
+      18,
+      18,
+      21,
+      0.95
+    );
+
+  font-family:
+    Inter,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+
+  font-size:
+    15px;
+
+  font-weight:
+    620;
+
+  line-height:
+    1.25;
+
+  letter-spacing:
+    -0.02em;
+}
+
+
+/* =====================================================
+   CHECK
+   ===================================================== */
+
+.character-picker-check {
+  width: 20px;
+  height: 20px;
+
+  flex: 0 0 auto;
+
+  display: grid;
+  place-items: center;
+
+  border-radius: 50%;
+
+  background:
+    rgba(
+      18,
+      18,
+      21,
+      0.94
+    );
+
+  color: white;
+
+  opacity: 0;
+
+  transform:
+    scale(0.76);
+
+  transition:
+    opacity 160ms ease,
+    transform 180ms
+    cubic-bezier(.22, 1, .36, 1);
+}
+
+
+.character-picker-check svg {
+  width: 13px;
+  height: 13px;
+}
+
+
+.character-picker-card[data-selected="true"]
+.character-picker-check {
+  opacity: 1;
+
+  transform:
+    scale(1);
+}
+
+
+/* =====================================================
+   DESCRIPTION
+   ===================================================== */
+
+.character-picker-card-description {
+  margin-top:
+    5px;
+
+  color:
+    rgba(
+      24,
+      24,
+      28,
+      0.54
+    );
+
+  font-family:
+    Inter,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+
+  font-size:
+    12.5px;
+
+  font-weight:
+    450;
+
+  line-height:
+    1.42;
+
+  letter-spacing:
+    -0.005em;
+}
+
+
+/* =====================================================
+   EMPTY STATE
+   ===================================================== */
+
+.character-picker-empty {
+  grid-column:
+    1 / -1;
+
+  padding:
+    36px
+    20px;
+
+  text-align:
+    center;
+
+  color:
+    rgba(
+      24,
+      24,
+      28,
+      0.52
+    );
+
+  font-family:
+    Inter,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+
+  font-size:
+    14px;
+}
+
+
+/* =====================================================
+   GLOBAL OPEN STATE
+   ===================================================== */
+
+html.neyo-character-picker-open {
+  overflow:
+    hidden;
+}
+
+
+/* =====================================================
+   MOBILE
+   ===================================================== */
+
+@media (max-width: 640px) {
+
+  .character-picker-shell {
+    place-items:
+      end center;
+
+    padding:
+      max(
+        12px,
+        env(safe-area-inset-top)
+      )
+      10px
+      max(
+        10px,
+        env(safe-area-inset-bottom)
+      );
+  }
+
+
+  .character-picker-panel {
+    width: 100%;
+
+    max-height:
+      min(
+        84dvh,
+        760px
+      );
+
+    border-radius:
+      28px
+      28px
+      22px
+      22px;
+
+    transform:
+      translateY(30px)
+      scale(0.99);
+
+    transform-origin:
+      bottom center;
+  }
+
+
+  .character-picker-shell.is-visible
+  .character-picker-panel {
+    transform:
+      translateY(0)
+      scale(1);
+  }
+
+
+  .character-picker-header {
+    padding:
+      22px
+      20px
+      14px;
+  }
+
+
+  .character-picker-title {
+    font-size:
+      21px;
+  }
+
+
+  .character-picker-subtitle {
+    max-width:
+      280px;
+
+    font-size:
+      13px;
+  }
+
+
+  .character-picker-list {
+    grid-template-columns:
+      1fr;
+
+    gap:
+      10px;
+
+    padding:
+      6px
+      12px
+      16px;
+  }
+
+
+  .character-picker-card {
+    display: grid;
+
+    grid-template-columns:
+      92px
+      minmax(0, 1fr);
+
+    align-items: center;
+
+    gap: 14px;
+
+    padding:
+      12px;
+
+    border-radius:
+      20px;
+  }
+
+
+  .character-picker-card-preview {
+    padding: 0;
+  }
+
+
+  .character-picker-preview {
+    width:
+      88px;
+  }
+
+
+  .character-picker-card-description {
+    max-width:
+      260px;
+  }
+}
+
+
+/* =====================================================
+   SMALL PHONE
+   ===================================================== */
+
+@media (max-width: 390px) {
+
+  .character-picker-header {
+    padding-left:
+      16px;
+
+    padding-right:
+      16px;
+  }
+
+
+  .character-picker-list {
+    padding-left:
+      10px;
+
+    padding-right:
+      10px;
+  }
+
+
+  .character-picker-card {
+    grid-template-columns:
+      82px
+      minmax(0, 1fr);
+
+    gap:
+      12px;
+  }
+
+
+  .character-picker-preview {
+    width:
+      80px;
+  }
+
+
+  .character-picker-card-name {
+    font-size:
+      14.5px;
+  }
+
+
+  .character-picker-card-description {
+    font-size:
+      12px;
+  }
+}
+
+
+/* =====================================================
+   DARK MODE
+   ===================================================== */
+
+html[data-theme="dark"]
+.character-picker-shell,
+
+body.dark
+.character-picker-shell {
+  background:
+    rgba(
+      10,
+      10,
+      12,
+      0.20
+    );
+}
+
+
+html[data-theme="dark"]
+.character-picker-panel,
+
+body.dark
+.character-picker-panel {
+  background:
+    rgba(
+      28,
+      28,
+      32,
+      0.94
+    );
+
+  border-color:
+    rgba(
+      255,
+      255,
+      255,
+      0.07
+    );
+
+  box-shadow:
+    0 28px 80px
+    rgba(
+      0,
+      0,
+      0,
+      0.38
+    ),
+
+    inset 0 1px 0
+    rgba(
+      255,
+      255,
+      255,
+      0.04
+    );
+}
+
+
+html[data-theme="dark"]
+.character-picker-title,
+
+body.dark
+.character-picker-title {
+  color:
+    rgba(
+      255,
+      255,
+      255,
+      0.94
+    );
+}
+
+
+html[data-theme="dark"]
+.character-picker-subtitle,
+
+body.dark
+.character-picker-subtitle {
+  color:
+    rgba(
+      255,
+      255,
+      255,
+      0.52
+    );
+}
+
+
+html[data-theme="dark"]
+.character-picker-card,
+
+body.dark
+.character-picker-card {
+  background:
+    rgba(
+      255,
+      255,
+      255,
+      0.045
+    );
+
+  border-color:
+    rgba(
+      255,
+      255,
+      255,
+      0.06
+    );
+}
+
+
+html[data-theme="dark"]
+.character-picker-card[data-selected="true"],
+
+body.dark
+.character-picker-card[data-selected="true"] {
+  background:
+    rgba(
+      255,
+      255,
+      255,
+      0.075
+    );
+
+  border-color:
+    rgba(
+      255,
+      255,
+      255,
+      0.16
+    );
+}
+
+
+html[data-theme="dark"]
+.character-picker-card-name,
+
+body.dark
+.character-picker-card-name {
+  color:
+    rgba(
+      255,
+      255,
+      255,
+      0.92
+    );
+}
+
+
+html[data-theme="dark"]
+.character-picker-card-description,
+
+body.dark
+.character-picker-card-description {
+  color:
+    rgba(
+      255,
+      255,
+      255,
+      0.50
+    );
+}
+
+
+html[data-theme="dark"]
+.character-picker-close,
+
+body.dark
+.character-picker-close {
+  background:
+    rgba(
+      255,
+      255,
+      255,
+      0.07
+    );
+
+  border-color:
+    rgba(
+      255,
+      255,
+      255,
+      0.07
+    );
+
+  color:
+    rgba(
+      255,
+      255,
+      255,
+      0.76
+    );
+}
+
+
+/* =====================================================
+   REDUCED MOTION
+   ===================================================== */
+
+@media (
+  prefers-reduced-motion: reduce
+) {
+
+  .character-picker-shell,
+  .character-picker-panel,
+  .character-picker-card,
+  .character-picker-face,
+  .character-picker-check,
+  .character-picker-close {
+    transition-duration:
+      1ms !important;
+
+    animation:
+      none !important;
+  }
+
+
+  .character-picker-panel,
+  .character-picker-card,
+  .character-picker-face {
+    transform:
+      none !important;
+  }
+}

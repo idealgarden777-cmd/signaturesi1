@@ -1,33 +1,28 @@
 /*
 =========================================================
-NEYO — PREMIUM MASCOT MOTION ENGINE
+NEYO — PREMIUM MASCOT MOTION ENGINE v2
 
 Purpose:
-- Natural floating / breathing
-- State-aware body motion
-- Pointer gaze
-- Micro eye movements
-- Speaking motion from real output energy
-- Listening acknowledgement
+- Visible but premium natural mascot movement
+- Automatic activation when Voice Mode opens
+- Idle breathing / floating
+- Listening attention
 - Thinking scan
-- Subtle emotional body language
-- Smooth inertia
-- 60fps requestAnimationFrame loop
+- Speaking movement from REAL assistant audio
+- Pointer gaze + subtle 3D tilt
+- Micro eye movement
+- Natural mouth physics
+- Interruption reaction
+- Tone-aware movement
+- Mobile + desktop safe
+- Reduced-motion support
 
-Architecture:
+Works with:
 voice.js
-   ↓
-mascot.js           → expression / mood / eye / mouth
-   ↓
-mascot-motion.js    → physical movement / life
-
-Does NOT own:
-- Gemini
-- WebSocket
-- voice state decisions
-- tone detection
-- eye geometry
-- mouth geometry
+mascot.js
+mascot-tone.js
+voice-mode.js
+mascot.css
 =========================================================
 */
 
@@ -81,11 +76,6 @@ Does NOT own:
       "neyoVoiceMode"
     );
 
-  const voiceStage =
-    voiceShell?.querySelector(
-      ".voice-mode-stage"
-    );
-
 
   if (
     !mascot ||
@@ -105,23 +95,27 @@ Does NOT own:
      REDUCED MOTION
      ===================================================== */
 
-  const reducedMotionQuery =
+  const motionPreference =
     window.matchMedia(
       "(prefers-reduced-motion: reduce)"
     );
 
-
   let reducedMotion =
-    reducedMotionQuery.matches;
+    motionPreference.matches;
 
 
-  reducedMotionQuery.addEventListener?.(
-    "change",
-    event => {
-      reducedMotion =
-        event.matches;
-    }
-  );
+  motionPreference
+    .addEventListener?.(
+      "change",
+      event => {
+        reducedMotion =
+          event.matches;
+
+        if (reducedMotion) {
+          resetVisualMotion();
+        }
+      }
+    );
 
 
   /* =====================================================
@@ -131,64 +125,66 @@ Does NOT own:
   const CONFIG =
     Object.freeze({
 
-      pointerEnabled:
+      pointer:
         true,
 
-      microGazeEnabled:
+      microGaze:
         true,
 
-      maxPointerRotateX:
-        2.8,
+      /*
+      Slightly stronger than previous version
+      so movement is actually visible.
+      */
 
-      maxPointerRotateY:
+      pointerRotateX:
         3.2,
 
-      maxPointerTranslate:
-        1.8,
+      pointerRotateY:
+        3.8,
+
+      pointerTranslateX:
+        2.2,
+
+      pointerTranslateY:
+        1.5,
 
       pointerSmoothing:
+        0.10,
+
+      bodySmoothing:
         0.075,
 
-      motionSmoothing:
-        0.055,
-
       gazeSmoothing:
-        0.085,
+        0.10,
 
-      energySmoothing:
-        0.12,
+      energyRise:
+        0.22,
+
+      energyFall:
+        0.10,
 
       microGazeMinMs:
-        1500,
+        1200,
 
       microGazeMaxMs:
-        4200,
+        3200,
 
       microGazeX:
-        1.8,
+        2.2,
 
       microGazeY:
-        1.2,
+        1.5,
 
-      listeningNodDuration:
-        340,
+      maxEyePointerX:
+        3.4,
 
-      speakingStartDuration:
-        380,
-
-      interruptionDuration:
-        220,
-
-      idlePhaseSpeed:
-        1.0
+      maxEyePointerY:
+        2.3
     });
 
 
   /* =====================================================
-     MOTION PROFILES
-
-     Keep amplitudes intentionally small.
-     Premium movement = controlled movement.
+     PHASE MOTION PROFILES
      ===================================================== */
 
   const MOTION =
@@ -196,79 +192,79 @@ Does NOT own:
 
       idle: {
         floatY:
-          1.9,
+          4.2,
 
         floatX:
-          0.35,
+          1.15,
 
         rotate:
-          0.28,
+          0.70,
 
         scale:
-          0.004,
+          0.010,
 
         speed:
-          1.0
+          0.78
       },
 
 
       listening: {
         floatY:
-          0.65,
-
-        floatX:
-          0.18,
-
-        rotate:
-          0.12,
-
-        scale:
-          0.003,
-
-        speed:
-          0.82
-      },
-
-
-      thinking: {
-        floatY:
-          0.9,
+          1.4,
 
         floatX:
           0.45,
 
         rotate:
-          0.42,
+          0.24,
 
         scale:
-          0.0025,
+          0.005,
 
         speed:
           0.72
       },
 
 
-      speaking: {
+      thinking: {
         floatY:
-          0.7,
+          2.2,
 
         floatX:
-          0.20,
+          1.15,
 
         rotate:
-          0.16,
+          0.82,
 
         scale:
-          0.0045,
+          0.006,
 
         speed:
-          1.12
+          0.62
+      },
+
+
+      speaking: {
+        floatY:
+          2.2,
+
+        floatX:
+          0.70,
+
+        rotate:
+          0.38,
+
+        scale:
+          0.008,
+
+        speed:
+          1.05
       },
 
 
       interrupted: {
         floatY:
-          0,
+          0.4,
 
         floatX:
           0,
@@ -277,7 +273,7 @@ Does NOT own:
           0,
 
         scale:
-          0,
+          0.002,
 
         speed:
           1
@@ -286,94 +282,88 @@ Does NOT own:
 
       error: {
         floatY:
-          0.15,
+          0.6,
 
         floatX:
           0,
 
         rotate:
-          0.08,
+          0.18,
 
         scale:
           0,
 
         speed:
-          0.6
+          0.5
+      },
+
+
+      muted: {
+        floatY:
+          1.1,
+
+        floatX:
+          0.20,
+
+        rotate:
+          0.10,
+
+        scale:
+          0.002,
+
+        speed:
+          0.55
       }
     });
 
 
   /* =====================================================
-     TONE MODIFIERS
+     TONE ENERGY
      ===================================================== */
 
-  const TONE_MOTION =
+  const TONE =
     Object.freeze({
 
-      friendly: {
-        energy:
-          1
-      },
+      friendly:
+        1,
 
-      happy: {
-        energy:
-          1.12
-      },
+      happy:
+        1.18,
 
-      excited: {
-        energy:
-          1.34
-      },
+      excited:
+        1.42,
 
-      calm: {
-        energy:
-          0.70
-      },
+      calm:
+        0.68,
 
-      focused: {
-        energy:
-          0.72
-      },
+      focused:
+        0.72,
 
-      curious: {
-        energy:
-          0.95
-      },
+      curious:
+        1.02,
 
-      surprised: {
-        energy:
-          1.25
-      },
+      surprised:
+        1.35,
 
-      confused: {
-        energy:
-          0.82
-      },
+      confused:
+        0.88,
 
-      skeptical: {
-        energy:
-          0.72
-      },
+      skeptical:
+        0.76,
 
-      empathetic: {
-        energy:
-          0.72
-      },
+      empathetic:
+        0.70,
 
-      playful: {
-        energy:
-          1.15
-      },
+      playful:
+        1.22,
 
-      serious: {
-        energy:
-          0.58
-      }
+      serious:
+        0.60
     });
 
 
   /* =====================================================
-     RUNTIME STATE
+     STATE
      ===================================================== */
 
   const state = {
@@ -426,22 +416,12 @@ Does NOT own:
     microY:
       0,
 
-    nextMicroGazeAt:
-      0,
-
-    listeningAcknowledged:
-      false,
-
-    lastTimestamp:
-      performance.now()
+    nextMicroGaze:
+      0
   };
 
 
-  /* =====================================================
-     INTERNAL MOTION VALUES
-     ===================================================== */
-
-  const motion = {
+  const body = {
 
     x:
       0,
@@ -455,27 +435,21 @@ Does NOT own:
     scale:
       1,
 
-    targetX:
+    tiltX:
       0,
 
-    targetY:
-      0,
-
-    targetRotation:
-      0,
-
-    targetScale:
-      1
+    tiltY:
+      0
   };
 
 
-  const barEnergy =
+  const mouthEnergy =
     mouthBars.map(
-      () => 0
+      () => 1
     );
 
 
-  let rafId =
+  let raf =
     0;
 
 
@@ -514,7 +488,7 @@ Does NOT own:
   }
 
 
-  function randomBetween(
+  function random(
     min,
     max
   ) {
@@ -525,6 +499,17 @@ Does NOT own:
         max -
         min
       )
+    );
+  }
+
+
+  function shellOpen() {
+    return Boolean(
+      voiceShell
+        ?.classList
+        .contains(
+          "is-open"
+        )
     );
   }
 
@@ -547,35 +532,137 @@ Does NOT own:
   }
 
 
-  function getProfile() {
+  function toneEnergy() {
     return (
-      MOTION[getPhase()] ||
-      MOTION.idle
-    );
-  }
-
-
-  function getToneEnergy() {
-    return (
-      TONE_MOTION[getTone()]
-        ?.energy ||
+      TONE[getTone()] ??
       1
     );
   }
 
 
   /* =====================================================
-     POINTER GAZE
+     ACTIVATION
+
+     This fixes the biggest issue:
+     engine no longer depends only on
+     one specific event firing.
      ===================================================== */
 
-  function handlePointerMove(
-    event
-  ) {
+  function activate() {
+
+    if (state.active) {
+      return;
+    }
+
+
+    state.active =
+      true;
+
+
+    state.phase =
+      getPhase();
+
+
+    state.tone =
+      getTone();
+
+
+    state.nextMicroGaze =
+      performance.now() +
+      800;
+
+
+    console.log(
+      "[NEYO Motion] ACTIVE",
+      {
+        phase:
+          state.phase,
+
+        tone:
+          state.tone
+      }
+    );
+  }
+
+
+  function deactivate() {
+
+    state.active =
+      false;
+
+
+    state.micTarget =
+      0;
+
+    state.outputTarget =
+      0;
+
+
+    resetVisualMotion();
+
+
+    console.log(
+      "[NEYO Motion] INACTIVE"
+    );
+  }
+
+
+  /* =====================================================
+     VOICE SHELL OBSERVER
+
+     Even if voice-open event was emitted
+     before this module loaded, motion starts.
+     ===================================================== */
+
+  if (voiceShell) {
+
+    const shellObserver =
+      new MutationObserver(
+        () => {
+
+          if (shellOpen()) {
+
+            activate();
+
+          } else {
+
+            deactivate();
+          }
+        }
+      );
+
+
+    shellObserver.observe(
+      voiceShell,
+      {
+        attributes:
+          true,
+
+        attributeFilter:
+          [
+            "class",
+            "aria-hidden"
+          ]
+      }
+    );
+
+
+    if (shellOpen()) {
+      activate();
+    }
+  }
+
+
+  /* =====================================================
+     POINTER
+     ===================================================== */
+
+  function pointerMove(event) {
 
     if (
-      reducedMotion ||
-      !CONFIG.pointerEnabled ||
-      !state.active
+      !CONFIG.pointer ||
+      !state.active ||
+      reducedMotion
     ) {
       return;
     }
@@ -594,40 +681,40 @@ Does NOT own:
     }
 
 
-    const centerX =
+    const cx =
       rect.left +
       rect.width / 2;
 
 
-    const centerY =
+    const cy =
       rect.top +
       rect.height / 2;
 
 
-    const normalizedX =
+    state.pointerTargetX =
       clamp(
         (
           event.clientX -
-          centerX
+          cx
         ) /
         (
           rect.width *
-          0.75
+          0.72
         ),
         -1,
         1
       );
 
 
-    const normalizedY =
+    state.pointerTargetY =
       clamp(
         (
           event.clientY -
-          centerY
+          cy
         ) /
         (
           rect.height *
-          0.75
+          0.72
         ),
         -1,
         1
@@ -636,18 +723,10 @@ Does NOT own:
 
     state.pointerInside =
       true;
-
-
-    state.pointerTargetX =
-      normalizedX;
-
-
-    state.pointerTargetY =
-      normalizedY;
   }
 
 
-  function handlePointerLeave() {
+  function pointerLeave() {
 
     state.pointerInside =
       false;
@@ -660,16 +739,10 @@ Does NOT own:
   }
 
 
-  const pointerTarget =
-    voiceShell ||
-    voiceStage ||
-    document;
-
-
-  pointerTarget
+  voiceShell
     ?.addEventListener(
       "pointermove",
-      handlePointerMove,
+      pointerMove,
       {
         passive:
           true
@@ -677,10 +750,10 @@ Does NOT own:
     );
 
 
-  pointerTarget
+  voiceShell
     ?.addEventListener(
       "pointerleave",
-      handlePointerLeave,
+      pointerLeave,
       {
         passive:
           true
@@ -690,21 +763,27 @@ Does NOT own:
 
   /* =====================================================
      MICRO GAZE
-
-     Tiny eye adjustments help remove
-     the "static icon" feeling.
      ===================================================== */
 
-  function updateMicroGaze(
-    now
-  ) {
+  function updateMicroGaze(now) {
 
     if (
-      !CONFIG.microGazeEnabled ||
-      reducedMotion ||
+      !CONFIG.microGaze ||
       !state.active ||
-      state.pointerInside
+      reducedMotion
     ) {
+      return;
+    }
+
+
+    if (state.pointerInside) {
+
+      state.microTargetX =
+        0;
+
+      state.microTargetY =
+        0;
+
       return;
     }
 
@@ -714,9 +793,12 @@ Does NOT own:
 
 
     if (
-      phase === "error" ||
-      phase === "interrupted"
+      phase ===
+        "interrupted" ||
+      phase ===
+        "error"
     ) {
+
       state.microTargetX =
         0;
 
@@ -729,21 +811,21 @@ Does NOT own:
 
     if (
       now <
-      state.nextMicroGazeAt
+      state.nextMicroGaze
     ) {
       return;
     }
 
 
-    state.nextMicroGazeAt =
+    state.nextMicroGaze =
       now +
-      randomBetween(
+      random(
         CONFIG.microGazeMinMs,
         CONFIG.microGazeMaxMs
       );
 
 
-    let strength =
+    let multiplier =
       1;
 
 
@@ -751,8 +833,9 @@ Does NOT own:
       phase ===
       "listening"
     ) {
-      strength =
-        0.45;
+
+      multiplier =
+        0.40;
     }
 
 
@@ -760,7 +843,8 @@ Does NOT own:
       phase ===
       "speaking"
     ) {
-      strength =
+
+      multiplier =
         0.35;
     }
 
@@ -769,30 +853,31 @@ Does NOT own:
       phase ===
       "thinking"
     ) {
-      strength =
-        1.15;
+
+      multiplier =
+        1.35;
     }
 
 
     state.microTargetX =
-      randomBetween(
+      random(
         -CONFIG.microGazeX,
         CONFIG.microGazeX
       ) *
-      strength;
+      multiplier;
 
 
     state.microTargetY =
-      randomBetween(
+      random(
         -CONFIG.microGazeY,
         CONFIG.microGazeY
       ) *
-      strength;
+      multiplier;
   }
 
 
   /* =====================================================
-     EYE MOTION
+     EYES
      ===================================================== */
 
   function updateEyes(
@@ -836,26 +921,24 @@ Does NOT own:
       );
 
 
-    let gazeX =
+    let x =
       state.microX;
 
 
-    let gazeY =
+    let y =
       state.microY;
 
 
-    if (
-      state.pointerInside
-    ) {
+    if (state.pointerInside) {
 
-      gazeX +=
+      x +=
         state.pointerX *
-        2.4;
+        CONFIG.maxEyePointerX;
 
 
-      gazeY +=
+      y +=
         state.pointerY *
-        1.65;
+        CONFIG.maxEyePointerY;
     }
 
 
@@ -864,7 +947,7 @@ Does NOT own:
 
 
     /*
-    Thinking gets a slow geometric scan.
+    Thinking scan.
     */
 
     if (
@@ -872,59 +955,89 @@ Does NOT own:
       !state.pointerInside
     ) {
 
-      const t =
+      const time =
         now /
         1000;
 
 
-      gazeX +=
+      x +=
         Math.sin(
-          t * 1.05
+          time * 1.12
         ) *
-        1.6;
+        2.3;
 
 
-      gazeY +=
+      y +=
         Math.sin(
-          t * 0.68
+          time * 0.72
         ) *
-        0.75;
+        1.0;
     }
 
 
-    /*
-    Independent offsets create subtle
-    binocular imperfection.
-    */
-
     leftEye.style.translate =
       `${(
-        gazeX -
-        0.15
+        x -
+        0.18
       ).toFixed(2)}px ${(
-        gazeY +
-        0.05
+        y +
+        0.06
       ).toFixed(2)}px`;
 
 
     rightEye.style.translate =
       `${(
-        gazeX +
-        0.15
+        x +
+        0.18
       ).toFixed(2)}px ${(
-        gazeY -
-        0.05
+        y -
+        0.06
       ).toFixed(2)}px`;
   }
 
 
   /* =====================================================
-     BODY / FACE MOTION
+     ENERGY
      ===================================================== */
 
-  function updateBody(
-    now
-  ) {
+  function updateEnergy() {
+
+    const micAmount =
+      state.micTarget >
+      state.micLevel
+        ? CONFIG.energyRise
+        : CONFIG.energyFall;
+
+
+    const outputAmount =
+      state.outputTarget >
+      state.outputLevel
+        ? CONFIG.energyRise
+        : CONFIG.energyFall;
+
+
+    state.micLevel =
+      lerp(
+        state.micLevel,
+        state.micTarget,
+        micAmount
+      );
+
+
+    state.outputLevel =
+      lerp(
+        state.outputLevel,
+        state.outputTarget,
+        outputAmount
+      );
+  }
+
+
+  /* =====================================================
+     BODY
+     ===================================================== */
+
+  function updateBody(now) {
 
     const phase =
       getPhase();
@@ -935,102 +1048,91 @@ Does NOT own:
       MOTION.idle;
 
 
-    const toneEnergy =
-      getToneEnergy();
+    const emotion =
+      toneEnergy();
 
 
-    const t =
+    const time =
       now /
       1000;
 
 
-    let floatY =
-      Math.sin(
-        t *
-        profile.speed *
-        1.17
-      ) *
-      profile.floatY;
+    /*
+    Two overlapping waves prevent
+    robotic perfect sinusoidal motion.
+    */
+
+    let y =
+      (
+        Math.sin(
+          time *
+          profile.speed *
+          1.18
+        ) *
+        profile.floatY
+      ) +
+      (
+        Math.sin(
+          time *
+          profile.speed *
+          0.51 +
+          1.3
+        ) *
+        profile.floatY *
+        0.20
+      );
 
 
-    let floatX =
-      Math.sin(
-        t *
-        profile.speed *
-        0.61 +
-        0.8
-      ) *
-      profile.floatX;
+    let x =
+      (
+        Math.sin(
+          time *
+          profile.speed *
+          0.57 +
+          0.8
+        ) *
+        profile.floatX
+      );
 
 
     let rotation =
-      Math.sin(
-        t *
-        profile.speed *
-        0.54
-      ) *
-      profile.rotate;
+      (
+        Math.sin(
+          time *
+          profile.speed *
+          0.48
+        ) *
+        profile.rotate
+      );
 
 
     let scale =
       1 +
-      Math.sin(
-        t *
-        profile.speed *
-        1.33
-      ) *
-      profile.scale;
+      (
+        Math.sin(
+          time *
+          profile.speed *
+          1.30
+        ) *
+        profile.scale
+      );
 
 
-    floatY *=
-      toneEnergy;
+    y *=
+      emotion;
 
 
-    floatX *=
-      toneEnergy;
+    x *=
+      emotion;
 
 
     rotation *=
-      toneEnergy;
+      emotion;
 
 
     /*
-    Speaking gets tiny real-audio
-    physical energy.
-    */
-
-    if (
-      phase ===
-      "speaking"
-    ) {
-
-      const energy =
-        state.outputLevel;
-
-
-      floatY -=
-        energy *
-        0.65;
-
-
-      scale +=
-        energy *
-        0.0045;
-
-
-      rotation +=
-        Math.sin(
-          t * 3.8
-        ) *
-        energy *
-        0.08;
-    }
-
-
-    /*
-    Listening becomes more still as
-    user voice gets stronger.
-    This feels attentive instead of noisy.
+    Listening becomes attentive:
+    stronger user speech = less idle drift.
     */
 
     if (
@@ -1041,177 +1143,177 @@ Does NOT own:
       const stillness =
         1 -
         state.micLevel *
-        0.55;
+        0.62;
 
 
-      floatY *=
+      x *=
         stillness;
 
 
-      floatX *=
+      y *=
         stillness;
 
 
       rotation *=
         stillness;
+
+
+      /*
+      Tiny forward energy while user speaks.
+      */
+
+      scale +=
+        state.micLevel *
+        0.003;
     }
 
 
     /*
-    Pointer creates tiny dimensional tilt.
+    Speaking uses actual assistant audio.
     */
 
-    let pointerRotateY =
+    if (
+      phase ===
+      "speaking"
+    ) {
+
+      y -=
+        state.outputLevel *
+        1.25;
+
+
+      scale +=
+        state.outputLevel *
+        0.009;
+
+
+      rotation +=
+        Math.sin(
+          time * 4.3
+        ) *
+        state.outputLevel *
+        0.17;
+    }
+
+
+    let tiltX =
       0;
 
 
-    let pointerRotateX =
-      0;
-
-
-    let pointerTranslateX =
-      0;
-
-
-    let pointerTranslateY =
+    let tiltY =
       0;
 
 
     if (
       state.pointerInside &&
-      CONFIG.pointerEnabled
+      CONFIG.pointer
     ) {
 
-      pointerRotateY =
+      x +=
         state.pointerX *
-        CONFIG.maxPointerRotateY;
+        CONFIG.pointerTranslateX;
 
 
-      pointerRotateX =
-        -state.pointerY *
-        CONFIG.maxPointerRotateX;
-
-
-      pointerTranslateX =
-        state.pointerX *
-        CONFIG.maxPointerTranslate;
-
-
-      pointerTranslateY =
+      y +=
         state.pointerY *
-        CONFIG.maxPointerTranslate *
-        0.65;
+        CONFIG.pointerTranslateY;
+
+
+      tiltX =
+        -state.pointerY *
+        CONFIG.pointerRotateX;
+
+
+      tiltY =
+        state.pointerX *
+        CONFIG.pointerRotateY;
     }
 
 
-    motion.targetX =
-      floatX +
-      pointerTranslateX;
-
-
-    motion.targetY =
-      floatY +
-      pointerTranslateY;
-
-
-    motion.targetRotation =
-      rotation;
-
-
-    motion.targetScale =
-      scale;
-
-
-    motion.x =
+    body.x =
       lerp(
-        motion.x,
-        motion.targetX,
-        CONFIG.motionSmoothing
+        body.x,
+        x,
+        CONFIG.bodySmoothing
       );
 
 
-    motion.y =
+    body.y =
       lerp(
-        motion.y,
-        motion.targetY,
-        CONFIG.motionSmoothing
+        body.y,
+        y,
+        CONFIG.bodySmoothing
       );
 
 
-    motion.rotation =
+    body.rotation =
       lerp(
-        motion.rotation,
-        motion.targetRotation,
-        CONFIG.motionSmoothing
+        body.rotation,
+        rotation,
+        CONFIG.bodySmoothing
       );
 
 
-    motion.scale =
+    body.scale =
       lerp(
-        motion.scale,
-        motion.targetScale,
-        CONFIG.motionSmoothing
+        body.scale,
+        scale,
+        CONFIG.bodySmoothing
+      );
+
+
+    body.tiltX =
+      lerp(
+        body.tiltX,
+        tiltX,
+        CONFIG.bodySmoothing
+      );
+
+
+    body.tiltY =
+      lerp(
+        body.tiltY,
+        tiltY,
+        CONFIG.bodySmoothing
       );
 
 
     /*
-    Use individual transform properties.
-    This avoids overwriting mascot.css
-    transform rules.
+    Important:
+    transform applied on ROOT mascot.
+    Face CSS remains independent.
     */
 
-    mascot.style.translate =
-      `${motion.x.toFixed(2)}px ${motion.y.toFixed(2)}px`;
-
-
-    mascot.style.rotate =
-      `${motion.rotation.toFixed(3)}deg`;
-
-
-    mascot.style.scale =
-      motion.scale.toFixed(4);
+    mascot.style.transform =
+      `
+        translate3d(
+          ${body.x.toFixed(2)}px,
+          ${body.y.toFixed(2)}px,
+          0
+        )
+        rotate(${body.rotation.toFixed(3)}deg)
+        scale(${body.scale.toFixed(4)})
+      `;
 
 
     /*
-    Face itself gets the tiny 3D response.
+    Tiny pseudo-3D face transform.
     */
 
-    face.style.transformOrigin =
-      "center";
-
-
-    face.style.rotate =
-      `${(
-        pointerRotateX *
-        0.03
-      ).toFixed(3)}deg`;
-
-
-    mascot.style.setProperty(
-      "--neyo-motion-rotate-x",
-      `${pointerRotateX.toFixed(2)}deg`
-    );
-
-
-    mascot.style.setProperty(
-      "--neyo-motion-rotate-y",
-      `${pointerRotateY.toFixed(2)}deg`
-    );
+    face.style.transform =
+      `
+        perspective(800px)
+        rotateX(${body.tiltX.toFixed(2)}deg)
+        rotateY(${body.tiltY.toFixed(2)}deg)
+      `;
   }
 
 
   /* =====================================================
-     SPEECH MOUTH PHYSICS
-
-     CSS already decides mouth geometry.
-     JS adds natural irregular movement.
-
-     No perfect sine-wave equalizer.
+     MOUTH PHYSICS
      ===================================================== */
 
-  function updateMouth(
-    now
-  ) {
+  function updateMouth(now) {
 
     if (!mouthBars.length) {
       return;
@@ -1233,18 +1335,25 @@ Does NOT own:
         i += 1
       ) {
 
-        barEnergy[i] =
+        mouthEnergy[i] =
           lerp(
-            barEnergy[i],
+            mouthEnergy[i],
             1,
-            0.10
+            0.15
           );
 
 
         mouthBars[i]
           .style
           .removeProperty(
-            "transform"
+            "--motion-mouth-scale"
+          );
+
+
+        mouthBars[i]
+          .style
+          .removeProperty(
+            "--motion-mouth-y"
           );
       }
 
@@ -1258,12 +1367,12 @@ Does NOT own:
         0.42,
         0.74,
         1,
-        0.78,
-        0.46
+        0.80,
+        0.47
       ];
 
 
-    const t =
+    const time =
       now /
       1000;
 
@@ -1274,59 +1383,54 @@ Does NOT own:
       i += 1
     ) {
 
-      const bar =
-        mouthBars[i];
+      const waveA =
+        Math.sin(
+          time *
+          (
+            6.2 +
+            i * 0.73
+          ) +
+          i * 1.4
+        );
 
 
-      const weight =
-        weights[i] ||
-        0.6;
+      const waveB =
+        Math.sin(
+          time *
+          (
+            10.3 +
+            i * 0.39
+          ) +
+          0.7
+        );
 
-
-      /*
-      Deterministic irregular modulation,
-      avoiding Math.random every frame.
-      */
 
       const irregular =
-        0.84 +
-        Math.sin(
-          t *
-          (
-            5.8 +
-            i * 0.83
-          ) +
-          i * 1.9
-        ) *
+        0.82 +
+        waveA *
         0.11 +
-        Math.sin(
-          t *
-          (
-            9.2 +
-            i * 0.41
-          )
-        ) *
-        0.05;
+        waveB *
+        0.06;
 
 
       const target =
-        0.82 +
+        1 +
         state.outputLevel *
-        weight *
+        weights[i] *
         irregular *
-        0.55;
+        0.90;
 
 
       const smoothing =
         target >
-        barEnergy[i]
-          ? 0.26
-          : 0.16;
+        mouthEnergy[i]
+          ? 0.32
+          : 0.18;
 
 
-      barEnergy[i] =
+      mouthEnergy[i] =
         lerp(
-          barEnergy[i] || 1,
+          mouthEnergy[i],
           target,
           smoothing
         );
@@ -1334,47 +1438,42 @@ Does NOT own:
 
       const y =
         Math.sin(
-          t * 3.3 +
-          i * 0.72
+          time * 3.8 +
+          i * 0.77
         ) *
         state.outputLevel *
-        0.65;
+        0.85;
 
 
-      bar.style.transform =
-        `translateY(${y.toFixed(2)}px) scaleY(${barEnergy[i].toFixed(3)})`;
+      /*
+      CSS variables instead of overriding
+      the expression system's transform.
+      */
+
+      mouthBars[i]
+        .style
+        .setProperty(
+          "--motion-mouth-scale",
+          mouthEnergy[i]
+            .toFixed(3)
+        );
+
+
+      mouthBars[i]
+        .style
+        .setProperty(
+          "--motion-mouth-y",
+          `${y.toFixed(2)}px`
+        );
     }
   }
 
 
   /* =====================================================
-     ENERGY
+     EVENT ANIMATIONS
      ===================================================== */
 
-  function updateEnergy() {
-
-    state.micLevel =
-      lerp(
-        state.micLevel,
-        state.micTarget,
-        CONFIG.energySmoothing
-      );
-
-
-    state.outputLevel =
-      lerp(
-        state.outputLevel,
-        state.outputTarget,
-        CONFIG.energySmoothing
-      );
-  }
-
-
-  /* =====================================================
-     ACKNOWLEDGEMENT MOTIONS
-     ===================================================== */
-
-  function acknowledgeListening() {
+  function listeningReaction() {
 
     if (
       reducedMotion ||
@@ -1384,68 +1483,28 @@ Does NOT own:
     }
 
 
-    mascot.animate(
+    face.animate(
       [
         {
-          transform:
-            "translateY(0px) scale(1)"
+          scale:
+            "1"
         },
 
         {
-          transform:
-            "translateY(1.2px) scale(.993)",
-          offset:
-            0.45
-        },
-
-        {
-          transform:
-            "translateY(0px) scale(1)"
-        }
-      ],
-      {
-        duration:
-          CONFIG.listeningNodDuration,
-
-        easing:
-          "cubic-bezier(.22,.88,.32,1)"
-      }
-    );
-  }
-
-
-  function acknowledgeSpeaking() {
-
-    if (
-      reducedMotion ||
-      !state.active
-    ) {
-      return;
-    }
-
-
-    mascot.animate(
-      [
-        {
-          transform:
-            "scale(.994)"
-        },
-
-        {
-          transform:
-            "scale(1.012)",
+          scale:
+            "0.985",
           offset:
             0.42
         },
 
         {
-          transform:
-            "scale(1)"
+          scale:
+            "1"
         }
       ],
       {
         duration:
-          CONFIG.speakingStartDuration,
+          320,
 
         easing:
           "cubic-bezier(.22,.88,.32,1)"
@@ -1454,7 +1513,7 @@ Does NOT own:
   }
 
 
-  function acknowledgeInterrupt() {
+  function speakingReaction() {
 
     if (
       reducedMotion ||
@@ -1464,28 +1523,28 @@ Does NOT own:
     }
 
 
-    mascot.animate(
+    face.animate(
       [
         {
-          transform:
-            "translateX(0px) scale(1)"
+          scale:
+            "0.99"
         },
 
         {
-          transform:
-            "translateX(-1.4px) scale(.992)",
+          scale:
+            "1.018",
           offset:
             0.42
         },
 
         {
-          transform:
-            "translateX(0px) scale(1)"
+          scale:
+            "1"
         }
       ],
       {
         duration:
-          CONFIG.interruptionDuration,
+          390,
 
         easing:
           "cubic-bezier(.22,.88,.32,1)"
@@ -1494,45 +1553,50 @@ Does NOT own:
   }
 
 
-  /* =====================================================
-     MAIN RAF LOOP
-     ===================================================== */
-
-  function animate(
-    now
-  ) {
-
-    rafId =
-      requestAnimationFrame(
-        animate
-      );
-
+  function interruptionReaction() {
 
     if (
-      !state.active ||
-      reducedMotion
+      reducedMotion ||
+      !state.active
     ) {
       return;
     }
 
 
-    updateEnergy();
+    face.animate(
+      [
+        {
+          transform:
+            "translateX(0)"
+        },
 
-    updateEyes(
-      now
+        {
+          transform:
+            "translateX(-3px)",
+          offset:
+            0.38
+        },
+
+        {
+          transform:
+            "translateX(1px)",
+          offset:
+            0.72
+        },
+
+        {
+          transform:
+            "translateX(0)"
+        }
+      ],
+      {
+        duration:
+          230,
+
+        easing:
+          "cubic-bezier(.22,.88,.32,1)"
+      }
     );
-
-    updateBody(
-      now
-    );
-
-    updateMouth(
-      now
-    );
-
-
-    state.lastTimestamp =
-      now;
   }
 
 
@@ -1540,7 +1604,7 @@ Does NOT own:
      RESET
      ===================================================== */
 
-  function resetMotion() {
+  function resetVisualMotion() {
 
     state.pointerInside =
       false;
@@ -1569,42 +1633,33 @@ Does NOT own:
     state.microY =
       0;
 
-    state.micTarget =
+
+    body.x =
       0;
 
-    state.micLevel =
+    body.y =
       0;
 
-    state.outputTarget =
+    body.rotation =
       0;
 
-    state.outputLevel =
-      0;
-
-
-    motion.x =
-      0;
-
-    motion.y =
-      0;
-
-    motion.rotation =
-      0;
-
-    motion.scale =
+    body.scale =
       1;
 
+    body.tiltX =
+      0;
+
+    body.tiltY =
+      0;
+
 
     mascot.style.removeProperty(
-      "translate"
+      "transform"
     );
 
-    mascot.style.removeProperty(
-      "rotate"
-    );
 
-    mascot.style.removeProperty(
-      "scale"
+    face.style.removeProperty(
+      "transform"
     );
 
 
@@ -1624,7 +1679,12 @@ Does NOT own:
     ) {
 
       bar.style.removeProperty(
-        "transform"
+        "--motion-mouth-scale"
+      );
+
+
+      bar.style.removeProperty(
+        "--motion-mouth-y"
       );
     }
   }
@@ -1638,20 +1698,7 @@ Does NOT own:
     "neyo:voice-open",
     () => {
 
-      state.active =
-        true;
-
-
-      state.phase =
-        "idle";
-
-
-      state.nextMicroGazeAt =
-        performance.now() +
-        1000;
-
-
-      resetMotion();
+      activate();
     }
   );
 
@@ -1660,11 +1707,7 @@ Does NOT own:
     "neyo:voice-close",
     () => {
 
-      state.active =
-        false;
-
-
-      resetMotion();
+      deactivate();
     }
   );
 
@@ -1680,6 +1723,7 @@ Does NOT own:
       if (
         event?.detail?.tone
       ) {
+
         state.tone =
           event.detail.tone;
       }
@@ -1691,7 +1735,7 @@ Does NOT own:
     "neyo:voice-listening",
     event => {
 
-      const previousPhase =
+      const previous =
         state.phase;
 
 
@@ -1709,11 +1753,11 @@ Does NOT own:
 
 
       if (
-        previousPhase !==
+        previous !==
         "listening"
       ) {
 
-        acknowledgeListening();
+        listeningReaction();
       }
     }
   );
@@ -1742,7 +1786,7 @@ Does NOT own:
     "neyo:voice-speaking",
     event => {
 
-      const previousPhase =
+      const previous =
         state.phase;
 
 
@@ -1760,11 +1804,11 @@ Does NOT own:
 
 
       if (
-        previousPhase !==
+        previous !==
         "speaking"
       ) {
 
-        acknowledgeSpeaking();
+        speakingReaction();
       }
     }
   );
@@ -1782,7 +1826,7 @@ Does NOT own:
         0;
 
 
-      acknowledgeInterrupt();
+      interruptionReaction();
     }
   );
 
@@ -1795,17 +1839,62 @@ Does NOT own:
         "error";
 
 
-      state.outputTarget =
+      state.micTarget =
         0;
 
-      state.micTarget =
+      state.outputTarget =
         0;
     }
   );
 
 
   /* =====================================================
-     TONE EVENTS
+     IMPORTANT FALLBACK BRIDGE
+
+     Mascot renderer becomes another
+     state source, preventing desync.
+     ===================================================== */
+
+  window.addEventListener(
+    "neyo:mascot-render",
+    event => {
+
+      const detail =
+        event?.detail;
+
+
+      if (!detail) {
+        return;
+      }
+
+
+      if (detail.phase) {
+
+        state.phase =
+          detail.phase;
+      }
+
+
+      if (detail.tone) {
+
+        state.tone =
+          detail.tone;
+      }
+
+
+      if (
+        shellOpen() &&
+        !state.active
+      ) {
+
+        activate();
+      }
+    }
+  );
+
+
+  /* =====================================================
+     TONE
      ===================================================== */
 
   window.addEventListener(
@@ -1826,7 +1915,7 @@ Does NOT own:
 
 
   /* =====================================================
-     ENERGY EVENTS
+     REAL AUDIO ENERGY
      ===================================================== */
 
   window.addEventListener(
@@ -1862,47 +1951,84 @@ Does NOT own:
 
 
   /* =====================================================
-     MANUAL API
+     MAIN LOOP
      ===================================================== */
 
-  function setPointerEnabled(
-    enabled
-  ) {
+  function animate(now) {
 
-    CONFIG.pointerEnabled =
-      Boolean(enabled);
-  }
+    raf =
+      requestAnimationFrame(
+        animate
+      );
 
 
-  function pulse() {
+    /*
+    Automatic recovery:
+    if UI is open, engine must be active.
+    */
 
     if (
+      shellOpen() &&
+      !state.active
+    ) {
+
+      activate();
+    }
+
+
+    if (
+      !state.active ||
       reducedMotion
     ) {
       return;
     }
 
 
-    mascot.animate(
+    updateEnergy();
+
+    updateEyes(
+      now
+    );
+
+    updateBody(
+      now
+    );
+
+    updateMouth(
+      now
+    );
+  }
+
+
+  /* =====================================================
+     MANUAL TEST
+     ===================================================== */
+
+  function pulse() {
+
+    activate();
+
+
+    face.animate(
       [
         {
-          transform:
-            "scale(1)"
+          scale:
+            "1"
         },
 
         {
-          transform:
-            "scale(1.012)"
+          scale:
+            "1.05"
         },
 
         {
-          transform:
-            "scale(1)"
+          scale:
+            "1"
         }
       ],
       {
         duration:
-          420,
+          500,
 
         easing:
           "cubic-bezier(.22,.88,.32,1)"
@@ -1918,10 +2044,14 @@ Does NOT own:
   window.NeyoMascotMotion =
     Object.freeze({
 
+      activate,
+
+      deactivate,
+
       pulse,
 
       reset:
-        resetMotion,
+        resetVisualMotion,
 
       getState:
         () => ({
@@ -1940,8 +2070,10 @@ Does NOT own:
           outputLevel:
             state.outputLevel,
 
-          pointerInside:
-            state.pointerInside
+          shellOpen:
+            shellOpen(),
+
+          reducedMotion
         })
     });
 
@@ -1950,14 +2082,19 @@ Does NOT own:
      INIT
      ===================================================== */
 
-  rafId =
+  if (shellOpen()) {
+    activate();
+  }
+
+
+  raf =
     requestAnimationFrame(
       animate
     );
 
 
   console.log(
-    "[NEYO Motion] Premium motion engine loaded"
+    "[NEYO Motion] Premium Motion v2 loaded"
   );
 
 })();

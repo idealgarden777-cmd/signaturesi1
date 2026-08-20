@@ -1,38 +1,34 @@
 /*
 =========================================================
-NEYO — PREMIUM FACE ENGINE v3
-Unified production mascot controller
+NEYO — PREMIUM FACE ENGINE v4
+Character-aware unified mascot controller
 
 Owns:
-- listening / thinking / speaking states
-- semantic mood awareness
-- emotional persistence
-- eye + mouth expression mapping
-- blink behavior
-- micro gaze
-- subtle body motion
-- real mic/output energy response
-- interruption reaction
-- premium non-random transitions
+- phase state
+- active character
+- mood expression rendering
+- blink
+- gaze
+- body motion
+- speech-bar motion
+- mic/output energy
+- character-specific expression preferences
+- character-specific motion personality
 
-Replaces:
-- old mascot.js
-- mascot-tone.js
-- mascot-motion.js
+Reads:
+window.NeyoCharacters
+window.NeyoCharacter
 
 Works with:
 - voice.js
+- mascot-intelligence.js
 - voice-mode.js
-- mascot.css
+- public/js/characters/neyo.js
 
-Expected DOM:
-#neyoMascot
-#neyoMascotLeftEye
-#neyoMascotRightEye
-#neyoMascotMouth
-.neyo-mascot-face
-.neyo-mascot-features
-.neyo-mouth-bar
+Does NOT own:
+- Gemini
+- semantic mood detection
+- camera
 =========================================================
 */
 
@@ -48,32 +44,43 @@ Expected DOM:
     document.getElementById("neyoMascot");
 
   const face =
-    mascot?.querySelector(".neyo-mascot-face");
-
-  const features =
-    mascot?.querySelector(".neyo-mascot-features");
+    mascot?.querySelector(
+      ".neyo-mascot-face"
+    );
 
   const leftEye =
-    document.getElementById("neyoMascotLeftEye");
+    document.getElementById(
+      "neyoMascotLeftEye"
+    );
 
   const rightEye =
-    document.getElementById("neyoMascotRightEye");
+    document.getElementById(
+      "neyoMascotRightEye"
+    );
 
   const mouth =
-    document.getElementById("neyoMascotMouth");
+    document.getElementById(
+      "neyoMascotMouth"
+    );
 
   const mouthBars =
     mouth
       ? Array.from(
-          mouth.querySelectorAll(".neyo-mouth-bar")
+          mouth.querySelectorAll(
+            ".neyo-mouth-bar"
+          )
         )
       : [];
 
   const statusEl =
-    document.getElementById("neyoMascotStatus");
+    document.getElementById(
+      "neyoMascotStatus"
+    );
 
   const voiceShell =
-    document.getElementById("neyoVoiceMode");
+    document.getElementById(
+      "neyoVoiceMode"
+    );
 
 
   if (
@@ -103,6 +110,7 @@ Expected DOM:
   let reducedMotion =
     reducedMotionQuery.matches;
 
+
   reducedMotionQuery.addEventListener?.(
     "change",
     event => {
@@ -117,71 +125,19 @@ Expected DOM:
 
 
   /* =====================================================
-     ENUMS
-     ===================================================== */
-
-  const PHASES = Object.freeze([
-    "idle",
-    "listening",
-    "thinking",
-    "speaking",
-    "interrupted",
-    "error",
-    "muted"
-  ]);
-
-
-  const MOODS = Object.freeze([
-    "friendly",
-    "happy",
-    "excited",
-    "calm",
-    "focused",
-    "curious",
-    "surprised",
-    "empathetic",
-    "serious",
-    "playful",
-    "skeptical",
-    "confused"
-  ]);
-
-
-  /* =====================================================
      CONFIG
      ===================================================== */
 
   const CONFIG = Object.freeze({
 
+    defaultCharacter:
+      "neyo",
+
     defaultMood:
       "friendly",
 
-    expressionTransitionMs:
-      220,
-
-    normalMoodHoldMs:
-      1900,
-
-    happyMoodHoldMs:
-      2400,
-
-    excitedMoodHoldMs:
-      2100,
-
-    empatheticMoodHoldMs:
-      3000,
-
-    seriousMoodHoldMs:
-      2600,
-
-    curiousMoodHoldMs:
-      1800,
-
-    surpriseMoodHoldMs:
-      1500,
-
     blinkMinMs:
-      3800,
+      3900,
 
     blinkMaxMs:
       7200,
@@ -190,16 +146,16 @@ Expected DOM:
       5200,
 
     listeningBlinkMaxMs:
-      9000,
+      8800,
 
     blinkCloseMs:
       72,
 
     blinkHoldMs:
-      30,
+      28,
 
     blinkOpenMs:
-      90,
+      88,
 
     microGazeMinMs:
       1500,
@@ -213,17 +169,14 @@ Expected DOM:
     gazeSmoothing:
       0.09,
 
+    pointerSmoothing:
+      0.08,
+
     energyRise:
       0.24,
 
     energyFall:
-      0.10,
-
-    pointerSmoothing:
-      0.08,
-
-    pointerEnabled:
-      true
+      0.10
   });
 
 
@@ -236,23 +189,14 @@ Expected DOM:
     active:
       false,
 
+    characterId:
+      CONFIG.defaultCharacter,
+
     phase:
       "idle",
 
     mood:
-      "friendly",
-
-    previousMood:
-      "friendly",
-
-    moodConfidence:
-      0,
-
-    moodLockedUntil:
-      0,
-
-    pendingMood:
-      null,
+      CONFIG.defaultMood,
 
     muted:
       false,
@@ -306,16 +250,9 @@ Expected DOM:
       0,
 
     blinking:
-      false,
-
-    expressionVersion:
-      0
+      false
   };
 
-
-  /* =====================================================
-     PHYSICAL VALUES
-     ===================================================== */
 
   const body = {
 
@@ -334,16 +271,15 @@ Expected DOM:
 
 
   const speechBars =
-    mouthBars.map(() => 1);
+    mouthBars.map(
+      () => 1
+    );
 
 
   let blinkTimer =
     0;
 
   let blinkAnimationTimer =
-    0;
-
-  let moodTimer =
     0;
 
   let rafId =
@@ -400,979 +336,377 @@ Expected DOM:
   }
 
 
-  function validPhase(value) {
-    return PHASES.includes(value);
-  }
-
-
-  function validMood(value) {
-    return MOODS.includes(value);
-  }
-
-
   function shellOpen() {
     return Boolean(
       voiceShell
         ?.classList
-        .contains("is-open")
+        .contains(
+          "is-open"
+        )
     );
   }
 
 
-  /* =====================================================
-     SEMANTIC MOOD DETECTION
-     ===================================================== */
-
-  const SEMANTIC_RULES = Object.freeze({
-
-    excited: {
-      weight: 5,
-
-      patterns: [
-        /\bso excited\b/i,
-        /\bvery excited\b/i,
-        /\bcan't wait\b/i,
-        /\bcannot wait\b/i,
-        /\bamazing\b/i,
-        /\bawesome\b/i,
-        /\bfantastic\b/i,
-        /\bincredible\b/i,
-        /\bbrilliant\b/i,
-        /\bwonderful\b/i,
-        /\byay\b/i
-      ]
-    },
-
-
-    happy: {
-      weight: 4,
-
-      patterns: [
-        /\bi am happy\b/i,
-        /\bi'm happy\b/i,
-        /\bso happy\b/i,
-        /\bvery happy\b/i,
-        /\bfeel happy\b/i,
-        /\bfeeling happy\b/i,
-        /\bglad\b/i,
-        /\bdelighted\b/i,
-        /\bpleased\b/i,
-        /\bgood news\b/i,
-        /\bgreat news\b/i,
-        /\bi love\b/i,
-        /\blove this\b/i,
-        /\bcelebrat(?:e|ing|ion)\b/i
-      ]
-    },
-
-
-    empathetic: {
-      weight: 5,
-
-      patterns: [
-        /\bi am sad\b/i,
-        /\bi'm sad\b/i,
-        /\bfeel sad\b/i,
-        /\bfeeling sad\b/i,
-        /\bhurt\b/i,
-        /\bheartbroken\b/i,
-        /\blonely\b/i,
-        /\bworried\b/i,
-        /\banxious\b/i,
-        /\bafraid\b/i,
-        /\bscared\b/i,
-        /\bterrible\b/i,
-        /\bcrying\b/i,
-        /\bnot doing well\b/i,
-        /\bnot feeling good\b/i
-      ]
-    },
-
-
-    surprised: {
-      weight: 4,
-
-      patterns: [
-        /\bwow\b/i,
-        /\bno way\b/i,
-        /\bunbelievable\b/i,
-        /\bunexpected\b/i,
-        /\bsurpris(?:e|ed|ing)\b/i,
-        /\boh my\b/i
-      ]
-    },
-
-
-    serious: {
-      weight: 4,
-
-      patterns: [
-        /\bserious\b/i,
-        /\bimportant\b/i,
-        /\bcritical\b/i,
-        /\burgent\b/i,
-        /\bemergency\b/i,
-        /\bwarning\b/i,
-        /\bdanger\b/i,
-        /\bsecurity\b/i,
-        /\bfailure\b/i,
-        /\bproblem\b/i
-      ]
-    },
-
-
-    curious: {
-      weight: 3,
-
-      patterns: [
-        /\bwhy\b/i,
-        /\bhow\b/i,
-        /\bwhat if\b/i,
-        /\bi wonder\b/i,
-        /\bcurious\b/i,
-        /\binteresting\b/i,
-        /\btell me more\b/i,
-        /\bwhat do you think\b/i,
-        /\bcan you explain\b/i
-      ]
-    },
-
-
-    playful: {
-      weight: 3,
-
-      patterns: [
-        /\bhaha+\b/i,
-        /\blol\b/i,
-        /\bfunny\b/i,
-        /\bjoke\b/i,
-        /\bkidding\b/i,
-        /\bjust kidding\b/i,
-        /😂/,
-        /🤣/,
-        /😄/
-      ]
-    },
-
-
-    focused: {
-      weight: 2,
-
-      patterns: [
-        /\bcode\b/i,
-        /\bdebug\b/i,
-        /\barchitecture\b/i,
-        /\banalyze\b/i,
-        /\banalysis\b/i,
-        /\bcalculate\b/i,
-        /\bproduction\b/i,
-        /\btechnical\b/i
-      ]
-    },
-
-
-    calm: {
-      weight: 2,
-
-      patterns: [
-        /\bcalm\b/i,
-        /\bpeaceful\b/i,
-        /\bgentle\b/i,
-        /\brelax\b/i,
-        /\bquiet\b/i
-      ]
-    }
-  });
-
-
-  function detectMood(text) {
-
-    const value =
-      String(text || "")
-        .trim()
-        .slice(0, 5000);
-
-
-    if (!value) {
-      return {
-        mood:
-          CONFIG.defaultMood,
-
-        confidence:
-          0
-      };
-    }
-
-
-    const scores = {};
-
-
-    for (
-      const [mood, rule]
-      of Object.entries(
-        SEMANTIC_RULES
-      )
-    ) {
-
-      let score =
-        0;
-
-
-      for (
-        const pattern
-        of rule.patterns
-      ) {
-
-        if (
-          pattern.test(value)
-        ) {
-          score +=
-            rule.weight;
-        }
-      }
-
-
-      scores[mood] =
-        score;
-    }
-
-
-    /*
-    Negation protection.
-    */
-
-    if (
-      /\bnot happy\b/i.test(value) ||
-      /\bunhappy\b/i.test(value)
-    ) {
-
-      scores.happy =
-        0;
-
-      scores.excited =
-        0;
-
-      scores.empathetic =
-        Math.max(
-          scores.empathetic || 0,
-          5
-        );
-    }
-
-
-    /*
-    Question mark gently supports curiosity.
-    */
-
-    if (
-      value.includes("?")
-    ) {
-
-      scores.curious =
-        (
-          scores.curious ||
-          0
-        ) +
-        1;
-    }
-
-
-    /*
-    Multiple ! increases expressive energy.
-    */
-
-    const exclamationCount =
-      (
-        value.match(/!/g) ||
-        []
-      ).length;
-
-
-    if (
-      exclamationCount >= 2
-    ) {
-
-      if (
-        scores.excited > 0
-      ) {
-        scores.excited +=
-          2;
-      }
-
-
-      if (
-        scores.happy > 0
-      ) {
-        scores.happy +=
-          1;
-      }
-
-
-      if (
-        scores.surprised > 0
-      ) {
-        scores.surprised +=
-          1;
-      }
-    }
-
-
-    let winner =
-      CONFIG.defaultMood;
-
-    let confidence =
-      0;
-
-
-    const priority = [
-      "empathetic",
-      "excited",
-      "happy",
-      "surprised",
-      "serious",
-      "playful",
-      "curious",
-      "focused",
-      "calm"
-    ];
-
-
-    for (
-      const mood
-      of priority
-    ) {
-
-      const score =
-        scores[mood] ||
-        0;
-
-
-      if (
-        score >
-        confidence
-      ) {
-
-        winner =
-          mood;
-
-        confidence =
-          score;
-      }
-    }
-
-
-    return {
-      mood:
-        winner,
-
-      confidence,
-
-      scores
-    };
-  }
-
-
-  /* =====================================================
-     MOOD HOLD
-     ===================================================== */
-
-  function getMoodHold(mood) {
-
-    switch (mood) {
-
-      case "happy":
-        return CONFIG.happyMoodHoldMs;
-
-
-      case "excited":
-        return CONFIG.excitedMoodHoldMs;
-
-
-      case "empathetic":
-        return CONFIG.empatheticMoodHoldMs;
-
-
-      case "serious":
-        return CONFIG.seriousMoodHoldMs;
-
-
-      case "curious":
-        return CONFIG.curiousMoodHoldMs;
-
-
-      case "surprised":
-        return CONFIG.surpriseMoodHoldMs;
-
-
-      default:
-        return CONFIG.normalMoodHoldMs;
-    }
-  }
-
-
-  /* =====================================================
-     SET MOOD
-     ===================================================== */
-
-  function setMood(
-    mood,
-    options = {}
+  function getCharacter(
+    id = state.characterId
   ) {
 
-    if (!validMood(mood)) {
-      return;
-    }
+    const helper =
+      window.NeyoCharacter;
 
-
-    const confidence =
-      Number(
-        options.confidence
-      ) || 1;
-
-
-    const now =
-      performance.now();
-
-
-    /*
-    Avoid weak expression overriding
-    a stronger emotion immediately.
-    */
 
     if (
-      !options.force &&
-      now <
-        state.moodLockedUntil &&
-      confidence <
-        state.moodConfidence
+      helper?.get
     ) {
 
-      state.pendingMood =
-        {
-          mood,
-          confidence
-        };
-
-
-      clearTimeout(
-        moodTimer
+      return (
+        helper.get(id) ||
+        helper.getActive?.() ||
+        null
       );
-
-
-      moodTimer =
-        setTimeout(
-          () => {
-
-            const pending =
-              state.pendingMood;
-
-
-            state.pendingMood =
-              null;
-
-
-            if (pending) {
-
-              setMood(
-                pending.mood,
-                {
-                  confidence:
-                    pending.confidence,
-
-                  force:
-                    true
-                }
-              );
-            }
-
-          },
-          Math.max(
-            0,
-            state.moodLockedUntil -
-            performance.now()
-          ) +
-          20
-        );
-
-
-      return;
     }
 
 
-    state.previousMood =
-      state.mood;
-
-
-    state.mood =
-      mood;
-
-
-    state.moodConfidence =
-      confidence;
-
-
-    state.moodLockedUntil =
-      now +
-      getMoodHold(mood);
-
-
-    state.expressionVersion +=
-      1;
-
-
-    renderExpression();
-
-
-    window.dispatchEvent(
-      new CustomEvent(
-        "neyo:mascot-mood",
-        {
-          detail: {
-            mood,
-            confidence
-          }
-        }
-      )
+    return (
+      window.NeyoCharacters?.[id] ||
+      window.NeyoCharacters?.neyo ||
+      null
     );
   }
 
 
-  function analyzeText(
-    text,
-    source = "text"
-  ) {
+  function getActiveCharacter() {
 
-    const result =
-      detectMood(text);
-
-
-    if (
-      result.confidence <= 0
-    ) {
-      return result;
-    }
-
-
-    setMood(
-      result.mood,
+    return (
+      getCharacter(
+        state.characterId
+      ) ||
       {
-        confidence:
-          result.confidence
+        id:
+          "neyo",
+
+        visual:
+          {},
+
+        expressions:
+          {},
+
+        motion:
+          {},
+
+        phases:
+          {}
       }
     );
-
-
-    console.debug?.(
-      "[NEYO Face] Mood",
-      {
-        source,
-        mood:
-          result.mood,
-        confidence:
-          result.confidence
-      }
-    );
-
-
-    return result;
   }
 
 
   /* =====================================================
-     EXPRESSION MATRIX
+     BASE EXPRESSION FALLBACKS
      ===================================================== */
 
-  function expressionFor(
-    phase,
-    mood
-  ) {
+  const BASE_EXPRESSIONS =
+    Object.freeze({
 
-    if (
-      state.muted
-    ) {
-
-      return {
+      friendly: {
         eye:
-          "half",
+          "arc",
 
         mouth:
-          "neutral"
-      };
-    }
+          "smile"
+      },
 
+      happy: {
+        eye:
+          "soft-arc",
 
-    if (
-      phase ===
-      "interrupted"
-    ) {
+        mouth:
+          "smile-wide"
+      },
 
-      return {
+      excited: {
         eye:
           "round",
 
         mouth:
+          "speak-active"
+      },
+
+      calm: {
+        eye:
+          "half",
+
+        mouth:
+          "smile"
+      },
+
+      focused: {
+        eye:
+          "pill",
+
+        mouth:
           "neutral"
-      };
-    }
+      },
 
+      curious: {
+        eye:
+          "asymmetric",
 
-    if (
-      phase ===
-      "error"
-    ) {
+        mouth:
+          "curious"
+      },
 
-      return {
+      surprised: {
+        eye:
+          "round",
+
+        mouth:
+          "surprise"
+      },
+
+      empathetic: {
+        eye:
+          "soft-arc",
+
+        mouth:
+          "smile"
+      },
+
+      serious: {
+        eye:
+          "half",
+
+        mouth:
+          "serious"
+      },
+
+      playful: {
+        eye:
+          "asymmetric",
+
+        mouth:
+          "smirk"
+      },
+
+      skeptical: {
+        eye:
+          "half",
+
+        mouth:
+          "smirk"
+      },
+
+      confused: {
         eye:
           "asymmetric",
 
         mouth:
           "error"
-      };
-    }
-
-
-    if (
-      phase ===
-      "thinking"
-    ) {
-
-      switch (mood) {
-
-        case "curious":
-          return {
-            eye:
-              "loop",
-
-            mouth:
-              "neutral"
-          };
-
-
-        case "serious":
-          return {
-            eye:
-              "diamond",
-
-            mouth:
-              "serious"
-          };
-
-
-        case "skeptical":
-          return {
-            eye:
-              "asymmetric",
-
-            mouth:
-              "smirk"
-          };
-
-
-        default:
-          return {
-            eye:
-              "square",
-
-            mouth:
-              "neutral"
-          };
       }
-    }
+    });
 
 
-    if (
-      phase ===
-      "listening"
-    ) {
+  /* =====================================================
+     CHARACTER-AWARE EXPRESSION
+     ===================================================== */
 
-      switch (mood) {
+  function getCharacterExpression(
+    mood
+  ) {
 
-        case "happy":
-          return {
-            eye:
-              "soft-arc",
-
-            mouth:
-              "smile"
-          };
+    const character =
+      getActiveCharacter();
 
 
-        case "excited":
-          return {
-            eye:
-              "round",
-
-            mouth:
-              "smile-wide"
-          };
-
-
-        case "empathetic":
-          return {
-            eye:
-              "soft-arc",
-
-            mouth:
-              "listening"
-          };
+    return (
+      character
+        ?.expressions
+        ?.[mood] ||
+      BASE_EXPRESSIONS[mood] ||
+      BASE_EXPRESSIONS.friendly
+    );
+  }
 
 
-        case "curious":
-          return {
-            eye:
-              "asymmetric",
+  function resolveExpression() {
 
-            mouth:
-              "curious"
-          };
+    const characterExpression =
+      getCharacterExpression(
+        state.mood
+      );
 
 
-        case "serious":
-          return {
-            eye:
-              "pill",
-
-            mouth:
-              "neutral"
-          };
+    let eye =
+      characterExpression.eye ||
+      "arc";
 
 
-        case "surprised":
-          return {
-            eye:
-              "round",
-
-            mouth:
-              "surprise"
-          };
-
-
-        default:
-          return {
-            eye:
-              "oval",
-
-            mouth:
-              "listening"
-          };
-      }
-    }
-
-
-    if (
-      phase ===
-      "speaking"
-    ) {
-
-      switch (mood) {
-
-        case "happy":
-          return {
-            eye:
-              "soft-arc",
-
-            mouth:
-              "speak-medium"
-          };
-
-
-        case "excited":
-          return {
-            eye:
-              "round",
-
-            mouth:
-              "speak-active"
-          };
-
-
-        case "empathetic":
-          return {
-            eye:
-              "soft-arc",
-
-            mouth:
-              "speak-soft"
-          };
-
-
-        case "curious":
-          return {
-            eye:
-              "asymmetric",
-
-            mouth:
-              "curious"
-          };
-
-
-        case "serious":
-          return {
-            eye:
-              "half",
-
-            mouth:
-              "serious"
-          };
-
-
-        case "surprised":
-          return {
-            eye:
-              "round",
-
-            mouth:
-              "surprise"
-          };
-
-
-        case "playful":
-          return {
-            eye:
-              "asymmetric",
-
-            mouth:
-              "speak-medium"
-          };
-
-
-        case "skeptical":
-          return {
-            eye:
-              "half",
-
-            mouth:
-              "smirk"
-          };
-
-
-        case "focused":
-          return {
-            eye:
-              "pill",
-
-            mouth:
-              "speak-medium"
-          };
-
-
-        case "calm":
-          return {
-            eye:
-              "half",
-
-            mouth:
-              "speak-soft"
-          };
-
-
-        default:
-          return {
-            eye:
-              "arc",
-
-            mouth:
-              "speak-soft"
-          };
-      }
-    }
+    let mouthMode =
+      characterExpression.mouth ||
+      "smile";
 
 
     /*
-    IDLE
+    Phase overrides only where needed.
+    Character mood remains the base identity.
     */
 
-    switch (mood) {
 
-      case "happy":
-        return {
-          eye:
-            "soft-arc",
+    if (
+      state.muted
+    ) {
 
-          mouth:
-            "smile-wide"
-        };
+      eye =
+        "half";
 
-
-      case "excited":
-        return {
-          eye:
-            "round",
-
-          mouth:
-            "smile-wide"
-        };
-
-
-      case "empathetic":
-        return {
-          eye:
-            "soft-arc",
-
-          mouth:
-            "smile"
-        };
-
-
-      case "curious":
-        return {
-          eye:
-            "asymmetric",
-
-          mouth:
-            "curious"
-        };
-
-
-      case "serious":
-        return {
-          eye:
-            "half",
-
-          mouth:
-            "neutral"
-        };
-
-
-      case "surprised":
-        return {
-          eye:
-            "round",
-
-          mouth:
-            "surprise"
-        };
-
-
-      case "playful":
-        return {
-          eye:
-            "asymmetric",
-
-          mouth:
-            "smirk"
-        };
-
-
-      case "calm":
-        return {
-          eye:
-            "half",
-
-          mouth:
-            "smile"
-        };
-
-
-      default:
-        return {
-          eye:
-            "arc",
-
-          mouth:
-            "smile"
-        };
+      mouthMode =
+        "neutral";
     }
+
+
+    if (
+      state.phase ===
+      "thinking"
+    ) {
+
+      if (
+        state.mood ===
+        "curious"
+      ) {
+
+        eye =
+          "loop";
+
+        mouthMode =
+          "neutral";
+
+      } else if (
+        state.mood ===
+        "serious"
+      ) {
+
+        eye =
+          "diamond";
+
+        mouthMode =
+          "serious";
+
+      } else {
+
+        eye =
+          "square";
+
+        mouthMode =
+          "neutral";
+      }
+    }
+
+
+    if (
+      state.phase ===
+      "listening"
+    ) {
+
+      if (
+        state.mood ===
+        "friendly"
+      ) {
+
+        eye =
+          "oval";
+
+        mouthMode =
+          "listening";
+      }
+
+
+      if (
+        state.mood ===
+        "focused"
+      ) {
+
+        eye =
+          "pill";
+
+        mouthMode =
+          "listening";
+      }
+    }
+
+
+    if (
+      state.phase ===
+      "speaking"
+    ) {
+
+      switch (
+        state.mood
+      ) {
+
+        case "excited":
+          mouthMode =
+            "speak-active";
+          break;
+
+
+        case "happy":
+        case "playful":
+        case "focused":
+          mouthMode =
+            "speak-medium";
+          break;
+
+
+        case "serious":
+          mouthMode =
+            "serious";
+          break;
+
+
+        case "curious":
+          mouthMode =
+            "curious";
+          break;
+
+
+        default:
+          mouthMode =
+            "speak-soft";
+      }
+    }
+
+
+    if (
+      state.phase ===
+      "interrupted"
+    ) {
+
+      eye =
+        "round";
+
+      mouthMode =
+        "neutral";
+    }
+
+
+    if (
+      state.phase ===
+      "error"
+    ) {
+
+      eye =
+        "asymmetric";
+
+      mouthMode =
+        "error";
+    }
+
+
+    return {
+      eye,
+      mouth:
+        mouthMode
+    };
   }
 
 
@@ -1380,14 +714,16 @@ Expected DOM:
      STATUS
      ===================================================== */
 
-  function statusText() {
+  function getStatusText() {
 
     if (state.muted) {
       return "Microphone muted";
     }
 
 
-    switch (state.phase) {
+    switch (
+      state.phase
+    ) {
 
       case "listening":
         return "Listening…";
@@ -1398,7 +734,11 @@ Expected DOM:
 
 
       case "speaking":
-        return "NEYO is speaking";
+        return `${
+          getActiveCharacter()
+            ?.name ||
+          "NEYO"
+        } is speaking`;
 
 
       case "interrupted":
@@ -1419,24 +759,30 @@ Expected DOM:
      RENDER
      ===================================================== */
 
-  function renderExpression() {
+  function render() {
+
+    const character =
+      getActiveCharacter();
+
 
     const expression =
-      expressionFor(
-        state.phase,
-        state.mood
-      );
+      resolveExpression();
+
+
+    mascot.dataset.character =
+      character.id ||
+      state.characterId;
 
 
     mascot.dataset.phase =
       state.phase;
 
 
-    mascot.dataset.tone =
+    mascot.dataset.mood =
       state.mood;
 
 
-    mascot.dataset.mood =
+    mascot.dataset.tone =
       state.mood;
 
 
@@ -1446,6 +792,20 @@ Expected DOM:
 
     mascot.dataset.mouth =
       expression.mouth;
+
+
+    mascot.dataset.bodyShape =
+      character
+        ?.visual
+        ?.bodyShape ||
+      "rounded-square";
+
+
+    mascot.dataset.surface =
+      character
+        ?.visual
+        ?.surface ||
+      "light";
 
 
     mascot.dataset.muted =
@@ -1480,20 +840,44 @@ Expected DOM:
 
     mascot.style.setProperty(
       "--neyo-mic-level",
-      state.micLevel.toFixed(3)
+      state.micLevel
+        .toFixed(3)
     );
 
 
     mascot.style.setProperty(
       "--neyo-output-level",
-      state.outputLevel.toFixed(3)
+      state.outputLevel
+        .toFixed(3)
+    );
+
+
+    mascot.style.setProperty(
+      "--neyo-character-face-scale",
+      String(
+        character
+          ?.visual
+          ?.faceScale ??
+        1
+      )
+    );
+
+
+    mascot.style.setProperty(
+      "--neyo-character-body-scale",
+      String(
+        character
+          ?.visual
+          ?.bodyScale ??
+        1
+      )
     );
 
 
     if (statusEl) {
 
       statusEl.textContent =
-        statusText();
+        getStatusText();
     }
 
 
@@ -1502,30 +886,188 @@ Expected DOM:
         "neyo:mascot-render",
         {
           detail: {
+            character:
+              character.id,
+
             phase:
               state.phase,
 
             mood:
               state.mood,
 
-            tone:
-              state.mood,
-
             eye:
               expression.eye,
 
             mouth:
-              expression.mouth,
-
-            micLevel:
-              state.micLevel,
-
-            outputLevel:
-              state.outputLevel
+              expression.mouth
           }
         }
       )
     );
+  }
+
+
+  /* =====================================================
+     CHARACTER CONTROL
+     ===================================================== */
+
+  function setCharacter(
+    id,
+    options = {}
+  ) {
+
+    const character =
+      getCharacter(id);
+
+
+    if (!character) {
+
+      console.warn(
+        "[NEYO Face] Unknown character:",
+        id
+      );
+
+      return false;
+    }
+
+
+    state.characterId =
+      character.id;
+
+
+    if (
+      window.NeyoCharacters
+    ) {
+
+      window.NeyoCharacters.active =
+        character.id;
+    }
+
+
+    if (
+      options.resetMood !==
+      false
+    ) {
+
+      state.mood =
+        character
+          ?.defaultExpression
+          ?.mood ||
+        CONFIG.defaultMood;
+    }
+
+
+    render();
+
+
+    if (
+      !reducedMotion &&
+      state.active
+    ) {
+
+      face.animate(
+        [
+          {
+            scale:
+              "0.97",
+            opacity:
+              0.86
+          },
+
+          {
+            scale:
+              "1.015",
+            opacity:
+              1,
+            offset:
+              0.58
+          },
+
+          {
+            scale:
+              "1",
+            opacity:
+              1
+          }
+        ],
+        {
+          duration:
+            420,
+
+          easing:
+            "cubic-bezier(.22,.88,.32,1)"
+        }
+      );
+    }
+
+
+    window.dispatchEvent(
+      new CustomEvent(
+        "neyo:character-change",
+        {
+          detail: {
+            id:
+              character.id,
+
+            character
+          }
+        }
+      )
+    );
+
+
+    console.log(
+      "[NEYO Face] Character:",
+      character.id
+    );
+
+
+    return true;
+  }
+
+
+  /* =====================================================
+     MOOD
+     ===================================================== */
+
+  function setMood(
+    mood
+  ) {
+
+    if (
+      !BASE_EXPRESSIONS[mood] &&
+      !getActiveCharacter()
+        ?.expressions
+        ?.[mood]
+    ) {
+      return;
+    }
+
+
+    state.mood =
+      mood;
+
+
+    render();
+  }
+
+
+  /* =====================================================
+     PHASE
+     ===================================================== */
+
+  function setPhase(
+    phase
+  ) {
+
+    state.phase =
+      phase;
+
+
+    render();
+
+
+    scheduleBlink();
   }
 
 
@@ -1568,8 +1110,10 @@ Expected DOM:
     if (
       !state.active ||
       reducedMotion ||
-      state.phase === "error" ||
-      state.phase === "interrupted"
+      state.phase ===
+        "error" ||
+      state.phase ===
+        "interrupted"
     ) {
       return;
     }
@@ -1577,11 +1121,13 @@ Expected DOM:
 
     const delay =
       state.phase ===
-        "listening"
+      "listening"
+
         ? randomBetween(
             CONFIG.listeningBlinkMinMs,
             CONFIG.listeningBlinkMaxMs
           )
+
         : randomBetween(
             CONFIG.blinkMinMs,
             CONFIG.blinkMaxMs
@@ -1613,29 +1159,35 @@ Expected DOM:
       true;
 
 
-    const roll =
-      Math.random();
+    const character =
+      getActiveCharacter();
 
 
-    /*
-    Rare one-eye micro wink,
-    only in friendly/playful/happy states.
-    */
+    const playful =
+      character
+        ?.personality
+        ?.playfulness ||
+      0;
 
-    if (
-      roll > 0.97 &&
+
+    const allowWink =
+      playful >
+        0.55 &&
       [
-        "friendly",
         "happy",
         "playful"
       ].includes(
         state.mood
-      ) &&
-      state.phase !==
-        "thinking"
+      );
+
+
+    if (
+      allowWink &&
+      Math.random() >
+        0.965
     ) {
 
-      const side =
+      const className =
         Math.random() >
         0.5
           ? "is-wink-left"
@@ -1643,7 +1195,7 @@ Expected DOM:
 
 
       mascot.classList.add(
-        side
+        className
       );
 
 
@@ -1652,8 +1204,7 @@ Expected DOM:
           () => {
 
             mascot.classList.remove(
-              "is-wink-left",
-              "is-wink-right"
+              className
             );
 
 
@@ -1717,7 +1268,9 @@ Expected DOM:
      MICRO GAZE
      ===================================================== */
 
-  function updateMicroGaze(now) {
+  function updateMicroGaze(
+    now
+  ) {
 
     if (
       reducedMotion ||
@@ -1736,6 +1289,24 @@ Expected DOM:
     }
 
 
+    const character =
+      getActiveCharacter();
+
+
+    const gazeStrength =
+      character
+        ?.motion
+        ?.gazeMovement ??
+      0.5;
+
+
+    const thinkingStrength =
+      character
+        ?.motion
+        ?.thinkingScan ??
+      0.5;
+
+
     state.nextMicroGazeAt =
       now +
       randomBetween(
@@ -1744,7 +1315,7 @@ Expected DOM:
       );
 
 
-    let strength =
+    let phaseMultiplier =
       1;
 
 
@@ -1752,8 +1323,9 @@ Expected DOM:
       state.phase ===
       "listening"
     ) {
-      strength =
-        0.35;
+
+      phaseMultiplier =
+        0.34;
     }
 
 
@@ -1761,7 +1333,8 @@ Expected DOM:
       state.phase ===
       "speaking"
     ) {
-      strength =
+
+      phaseMultiplier =
         0.25;
     }
 
@@ -1770,8 +1343,10 @@ Expected DOM:
       state.phase ===
       "thinking"
     ) {
-      strength =
-        1.25;
+
+      phaseMultiplier =
+        0.8 +
+        thinkingStrength;
     }
 
 
@@ -1780,7 +1355,8 @@ Expected DOM:
         -2,
         2
       ) *
-      strength;
+      gazeStrength *
+      phaseMultiplier;
 
 
     state.microTargetY =
@@ -1788,7 +1364,8 @@ Expected DOM:
         -1.2,
         1.2
       ) *
-      strength;
+      gazeStrength *
+      phaseMultiplier;
   }
 
 
@@ -1796,10 +1373,9 @@ Expected DOM:
      POINTER
      ===================================================== */
 
-  function handlePointerMove(event) {
+  function pointerMove(event) {
 
     if (
-      !CONFIG.pointerEnabled ||
       !state.active ||
       reducedMotion
     ) {
@@ -1810,6 +1386,14 @@ Expected DOM:
     const rect =
       mascot
         .getBoundingClientRect();
+
+
+    if (
+      !rect.width ||
+      !rect.height
+    ) {
+      return;
+    }
 
 
     const cx =
@@ -1830,7 +1414,7 @@ Expected DOM:
         ) /
         (
           rect.width *
-          0.72
+          0.75
         ),
         -1,
         1
@@ -1845,7 +1429,7 @@ Expected DOM:
         ) /
         (
           rect.height *
-          0.72
+          0.75
         ),
         -1,
         1
@@ -1857,7 +1441,7 @@ Expected DOM:
   }
 
 
-  function handlePointerLeave() {
+  function pointerLeave() {
 
     state.pointerInside =
       false;
@@ -1872,24 +1456,26 @@ Expected DOM:
   }
 
 
-  voiceShell?.addEventListener(
-    "pointermove",
-    handlePointerMove,
-    {
-      passive:
-        true
-    }
-  );
+  voiceShell
+    ?.addEventListener(
+      "pointermove",
+      pointerMove,
+      {
+        passive:
+          true
+      }
+    );
 
 
-  voiceShell?.addEventListener(
-    "pointerleave",
-    handlePointerLeave,
-    {
-      passive:
-        true
-    }
-  );
+  voiceShell
+    ?.addEventListener(
+      "pointerleave",
+      pointerLeave,
+      {
+        passive:
+          true
+      }
+    );
 
 
   /* =====================================================
@@ -1930,13 +1516,15 @@ Expected DOM:
 
     mascot.style.setProperty(
       "--neyo-mic-level",
-      state.micLevel.toFixed(3)
+      state.micLevel
+        .toFixed(3)
     );
 
 
     mascot.style.setProperty(
       "--neyo-output-level",
-      state.outputLevel.toFixed(3)
+      state.outputLevel
+        .toFixed(3)
     );
   }
 
@@ -1945,179 +1533,153 @@ Expected DOM:
      BODY MOTION
      ===================================================== */
 
-  const MOTION = Object.freeze({
-
-    idle: {
-      y:
-        2.8,
-
-      x:
-        0.7,
-
-      rotation:
-        0.38,
-
-      scale:
-        0.006,
-
-      speed:
-        0.72
-    },
-
-
-    listening: {
-      y:
-        0.8,
-
-      x:
-        0.20,
-
-      rotation:
-        0.10,
-
-      scale:
-        0.0025,
-
-      speed:
-        0.65
-    },
-
-
-    thinking: {
-      y:
-        1.3,
-
-      x:
-        0.65,
-
-      rotation:
-        0.50,
-
-      scale:
-        0.003,
-
-      speed:
-        0.58
-    },
-
-
-    speaking: {
-      y:
-        1.2,
-
-      x:
-        0.35,
-
-      rotation:
-        0.18,
-
-      scale:
-        0.004,
-
-      speed:
-        0.94
-    },
-
-
-    interrupted: {
-      y:
-        0,
-
-      x:
-        0,
-
-      rotation:
-        0,
-
-      scale:
-        0,
-
-      speed:
-        1
-    },
-
-
-    error: {
-      y:
-        0.3,
-
-      x:
-        0,
-
-      rotation:
-        0.10,
-
-      scale:
-        0,
-
-      speed:
-        0.5
-    }
-  });
-
-
-  const MOOD_ENERGY =
+  const BASE_MOTION =
     Object.freeze({
 
-      friendly:
-        1,
+      idle: {
+        y:
+          2.8,
 
-      happy:
-        1.12,
+        x:
+          0.7,
 
-      excited:
-        1.34,
+        rotation:
+          0.38,
 
-      calm:
-        0.68,
+        scale:
+          0.006,
 
-      focused:
-        0.70,
+        speed:
+          0.72
+      },
 
-      curious:
-        0.94,
 
-      surprised:
-        1.28,
+      listening: {
+        y:
+          0.8,
 
-      empathetic:
-        0.66,
+        x:
+          0.20,
 
-      serious:
-        0.58,
+        rotation:
+          0.10,
 
-      playful:
-        1.15,
+        scale:
+          0.0025,
 
-      skeptical:
-        0.72,
+        speed:
+          0.65
+      },
 
-      confused:
-        0.82
+
+      thinking: {
+        y:
+          1.3,
+
+        x:
+          0.65,
+
+        rotation:
+          0.50,
+
+        scale:
+          0.003,
+
+        speed:
+          0.58
+      },
+
+
+      speaking: {
+        y:
+          1.2,
+
+        x:
+          0.35,
+
+        rotation:
+          0.18,
+
+        scale:
+          0.004,
+
+        speed:
+          0.94
+      }
     });
 
 
-  function updateBody(now) {
+  function updateBody(
+    now
+  ) {
+
+    const character =
+      getActiveCharacter();
+
 
     const profile =
-      MOTION[state.phase] ||
-      MOTION.idle;
+      BASE_MOTION[
+        state.phase
+      ] ||
+      BASE_MOTION.idle;
 
 
-    const moodEnergy =
-      MOOD_ENERGY[
-        state.mood
-      ] || 1;
+    const motionProfile =
+      character.motion ||
+      {};
+
+
+    const phaseProfile =
+      character
+        ?.phases
+        ?.[state.phase] ||
+      {};
+
+
+    const generalEnergy =
+      Number(
+        phaseProfile.energy ??
+        character
+          ?.personality
+          ?.energy ??
+        0.5
+      );
+
+
+    const idleMotion =
+      Number(
+        motionProfile
+          .idleFloat ??
+        0.5
+      );
+
+
+    const speechMotion =
+      Number(
+        motionProfile
+          .speechMovement ??
+        0.5
+      );
+
+
+    const asymmetry =
+      Number(
+        motionProfile
+          .asymmetry ??
+        0.15
+      );
 
 
     const t =
-      now / 1000;
+      now /
+      1000;
 
 
-    /*
-    Two frequencies avoid obvious
-    repetitive bouncing.
-    */
+    const baseStrength =
+      0.60 +
+      generalEnergy *
+      0.75;
+
 
     let y =
       (
@@ -2132,11 +1694,11 @@ Expected DOM:
         Math.sin(
           t *
           profile.speed *
-          0.49 +
+          0.51 +
           0.7
         ) *
         profile.y *
-        0.16
+        asymmetry
       );
 
 
@@ -2169,22 +1731,32 @@ Expected DOM:
       profile.scale;
 
 
+    if (
+      state.phase ===
+      "idle"
+    ) {
+
+      y *=
+        0.65 +
+        idleMotion;
+
+      x *=
+        0.65 +
+        idleMotion;
+    }
+
+
     y *=
-      moodEnergy;
+      baseStrength;
 
 
     x *=
-      moodEnergy;
+      baseStrength;
 
 
     rotation *=
-      moodEnergy;
+      baseStrength;
 
-
-    /*
-    Listening gets steadier when
-    user actually speaks.
-    */
 
     if (
       state.phase ===
@@ -2215,10 +1787,6 @@ Expected DOM:
     }
 
 
-    /*
-    Speaking follows real assistant energy.
-    */
-
     if (
       state.phase ===
       "speaking"
@@ -2226,12 +1794,20 @@ Expected DOM:
 
       y -=
         state.outputLevel *
-        0.75;
+        (
+          0.5 +
+          speechMotion *
+          0.8
+        );
 
 
       scale +=
         state.outputLevel *
-        0.006;
+        (
+          0.003 +
+          speechMotion *
+          0.006
+        );
 
 
       rotation +=
@@ -2239,7 +1815,8 @@ Expected DOM:
           t * 4
         ) *
         state.outputLevel *
-        0.10;
+        speechMotion *
+        0.18;
     }
 
 
@@ -2249,7 +1826,11 @@ Expected DOM:
     ) {
 
       rotation +=
-        0.45;
+        0.25 +
+        character
+          ?.personality
+          ?.curiosity *
+        0.30;
     }
 
 
@@ -2259,26 +1840,32 @@ Expected DOM:
     ) {
 
       rotation -=
-        0.35;
+        0.30;
     }
 
-
-    /*
-    Pointer movement is deliberately tiny.
-    */
 
     if (
       state.pointerInside
     ) {
 
+      const response =
+        Number(
+          motionProfile
+            .pointerResponse ??
+          0.3
+        );
+
+
       x +=
         state.pointerX *
-        1.4;
+        response *
+        3;
 
 
       y +=
         state.pointerY *
-        0.8;
+        response *
+        1.6;
     }
 
 
@@ -2340,10 +1927,12 @@ Expected DOM:
 
 
   /* =====================================================
-     GAZE MOTION
+     GAZE
      ===================================================== */
 
-  function updateGaze(now) {
+  function updateGaze(
+    now
+  ) {
 
     updateMicroGaze(
       now
@@ -2382,6 +1971,19 @@ Expected DOM:
       );
 
 
+    const character =
+      getActiveCharacter();
+
+
+    const pointerResponse =
+      Number(
+        character
+          ?.motion
+          ?.pointerResponse ??
+        0.3
+      );
+
+
     let x =
       state.microX;
 
@@ -2396,12 +1998,20 @@ Expected DOM:
 
       x +=
         state.pointerX *
-        2.5;
+        (
+          1.5 +
+          pointerResponse *
+          3
+        );
 
 
       y +=
         state.pointerY *
-        1.6;
+        (
+          1 +
+          pointerResponse *
+          2
+        );
     }
 
 
@@ -2411,22 +2021,36 @@ Expected DOM:
       !state.pointerInside
     ) {
 
+      const thinking =
+        Number(
+          character
+            ?.motion
+            ?.thinkingScan ??
+          0.5
+        );
+
+
       const t =
-        now / 1000;
+        now /
+        1000;
 
 
       x +=
         Math.sin(
-          t * 1.05
+          t *
+          1.05
         ) *
-        1.7;
+        thinking *
+        3;
 
 
       y +=
         Math.sin(
-          t * 0.68
+          t *
+          0.68
         ) *
-        0.7;
+        thinking *
+        1.2;
     }
 
 
@@ -2444,14 +2068,31 @@ Expected DOM:
 
 
   /* =====================================================
-     SPEECH PHYSICS
+     SPEECH BARS
      ===================================================== */
 
-  function updateSpeechBars(now) {
+  function updateSpeechBars(
+    now
+  ) {
 
-    if (!mouthBars.length) {
+    if (
+      !mouthBars.length
+    ) {
       return;
     }
+
+
+    const character =
+      getActiveCharacter();
+
+
+    const speechEnergy =
+      Number(
+        character
+          ?.motion
+          ?.speechMovement ??
+        0.5
+      );
 
 
     if (
@@ -2461,7 +2102,8 @@ Expected DOM:
 
       for (
         let i = 0;
-        i < speechBars.length;
+        i <
+        speechBars.length;
         i += 1
       ) {
 
@@ -2505,12 +2147,14 @@ Expected DOM:
 
 
     const t =
-      now / 1000;
+      now /
+      1000;
 
 
     for (
       let i = 0;
-      i < mouthBars.length;
+      i <
+      mouthBars.length;
       i += 1
     ) {
 
@@ -2520,7 +2164,8 @@ Expected DOM:
           t *
           (
             5.8 +
-            i * 0.71
+            i *
+            0.71
           ) +
           i
         ) *
@@ -2529,7 +2174,8 @@ Expected DOM:
           t *
           (
             9.7 +
-            i * 0.37
+            i *
+            0.37
           )
         ) *
         0.05;
@@ -2540,7 +2186,11 @@ Expected DOM:
         state.outputLevel *
         weights[i] *
         irregular *
-        0.72;
+        (
+          0.4 +
+          speechEnergy *
+          0.75
+        );
 
 
       speechBars[i] =
@@ -2560,7 +2210,11 @@ Expected DOM:
           i * 0.78
         ) *
         state.outputLevel *
-        0.52;
+        (
+          0.25 +
+          speechEnergy *
+          0.55
+        );
 
 
       mouthBars[i]
@@ -2583,303 +2237,7 @@ Expected DOM:
 
 
   /* =====================================================
-     PHASE
-     ===================================================== */
-
-  function setPhase(
-    phase,
-    options = {}
-  ) {
-
-    if (
-      !validPhase(phase)
-    ) {
-      return;
-    }
-
-
-    const previous =
-      state.phase;
-
-
-    state.phase =
-      phase;
-
-
-    if (
-      options.mood &&
-      validMood(
-        options.mood
-      )
-    ) {
-
-      setMood(
-        options.mood,
-        {
-          confidence:
-            options.confidence ||
-            3
-        }
-      );
-
-    } else {
-
-      renderExpression();
-    }
-
-
-    if (
-      previous !==
-      phase
-    ) {
-
-      reactionForPhase(
-        phase
-      );
-    }
-
-
-    scheduleBlink();
-  }
-
-
-  /* =====================================================
-     REACTIONS
-     ===================================================== */
-
-  function reactionForPhase(
-    phase
-  ) {
-
-    if (
-      reducedMotion ||
-      !state.active
-    ) {
-      return;
-    }
-
-
-    if (
-      phase ===
-      "listening"
-    ) {
-
-      face.animate(
-        [
-          {
-            scale:
-              "1"
-          },
-
-          {
-            scale:
-              "0.988",
-            offset:
-              0.45
-          },
-
-          {
-            scale:
-              "1"
-          }
-        ],
-        {
-          duration:
-            300,
-
-          easing:
-            "cubic-bezier(.22,.88,.32,1)"
-        }
-      );
-    }
-
-
-    if (
-      phase ===
-      "speaking"
-    ) {
-
-      face.animate(
-        [
-          {
-            scale:
-              "0.994"
-          },
-
-          {
-            scale:
-              "1.014",
-            offset:
-              0.40
-          },
-
-          {
-            scale:
-              "1"
-          }
-        ],
-        {
-          duration:
-            360,
-
-          easing:
-            "cubic-bezier(.22,.88,.32,1)"
-        }
-      );
-    }
-
-
-    if (
-      phase ===
-      "interrupted"
-    ) {
-
-      face.animate(
-        [
-          {
-            translate:
-              "0 0"
-          },
-
-          {
-            translate:
-              "-2px 0",
-            offset:
-              0.40
-          },
-
-          {
-            translate:
-              "0 0"
-          }
-        ],
-        {
-          duration:
-            210,
-
-          easing:
-            "cubic-bezier(.22,.88,.32,1)"
-        }
-      );
-    }
-
-
-    if (
-      state.mood ===
-      "surprised"
-    ) {
-
-      face.animate(
-        [
-          {
-            scale:
-              "1"
-          },
-
-          {
-            scale:
-              "1.035",
-            offset:
-              0.35
-          },
-
-          {
-            scale:
-              "1"
-          }
-        ],
-        {
-          duration:
-            430,
-
-          easing:
-            "cubic-bezier(.22,.88,.32,1)"
-        }
-      );
-    }
-  }
-
-
-  /* =====================================================
-     ACTIVATION
-     ===================================================== */
-
-  function open() {
-
-    state.active =
-      true;
-
-
-    state.phase =
-      "idle";
-
-
-    state.nextMicroGazeAt =
-      performance.now() +
-      900;
-
-
-    renderExpression();
-
-    scheduleBlink();
-  }
-
-
-  function close() {
-
-    state.active =
-      false;
-
-
-    clearBlink();
-
-
-    clearTimeout(
-      moodTimer
-    );
-
-
-    state.phase =
-      "idle";
-
-
-    state.mood =
-      "friendly";
-
-
-    state.previousMood =
-      "friendly";
-
-
-    state.moodConfidence =
-      0;
-
-
-    state.moodLockedUntil =
-      0;
-
-
-    state.pendingMood =
-      null;
-
-
-    state.micTarget =
-      0;
-
-
-    state.outputTarget =
-      0;
-
-
-    resetPhysicalMotion();
-
-
-    renderExpression();
-  }
-
-
-  /* =====================================================
-     RESET
+     RESET MOTION
      ===================================================== */
 
   function resetPhysicalMotion() {
@@ -2900,20 +2258,23 @@ Expected DOM:
     state.pointerInside =
       false;
 
-
     state.pointerTargetX =
       0;
 
     state.pointerTargetY =
       0;
 
+    state.pointerX =
+      0;
+
+    state.pointerY =
+      0;
 
     state.microTargetX =
       0;
 
     state.microTargetY =
       0;
-
 
     state.microX =
       0;
@@ -2960,6 +2321,87 @@ Expected DOM:
 
 
   /* =====================================================
+     OPEN / CLOSE
+     ===================================================== */
+
+  function open() {
+
+    state.active =
+      true;
+
+
+    const active =
+      window
+        .NeyoCharacters
+        ?.active;
+
+
+    if (
+      active &&
+      getCharacter(
+        active
+      )
+    ) {
+
+      state.characterId =
+        active;
+    }
+
+
+    const character =
+      getActiveCharacter();
+
+
+    state.phase =
+      "idle";
+
+
+    state.mood =
+      character
+        ?.defaultExpression
+        ?.mood ||
+      CONFIG.defaultMood;
+
+
+    state.nextMicroGazeAt =
+      performance.now() +
+      800;
+
+
+    render();
+
+    scheduleBlink();
+  }
+
+
+  function close() {
+
+    state.active =
+      false;
+
+
+    clearBlink();
+
+
+    state.phase =
+      "idle";
+
+
+    state.micTarget =
+      0;
+
+    state.outputTarget =
+      0;
+
+
+    resetPhysicalMotion();
+
+
+    render();
+  }
+
+
+  /* =====================================================
      MAIN LOOP
      ===================================================== */
 
@@ -2996,7 +2438,7 @@ Expected DOM:
 
 
   /* =====================================================
-     VOICE EVENTS
+     EVENTS
      ===================================================== */
 
   window.addEventListener(
@@ -3014,7 +2456,6 @@ Expected DOM:
   window.addEventListener(
     "neyo:voice-idle",
     () => {
-
       setPhase(
         "idle"
       );
@@ -3025,7 +2466,6 @@ Expected DOM:
   window.addEventListener(
     "neyo:voice-listening",
     () => {
-
       setPhase(
         "listening"
       );
@@ -3036,7 +2476,6 @@ Expected DOM:
   window.addEventListener(
     "neyo:voice-thinking",
     () => {
-
       setPhase(
         "thinking"
       );
@@ -3047,7 +2486,6 @@ Expected DOM:
   window.addEventListener(
     "neyo:voice-speaking",
     () => {
-
       setPhase(
         "speaking"
       );
@@ -3063,15 +2501,12 @@ Expected DOM:
         0;
 
 
-      setPhase(
-        "interrupted",
-        {
-          mood:
-            "surprised",
+      state.mood =
+        "surprised";
 
-          confidence:
-            5
-        }
+
+      setPhase(
+        "interrupted"
       );
     }
   );
@@ -3081,65 +2516,16 @@ Expected DOM:
     "neyo:voice-error",
     () => {
 
-      setPhase(
-        "error",
-        {
-          mood:
-            "confused",
+      state.mood =
+        "confused";
 
-          confidence:
-            5
-        }
+
+      setPhase(
+        "error"
       );
     }
   );
 
-
-  /* =====================================================
-     SEMANTIC TEXT EVENTS
-     ===================================================== */
-
-  window.addEventListener(
-    "neyo:voice-user-text",
-    event => {
-
-      const text =
-        event?.detail?.text;
-
-
-      if (text) {
-
-        analyzeText(
-          text,
-          "user"
-        );
-      }
-    }
-  );
-
-
-  window.addEventListener(
-    "neyo:voice-assistant-text",
-    event => {
-
-      const text =
-        event?.detail?.text;
-
-
-      if (text) {
-
-        analyzeText(
-          text,
-          "assistant"
-        );
-      }
-    }
-  );
-
-
-  /* =====================================================
-     ENERGY EVENTS
-     ===================================================== */
 
   window.addEventListener(
     "neyo:voice-mic-level",
@@ -3148,8 +2534,11 @@ Expected DOM:
       state.micTarget =
         clamp(
           Number(
-            event?.detail?.level
-          ) || 0,
+            event
+              ?.detail
+              ?.level
+          ) ||
+          0,
           0,
           1
         );
@@ -3164,8 +2553,11 @@ Expected DOM:
       state.outputTarget =
         clamp(
           Number(
-            event?.detail?.level
-          ) || 0,
+            event
+              ?.detail
+              ?.level
+          ) ||
+          0,
           0,
           1
         );
@@ -3173,30 +2565,19 @@ Expected DOM:
   );
 
 
-  /* =====================================================
-     CONTROLS
-     ===================================================== */
-
   window.addEventListener(
     "neyo:voice-muted",
     event => {
 
       state.muted =
         Boolean(
-          event?.detail?.muted
+          event
+            ?.detail
+            ?.muted
         );
 
 
-      if (
-        state.muted
-      ) {
-
-        state.micTarget =
-          0;
-      }
-
-
-      renderExpression();
+      render();
     }
   );
 
@@ -3207,20 +2588,13 @@ Expected DOM:
 
       state.speakerOn =
         Boolean(
-          event?.detail?.enabled
+          event
+            ?.detail
+            ?.enabled
         );
 
 
-      if (
-        !state.speakerOn
-      ) {
-
-        state.outputTarget =
-          0;
-      }
-
-
-      renderExpression();
+      render();
     }
   );
 
@@ -3231,11 +2605,58 @@ Expected DOM:
 
       state.cameraOn =
         Boolean(
-          event?.detail?.enabled
+          event
+            ?.detail
+            ?.enabled
         );
 
 
-      renderExpression();
+      render();
+    }
+  );
+
+
+  /*
+  Mood decisions now come from
+  mascot-intelligence.js
+  */
+
+  window.addEventListener(
+    "neyo:mascot-intelligence",
+    event => {
+
+      const mood =
+        event
+          ?.detail
+          ?.mood;
+
+
+      if (mood) {
+
+        setMood(
+          mood
+        );
+      }
+    }
+  );
+
+
+  window.addEventListener(
+    "neyo:character-select",
+    event => {
+
+      const id =
+        event
+          ?.detail
+          ?.id;
+
+
+      if (id) {
+
+        setCharacter(
+          id
+        );
+      }
     }
   );
 
@@ -3296,40 +2717,39 @@ Expected DOM:
 
       close,
 
-      setPhase,
+      setCharacter,
 
       setMood,
 
       /*
-      Backwards compatibility:
-      old code can still call setTone().
+      Compatibility with old
+      tone terminology.
       */
 
       setTone:
         setMood,
 
-      analyzeText,
-
-      detectMood,
+      setPhase,
 
       blink,
+
+      getCharacter:
+        () =>
+          getActiveCharacter(),
 
       getState:
         () => ({
           active:
             state.active,
 
+          characterId:
+            state.characterId,
+
           phase:
             state.phase,
 
           mood:
             state.mood,
-
-          previousMood:
-            state.previousMood,
-
-          moodConfidence:
-            state.moodConfidence,
 
           micLevel:
             state.micLevel,
@@ -3341,7 +2761,10 @@ Expected DOM:
             state.muted,
 
           speakerOn:
-            state.speakerOn
+            state.speakerOn,
+
+          cameraOn:
+            state.cameraOn
         })
     });
 
@@ -3350,11 +2773,25 @@ Expected DOM:
      INIT
      ===================================================== */
 
-  renderExpression();
+  if (
+    window
+      .NeyoCharacters
+      ?.active
+  ) {
+
+    state.characterId =
+      window
+        .NeyoCharacters
+        .active;
+  }
 
 
-  if (shellOpen()) {
+  render();
 
+
+  if (
+    shellOpen()
+  ) {
     open();
   }
 
@@ -3366,7 +2803,7 @@ Expected DOM:
 
 
   console.log(
-    "[NEYO Face] Premium Face Engine v3 loaded"
+    "[NEYO Face] Character-aware engine v4 loaded"
   );
 
 })();

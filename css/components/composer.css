@@ -692,3 +692,246 @@ body.dark-mode
     }
 
 }
+/* =========================================================
+   NEYO — SEND BUTTON FINAL STATES
+   Desktop + Mobile
+   ========================================================= */
+
+.send-btn {
+    width: 40px !important;
+    height: 40px !important;
+
+    min-width: 40px !important;
+    min-height: 40px !important;
+
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+
+    padding: 0 !important;
+
+    border: 0 !important;
+    border-radius: 999px !important;
+
+    background: #111111 !important;
+    color: #ffffff !important;
+
+    cursor: pointer !important;
+
+    opacity: 1 !important;
+
+    box-shadow:
+        0 1px 2px rgba(0, 0, 0, 0.10),
+        0 4px 12px rgba(0, 0, 0, 0.10) !important;
+
+    transition:
+        background-color 140ms ease,
+        color 140ms ease,
+        opacity 140ms ease,
+        box-shadow 140ms ease !important;
+}
+
+
+/* =========================================================
+   ICON
+   ========================================================= */
+
+.send-btn svg {
+    width: 18px !important;
+    height: 18px !important;
+
+    stroke-width: 2 !important;
+
+    pointer-events: none !important;
+}
+
+
+/* =========================================================
+   ACTIVE HOVER
+   ========================================================= */
+
+.send-btn:not(:disabled):not(.is-disabled):hover {
+    background: #1c1c1c !important;
+
+    box-shadow:
+        0 1px 2px rgba(0, 0, 0, 0.12),
+        0 5px 14px rgba(0, 0, 0, 0.14) !important;
+}
+
+
+.send-btn:not(:disabled):not(.is-disabled):active {
+    background: #242424 !important;
+}
+
+
+/* =========================================================
+   DISABLED
+
+   No text + no ready attachment.
+   ========================================================= */
+
+.send-btn:disabled,
+.send-btn.is-disabled {
+    background:
+        rgba(17, 17, 17, 0.18) !important;
+
+    color:
+        rgba(255, 255, 255, 0.92) !important;
+
+    cursor: default !important;
+
+    opacity: 1 !important;
+
+    box-shadow: none !important;
+
+    pointer-events: none !important;
+}
+
+
+/* =========================================================
+   ATTACHMENT PROCESSING
+
+   Keep button clean and subtle.
+   ========================================================= */
+
+.send-btn.attachments-pending {
+    background:
+        rgba(17, 17, 17, 0.14) !important;
+
+    color:
+        rgba(17, 17, 17, 0.48) !important;
+
+    box-shadow: none !important;
+
+    cursor: default !important;
+}
+
+
+.send-loader-icon {
+    width: 18px !important;
+    height: 18px !important;
+
+    animation:
+        neyo-send-loader-spin
+        850ms
+        linear
+        infinite;
+}
+
+
+@keyframes neyo-send-loader-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+
+/* =========================================================
+   GENERATING / STOP
+   ========================================================= */
+
+.send-btn.is-generating {
+    background: #111111 !important;
+    color: #ffffff !important;
+
+    cursor: pointer !important;
+
+    box-shadow:
+        0 1px 2px rgba(0, 0, 0, 0.10),
+        0 4px 12px rgba(0, 0, 0, 0.10) !important;
+}
+
+
+.send-stop-square {
+    display: block !important;
+
+    width: 11px !important;
+    height: 11px !important;
+
+    border-radius: 2.5px !important;
+
+    background: currentColor !important;
+
+    pointer-events: none !important;
+}
+
+
+/* =========================================================
+   DARK MODE
+   ========================================================= */
+
+body.dark-mode .send-btn {
+    background: #f5f5f5 !important;
+    color: #111111 !important;
+
+    box-shadow:
+        0 1px 2px rgba(0, 0, 0, 0.18),
+        0 4px 12px rgba(0, 0, 0, 0.16) !important;
+}
+
+
+body.dark-mode
+.send-btn:not(:disabled):not(.is-disabled):hover {
+    background: #ffffff !important;
+}
+
+
+body.dark-mode
+.send-btn:disabled,
+body.dark-mode
+.send-btn.is-disabled {
+    background:
+        rgba(245, 245, 245, 0.22) !important;
+
+    color:
+        rgba(17, 17, 17, 0.72) !important;
+
+    box-shadow: none !important;
+}
+
+
+body.dark-mode
+.send-btn.attachments-pending {
+    background:
+        rgba(245, 245, 245, 0.16) !important;
+
+    color:
+        rgba(245, 245, 245, 0.56) !important;
+
+    box-shadow: none !important;
+}
+
+
+/* =========================================================
+   FOCUS
+   ========================================================= */
+
+.send-btn:focus-visible {
+    outline:
+        2px solid
+        rgba(17, 17, 17, 0.30) !important;
+
+    outline-offset:
+        3px !important;
+}
+
+
+body.dark-mode
+.send-btn:focus-visible {
+    outline-color:
+        rgba(255, 255, 255, 0.45) !important;
+}
+
+
+/* =========================================================
+   REDUCED MOTION
+   ========================================================= */
+
+@media (
+    prefers-reduced-motion: reduce
+) {
+
+    .send-loader-icon {
+        animation: none !important;
+    }
+}

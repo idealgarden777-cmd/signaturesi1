@@ -1,44 +1,45 @@
 /*
 =========================================================
 NEYO — ATTACHMENTS CONTROLLER
-FINAL v3 — CONFLICT-FREE BASELINE
+FINAL v4 — SIGNED UPLOAD + PROCESSING
 
 FILE:
 public/js/components/attachments.js
 
+FLOW
+---------------------------------------------------------
+1. User selects / drops / pastes file
+2. Validate locally
+3. POST metadata -> /api/attachments/upload
+4. Receive uploadId + bucket + path + signedUrl
+5. Upload raw File directly to signed URL
+6. POST metadata -> /api/attachments/process
+7. Receive document / chunks / stats
+8. Mark attachment READY
+9. chat.js receives secure storage metadata only
+
 OWNERSHIP
 ---------------------------------------------------------
-neo.js
-  ✅ #attachBtn / "+" popup UX
-  ✅ Deep Research menu item
-  ✅ Personalities menu item
+✅ Owns private file input
+✅ Owns file upload state
+✅ Owns attachment chips
+✅ Owns drag/drop + pasted files
+✅ Owns retry/remove
+✅ Owns #addFilesMenuBtn
 
-attachments.js
-  ✅ #addFilesMenuBtn
-  ✅ private file input
-  ✅ file validation
-  ✅ upload authorization
-  ✅ signed Storage upload
-  ✅ processing
-  ✅ attachment chips
-  ✅ progress
-  ✅ retry / remove
-  ✅ drag + drop
-  ✅ file paste
-  ✅ ready attachment state
+DOES NOT OWN
+---------------------------------------------------------
+❌ #attachBtn
+❌ #sendBtn
+❌ #chatInput
+❌ chat transport
+❌ voice
+❌ mascot
+❌ neo.js
 
-attachments.js DOES NOT OWN:
-  ❌ #attachBtn
-  ❌ #sendBtn
-  ❌ #chatInput
-  ❌ chat API
-  ❌ voice
-  ❌ mascot
-  ❌ characters
-  ❌ history
-
-PUBLIC:
-window.NeyoAttachments
+IMPORTANT
+---------------------------------------------------------
+#attachBtn remains owned by neo.js popup UX.
 =========================================================
 */
 
@@ -51,11 +52,12 @@ window.NeyoAttachments
      ===================================================== */
 
   const VERSION =
-    "neyo-attachments-final-v3";
+    "neyo-attachments-final-v4";
 
 
   if (
-    window.NeyoAttachments?.__controller === true
+    window.NeyoAttachments?.__controller ===
+    true
   ) {
     console.warn(
       "[NEYO Attachments] Controller already initialized."
@@ -101,12 +103,6 @@ window.NeyoAttachments
      DOM
      ===================================================== */
 
-  /*
-   * IMPORTANT:
-   * #attachBtn belongs to neo.js.
-   * We only keep a reference for diagnostics.
-   */
-
   const attachBtn =
     document.getElementById(
       "attachBtn"
@@ -135,21 +131,20 @@ window.NeyoAttachments
     document.querySelector(
       ".composer-wrapper"
     ) ||
-    document.querySelector(
-      ".composer"
-    );
+    document.body;
 
 
   const glassInputContainer =
     document.getElementById(
       "glassInputContainer"
+    ) ||
+    composerWrapper;
+
+
+  const dragDropOverlay =
+    document.getElementById(
+      "dragDropOverlay"
     );
-
-
-  const dropZone =
-    composerWrapper ||
-    glassInputContainer ||
-    document.body;
 
 
   let attachmentList =
@@ -161,43 +156,36 @@ window.NeyoAttachments
     );
 
 
-  /*
-   * Safe fallback only.
-   */
-
-  if (!attachmentList) {
+  if (
+    !attachmentList
+  ) {
     attachmentList =
       document.createElement(
         "div"
       );
 
+
     attachmentList.id =
       "attachmentList";
 
+
     attachmentList.className =
-      "attached-chips-wrapper attachment-list";
+      "attached-chips-wrapper";
+
 
     attachmentList.hidden =
       true;
 
-    (
-      glassInputContainer ||
-      composerWrapper ||
-      document.body
-    ).prepend(
-      attachmentList
-    );
+
+    glassInputContainer
+      ?.prepend(
+        attachmentList
+      );
   }
 
 
   /* =====================================================
      PRIVATE FILE INPUT
-
-     We deliberately do NOT use:
-     #attachmentInput
-     #hiddenFileInput
-
-     This prevents old listeners from receiving File objects.
      ===================================================== */
 
   let fileInput =
@@ -206,34 +194,44 @@ window.NeyoAttachments
     );
 
 
-  if (!fileInput) {
+  if (
+    !fileInput
+  ) {
     fileInput =
       document.createElement(
         "input"
       );
 
+
     fileInput.type =
       "file";
+
 
     fileInput.id =
       "neyoAttachmentInput";
 
+
     fileInput.multiple =
       true;
+
 
     fileInput.hidden =
       true;
 
+
     fileInput.tabIndex =
       -1;
 
+
     fileInput.accept =
       "*/*";
+
 
     fileInput.setAttribute(
       "aria-hidden",
       "true"
     );
+
 
     document.body.appendChild(
       fileInput
@@ -258,7 +256,7 @@ window.NeyoAttachments
 
 
   /* =====================================================
-     FILE GROUPS
+     EXTENSIONS
      ===================================================== */
 
   const EXTENSIONS =
@@ -379,21 +377,17 @@ window.NeyoAttachments
           "jsx",
           "ts",
           "tsx",
-
           "py",
           "pyw",
-
           "java",
           "kt",
           "kts",
-
           "c",
           "h",
           "cc",
           "cpp",
           "cxx",
           "hpp",
-
           "cs",
           "go",
           "rs",
@@ -402,27 +396,22 @@ window.NeyoAttachments
           "swift",
           "dart",
           "scala",
-
           "sh",
           "bash",
           "zsh",
           "fish",
           "ps1",
-
           "html",
           "htm",
           "css",
           "scss",
           "sass",
           "less",
-
           "vue",
           "svelte",
-
           "graphql",
           "gql",
           "proto",
-
           "dockerfile",
           "makefile",
           "env",
@@ -431,12 +420,6 @@ window.NeyoAttachments
     });
 
 
-  /*
-   * Executable / installer formats.
-   * Files are data, but there is no useful reason
-   * for this chat upload pipeline to accept these.
-   */
-
   const BLOCKED_EXTENSIONS =
     new Set([
       "exe",
@@ -444,14 +427,12 @@ window.NeyoAttachments
       "com",
       "scr",
       "msi",
-
       "bat",
       "cmd",
       "vbs",
       "vbe",
       "wsf",
       "wsh",
-
       "apk",
       "app",
       "dmg",
@@ -462,15 +443,18 @@ window.NeyoAttachments
 
 
   /* =====================================================
-     UTILITIES
+     DEBUG
      ===================================================== */
 
   function debug(
     ...args
   ) {
-    if (!CONFIG.debug) {
+    if (
+      !CONFIG.debug
+    ) {
       return;
     }
+
 
     console.log(
       "[NEYO Attachments]",
@@ -478,6 +462,57 @@ window.NeyoAttachments
     );
   }
 
+
+  /* =====================================================
+     EVENTS
+     ===================================================== */
+
+  function emit(
+    name,
+    detail =
+      {}
+  ) {
+    window.dispatchEvent(
+      new CustomEvent(
+        name,
+        {
+          detail
+        }
+      )
+    );
+  }
+
+
+  function emitError(
+    message,
+    item =
+      null
+  ) {
+    console.error(
+      "[NEYO Attachments]",
+      message
+    );
+
+
+    emit(
+      "neyo:attachment-error",
+      {
+        message,
+
+        attachment:
+          item
+            ? serializeItem(
+                item
+              )
+            : null
+      }
+    );
+  }
+
+
+  /* =====================================================
+     HELPERS
+     ===================================================== */
 
   function clamp(
     value,
@@ -504,6 +539,7 @@ window.NeyoAttachments
         .randomUUID();
     }
 
+
     return (
       `att_${Date.now()}_` +
       Math.random()
@@ -513,47 +549,75 @@ window.NeyoAttachments
   }
 
 
-  function cleanString(
-    value
-  ) {
-    return String(
-      value ??
-      ""
-    )
-      .replace(
-        /\u0000/g,
-        ""
-      )
-      .trim();
-  }
-
-
   function getExtension(
     name
   ) {
     const value =
-      cleanString(
-        name
+      String(
+        name ||
+        ""
       );
+
 
     const index =
       value.lastIndexOf(
         "."
       );
 
+
     if (
-      index < 0 ||
+      index <
+        0 ||
       index ===
-        value.length - 1
+        value.length -
+        1
     ) {
       return "";
     }
 
+
     return value
       .slice(
-        index + 1
+        index +
+          1
       )
       .toLowerCase();
+  }
+
+
+  function getCategory(
+    extension
+  ) {
+    const ext =
+      String(
+        extension ||
+        ""
+      )
+        .toLowerCase();
+
+
+    for (
+      const [
+        category,
+        extensions
+      ]
+      of Object.entries(
+        EXTENSIONS
+      )
+    ) {
+      if (
+        extensions.has(
+          ext
+        )
+      ) {
+        return category;
+      }
+    }
+
+
+    return (
+      "unknown"
+    );
   }
 
 
@@ -566,12 +630,14 @@ window.NeyoAttachments
       ) ||
       0;
 
+
     if (
       value <
       1024
     ) {
       return `${value} B`;
     }
+
 
     if (
       value <
@@ -584,6 +650,7 @@ window.NeyoAttachments
         ).toFixed(1)} KB`
       );
     }
+
 
     if (
       value <
@@ -601,6 +668,7 @@ window.NeyoAttachments
         ).toFixed(1)} MB`
       );
     }
+
 
     return (
       `${(
@@ -646,191 +714,89 @@ window.NeyoAttachments
 
 
   /* =====================================================
-     CATEGORY
+     ICON
      ===================================================== */
-
-  function getCategory(
-    file
-  ) {
-    const mime =
-      cleanString(
-        file?.type
-      )
-        .toLowerCase();
-
-    const extension =
-      getExtension(
-        file?.name
-      );
-
-
-    if (
-      mime.startsWith(
-        "image/"
-      ) ||
-      EXTENSIONS
-        .image
-        .has(
-          extension
-        )
-    ) {
-      return "image";
-    }
-
-
-    if (
-      mime.startsWith(
-        "audio/"
-      ) ||
-      EXTENSIONS
-        .audio
-        .has(
-          extension
-        )
-    ) {
-      return "audio";
-    }
-
-
-    if (
-      mime.startsWith(
-        "video/"
-      ) ||
-      EXTENSIONS
-        .video
-        .has(
-          extension
-        )
-    ) {
-      return "video";
-    }
-
-
-    if (
-      mime ===
-        "application/pdf" ||
-      EXTENSIONS
-        .document
-        .has(
-          extension
-        )
-    ) {
-      return "document";
-    }
-
-
-    if (
-      EXTENSIONS
-        .spreadsheet
-        .has(
-          extension
-        )
-    ) {
-      return "spreadsheet";
-    }
-
-
-    if (
-      EXTENSIONS
-        .presentation
-        .has(
-          extension
-        )
-    ) {
-      return "presentation";
-    }
-
-
-    if (
-      EXTENSIONS
-        .archive
-        .has(
-          extension
-        )
-    ) {
-      return "archive";
-    }
-
-
-    if (
-      EXTENSIONS
-        .code
-        .has(
-          extension
-        )
-    ) {
-      return "code";
-    }
-
-
-    if (
-      EXTENSIONS
-        .data
-        .has(
-          extension
-        )
-    ) {
-      return "data";
-    }
-
-
-    if (
-      mime.startsWith(
-        "text/"
-      )
-    ) {
-      return "text";
-    }
-
-
-    return "unknown";
-  }
-
 
   function getIcon(
     category
   ) {
-    const icons = {
-      image:
-        "image",
+    switch (
+      category
+    ) {
+      case "document":
+        return "file-text";
 
-      audio:
-        "audio-lines",
+      case "spreadsheet":
+        return "sheet";
 
-      video:
-        "video",
+      case "presentation":
+        return "presentation";
 
-      document:
-        "file-text",
+      case "image":
+        return "image";
 
-      spreadsheet:
-        "table-2",
+      case "audio":
+        return "audio-lines";
 
-      presentation:
-        "presentation",
+      case "video":
+        return "video";
 
-      archive:
-        "archive",
+      case "archive":
+        return "archive";
 
-      code:
-        "file-code-2",
+      case "code":
+        return "file-code-2";
 
-      data:
-        "database",
+      case "data":
+        return "database";
 
-      text:
-        "file-text",
+      default:
+        return "file";
+    }
+  }
 
-      unknown:
-        "file"
-    };
 
-    return (
-      icons[
-        category
-      ] ||
-      "file"
-    );
+  /* =====================================================
+     STATUS LABEL
+     ===================================================== */
+
+  function getStatusLabel(
+    item
+  ) {
+    switch (
+      item.status
+    ) {
+      case "queued":
+      case "authorizing":
+        return "Preparing";
+
+      case "uploading":
+        return (
+          `Uploading ${Math.round(
+            item.progress ||
+            0
+          )}%`
+        );
+
+      case "uploaded":
+      case "processing":
+        return "Reading";
+
+      case "queued-processing":
+        return "Processing";
+
+      case "ready":
+        return "Ready";
+
+      case "error":
+        return (
+          item.error ||
+          "Failed"
+        );
+
+      default:
+        return "Preparing";
+    }
   }
 
 
@@ -842,10 +808,10 @@ window.NeyoAttachments
     let total =
       0;
 
+
     for (
       const item
-      of state.items
-        .values()
+      of state.items.values()
     ) {
       total +=
         Number(
@@ -854,12 +820,41 @@ window.NeyoAttachments
         0;
     }
 
+
     return total;
   }
 
 
   /* =====================================================
-     VALIDATION
+     DUPLICATE
+     ===================================================== */
+
+  function isDuplicate(
+    file
+  ) {
+    for (
+      const item
+      of state.items.values()
+    ) {
+      if (
+        item.name ===
+          file.name &&
+        item.size ===
+          file.size &&
+        item.lastModified ===
+          file.lastModified
+      ) {
+        return true;
+      }
+    }
+
+
+    return false;
+  }
+
+
+  /* =====================================================
+     VALIDATE
      ===================================================== */
 
   function validateFile(
@@ -878,41 +873,15 @@ window.NeyoAttachments
     }
 
 
-    const name =
-      cleanString(
-        file.name
-      );
-
-
-    if (!name) {
-      return {
-        valid:
-          false,
-
-        message:
-          "File name is missing."
-      };
-    }
-
-
-    const extension =
-      getExtension(
-        name
-      );
-
-
     if (
-      BLOCKED_EXTENSIONS
-        .has(
-          extension
-        )
+      !file.name
     ) {
       return {
         valid:
           false,
 
         message:
-          `${name} is not supported.`
+          "File name is missing."
       };
     }
 
@@ -926,7 +895,7 @@ window.NeyoAttachments
           false,
 
         message:
-          `${name} is empty.`
+          `"${file.name}" is empty.`
       };
     }
 
@@ -940,7 +909,30 @@ window.NeyoAttachments
           false,
 
         message:
-          `${name} is larger than ${formatBytes(CONFIG.maxFileSize)}.`
+          `"${file.name}" exceeds the ${formatBytes(
+            CONFIG.maxFileSize
+          )} file limit.`
+      };
+    }
+
+
+    const extension =
+      getExtension(
+        file.name
+      );
+
+
+    if (
+      BLOCKED_EXTENSIONS.has(
+        extension
+      )
+    ) {
+      return {
+        valid:
+          false,
+
+        message:
+          `"${file.name}" is not an allowed attachment type.`
       };
     }
 
@@ -954,7 +946,7 @@ window.NeyoAttachments
           false,
 
         message:
-          `You can attach up to ${CONFIG.maxFiles} files.`
+          `Maximum ${CONFIG.maxFiles} attachments are allowed.`
       };
     }
 
@@ -969,50 +961,40 @@ window.NeyoAttachments
           false,
 
         message:
-          `Total attachments cannot exceed ${formatBytes(CONFIG.maxTotalSize)}.`
+          `Total attachments cannot exceed ${formatBytes(
+            CONFIG.maxTotalSize
+          )}.`
       };
     }
 
 
     return {
       valid:
-        true
+        true,
+
+      extension,
+
+      category:
+        getCategory(
+          extension
+        )
     };
   }
 
 
-  function isDuplicate(
-    file
-  ) {
-    for (
-      const item
-      of state.items
-        .values()
-    ) {
-      if (
-        item.name ===
-          file.name &&
-        item.size ===
-          file.size &&
-        item.file
-          ?.lastModified ===
-          file.lastModified
-      ) {
-        return true;
-      }
-    }
-
-    return false;
-  }
-
-
   /* =====================================================
-     INTERNAL ITEM
+     ITEM
      ===================================================== */
 
   function createItem(
     file
   ) {
+    const extension =
+      getExtension(
+        file.name
+      );
+
+
     return {
       id:
         createId(),
@@ -1020,43 +1002,39 @@ window.NeyoAttachments
       file,
 
       name:
-        cleanString(
-          file.name
-        ),
+        file.name,
 
       size:
-        Number(
-          file.size
-        ) ||
-        0,
+        file.size,
 
       mime:
-        cleanString(
-          file.type
-        ) ||
+        file.type ||
         "application/octet-stream",
 
-      extension:
-        getExtension(
-          file.name
-        ),
+      extension,
 
       category:
         getCategory(
-          file
+          extension
         ),
+
+      lastModified:
+        file.lastModified,
+
+      previewUrl:
+        null,
 
       status:
         "queued",
+
+      ready:
+        false,
 
       progress:
         0,
 
       error:
         null,
-
-      ready:
-        false,
 
       uploadId:
         null,
@@ -1088,20 +1066,18 @@ window.NeyoAttachments
       warnings:
         [],
 
-      previewUrl:
-        null,
-
       uploadXhr:
         null,
 
       processController:
-        null,
-
-      createdAt:
-        Date.now()
+        null
     };
   }
 
+
+  /* =====================================================
+     PREVIEW
+     ===================================================== */
 
   function createPreviewUrl(
     item
@@ -1113,11 +1089,12 @@ window.NeyoAttachments
       return null;
     }
 
+
     try {
-      return URL
-        .createObjectURL(
-          item.file
-        );
+      return URL.createObjectURL(
+        item.file
+      );
+
     } catch {
       return null;
     }
@@ -1125,7 +1102,7 @@ window.NeyoAttachments
 
 
   /* =====================================================
-     PUBLIC SERIALIZATION
+     SERIALIZE
      ===================================================== */
 
   function serializeItem(
@@ -1166,10 +1143,15 @@ window.NeyoAttachments
         item.status,
 
       ready:
-        item.ready,
+        Boolean(
+          item.ready
+        ),
 
       progress:
-        item.progress,
+        Math.round(
+          item.progress ||
+          0
+        ),
 
       bucket:
         item.bucket,
@@ -1181,7 +1163,11 @@ window.NeyoAttachments
         item.document,
 
       chunks:
-        item.chunks,
+        Array.isArray(
+          item.chunks
+        )
+          ? item.chunks
+          : [],
 
       stats:
         item.stats,
@@ -1190,7 +1176,11 @@ window.NeyoAttachments
         item.extraction,
 
       warnings:
-        item.warnings,
+        Array.isArray(
+          item.warnings
+        )
+          ? item.warnings
+          : [],
 
       error:
         item.error
@@ -1226,10 +1216,10 @@ window.NeyoAttachments
       .filter(
         item =>
           item &&
-          item.status ===
-            "ready" &&
           item.ready ===
-            true
+            true &&
+          item.status ===
+            "ready"
       )
       .map(
         serializeItem
@@ -1237,18 +1227,32 @@ window.NeyoAttachments
   }
 
 
-  function hasPending() {
-    return state.order
-      .map(
-        id =>
-          state.items.get(
-            id
-          )
-      )
-      .filter(
-        Boolean
-      )
-      .some(
+  /* =====================================================
+     EMIT STATE
+     ===================================================== */
+
+  function emitState() {
+    const all =
+      getAll();
+
+
+    const ready =
+      all.filter(
+        item =>
+          item.ready
+      );
+
+
+    const errors =
+      all.filter(
+        item =>
+          item.status ===
+          "error"
+      );
+
+
+    const pending =
+      all.some(
         item =>
           [
             "queued",
@@ -1261,190 +1265,125 @@ window.NeyoAttachments
             item.status
           )
       );
+
+
+    emit(
+      "neyo:attachments-change",
+      {
+        count:
+          all.length,
+
+        ready:
+          ready.length,
+
+        errors:
+          errors.length,
+
+        pending,
+
+        totalSize:
+          getTotalSize(),
+
+        attachments:
+          all
+      }
+    );
   }
 
 
-  function hasErrors() {
-    return state.order
-      .map(
-        id =>
-          state.items.get(
-            id
-          )
-      )
-      .filter(
-        Boolean
-      )
-      .some(
-        item =>
-          item.status ===
-          "error"
+  /* =====================================================
+     COMPOSER CLASS
+     ===================================================== */
+
+  function syncComposerClass() {
+    const hasFiles =
+      state.items.size >
+      0;
+
+
+    composerWrapper
+      ?.classList
+      .toggle(
+        "has-attachments",
+        hasFiles
+      );
+
+
+    glassInputContainer
+      ?.classList
+      .toggle(
+        "has-attachments",
+        hasFiles
       );
   }
 
 
   /* =====================================================
-     EVENTS
+     RENDER CHIP
      ===================================================== */
-
-  function emitState() {
-    const attachments =
-      getAll();
-
-    window.dispatchEvent(
-      new CustomEvent(
-        "neyo:attachments-change",
-        {
-          detail: {
-            attachments,
-
-            files:
-              attachments,
-
-            count:
-              attachments.length,
-
-            ready:
-              getReady()
-                .length,
-
-            pending:
-              hasPending(),
-
-            errors:
-              attachments
-                .filter(
-                  item =>
-                    item.status ===
-                    "error"
-                )
-                .length
-          }
-        }
-      )
-    );
-  }
-
-
-  function emitError(
-    message,
-    item = null
-  ) {
-    console.warn(
-      "[NEYO Attachments]",
-      message
-    );
-
-    window.dispatchEvent(
-      new CustomEvent(
-        "neyo:attachment-error",
-        {
-          detail: {
-            message,
-
-            attachment:
-              item
-                ? serializeItem(
-                    item
-                  )
-                : null
-          }
-        }
-      )
-    );
-  }
-
-
-  /* =====================================================
-     CHIP UI
-     ===================================================== */
-
-  function getStatusText(
-    item
-  ) {
-    switch (
-      item.status
-    ) {
-      case "queued":
-        return "Queued";
-
-      case "authorizing":
-        return "Preparing…";
-
-      case "uploading":
-        return (
-          `Uploading ${Math.round(item.progress)}%`
-        );
-
-      case "uploaded":
-        return "Uploaded";
-
-      case "processing":
-        return "Reading…";
-
-      case "queued-processing":
-        return "Processing…";
-
-      case "ready":
-        return "Ready";
-
-      case "error":
-        return (
-          item.error ||
-          "Failed"
-        );
-
-      default:
-        return (
-          item.status ||
-          ""
-        );
-    }
-  }
-
 
   function renderItem(
     item
   ) {
-    let element =
+    if (
+      !attachmentList
+    ) {
+      return;
+    }
+
+
+    let chip =
       attachmentList
         .querySelector(
           `[data-attachment-id="${item.id}"]`
         );
 
 
-    if (!element) {
-      element =
+    if (
+      !chip
+    ) {
+      chip =
         document.createElement(
           "div"
         );
 
-      element.className =
+
+      chip.className =
         "attachment-chip";
 
-      element.dataset
-        .attachmentId =
+
+      chip.dataset.attachmentId =
         item.id;
 
-      attachmentList
-        .appendChild(
-          element
-        );
+
+      attachmentList.appendChild(
+        chip
+      );
     }
 
 
-    element.dataset.status =
+    chip.dataset.status =
       item.status;
 
 
-    const visual =
+    const status =
+      getStatusLabel(
+        item
+      );
+
+
+    const isError =
+      item.status ===
+      "error";
+
+
+    const preview =
       item.previewUrl
         ? `
           <div class="attachment-chip-preview">
             <img
               src="${escapeHtml(item.previewUrl)}"
               alt=""
-              draggable="false"
             >
           </div>
         `
@@ -1452,23 +1391,53 @@ window.NeyoAttachments
           <div class="attachment-chip-icon">
             <i
               data-lucide="${getIcon(item.category)}"
-              aria-hidden="true"
+              size="16"
             ></i>
           </div>
         `;
 
 
+    const action =
+      isError
+        ? `
+          <button
+            class="attachment-chip-retry"
+            type="button"
+            data-action="retry"
+            title="Retry"
+            aria-label="Retry attachment"
+          >
+            <i
+              data-lucide="rotate-ccw"
+              size="14"
+            ></i>
+          </button>
+        `
+        : `
+          <button
+            class="attachment-chip-remove"
+            type="button"
+            data-action="remove"
+            title="Remove"
+            aria-label="Remove attachment"
+          >
+            <i
+              data-lucide="x"
+              size="14"
+            ></i>
+          </button>
+        `;
+
+
     const progress =
       item.status ===
-        "uploading"
+      "uploading"
         ? `
-          <div
-            class="attachment-chip-progress"
-            aria-hidden="true"
-          >
+          <div class="attachment-chip-progress">
             <span
               style="width:${clamp(
-                item.progress,
+                item.progress ||
+                0,
                 0,
                 100
               )}%"
@@ -1478,68 +1447,48 @@ window.NeyoAttachments
         : "";
 
 
-    const retry =
-      item.status ===
-        "error"
-        ? `
-          <button
-            type="button"
-            class="attachment-chip-retry"
-            data-action="retry"
-            aria-label="Retry ${escapeHtml(item.name)}"
+    chip.innerHTML =
+      `
+        ${preview}
+
+        <div class="attachment-chip-body">
+
+          <div
+            class="attachment-chip-name"
+            title="${escapeHtml(item.name)}"
           >
-            <i
-              data-lucide="refresh-cw"
-              aria-hidden="true"
-            ></i>
-          </button>
-        `
-        : "";
+            ${escapeHtml(item.name)}
+          </div>
 
+          <div class="attachment-chip-meta">
 
-    element.innerHTML = `
-      ${visual}
+            <span>
+              ${escapeHtml(
+                formatBytes(
+                  item.size
+                )
+              )}
+            </span>
 
-      <div class="attachment-chip-body">
+            <span aria-hidden="true">
+              ·
+            </span>
 
-        <div class="attachment-chip-name">
-          ${escapeHtml(item.name)}
-        </div>
+            <span
+              class="attachment-chip-status"
+              title="${escapeHtml(status)}"
+            >
+              ${escapeHtml(status)}
+            </span>
 
-        <div class="attachment-chip-meta">
+          </div>
 
-          <span>
-            ${escapeHtml(formatBytes(item.size))}
-          </span>
-
-          <span aria-hidden="true">
-            ·
-          </span>
-
-          <span class="attachment-chip-status">
-            ${escapeHtml(getStatusText(item))}
-          </span>
+          ${progress}
 
         </div>
 
-        ${progress}
-
-      </div>
-
-      ${retry}
-
-      <button
-        type="button"
-        class="attachment-chip-remove"
-        data-action="remove"
-        aria-label="Remove ${escapeHtml(item.name)}"
-      >
-        <i
-          data-lucide="x"
-          aria-hidden="true"
-        ></i>
-      </button>
-    `;
+        ${action}
+      `;
 
 
     try {
@@ -1551,7 +1500,18 @@ window.NeyoAttachments
   }
 
 
+  /* =====================================================
+     RENDER ALL
+     ===================================================== */
+
   function renderAll() {
+    if (
+      !attachmentList
+    ) {
+      return;
+    }
+
+
     for (
       const id
       of state.order
@@ -1561,10 +1521,37 @@ window.NeyoAttachments
           id
         );
 
-      if (item) {
+
+      if (
+        item
+      ) {
         renderItem(
           item
         );
+      }
+    }
+
+
+    const knownIds =
+      new Set(
+        state.order
+      );
+
+
+    for (
+      const chip
+      of attachmentList
+        .querySelectorAll(
+          "[data-attachment-id]"
+        )
+    ) {
+      if (
+        !knownIds.has(
+          chip.dataset
+            .attachmentId
+        )
+      ) {
+        chip.remove();
       }
     }
 
@@ -1574,77 +1561,69 @@ window.NeyoAttachments
       0;
 
 
-    attachmentList
-      .classList
-      .toggle(
-        "has-attachments",
-        state.items.size >
-          0
-      );
-
-
-    /*
-     * Allows composer CSS to react without
-     * JS forcing dimensions.
-     */
-
-    composerWrapper
-      ?.classList
-      .toggle(
-        "has-attachments",
-        state.items.size >
-          0
-      );
-
+    syncComposerClass();
 
     emitState();
   }
 
 
   /* =====================================================
-     PICKER
+     OPEN PICKER
      ===================================================== */
 
   function openPicker() {
-    fileInput.value =
-      "";
+    try {
+      fileInput.click();
 
-    fileInput.click();
+      return true;
+
+    } catch (
+      error
+    ) {
+      console.error(
+        "[NEYO Attachments] Could not open file picker:",
+        error
+      );
+
+
+      return false;
+    }
   }
 
 
-  function closePopup() {
-    if (!attachPopupMenu) {
+  /* =====================================================
+     CLOSE LEGACY POPUP
+     ===================================================== */
+
+  function closeLegacyPopup() {
+    if (
+      !attachPopupMenu
+    ) {
       return;
     }
 
 
-    attachPopupMenu
-      .classList
-      .remove(
-        "open",
-        "active",
-        "show",
-        "visible"
-      );
+    attachPopupMenu.classList.remove(
+      "active",
+      "open",
+      "show"
+    );
 
 
-    attachPopupMenu
-      .setAttribute(
-        "aria-hidden",
-        "true"
-      );
+    attachPopupMenu.setAttribute(
+      "aria-hidden",
+      "true"
+    );
 
 
-    /*
-     * Keep the + button semantically synchronized.
-     */
-
-    attachBtn
-      ?.setAttribute(
+    if (
+      attachBtn
+    ) {
+      attachBtn.setAttribute(
         "aria-expanded",
         "false"
       );
+    }
   }
 
 
@@ -1688,6 +1667,7 @@ window.NeyoAttachments
           file.name
         );
 
+
         continue;
       }
 
@@ -1704,6 +1684,7 @@ window.NeyoAttachments
         emitError(
           validation.message
         );
+
 
         continue;
       }
@@ -1744,12 +1725,12 @@ window.NeyoAttachments
       );
 
 
-      emitState();
+      renderAll();
 
 
       /*
-       * Parallel processing is intentional.
-       * Each attachment owns its own XHR/controller.
+       * Run every file independently.
+       * One failed file must not stop others.
        */
 
       void processPipeline(
@@ -1758,20 +1739,26 @@ window.NeyoAttachments
     }
 
 
-    renderAll();
-
-
     return added;
   }
 
 
   /* =====================================================
-     STEP 1 — CREATE SIGNED UPLOAD SESSION
+     STEP 1 — UPLOAD AUTHORIZATION
      ===================================================== */
 
   async function createUploadSession(
     item
   ) {
+    if (
+      !item?.name
+    ) {
+      throw new Error(
+        "Attachment filename is missing before upload."
+      );
+    }
+
+
     const payload = {
       name:
         item.name,
@@ -1794,24 +1781,14 @@ window.NeyoAttachments
 
 
     debug(
-      "Upload authorization:",
-      {
-        name:
-          item.name,
-
-        size:
-          item.size,
-
-        category:
-          item.category
-      }
+      "UPLOAD_SESSION_REQUEST",
+      payload
     );
 
 
     const response =
       await fetch(
-        CONFIG
-          .uploadSessionEndpoint,
+        CONFIG.uploadSessionEndpoint,
         {
           method:
             "POST",
@@ -1851,10 +1828,31 @@ window.NeyoAttachments
 
     try {
       data =
-        JSON.parse(
-          raw
-        );
+        raw
+          ? JSON.parse(
+              raw
+            )
+          : null;
     } catch {}
+
+
+    debug(
+      "UPLOAD_SESSION_RESPONSE",
+      {
+        status:
+          response.status,
+
+        ok:
+          response.ok,
+
+        data,
+
+        raw:
+          data
+            ? undefined
+            : raw
+      }
+    );
 
 
     if (
@@ -1862,7 +1860,6 @@ window.NeyoAttachments
     ) {
       throw new Error(
         data?.error ||
-        data?.message ||
         raw ||
         `Upload authorization failed (${response.status}).`
       );
@@ -1907,12 +1904,21 @@ window.NeyoAttachments
     }
 
 
+    /*
+     * CRITICAL v4 FIX:
+     *
+     * token is NOT required.
+     * signedUrl is the actual browser upload contract.
+     */
+
     const signedUrl =
       data.signedUrl ||
       data.url;
 
 
-    if (!signedUrl) {
+    if (
+      !signedUrl
+    ) {
       throw new Error(
         "Signed upload URL is missing."
       );
@@ -1922,13 +1928,28 @@ window.NeyoAttachments
     return {
       ...data,
 
-      signedUrl
+      signedUrl,
+
+      method:
+        String(
+          data.method ||
+          "PUT"
+        )
+          .trim()
+          .toUpperCase(),
+
+      headers:
+        data.headers &&
+        typeof data.headers ===
+          "object"
+            ? data.headers
+            : {}
     };
   }
 
 
   /* =====================================================
-     STEP 2 — DIRECT STORAGE UPLOAD
+     STEP 2 — DIRECT SIGNED STORAGE UPLOAD
      ===================================================== */
 
   function uploadToSignedUrl(
@@ -1940,19 +1961,23 @@ window.NeyoAttachments
         resolve,
         reject
       ) => {
+
         const signedUrl =
-          cleanString(
-            session
-              ?.signedUrl
+          String(
+            session?.signedUrl ||
+            ""
           );
 
 
-        if (!signedUrl) {
+        if (
+          !signedUrl
+        ) {
           reject(
             new Error(
               "Signed upload URL is missing."
             )
           );
+
 
           return;
         }
@@ -1967,13 +1992,12 @@ window.NeyoAttachments
 
 
         const method =
-          cleanString(
+          String(
             session?.method ||
-            session?.uploadMethod ||
             "PUT"
           )
-            .toUpperCase() ||
-          "PUT";
+            .trim()
+            .toUpperCase();
 
 
         xhr.open(
@@ -1984,12 +2008,11 @@ window.NeyoAttachments
 
 
         xhr.timeout =
-          CONFIG
-            .uploadTimeoutMs;
+          CONFIG.uploadTimeoutMs;
 
 
         /*
-         * Apply server-authorized headers first.
+         * Apply backend supplied upload headers first.
          */
 
         if (
@@ -2015,31 +2038,38 @@ window.NeyoAttachments
               continue;
             }
 
-            xhr.setRequestHeader(
-              key,
-              String(
-                value
-              )
-            );
+
+            try {
+              xhr.setRequestHeader(
+                key,
+                String(
+                  value
+                )
+              );
+            } catch {}
           }
         }
 
 
-        const suppliedHeaders =
+        /*
+         * Avoid overriding backend Content-Type
+         * if it already supplied one.
+         */
+
+        const hasContentType =
           Object.keys(
             session.headers ||
             {}
           )
-            .map(
-              value =>
-                value.toLowerCase()
+            .some(
+              key =>
+                key.toLowerCase() ===
+                "content-type"
             );
 
 
         if (
-          !suppliedHeaders.includes(
-            "content-type"
-          )
+          !hasContentType
         ) {
           xhr.setRequestHeader(
             "Content-Type",
@@ -2052,8 +2082,7 @@ window.NeyoAttachments
         xhr.upload.onprogress =
           event => {
             if (
-              !event
-                .lengthComputable
+              !event.lengthComputable
             ) {
               return;
             }
@@ -2065,7 +2094,7 @@ window.NeyoAttachments
                   event.loaded /
                   event.total
                 ) *
-                  100,
+                100,
                 0,
                 100
               );
@@ -2096,6 +2125,7 @@ window.NeyoAttachments
                 true
               );
 
+
               return;
             }
 
@@ -2105,15 +2135,17 @@ window.NeyoAttachments
 
 
             try {
-              const body =
+              const response =
                 JSON.parse(
                   xhr.responseText
                 );
 
+
               message =
-                body?.message ||
-                body?.error ||
+                response?.message ||
+                response?.error ||
                 message;
+
             } catch {}
 
 
@@ -2130,9 +2162,10 @@ window.NeyoAttachments
             item.uploadXhr =
               null;
 
+
             reject(
               new Error(
-                "Network error during file upload."
+                "Network error during storage upload."
               )
             );
           };
@@ -2142,6 +2175,7 @@ window.NeyoAttachments
           () => {
             item.uploadXhr =
               null;
+
 
             reject(
               new Error(
@@ -2156,20 +2190,15 @@ window.NeyoAttachments
             item.uploadXhr =
               null;
 
+
             reject(
               new DOMException(
-                "Upload cancelled.",
+                "Upload aborted.",
                 "AbortError"
               )
             );
           };
 
-
-        /*
-         * Raw File body.
-         * The signed upload URL authorizes the
-         * destination and Storage path.
-         */
 
         xhr.send(
           item.file
@@ -2180,7 +2209,7 @@ window.NeyoAttachments
 
 
   /* =====================================================
-     STEP 3 — PROCESS ATTACHMENT
+     STEP 3 — PROCESS FILE
      ===================================================== */
 
   async function requestProcessing(
@@ -2198,8 +2227,7 @@ window.NeyoAttachments
       window.setTimeout(
         () =>
           controller.abort(),
-        CONFIG
-          .processTimeoutMs
+        CONFIG.processTimeoutMs
       );
 
 
@@ -2232,21 +2260,14 @@ window.NeyoAttachments
 
 
       debug(
-        "Processing attachment:",
-        {
-          name:
-            item.name,
-
-          category:
-            item.category
-        }
+        "PROCESS_REQUEST",
+        payload
       );
 
 
       const response =
         await fetch(
-          CONFIG
-            .processEndpoint,
+          CONFIG.processEndpoint,
           {
             method:
               "POST",
@@ -2274,8 +2295,7 @@ window.NeyoAttachments
               ),
 
             signal:
-              controller
-                .signal
+              controller.signal
           }
         );
 
@@ -2290,10 +2310,32 @@ window.NeyoAttachments
 
       try {
         data =
-          JSON.parse(
-            raw
-          );
+          raw
+            ? JSON.parse(
+                raw
+              )
+            : null;
+
       } catch {}
+
+
+      debug(
+        "PROCESS_RESPONSE",
+        {
+          status:
+            response.status,
+
+          ok:
+            response.ok,
+
+          data,
+
+          raw:
+            data
+              ? undefined
+              : raw
+        }
+      );
 
 
       if (
@@ -2316,7 +2358,6 @@ window.NeyoAttachments
       ) {
         throw new Error(
           data?.error ||
-          data?.message ||
           raw ||
           `File processing failed (${response.status}).`
         );
@@ -2333,10 +2374,27 @@ window.NeyoAttachments
       };
 
 
+    } catch (
+      error
+    ) {
+      if (
+        error?.name ===
+        "AbortError"
+      ) {
+        throw new Error(
+          "File processing timed out."
+        );
+      }
+
+
+      throw error;
+
+
     } finally {
       window.clearTimeout(
         timer
       );
+
 
       item.processController =
         null;
@@ -2345,7 +2403,7 @@ window.NeyoAttachments
 
 
   /* =====================================================
-     FULL PIPELINE
+     COMPLETE PIPELINE
      ===================================================== */
 
   async function processPipeline(
@@ -2357,24 +2415,30 @@ window.NeyoAttachments
       );
 
 
-    if (!item) {
+    if (
+      !item
+    ) {
       return false;
     }
 
 
     try {
-      /* ---------------------------------------------
-         AUTHORIZE
-         --------------------------------------------- */
+
+      /* -------------------------------------------------
+         PREPARING
+         ------------------------------------------------- */
 
       item.status =
         "authorizing";
 
-      item.progress =
-        0;
 
       item.error =
         null;
+
+
+      item.progress =
+        0;
+
 
       item.ready =
         false;
@@ -2384,8 +2448,13 @@ window.NeyoAttachments
         item
       );
 
+
       emitState();
 
+
+      /* -------------------------------------------------
+         AUTHORIZATION
+         ------------------------------------------------- */
 
       const session =
         await createUploadSession(
@@ -2405,16 +2474,18 @@ window.NeyoAttachments
       item.uploadId =
         session.uploadId;
 
+
       item.bucket =
         session.bucket;
+
 
       item.path =
         session.path;
 
 
-      /* ---------------------------------------------
-         UPLOAD
-         --------------------------------------------- */
+      /* -------------------------------------------------
+         UPLOADING
+         ------------------------------------------------- */
 
       item.status =
         "uploading";
@@ -2423,6 +2494,7 @@ window.NeyoAttachments
       renderItem(
         item
       );
+
 
       emitState();
 
@@ -2445,20 +2517,10 @@ window.NeyoAttachments
       item.progress =
         100;
 
-      item.status =
-        "uploaded";
 
-
-      renderItem(
-        item
-      );
-
-      emitState();
-
-
-      /* ---------------------------------------------
-         PROCESS
-         --------------------------------------------- */
+      /* -------------------------------------------------
+         READING / PROCESSING
+         ------------------------------------------------- */
 
       item.status =
         "processing";
@@ -2467,6 +2529,7 @@ window.NeyoAttachments
       renderItem(
         item
       );
+
 
       emitState();
 
@@ -2514,15 +2577,16 @@ window.NeyoAttachments
           : [];
 
 
-      /* ---------------------------------------------
-         SERVER QUEUED PROCESSING
-         --------------------------------------------- */
+      /* -------------------------------------------------
+         QUEUED SERVER PROCESSING
+         ------------------------------------------------- */
 
       if (
         processing.queued
       ) {
         item.status =
           "queued-processing";
+
 
         item.ready =
           false;
@@ -2532,21 +2596,18 @@ window.NeyoAttachments
           item
         );
 
+
         emitState();
 
 
-        window.dispatchEvent(
-          new CustomEvent(
-            "neyo:attachment-processing-queued",
-            {
-              detail: {
-                attachment:
-                  serializeItem(
-                    item
-                  )
-              }
-            }
-          )
+        emit(
+          "neyo:attachment-processing-queued",
+          {
+            attachment:
+              serializeItem(
+                item
+              )
+          }
         );
 
 
@@ -2554,9 +2615,9 @@ window.NeyoAttachments
       }
 
 
-      /* ---------------------------------------------
+      /* -------------------------------------------------
          READY
-         --------------------------------------------- */
+         ------------------------------------------------- */
 
       item.document =
         data.document ||
@@ -2577,7 +2638,8 @@ window.NeyoAttachments
 
 
       item.ready =
-        true;
+        data.ready !==
+        false;
 
 
       item.status =
@@ -2588,26 +2650,23 @@ window.NeyoAttachments
         item
       );
 
+
       emitState();
 
 
-      window.dispatchEvent(
-        new CustomEvent(
-          "neyo:attachment-ready",
-          {
-            detail: {
-              attachment:
-                serializeItem(
-                  item
-                )
-            }
-          }
-        )
+      emit(
+        "neyo:attachment-ready",
+        {
+          attachment:
+            serializeItem(
+              item
+            )
+        }
       );
 
 
       debug(
-        "Ready:",
+        "READY",
         {
           name:
             item.name,
@@ -2618,8 +2677,22 @@ window.NeyoAttachments
           uploadId:
             item.uploadId,
 
+          bucket:
+            item.bucket,
+
           path:
-            item.path
+            item.path,
+
+          documentId:
+            item.documentId,
+
+          chunks:
+            item.chunks.length,
+
+          parser:
+            item.extraction
+              ?.parser ||
+            null
         }
       );
 
@@ -2630,12 +2703,6 @@ window.NeyoAttachments
     } catch (
       error
     ) {
-      /*
-       * If item was removed while upload/process
-       * was being cancelled, there is nothing
-       * left to render as an error.
-       */
-
       if (
         !state.items.has(
           id
@@ -2655,7 +2722,7 @@ window.NeyoAttachments
 
       item.error =
         error?.name ===
-          "AbortError"
+        "AbortError"
           ? "Attachment operation was cancelled."
           : (
               error?.message ||
@@ -2667,6 +2734,7 @@ window.NeyoAttachments
         item
       );
 
+
       emitState();
 
 
@@ -2676,27 +2744,44 @@ window.NeyoAttachments
       );
 
 
+      debug(
+        "PIPELINE_ERROR",
+        {
+          name:
+            item.name,
+
+          status:
+            item.status,
+
+          error:
+            item.error
+        }
+      );
+
+
       return false;
     }
   }
 
 
   /* =====================================================
-     RETRY
+     RESET FOR RETRY
      ===================================================== */
 
-  function resetForRetry(
+  function resetItemForRetry(
     item
   ) {
     try {
       item.uploadXhr
-        ?.abort?.();
+        ?.abort
+        ?.();
     } catch {}
 
 
     try {
       item.processController
-        ?.abort?.();
+        ?.abort
+        ?.();
     } catch {}
 
 
@@ -2765,6 +2850,10 @@ window.NeyoAttachments
   }
 
 
+  /* =====================================================
+     RETRY
+     ===================================================== */
+
   function retryAttachment(
     id
   ) {
@@ -2774,12 +2863,14 @@ window.NeyoAttachments
       );
 
 
-    if (!item) {
+    if (
+      !item
+    ) {
       return false;
     }
 
 
-    resetForRetry(
+    resetItemForRetry(
       item
     );
 
@@ -2814,20 +2905,24 @@ window.NeyoAttachments
       );
 
 
-    if (!item) {
+    if (
+      !item
+    ) {
       return false;
     }
 
 
     try {
       item.uploadXhr
-        ?.abort?.();
+        ?.abort
+        ?.();
     } catch {}
 
 
     try {
       item.processController
-        ?.abort?.();
+        ?.abort
+        ?.();
     } catch {}
 
 
@@ -2856,7 +2951,7 @@ window.NeyoAttachments
 
 
     attachmentList
-      .querySelector(
+      ?.querySelector(
         `[data-attachment-id="${id}"]`
       )
       ?.remove();
@@ -2865,24 +2960,17 @@ window.NeyoAttachments
     renderAll();
 
 
-    window.dispatchEvent(
-      new CustomEvent(
-        "neyo:attachment-removed",
-        {
-          detail: {
-            id,
+    emit(
+      "neyo:attachment-removed",
+      {
+        id,
 
-            uploadId:
-              item.uploadId,
+        uploadId:
+          item.uploadId,
 
-            bucket:
-              item.bucket,
-
-            path:
-              item.path
-          }
-        }
-      )
+        path:
+          item.path
+      }
     );
 
 
@@ -2895,14 +2983,11 @@ window.NeyoAttachments
      ===================================================== */
 
   function clearAttachments() {
-    const ids = [
-      ...state.order
-    ];
-
-
     for (
       const id
-      of ids
+      of [
+        ...state.order
+      ]
     ) {
       removeAttachment(
         id
@@ -2910,48 +2995,46 @@ window.NeyoAttachments
     }
 
 
-    attachmentList.innerHTML =
-      "";
+    if (
+      attachmentList
+    ) {
+      attachmentList.innerHTML =
+        "";
 
 
-    attachmentList.hidden =
-      true;
+      attachmentList.hidden =
+        true;
+    }
 
 
-    composerWrapper
-      ?.classList
-      .remove(
-        "has-attachments"
-      );
-
+    syncComposerClass();
 
     emitState();
   }
 
 
   /* =====================================================
-     + BUTTON OWNERSHIP
-
-     DO NOTHING.
-
-     neo.js remains owner of #attachBtn.
+     BUTTON OWNERSHIP
      ===================================================== */
 
-  if (attachBtn) {
+  /*
+   * DO NOT bind #attachBtn.
+   *
+   * neo.js owns its popup behavior.
+   */
+
+  if (
+    attachBtn
+  ) {
     debug(
-      "#attachBtn preserved for existing popup UX."
+      "#attachBtn preserved for neo.js popup UX."
     );
   }
 
 
-  /* =====================================================
-     ADD FILES MENU OWNERSHIP
-
-     Capture phase prevents any legacy file-picker
-     handler attached specifically to Add Files.
-
-     Other popup items remain untouched.
-     ===================================================== */
+  /*
+   * We own only Add Files inside popup.
+   */
 
   if (
     addFilesMenuBtn
@@ -2967,16 +3050,11 @@ window.NeyoAttachments
           .stopImmediatePropagation();
 
 
-        closePopup();
-
+        closeLegacyPopup();
 
         openPicker();
       },
       true
-    );
-  } else {
-    console.warn(
-      "[NEYO Attachments] #addFilesMenuBtn was not found."
     );
   }
 
@@ -2997,8 +3075,8 @@ window.NeyoAttachments
 
 
       /*
-       * Allows choosing the same file again
-       * after it has been removed.
+       * Important:
+       * reset so same file can be selected again.
        */
 
       fileInput.value =
@@ -3021,100 +3099,94 @@ window.NeyoAttachments
 
 
   /* =====================================================
-     DRAG / DROP HELPERS
+     EXTERNAL OPEN REQUEST
+     ===================================================== */
+
+  window.addEventListener(
+    "neyo:attachments-open-request",
+    () => {
+      openPicker();
+    }
+  );
+
+
+  /* =====================================================
+     DRAG HELPERS
      ===================================================== */
 
   function eventHasFiles(
     event
   ) {
-    return Array
-      .from(
+    const types =
+      Array.from(
         event
           ?.dataTransfer
           ?.types ||
         []
-      )
-      .includes(
-        "Files"
       );
+
+
+    return types.includes(
+      "Files"
+    );
   }
 
 
   function isInsideComposer(
     event
   ) {
-    if (!composerWrapper) {
-      return true;
-    }
-
-
-    const path =
-      typeof event
-        .composedPath ===
-        "function"
-          ? event
-              .composedPath()
-          : [];
+    const target =
+      event.target;
 
 
     if (
-      path.includes(
-        composerWrapper
-      )
+      !target ||
+      !(target instanceof Node)
     ) {
-      return true;
+      return false;
     }
 
 
-    return composerWrapper
-      .contains(
-        event.target
-      );
+    return Boolean(
+      composerWrapper
+        ?.contains(
+          target
+        )
+    );
   }
 
 
-  function showDragState() {
+  function setDragging(
+    active
+  ) {
     state.dragging =
-      true;
-
-
-    dropZone
-      ?.classList
-      .add(
-        "is-file-dragging"
+      Boolean(
+        active
       );
 
 
-    document
-      .getElementById(
-        "dragDropOverlay"
-      )
+    composerWrapper
       ?.classList
-      .add(
-        "active"
-      );
-  }
-
-
-  function hideDragState() {
-    state.dragging =
-      false;
-
-
-    dropZone
-      ?.classList
-      .remove(
-        "is-file-dragging"
+      .toggle(
+        "is-file-dragging",
+        state.dragging
       );
 
 
-    document
-      .getElementById(
-        "dragDropOverlay"
-      )
+    dragDropOverlay
       ?.classList
-      .remove(
-        "active"
+      .toggle(
+        "active",
+        state.dragging
+      );
+
+
+    dragDropOverlay
+      ?.setAttribute(
+        "aria-hidden",
+        state.dragging
+          ? "false"
+          : "true"
       );
   }
 
@@ -3142,11 +3214,9 @@ window.NeyoAttachments
 
       event.stopPropagation();
 
-      event
-        .stopImmediatePropagation();
-
-
-      showDragState();
+      setDragging(
+        true
+      );
     },
     true
   );
@@ -3175,20 +3245,55 @@ window.NeyoAttachments
 
       event.stopPropagation();
 
-      event
-        .stopImmediatePropagation();
-
 
       if (
         event.dataTransfer
       ) {
-        event.dataTransfer
-          .dropEffect =
+        event.dataTransfer.dropEffect =
           "copy";
       }
 
 
-      showDragState();
+      setDragging(
+        true
+      );
+    },
+    true
+  );
+
+
+  /* =====================================================
+     DRAG LEAVE
+     ===================================================== */
+
+  document.addEventListener(
+    "dragleave",
+    event => {
+      if (
+        !state.dragging
+      ) {
+        return;
+      }
+
+
+      const related =
+        event.relatedTarget;
+
+
+      if (
+        related instanceof Node &&
+        composerWrapper
+          ?.contains(
+            related
+          )
+      ) {
+        return;
+      }
+
+
+      setDragging(
+        false
+      );
     },
     true
   );
@@ -3200,7 +3305,7 @@ window.NeyoAttachments
 
   document.addEventListener(
     "drop",
-    event => {
+    async event => {
       if (
         !eventHasFiles(
           event
@@ -3221,6 +3326,11 @@ window.NeyoAttachments
         .stopImmediatePropagation();
 
 
+      setDragging(
+        false
+      );
+
+
       const files =
         Array.from(
           event
@@ -3230,13 +3340,11 @@ window.NeyoAttachments
         );
 
 
-      hideDragState();
-
-
       if (
-        files.length
+        files.length >
+        0
       ) {
-        void addFiles(
+        await addFiles(
           files
         );
       }
@@ -3246,51 +3354,21 @@ window.NeyoAttachments
 
 
   /* =====================================================
-     DRAG LEAVE
-     ===================================================== */
+     PASTE FILES
 
-  document.addEventListener(
-    "dragleave",
-    event => {
-      if (
-        !state.dragging
-      ) {
-        return;
-      }
-
-
-      if (
-        event.relatedTarget &&
-        composerWrapper
-          ?.contains(
-            event.relatedTarget
-          )
-      ) {
-        return;
-      }
-
-
-      hideDragState();
-    },
-    true
-  );
-
-
-  /* =====================================================
-     FILE PASTE
-
-     Only clipboard Files are intercepted.
-     Normal text paste remains 100% untouched.
+     Normal text paste remains untouched.
      ===================================================== */
 
   document.addEventListener(
     "paste",
-    event => {
+    async event => {
       const clipboard =
         event.clipboardData;
 
 
-      if (!clipboard) {
+      if (
+        !clipboard
+      ) {
         return;
       }
 
@@ -3300,12 +3378,11 @@ window.NeyoAttachments
 
 
       for (
-        const clipboardItem
-        of clipboard.items ||
-        []
+        const item
+        of clipboard.items
       ) {
         if (
-          clipboardItem.kind !==
+          item.kind !==
           "file"
         ) {
           continue;
@@ -3313,17 +3390,23 @@ window.NeyoAttachments
 
 
         const file =
-          clipboardItem
-            .getAsFile();
+          item.getAsFile();
 
 
-        if (file) {
+        if (
+          file
+        ) {
           files.push(
             file
           );
         }
       }
 
+
+      /*
+       * If clipboard has no files,
+       * leave normal text paste alone.
+       */
 
       if (
         files.length ===
@@ -3335,13 +3418,8 @@ window.NeyoAttachments
 
       event.preventDefault();
 
-      event.stopPropagation();
 
-      event
-        .stopImmediatePropagation();
-
-
-      void addFiles(
+      await addFiles(
         files
       );
     },
@@ -3356,20 +3434,21 @@ window.NeyoAttachments
   attachmentList.addEventListener(
     "click",
     event => {
-      const action =
-        event.target
-          ?.closest?.(
-            "[data-action]"
-          );
+      const button =
+        event.target.closest(
+          "[data-action]"
+        );
 
 
-      if (!action) {
+      if (
+        !button
+      ) {
         return;
       }
 
 
       const chip =
-        action.closest(
+        button.closest(
           "[data-attachment-id]"
         );
 
@@ -3379,18 +3458,15 @@ window.NeyoAttachments
           ?.attachmentId;
 
 
-      if (!id) {
+      if (
+        !id
+      ) {
         return;
       }
 
 
-      event.preventDefault();
-
-      event.stopPropagation();
-
-
       if (
-        action.dataset
+        button.dataset
           .action ===
         "remove"
       ) {
@@ -3398,12 +3474,13 @@ window.NeyoAttachments
           id
         );
 
+
         return;
       }
 
 
       if (
-        action.dataset
+        button.dataset
           .action ===
         "retry"
       ) {
@@ -3416,22 +3493,14 @@ window.NeyoAttachments
 
 
   /* =====================================================
-     SUCCESSFUL CHAT → CLEAR ATTACHMENTS
+     PUBLIC CLEAR REQUEST
      ===================================================== */
 
   window.addEventListener(
     "neyo:attachments-clear-request",
-    clearAttachments
-  );
-
-
-  /* =====================================================
-     EXTERNAL OPEN REQUEST
-     ===================================================== */
-
-  window.addEventListener(
-    "neyo:attachments-open-request",
-    openPicker
+    () => {
+      clearAttachments();
+    }
   );
 
 
@@ -3465,9 +3534,31 @@ window.NeyoAttachments
 
       getReady,
 
-      hasPending,
+      hasPending:
+        () =>
+          getAll()
+            .some(
+              item =>
+                [
+                  "queued",
+                  "authorizing",
+                  "uploading",
+                  "uploaded",
+                  "processing",
+                  "queued-processing"
+                ].includes(
+                  item.status
+                )
+            ),
 
-      hasErrors,
+      hasErrors:
+        () =>
+          getAll()
+            .some(
+              item =>
+                item.status ===
+                "error"
+            ),
 
       getState:
         () => ({
@@ -3475,30 +3566,17 @@ window.NeyoAttachments
             VERSION,
 
           count:
-            state.items
-              .size,
-
-          ready:
-            getReady()
-              .length,
-
-          pending:
-            hasPending(),
-
-          errors:
-            getAll()
-              .filter(
-                item =>
-                  item.status ===
-                  "error"
-              )
-              .length,
+            state.items.size,
 
           totalSize:
             getTotalSize(),
 
           dragging:
             state.dragging,
+
+          ready:
+            getReady()
+              .length,
 
           attachments:
             getAll()
@@ -3529,43 +3607,37 @@ window.NeyoAttachments
      INIT
      ===================================================== */
 
-  fileInput.multiple =
+  attachmentList.hidden =
     true;
 
 
-  fileInput.accept =
-    "*/*";
-
-
-  attachmentList.hidden =
-    state.items.size ===
-    0;
-
-
-  composerWrapper
-    ?.classList
-    .remove(
-      "has-attachments"
-    );
+  syncComposerClass();
 
 
   emitState();
 
 
+  emit(
+    "neyo:attachments-ready",
+    {
+      version:
+        VERSION
+    }
+  );
+
+
   debug(
-    "FINAL v3 READY",
+    "FINAL v4 READY",
     {
       version:
         VERSION,
 
-      attachBtnPreserved:
-        Boolean(
-          attachBtn
-        ),
+      maxFiles:
+        CONFIG.maxFiles,
 
-      addFilesOwned:
-        Boolean(
-          addFilesMenuBtn
+      maxFileSize:
+        formatBytes(
+          CONFIG.maxFileSize
         ),
 
       privateInput:
@@ -3574,12 +3646,14 @@ window.NeyoAttachments
       attachmentList:
         attachmentList.id,
 
-      maxFiles:
-        CONFIG.maxFiles,
+      attachBtnOwnedByNeo:
+        Boolean(
+          attachBtn
+        ),
 
-      maxFileSize:
-        formatBytes(
-          CONFIG.maxFileSize
+      addFilesOwned:
+        Boolean(
+          addFilesMenuBtn
         )
     }
   );

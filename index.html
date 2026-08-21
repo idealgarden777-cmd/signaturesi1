@@ -373,10 +373,21 @@
             <i data-lucide="brain-circuit" size="16"></i><span>NEYO Personalities</span>
           </div>
         </div>
-        <input type="file" id="hiddenFileInput" multiple style="display: none;">
+
+        <!-- NEW: attachment input with updated ID -->
+        <input
+          type="file"
+          id="attachmentInput"
+          multiple
+          hidden
+        >
 
         <div class="glass-input-container" id="glassInputContainer">
-          <div class="attached-chips-wrapper" id="attachedChipsWrapper"></div>
+          <!-- NEW: attachment list container with updated ID -->
+          <div
+            class="attached-chips-wrapper"
+            id="attachmentList"
+          ></div>
 
           <!-- EXPAND BUTTON -->
           <button
@@ -393,9 +404,10 @@
           </button>
 
           <div class="composer-input-row">
+            <!-- NEW: attachment button with updated ID -->
             <button
               class="attach-btn"
-              id="attachBtn"
+              id="attachmentBtn"
               title="Add Attachments"
               type="button"
               data-tooltip="Attach files"
@@ -1564,87 +1576,60 @@
   <!-- END #neyoVoiceMode -->
 
   <!-- ========================================================= -->
-  <!-- SCRIPTS — FINAL LOCKED ORDER WITH WIZI                    -->
+  <!-- SCRIPTS — FINAL FIXED ORDER WITH CHAT.JS                  -->
   <!-- ========================================================= -->
 
-  <!-- Main working app -->
+  <!-- Main legacy app — untouched -->
   <script src="/neo.js?v=86"></script>
 
-  <!-- Attachments — clean restart checkpoint -->
-  <script type="module" src="/js/components/attachments.js?v=1"></script>
-
-  <!-- Model menu (v5) -->
+  <!-- ===== UI COMPONENTS ===== -->
   <script type="module" src="/js/components/model-menu.js?v=5"></script>
-
-  <!-- Profile (v3) -->
   <script type="module" src="/js/components/profile.js?v=3"></script>
-
-  <!-- Checkout (v4) -->
   <script type="module" src="/js/components/checkout.js?v=4"></script>
-
-  <!-- Composer expand (restored) -->
   <script type="module" src="/js/components/composer-expand.js?v=2"></script>
-
-  <!-- Composer scrollbar (NEW) -->
   <script type="module" src="/js/components/composer-scrollbar.js?v=1"></script>
 
   <!-- ===== CHARACTER DEFINITIONS ===== -->
-  <!-- NEYO character (default) -->
-  <script
-    type="module"
-    src="/js/characters/neyo.js?v=1"
-  ></script>
-
-  <!-- ZADI character -->
-  <script
-    type="module"
-    src="/js/characters/zadi.js?v=1"
-  ></script>
-
-  <!-- WIZI character (new) -->
-  <script
-    type="module"
-    src="/js/characters/wizi.js?v=1"
-  ></script>
+  <script type="module" src="/js/characters/neyo.js?v=1"></script>
+  <script type="module" src="/js/characters/zadi.js?v=1"></script>
+  <script type="module" src="/js/characters/wizi.js?v=1"></script>
 
   <!-- ===== VOICE + MASCOT + PICKER ===== -->
+  <script type="module" src="/js/components/voice.js?v=103"></script>
+  <script type="module" src="/js/components/mascot.js?v=6"></script>
+  <script type="module" src="/js/components/mascot-intelligence.js?v=1"></script>
+  <script type="module" src="/js/components/voice-mode.js?v=3"></script>
+  <script type="module" src="/js/components/character-picker.js?v=1"></script>
 
-  <!-- Gemini Live voice engine -->
+  <!-- ========================================================= -->
+  <!-- NEW CORE CHAT PIPELINE — ATTACHMENT + CHAT + SEND        -->
+  <!-- ========================================================= -->
+
+  <!-- Universal attachments -->
   <script
     type="module"
-    src="/js/components/voice.js?v=103"
+    src="/js/components/attachments.js?v=2"
   ></script>
 
-  <!-- Unified premium face engine -->
+  <!-- Chat core — NEW (was missing!) -->
   <script
     type="module"
-    src="/js/components/mascot.js?v=6"
+    src="/js/components/chat.js?v=3"
   ></script>
 
-  <!-- Mood / conversation intelligence -->
+  <!-- Send / Stop controller — v3, only once -->
   <script
     type="module"
-    src="/js/components/mascot-intelligence.js?v=1"
+    src="/js/components/send-state.js?v=3"
   ></script>
 
-  <!-- Voice Mode screen + controls -->
-  <script
-    type="module"
-    src="/js/components/voice-mode.js?v=3"
-  ></script>
+  <!-- ========================================================= -->
+  <!-- UTILITIES                                                 -->
+  <!-- ========================================================= -->
 
-  <!-- Character Picker UI -->
-  <script
-    type="module"
-    src="/js/components/character-picker.js?v=1"
-  ></script>
-
-  <!-- Native tooltips (restored) -->
+  <!-- Native tooltips -->
   <script type="module" src="/js/components/native-tooltips.js?v=1"></script>
   <script type="module" src="/js/components/tooltip-registry.js?v=2"></script>
-
-  <!-- Send state (restored, v2) -->
-  <script type="module" src="/js/components/send-state.js?v=2"></script>
 
   <!-- Ads module (v3) — handles Monetag Vignette + Onclick for Free users only -->
   <script type="module" src="/js/components/ads.js?v=3"></script>

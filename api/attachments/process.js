@@ -1,44 +1,25 @@
 /*
 =========================================================
-NEYO — ATTACHMENT PROCESSOR API v1
+NEYO — ATTACHMENT PROCESSOR API v2
 
 Purpose:
 - Validate uploaded attachment reference
-- Verify file belongs to current user
+- Verify storage ownership
 - Download private object from Supabase Storage
-- Detect normalized file type
-- Run safe extraction pipeline
-- Return model-ready extraction metadata
-- Never execute uploaded files
-- Gracefully handle unsupported formats
-
-Flow:
-Browser
-  ↓
-Supabase Storage upload complete
-  ↓
-POST /api/attachments/process
-  ↓
-validate
-  ↓
-verify path ownership
-  ↓
-download private object
-  ↓
-extractAttachment()
-  ↓
-normalize result
-  ↓
-return processId + extracted content metadata
+- Extract raw content
+- Normalize + chunk extracted content
+- Return model-ready attachment structure
+- Keep large files safe for future background processing
 
 Requires:
 - @supabase/supabase-js
 - lib/attachments/extractors.js
+- lib/attachments/normalize.js
 
 Environment:
 - SUPABASE_URL
 - SUPABASE_SERVICE_ROLE_KEY
-- ATTACHMENTS_BUCKET (optional)
+- ATTACHMENTS_BUCKET
 =========================================================
 */
 
@@ -52,6 +33,11 @@ import {
   extractAttachment
 } from "../../lib/attachments/extractors.js";
 
+import {
+  normalizeAttachment,
+  buildRetrievalRecords
+} from "../../lib/attachments/normalize.js";
+
 
 /* =========================================================
    CONFIG
@@ -62,24 +48,9 @@ const BUCKET =
   "neyo-attachments";
 
 
-/*
-Maximum uploaded object size we will accept
-for processing.
-
-Upload API currently allows 100 MB.
-*/
-
 const MAX_FILE_SIZE =
   100 * 1024 * 1024;
 
-
-/*
-Inline extraction should remain conservative
-inside a serverless function.
-
-Heavy media / huge documents should later move
-to a background worker.
-*/
 
 const MAX_INLINE_PROCESS_SIZE =
   25 * 1024 * 1024;
@@ -91,6 +62,10 @@ const MAX_FILENAME_LENGTH =
 
 const MAX_PATH_LENGTH =
   1000;
+
+
+const MAX_RESPONSE_CHUNKS =
+  60;
 
 
 /* =========================================================
@@ -177,8 +152,7 @@ function readBody(
 
   if (
     req.body &&
-    typeof req.body ===
-      "object"
+    typeof req.body === "object"
   ) {
 
     return req.body;
@@ -186,8 +160,7 @@ function readBody(
 
 
   if (
-    typeof req.body ===
-      "string"
+    typeof req.body === "string"
   ) {
 
     try {
@@ -244,8 +217,7 @@ function getExtension(
 
   if (
     index === -1 ||
-    index ===
-      name.length - 1
+    index === name.length - 1
   ) {
 
     return "";
@@ -261,12 +233,10 @@ function getExtension(
 
 
 /* =========================================================
-   USER ID
+   AUTH / USER
 
-   IMPORTANT:
    Replace this with your real Signaturesi auth resolver.
-
-   Never trust a userId sent inside request body.
+   Never trust userId from request body.
    ========================================================= */
 
 function resolveUserId(
@@ -280,8 +250,7 @@ function resolveUserId(
 
 
   if (
-    typeof raw ===
-      "string" &&
+    typeof raw === "string" &&
     raw.trim()
   ) {
 
@@ -449,7 +418,7 @@ function validateRequest(
 
 
 /* =========================================================
-   PATH SECURITY
+   PATH OWNERSHIP
    ========================================================= */
 
 function validateOwnershipPath({
@@ -467,34 +436,14 @@ function validateOwnershipPath({
       );
 
 
-  /*
-  Prevent basic path traversal.
-  */
-
   if (
-    normalized.includes(
-      ".."
-    )
+    normalized.includes("..") ||
+    normalized.startsWith("/")
   ) {
 
     return false;
   }
 
-
-  if (
-    normalized.startsWith(
-      "/"
-    )
-  ) {
-
-    return false;
-  }
-
-
-  /*
-  Upload API creates:
-  users/{userId}/YYYY/MM/DD/{attachmentId}/file.ext
-  */
 
   const expectedPrefix =
     `users/${userId}/`;
@@ -507,123 +456,60 @@ function validateOwnershipPath({
 
 
 /* =========================================================
-   FILE SIZE
+   RESPONSE-SAFE CHUNKS
+
+   Don't dump hundreds of chunks into a single API response.
+   Full indexing records can later be stored in DB/vector store.
    ========================================================= */
 
-function getBlobSize(
-  blob
+function createResponseChunks(
+  normalized
 ) {
 
-  const size =
-    Number(
-      blob?.size
-    );
-
-
   if (
-    !Number.isFinite(size)
+    !Array.isArray(
+      normalized?.chunks
+    )
   ) {
 
-    return 0;
+    return [];
   }
 
 
-  return size;
-}
+  return normalized
+    .chunks
+    .slice(
+      0,
+      MAX_RESPONSE_CHUNKS
+    )
+    .map(
+      chunk => ({
 
+        id:
+          chunk.id,
 
-/* =========================================================
-   EXTRACTION RESULT SANITIZER
-   ========================================================= */
+        index:
+          chunk.index,
 
-function normalizeExtractionResult(
-  result
-) {
+        heading:
+          chunk.heading,
 
-  const value =
-    result &&
-    typeof result ===
-      "object"
-      ? result
-      : {};
+        startChar:
+          chunk.startChar,
 
+        endChar:
+          chunk.endChar,
 
-  return {
+        characters:
+          chunk.characters,
 
-    extracted:
-      Boolean(
-        value.extracted
-      ),
+        text:
+          chunk.text,
 
-
-    /*
-    Human/model readable text.
-
-    extractors.js should already enforce
-    its own text-size limits.
-    */
-
-    text:
-      typeof value.text ===
-        "string"
-        ? value.text
-        : "",
-
-
-    /*
-    Structured data such as:
-    sheets, pages, dimensions, duration etc.
-    */
-
-    metadata:
-      value.metadata &&
-      typeof value.metadata ===
-        "object"
-        ? value.metadata
-        : {},
-
-
-    type:
-      cleanString(
-        value.type ||
-        "unknown",
-        100
-      ),
-
-
-    parser:
-      cleanString(
-        value.parser ||
-        "none",
-        100
-      ),
-
-
-    truncated:
-      Boolean(
-        value.truncated
-      ),
-
-
-    warnings:
-      Array.isArray(
-        value.warnings
-      )
-        ? value.warnings
-            .map(
-              warning =>
-                cleanString(
-                  warning,
-                  500
-                )
-            )
-            .filter(Boolean)
-            .slice(
-              0,
-              20
-            )
-        : []
-  };
+        source:
+          chunk.source
+      })
+    );
 }
 
 
@@ -641,8 +527,7 @@ export default async function handler(
      ------------------------------------------------------- */
 
   if (
-    req.method !==
-    "POST"
+    req.method !== "POST"
   ) {
 
     res.setHeader(
@@ -742,7 +627,7 @@ export default async function handler(
 
 
   /* -------------------------------------------------------
-     OWNERSHIP
+     OWNERSHIP CHECK
      ------------------------------------------------------- */
 
   if (
@@ -776,17 +661,21 @@ export default async function handler(
 
 
   /* -------------------------------------------------------
-     PROCESS ID
+     IDS
      ------------------------------------------------------- */
 
   const processId =
     crypto.randomUUID();
 
 
+  const documentId =
+    crypto.randomUUID();
+
+
   try {
 
     /* -----------------------------------------------------
-       SUPABASE ADMIN CLIENT
+       SUPABASE
        ----------------------------------------------------- */
 
     const supabase =
@@ -806,7 +695,7 @@ export default async function handler(
 
 
     /* -----------------------------------------------------
-       DOWNLOAD PRIVATE OBJECT
+       DOWNLOAD
        ----------------------------------------------------- */
 
     const {
@@ -837,14 +726,11 @@ export default async function handler(
     }
 
 
-    /* -----------------------------------------------------
-       SIZE VALIDATION
-       ----------------------------------------------------- */
-
     const size =
-      getBlobSize(
-        blob
-      );
+      Number(
+        blob.size
+      ) ||
+      0;
 
 
     if (
@@ -887,18 +773,11 @@ export default async function handler(
       MAX_INLINE_PROCESS_SIZE
     ) {
 
-      /*
-      We intentionally do NOT try to parse huge documents
-      inside a normal serverless request.
-
-      Later:
-      enqueue background processing job here.
-      */
-
       console.log(
-        "[NEYO Attachment Processor] Large file queued",
+        "[NEYO Attachment Processor] Background processing required",
         {
           processId,
+          documentId,
           uploadId:
             attachment.uploadId,
           name:
@@ -914,6 +793,9 @@ export default async function handler(
         {
 
           processId,
+
+
+          documentId,
 
 
           uploadId:
@@ -950,7 +832,10 @@ export default async function handler(
             category:
               attachment.category,
 
-            size
+            size,
+
+            path:
+              attachment.path
           },
 
 
@@ -962,7 +847,7 @@ export default async function handler(
 
 
     /* -----------------------------------------------------
-       BLOB → ARRAYBUFFER
+       BLOB → BUFFER
        ----------------------------------------------------- */
 
     const arrayBuffer =
@@ -976,13 +861,10 @@ export default async function handler(
 
 
     /* -----------------------------------------------------
-       EXTRACTION
-
-       Actual format-specific logic belongs in:
-       lib/attachments/extractors.js
+       RAW EXTRACTION
        ----------------------------------------------------- */
 
-    const rawExtraction =
+    const extraction =
       await extractAttachment({
 
         buffer,
@@ -1008,10 +890,59 @@ export default async function handler(
       });
 
 
-    const extraction =
-      normalizeExtractionResult(
-        rawExtraction
+    /* -----------------------------------------------------
+       NORMALIZATION + CHUNKING
+       ----------------------------------------------------- */
+
+    const normalized =
+      normalizeAttachment(
+        extraction,
+        {
+
+          documentId,
+
+
+          uploadId:
+            attachment.uploadId,
+
+
+          processId,
+
+
+          storagePath:
+            attachment.path
+        }
       );
+
+
+    /* -----------------------------------------------------
+       RETRIEVAL RECORDS
+
+       These are ready for future:
+       - embeddings
+       - Supabase pgvector
+       - semantic retrieval
+
+       For now we only count them.
+       ----------------------------------------------------- */
+
+    const retrievalRecords =
+      buildRetrievalRecords(
+        normalized
+      );
+
+
+    const responseChunks =
+      createResponseChunks(
+        normalized
+      );
+
+
+    const responseChunksTruncated =
+      normalized
+        .chunks
+        .length >
+      responseChunks.length;
 
 
     /* -----------------------------------------------------
@@ -1025,15 +956,15 @@ export default async function handler(
         processId,
 
 
+        documentId,
+
+
         uploadId:
           attachment.uploadId,
 
 
-        file:
+        name:
           attachment.name,
-
-
-        size,
 
 
         category:
@@ -1048,8 +979,16 @@ export default async function handler(
           extraction.extracted,
 
 
-        truncated:
-          extraction.truncated
+        normalizedReady:
+          normalized.ready,
+
+
+        chunks:
+          normalized.chunks.length,
+
+
+        characters:
+          normalized.stats.characters
       }
     );
 
@@ -1062,6 +1001,9 @@ export default async function handler(
         processId,
 
 
+        documentId,
+
+
         uploadId:
           attachment.uploadId,
 
@@ -1071,11 +1013,13 @@ export default async function handler(
 
 
         ready:
-          true,
+          normalized.ready,
 
 
         extracted:
-          extraction.extracted,
+          Boolean(
+            extraction.extracted
+          ),
 
 
         processingMode:
@@ -1098,10 +1042,17 @@ export default async function handler(
 
           size,
 
+          bucket:
+            BUCKET,
+
           path:
             attachment.path
         },
 
+
+        /* -------------------------------------------------
+           RAW EXTRACTION SUMMARY
+           ------------------------------------------------- */
 
         extraction: {
 
@@ -1113,8 +1064,8 @@ export default async function handler(
             extraction.parser,
 
 
-          text:
-            extraction.text,
+          extracted:
+            extraction.extracted,
 
 
           truncated:
@@ -1122,12 +1073,55 @@ export default async function handler(
 
 
           warnings:
-            extraction.warnings
+            extraction.warnings,
+
+
+          metadata:
+            extraction.metadata
         },
 
 
+        /* -------------------------------------------------
+           NORMALIZED DOCUMENT
+           ------------------------------------------------- */
+
+        document:
+          normalized.document,
+
+
+        /* -------------------------------------------------
+           MODEL / RETRIEVAL CHUNKS
+           ------------------------------------------------- */
+
+        chunks:
+          responseChunks,
+
+
+        chunksTruncatedInResponse:
+          responseChunksTruncated,
+
+
+        totalChunks:
+          normalized.chunks.length,
+
+
+        retrievalRecords:
+          retrievalRecords.length,
+
+
+        /* -------------------------------------------------
+           STATS
+           ------------------------------------------------- */
+
+        stats:
+          normalized.stats,
+
+
+        warnings:
+          normalized.warnings,
+
+
         metadata: {
-          ...extraction.metadata,
 
           storageBucket:
             BUCKET,
@@ -1162,6 +1156,9 @@ export default async function handler(
         processId,
 
 
+        documentId,
+
+
         uploadId:
           attachment.uploadId,
 
@@ -1176,22 +1173,17 @@ export default async function handler(
     );
 
 
-    const message =
+    const rawMessage =
       String(
         error?.message ||
         ""
       );
 
 
-    /*
-    Don't expose arbitrary internal stack traces.
-    */
-
     const safeMessage =
-      message &&
-      message.length <
-        300
-        ? message
+      rawMessage &&
+      rawMessage.length < 300
+        ? rawMessage
         : "Could not process attachment.";
 
 
@@ -1201,6 +1193,9 @@ export default async function handler(
       {
 
         processId,
+
+
+        documentId,
 
 
         uploadId:

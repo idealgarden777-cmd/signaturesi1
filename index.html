@@ -884,19 +884,19 @@
 
 
     /* =======================================================
-       LIVE SUGGESTIONS
-
-       Same rule:
-       floating UI cannot resize composer.
+       LIVE SUGGESTIONS — UPDATED: static, full-width, non-floating
        ======================================================= */
 
     #liveSuggestions {
-      position: absolute;
+      position: static !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      margin: 0 0 8px 0 !important;
+      padding: 0 !important;
+    }
 
-      left: 0;
-      right: 0;
-
-      z-index: 35;
+    #liveSuggestions:empty {
+      display: none !important;
     }
 
 
@@ -1282,7 +1282,7 @@
         </div>
 
 
-        <!-- Suggestions are floating UI -->
+        <!-- Suggestions are now static, full-width, non-floating -->
         <div
           class="live-suggestions"
           id="liveSuggestions"

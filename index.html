@@ -12,6 +12,9 @@
   <!-- Monetag Verification (kept) -->
   <meta name="monetag" content="5c03c9d12ef5dab45df4b58c864f5ae9">
 
+  <!-- ========================================================= -->
+  <!-- CSP — UPDATED TO INCLUDE BOTH SUPABASE URLS               -->
+  <!-- ========================================================= -->
   <meta http-equiv="Content-Security-Policy" content="
     default-src 'self';
     script-src 'self' 'unsafe-inline'
@@ -27,10 +30,12 @@
       https://fonts.gstatic.com
       https://cdn.jsdelivr.net;
     img-src 'self' data: blob:
-      https://ajglvfoqiyrrisuoxecu.supabase.co;
+      https://ajglvfoqiyrrisuoxecu.supabase.co
+      https://ujclhweqqifgoiscvqmd.supabase.co;
     connect-src 'self'
       https://accounts.signaturesi.com
       https://ajglvfoqiyrrisuoxecu.supabase.co
+      https://ujclhweqqifgoiscvqmd.supabase.co
       https://generativelanguage.googleapis.com
       wss://generativelanguage.googleapis.com
       https://cdn.jsdelivr.net
@@ -133,6 +138,914 @@
       border-radius: inherit;
       clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
     }
+  </style>
+
+  <!-- ========================================================= -->
+  <!-- COMPOSER STABILITY OVERRIDES                              -->
+  <!-- ========================================================= -->
+
+  <style id="neyoComposerStabilityV1">
+
+    /* =======================================================
+       COMPOSER ROOT
+       ======================================================= */
+
+    #composerWrapper {
+      position: relative;
+
+      width: 100%;
+      min-width: 0;
+
+      box-sizing: border-box;
+
+      isolation: isolate;
+    }
+
+
+    /* =======================================================
+       MAIN INPUT SURFACE
+
+       Important:
+       - no height jumping
+       - no scale animation
+       - predictable vertical growth
+       ======================================================= */
+
+    #glassInputContainer {
+      position: relative;
+
+      display: flex !important;
+      flex-direction: column !important;
+
+      width: 100% !important;
+      min-width: 0 !important;
+
+      min-height: 56px !important;
+
+      padding: 5px 8px !important;
+
+      overflow: visible;
+
+      box-sizing: border-box;
+
+      transform: none !important;
+
+      transition:
+        background-color 150ms ease,
+        border-color 150ms ease,
+        box-shadow 150ms ease !important;
+    }
+
+
+    #glassInputContainer:hover,
+    #glassInputContainer:focus-within {
+      transform: none !important;
+    }
+
+
+    /* =======================================================
+       ATTACHMENT SHELF
+
+       Empty:
+         zero height
+
+       Has files:
+         one compact horizontal row
+
+       This prevents the composer from growing/shrinking
+       unpredictably during upload progress.
+       ======================================================= */
+
+    #attachmentList {
+      width: 100%;
+      min-width: 0;
+
+      display: flex;
+      align-items: center;
+
+      gap: 8px;
+
+      padding: 0;
+
+      margin: 0;
+
+      overflow-x: auto;
+      overflow-y: hidden;
+
+      overscroll-behavior-x: contain;
+
+      scrollbar-width: thin;
+
+      scroll-behavior: smooth;
+
+      box-sizing: border-box;
+
+      flex: 0 0 auto;
+    }
+
+
+    #attachmentList[hidden] {
+      display: none !important;
+    }
+
+
+    #attachmentList:not([hidden]) {
+      min-height: 54px;
+
+      padding:
+        3px
+        2px
+        7px;
+
+      margin-bottom: 1px;
+    }
+
+
+    #attachmentList::-webkit-scrollbar {
+      height: 4px;
+    }
+
+
+    #attachmentList::-webkit-scrollbar-thumb {
+      border-radius: 999px;
+
+      background:
+        rgba(120, 120, 120, 0.28);
+    }
+
+
+    /* =======================================================
+       ATTACHMENT CHIP
+       ======================================================= */
+
+    #attachmentList .attachment-chip {
+      position: relative;
+
+      display: flex;
+      align-items: center;
+
+      flex:
+        0
+        0
+        auto;
+
+      width: auto;
+      min-width: 180px;
+      max-width: 280px;
+
+      height: 44px;
+
+      gap: 8px;
+
+      padding:
+        5px
+        6px;
+
+      border:
+        1px
+        solid
+        rgba(120, 120, 120, 0.18);
+
+      border-radius: 13px;
+
+      background:
+        rgba(255, 255, 255, 0.62);
+
+      box-shadow:
+        0
+        1px
+        2px
+        rgba(0, 0, 0, 0.04);
+
+      overflow: hidden;
+
+      box-sizing: border-box;
+
+      transform: none !important;
+    }
+
+
+    html.dark #attachmentList .attachment-chip,
+    body.dark #attachmentList .attachment-chip,
+    [data-theme="dark"] #attachmentList .attachment-chip {
+      background:
+        rgba(35, 35, 35, 0.72);
+
+      border-color:
+        rgba(255, 255, 255, 0.1);
+    }
+
+
+    /* =======================================================
+       PREVIEW / ICON
+       ======================================================= */
+
+    #attachmentList .attachment-chip-icon,
+    #attachmentList .attachment-chip-preview {
+      width: 32px;
+      height: 32px;
+
+      min-width: 32px;
+
+      display: grid;
+      place-items: center;
+
+      border-radius: 9px;
+
+      overflow: hidden;
+
+      flex:
+        0
+        0
+        32px;
+
+      background:
+        rgba(128, 128, 128, 0.1);
+    }
+
+
+    #attachmentList .attachment-chip-preview img {
+      width: 100%;
+      height: 100%;
+
+      display: block;
+
+      object-fit: cover;
+    }
+
+
+    #attachmentList .attachment-chip-icon svg {
+      width: 16px;
+      height: 16px;
+    }
+
+
+    /* =======================================================
+       CHIP BODY
+       ======================================================= */
+
+    #attachmentList .attachment-chip-body {
+      position: relative;
+
+      min-width: 0;
+
+      flex:
+        1
+        1
+        auto;
+
+      overflow: hidden;
+    }
+
+
+    #attachmentList .attachment-chip-name {
+      width: 100%;
+
+      overflow: hidden;
+
+      white-space: nowrap;
+
+      text-overflow: ellipsis;
+
+      font-size: 12.5px;
+      font-weight: 550;
+
+      line-height: 1.2;
+    }
+
+
+    #attachmentList .attachment-chip-meta {
+      display: flex;
+      align-items: center;
+
+      min-width: 0;
+
+      gap: 4px;
+
+      margin-top: 3px;
+
+      overflow: hidden;
+
+      white-space: nowrap;
+
+      color:
+        rgba(100, 100, 100, 0.82);
+
+      font-size: 10.5px;
+
+      line-height: 1.1;
+    }
+
+
+    #attachmentList .attachment-chip-status {
+      max-width: 95px;
+
+      overflow: hidden;
+
+      text-overflow: ellipsis;
+
+      white-space: nowrap;
+    }
+
+
+    /* =======================================================
+       UPLOAD PROGRESS
+
+       Absolute positioning prevents layout shift.
+       ======================================================= */
+
+    #attachmentList .attachment-chip-progress {
+      position: absolute;
+
+      left: 0;
+      right: 0;
+      bottom: -4px;
+
+      height: 2px;
+
+      overflow: hidden;
+
+      border-radius: 999px;
+
+      background:
+        rgba(128, 128, 128, 0.12);
+    }
+
+
+    #attachmentList .attachment-chip-progress > span {
+      display: block;
+
+      height: 100%;
+
+      border-radius: inherit;
+
+      background: currentColor;
+
+      opacity: 0.58;
+
+      transition:
+        width
+        180ms
+        ease;
+    }
+
+
+    /* =======================================================
+       REMOVE / RETRY
+       ======================================================= */
+
+    #attachmentList .attachment-chip-remove,
+    #attachmentList .attachment-chip-retry {
+      appearance: none;
+
+      width: 26px;
+      height: 26px;
+
+      min-width: 26px;
+
+      display: grid;
+      place-items: center;
+
+      flex:
+        0
+        0
+        26px;
+
+      padding: 0;
+
+      border: 0;
+
+      border-radius: 8px;
+
+      background: transparent;
+
+      color: inherit;
+
+      cursor: pointer;
+
+      opacity: 0.64;
+
+      transform: none !important;
+
+      transition:
+        opacity 140ms ease,
+        background-color 140ms ease;
+    }
+
+
+    #attachmentList .attachment-chip-remove:hover,
+    #attachmentList .attachment-chip-retry:hover {
+      opacity: 1;
+
+      background:
+        rgba(128, 128, 128, 0.12);
+
+      transform: none !important;
+    }
+
+
+    #attachmentList .attachment-chip-remove svg,
+    #attachmentList .attachment-chip-retry svg {
+      width: 14px;
+      height: 14px;
+    }
+
+
+    /* =======================================================
+       ERROR STATE
+       ======================================================= */
+
+    #attachmentList
+    .attachment-chip[data-status="error"] {
+      border-color:
+        rgba(220, 70, 70, 0.28);
+    }
+
+
+    /* =======================================================
+       READY STATE
+
+       Deliberately subtle.
+       No green giant badge / no layout change.
+       ======================================================= */
+
+    #attachmentList
+    .attachment-chip[data-status="ready"] {
+      opacity: 1;
+    }
+
+
+    /* =======================================================
+       INPUT ROW
+
+       Buttons stay in same vertical position.
+       ======================================================= */
+
+    #glassInputContainer .composer-input-row {
+      display: flex !important;
+
+      align-items: flex-end !important;
+
+      width: 100% !important;
+      min-width: 0 !important;
+
+      min-height: 44px !important;
+
+      gap: 6px !important;
+
+      flex:
+        0
+        0
+        auto;
+
+      box-sizing: border-box;
+    }
+
+
+    /* =======================================================
+       TEXTAREA
+       ======================================================= */
+
+    #chatInput {
+      display: block;
+
+      flex:
+        1
+        1
+        auto;
+
+      width: auto !important;
+      min-width: 0 !important;
+
+      min-height: 38px !important;
+      max-height: 160px !important;
+
+      margin: 0 !important;
+
+      padding:
+        7px
+        7px !important;
+
+      border: 0 !important;
+
+      outline: 0 !important;
+
+      background:
+        transparent !important;
+
+      box-shadow:
+        none !important;
+
+      resize: none !important;
+
+      overflow-y: auto;
+
+      line-height: 1.4 !important;
+
+      box-sizing: border-box;
+    }
+
+
+    #chatInput:focus {
+      border: 0 !important;
+
+      outline: 0 !important;
+
+      box-shadow:
+        none !important;
+    }
+
+
+    /* =======================================================
+       LEFT / RIGHT BUTTON STABILITY
+       ======================================================= */
+
+    #attachBtn,
+    #micBtn,
+    #sendBtn {
+      flex:
+        0
+        0
+        auto !important;
+
+      transform:
+        none !important;
+
+      align-self:
+        flex-end;
+
+      transition:
+        background-color 140ms ease,
+        color 140ms ease,
+        border-color 140ms ease,
+        opacity 140ms ease,
+        box-shadow 140ms ease !important;
+    }
+
+
+    #attachBtn:hover,
+    #attachBtn:active,
+    #micBtn:hover,
+    #micBtn:active,
+    #sendBtn:hover,
+    #sendBtn:active {
+      transform:
+        none !important;
+    }
+
+
+    /* =======================================================
+       PLUS BUTTON
+       ======================================================= */
+
+    #attachBtn {
+      width: 40px !important;
+      height: 40px !important;
+
+      min-width: 40px !important;
+      min-height: 40px !important;
+
+      padding: 0 !important;
+    }
+
+
+    /* =======================================================
+       MIC BUTTON
+       ======================================================= */
+
+    #micBtn {
+      width: 40px !important;
+      height: 40px !important;
+
+      min-width: 40px !important;
+      min-height: 40px !important;
+
+      margin: 0 !important;
+
+      padding: 0 !important;
+    }
+
+
+    /* =======================================================
+       SEND BUTTON
+
+       Changing arrow → stop can no longer change dimensions.
+       ======================================================= */
+
+    #sendBtn {
+      width: 40px !important;
+      height: 40px !important;
+
+      min-width: 40px !important;
+      min-height: 40px !important;
+
+      padding: 0 !important;
+
+      border-radius:
+        999px !important;
+
+      transform:
+        none !important;
+    }
+
+
+    #sendBtn > svg,
+    #sendBtn > i {
+      flex:
+        0
+        0
+        auto;
+    }
+
+
+    #sendBtn.is-generating {
+      width: 40px !important;
+      height: 40px !important;
+
+      min-width: 40px !important;
+      min-height: 40px !important;
+    }
+
+
+    #sendBtn:disabled {
+      cursor: default;
+    }
+
+
+    /* =======================================================
+       VOICE TRANSCRIBE
+
+       Prevent voice state from pushing send button.
+       ======================================================= */
+
+    #voiceTranscribeContainer {
+      flex:
+        0
+        0
+        auto;
+
+      max-width:
+        min(
+          240px,
+          38vw
+        );
+
+      overflow: hidden;
+    }
+
+
+    /* =======================================================
+       EXPAND BUTTON
+
+       Keep it from entering normal flex calculations.
+       ======================================================= */
+
+    #composerExpandBtn {
+      position: absolute;
+
+      top: 8px;
+      right: 10px;
+
+      z-index: 3;
+
+      transform:
+        none !important;
+    }
+
+
+    /*
+     * Don't leave empty space for expand button
+     * when the attachment shelf is visible.
+     */
+
+    #glassInputContainer.has-attachments
+    #composerExpandBtn,
+    #composerWrapper.has-attachments
+    #composerExpandBtn {
+      top: 62px;
+    }
+
+
+    /* =======================================================
+       DRAG / DROP OVERLAY
+
+       Absolute overlay means no composer reflow.
+       ======================================================= */
+
+    #dragDropOverlay {
+      position: absolute !important;
+
+      inset: 0 !important;
+
+      z-index: 20;
+
+      pointer-events: none;
+
+      box-sizing: border-box;
+    }
+
+
+    #dragDropOverlay:not(.active) {
+      visibility: hidden;
+
+      opacity: 0;
+
+      pointer-events: none;
+    }
+
+
+    #dragDropOverlay.active {
+      visibility: visible;
+
+      opacity: 1;
+
+      pointer-events: none;
+    }
+
+
+    /* =======================================================
+       POPUP
+
+       Popup must float.
+       It must never consume composer layout space.
+       ======================================================= */
+
+    #attachPopupMenu {
+      position: absolute;
+
+      z-index: 40;
+
+      max-width:
+        min(
+          280px,
+          calc(100vw - 24px)
+        );
+    }
+
+
+    /* =======================================================
+       LIVE SUGGESTIONS
+
+       Same rule:
+       floating UI cannot resize composer.
+       ======================================================= */
+
+    #liveSuggestions {
+      position: absolute;
+
+      left: 0;
+      right: 0;
+
+      z-index: 35;
+    }
+
+
+    /* =======================================================
+       MOBILE
+       ======================================================= */
+
+    @media
+    (
+      max-width: 640px
+    ) {
+
+      #glassInputContainer {
+        padding:
+          5px
+          6px !important;
+      }
+
+
+      #glassInputContainer
+      .composer-input-row {
+        gap:
+          4px !important;
+      }
+
+
+      #attachBtn,
+      #micBtn,
+      #sendBtn {
+        width:
+          38px !important;
+
+        height:
+          38px !important;
+
+        min-width:
+          38px !important;
+
+        min-height:
+          38px !important;
+      }
+
+
+      #attachmentList:not([hidden]) {
+        min-height:
+          52px;
+
+        padding-bottom:
+          6px;
+      }
+
+
+      #attachmentList
+      .attachment-chip {
+        min-width:
+          155px;
+
+        max-width:
+          220px;
+
+        height:
+          42px;
+      }
+
+
+      #attachmentList
+      .attachment-chip-icon,
+      #attachmentList
+      .attachment-chip-preview {
+        width:
+          30px;
+
+        height:
+          30px;
+
+        min-width:
+          30px;
+
+        flex-basis:
+          30px;
+      }
+
+
+      #voiceTranscribeContainer {
+        max-width:
+          34vw;
+      }
+
+
+      #chatInput {
+        font-size:
+          16px !important;
+      }
+
+    }
+
+
+    /* =======================================================
+       VERY SMALL MOBILE
+       ======================================================= */
+
+    @media
+    (
+      max-width: 390px
+    ) {
+
+      #voiceTranscribeContainer:not(.active) {
+        max-width: 0;
+
+        overflow: hidden;
+      }
+
+
+      #attachmentList
+      .attachment-chip {
+        min-width:
+          145px;
+
+        max-width:
+          190px;
+      }
+
+    }
+
+
+    /* =======================================================
+       REDUCED MOTION
+       ======================================================= */
+
+    @media
+    (
+      prefers-reduced-motion: reduce
+    ) {
+
+      #glassInputContainer,
+      #attachBtn,
+      #micBtn,
+      #sendBtn,
+      #attachmentList *,
+      #dragDropOverlay {
+        transition:
+          none !important;
+
+        animation:
+          none !important;
+      }
+
+    }
+
   </style>
 
   <!-- KaTeX -->
@@ -341,47 +1254,140 @@
       </div>
     </div>
 
+    <!-- ========================================================= -->
+    <!-- COMPOSER DOCK — STABLE VERSION                            -->
+    <!-- ========================================================= -->
+
     <footer class="composer-dock">
-      <div class="composer-wrapper" id="composerWrapper">
-        <div class="drag-drop-overlay" id="dragDropOverlay">
-          <i data-lucide="upload-cloud" size="32"></i><span>Drop files here to attach</span>
+
+      <div
+        class="composer-wrapper"
+        id="composerWrapper"
+      >
+
+        <!-- Drag/drop floats above composer; never changes its size -->
+        <div
+          class="drag-drop-overlay"
+          id="dragDropOverlay"
+          aria-hidden="true"
+        >
+          <i
+            data-lucide="upload-cloud"
+            size="32"
+          ></i>
+
+          <span>
+            Drop files here to attach
+          </span>
         </div>
-        <div class="live-suggestions" id="liveSuggestions"></div>
-        <div class="attachment-popup-menu" id="attachPopupMenu">
-          <div
+
+
+        <!-- Suggestions are floating UI -->
+        <div
+          class="live-suggestions"
+          id="liveSuggestions"
+        ></div>
+
+
+        <!--
+          + BUTTON POPUP
+
+          Ownership:
+          neo.js owns opening/closing this popup.
+
+          attachments.js owns ONLY #addFilesMenuBtn.
+        -->
+        <div
+          class="attachment-popup-menu"
+          id="attachPopupMenu"
+          role="menu"
+          aria-hidden="true"
+        >
+
+          <button
             class="attachment-popup-item"
             id="addFilesMenuBtn"
+            type="button"
+            role="menuitem"
             data-tooltip="Add files"
             data-tooltip-position="right"
           >
-            <i data-lucide="paperclip" size="16"></i><span>Add Files</span>
-          </div>
-          <div
+            <i
+              data-lucide="paperclip"
+              size="16"
+            ></i>
+
+            <span>
+              Add Files
+            </span>
+          </button>
+
+
+          <button
             class="attachment-popup-item"
             id="deepResearchToggleBtn"
+            type="button"
+            role="menuitem"
             data-tooltip="Deep Research"
             data-tooltip-position="right"
           >
-            <i data-lucide="search-code" size="16"></i><span>Deep Research</span>
-          </div>
-          <div
+            <i
+              data-lucide="search-code"
+              size="16"
+            ></i>
+
+            <span>
+              Deep Research
+            </span>
+          </button>
+
+
+          <button
             class="attachment-popup-item"
             id="personalMemoryBtn"
+            type="button"
+            role="menuitem"
             data-tooltip="NEYO Personalities"
             data-tooltip-position="right"
           >
-            <i data-lucide="brain-circuit" size="16"></i><span>NEYO Personalities</span>
-          </div>
+            <i
+              data-lucide="brain-circuit"
+              size="16"
+            ></i>
+
+            <span>
+              NEYO Personalities
+            </span>
+          </button>
+
         </div>
-        <div class="glass-input-container" id="glassInputContainer">
-          <!-- NEW: attachment list container with updated ID -->
+
+
+        <!-- =====================================================
+             STABLE INPUT SURFACE
+             ===================================================== -->
+
+        <div
+          class="glass-input-container"
+          id="glassInputContainer"
+        >
+
+          <!--
+            Attachment shelf.
+
+            IMPORTANT:
+            No public <input type="file"> here.
+            attachments.js creates #neyoAttachmentInput privately.
+          -->
           <div
             class="attached-chips-wrapper"
             id="attachmentList"
+            aria-label="Attached files"
             hidden
           ></div>
 
-          <!-- EXPAND BUTTON -->
+
+          <!-- Existing composer expand module remains supported -->
           <button
             class="composer-expand-btn"
             id="composerExpandBtn"
@@ -392,68 +1398,161 @@
             data-tooltip="Expand"
             data-tooltip-position="top"
           >
-            <i data-lucide="maximize-2" size="16"></i>
+            <i
+              data-lucide="maximize-2"
+              size="16"
+            ></i>
           </button>
 
+
+          <!-- ===================================================
+               INPUT ROW
+               =================================================== -->
+
           <div class="composer-input-row">
-            <!-- Attachment launcher: popup ownership stays with neo.js -->
+
+
+            <!--
+              Existing popup launcher.
+              DO NOT rename this.
+              DO NOT let attachments.js own it.
+            -->
             <button
               class="attach-btn"
               id="attachBtn"
               title="Add Attachments"
               type="button"
+              aria-label="Add attachments"
               aria-haspopup="menu"
               aria-controls="attachPopupMenu"
               aria-expanded="false"
               data-tooltip="Attach files"
               data-tooltip-position="top"
             >
-              <i data-lucide="plus" size="20"></i>
+              <i
+                data-lucide="plus"
+                size="20"
+              ></i>
             </button>
-            <textarea id="chatInput" rows="1" placeholder="Message NEYO..."></textarea>
-            <div class="voice-transcribe-container" id="voiceTranscribeContainer">
-              <div class="wave-dots-bar" id="waveDotsBar">
-                <span></span><span></span><span></span><span></span><span></span><span></span>
-                <span></span><span></span><span></span><span></span><span></span><span></span>
-                <span></span><span></span><span></span><span></span><span></span><span></span>
-                <span></span><span></span><span></span><span></span><span></span><span></span>
+
+
+            <!-- Chat input -->
+            <textarea
+              id="chatInput"
+              rows="1"
+              placeholder="Message NEYO..."
+              aria-label="Message NEYO"
+              autocomplete="off"
+              autocapitalize="sentences"
+              spellcheck="true"
+            ></textarea>
+
+
+            <!-- Existing voice transcription UI -->
+            <div
+              class="voice-transcribe-container"
+              id="voiceTranscribeContainer"
+            >
+
+              <div
+                class="wave-dots-bar"
+                id="waveDotsBar"
+              >
+                <span></span>
+                <span></span>
+                <span></span>
+                <span></span>
+                <span></span>
+                <span></span>
+
+                <span></span>
+                <span></span>
+                <span></span>
+                <span></span>
+                <span></span>
+                <span></span>
+
+                <span></span>
+                <span></span>
+                <span></span>
+                <span></span>
+                <span></span>
+                <span></span>
+
+                <span></span>
+                <span></span>
+                <span></span>
+                <span></span>
+                <span></span>
+                <span></span>
               </div>
+
+
               <button
                 class="stop-recording-btn"
                 id="stopRecBtn"
                 title="Stop Listening"
                 type="button"
+                aria-label="Stop listening"
                 data-tooltip="Stop listening"
                 data-tooltip-position="top"
               >
-                <i data-lucide="square" size="14"></i>
+                <i
+                  data-lucide="square"
+                  size="14"
+                ></i>
               </button>
+
             </div>
+
+
+            <!-- Existing voice input -->
             <button
               class="icon-btn mic-btn"
               id="micBtn"
               title="Voice Input"
               type="button"
+              aria-label="Voice input"
               data-tooltip="Voice input"
               data-tooltip-position="top"
             >
-              <i data-lucide="audio-lines" size="16"></i>
+              <i
+                data-lucide="audio-lines"
+                size="16"
+              ></i>
             </button>
+
+
+            <!--
+              send-state.js owns this button.
+              chat.js DOES NOT bind it directly.
+            -->
             <button
               class="send-btn"
               id="sendBtn"
               title="Send Message"
               type="button"
+              aria-label="Send message"
               data-tooltip="Send message"
               data-tooltip-position="top"
             >
-              <i data-lucide="arrow-up" size="18"></i>
+              <i
+                data-lucide="arrow-up"
+                size="18"
+              ></i>
             </button>
+
           </div>
+
         </div>
 
-        <p class="composer-note">NEYO may produce inaccurate info. Verify critical data.</p>
+
+        <p class="composer-note">
+          NEYO may produce inaccurate info. Verify critical data.
+        </p>
+
       </div>
+
     </footer>
   </main>
 
@@ -1571,67 +2670,150 @@
   <!-- END #neyoVoiceMode -->
 
   <!-- ========================================================= -->
-  <!-- SCRIPTS — FINAL FIXED ORDER WITH CHAT.JS                  -->
+  <!-- SCRIPTS — FINAL STABLE ORDER                              -->
   <!-- ========================================================= -->
 
-  <!-- Main legacy app — untouched -->
+  <!-- Main legacy application — KEEP FIRST / UNTOUCHED -->
   <script src="/neo.js?v=86"></script>
 
+
   <!-- ===== UI COMPONENTS ===== -->
-  <script type="module" src="/js/components/model-menu.js?v=5"></script>
-  <script type="module" src="/js/components/profile.js?v=3"></script>
-  <script type="module" src="/js/components/checkout.js?v=4"></script>
-  <script type="module" src="/js/components/composer-expand.js?v=2"></script>
-  <script type="module" src="/js/components/composer-scrollbar.js?v=1"></script>
+
+  <script
+    type="module"
+    src="/js/components/model-menu.js?v=5"
+  ></script>
+
+  <script
+    type="module"
+    src="/js/components/profile.js?v=3"
+  ></script>
+
+  <script
+    type="module"
+    src="/js/components/checkout.js?v=4"
+  ></script>
+
+  <script
+    type="module"
+    src="/js/components/composer-expand.js?v=2"
+  ></script>
+
+  <script
+    type="module"
+    src="/js/components/composer-scrollbar.js?v=1"
+  ></script>
+
 
   <!-- ===== CHARACTER DEFINITIONS ===== -->
-  <script type="module" src="/js/characters/neyo.js?v=1"></script>
-  <script type="module" src="/js/characters/zadi.js?v=1"></script>
-  <script type="module" src="/js/characters/wizi.js?v=1"></script>
+
+  <script
+    type="module"
+    src="/js/characters/neyo.js?v=1"
+  ></script>
+
+  <script
+    type="module"
+    src="/js/characters/zadi.js?v=1"
+  ></script>
+
+  <script
+    type="module"
+    src="/js/characters/wizi.js?v=1"
+  ></script>
+
 
   <!-- ===== VOICE + MASCOT + PICKER ===== -->
-  <script type="module" src="/js/components/voice.js?v=103"></script>
-  <script type="module" src="/js/components/mascot.js?v=6"></script>
-  <script type="module" src="/js/components/mascot-intelligence.js?v=1"></script>
-  <script type="module" src="/js/components/voice-mode.js?v=3"></script>
-  <script type="module" src="/js/components/character-picker.js?v=1"></script>
+
+  <script
+    type="module"
+    src="/js/components/voice.js?v=103"
+  ></script>
+
+  <script
+    type="module"
+    src="/js/components/mascot.js?v=6"
+  ></script>
+
+  <script
+    type="module"
+    src="/js/components/mascot-intelligence.js?v=1"
+  ></script>
+
+  <script
+    type="module"
+    src="/js/components/voice-mode.js?v=3"
+  ></script>
+
+  <script
+    type="module"
+    src="/js/components/character-picker.js?v=1"
+  ></script>
+
 
   <!-- ========================================================= -->
-  <!-- STABLE CORE CHAT PIPELINE — ATTACHMENT + CHAT + SEND     -->
+  <!-- STABLE CORE CHAT PIPELINE                                -->
   <!-- ========================================================= -->
 
-  <!-- Attachments: owns files only; plus-button popup stays with neo.js -->
+
+  <!--
+    1. Attachments first.
+    Owns file lifecycle only.
+  -->
   <script
     type="module"
     src="/js/components/attachments.js?v=3"
   ></script>
 
-  <!-- Chat core — working baseline -->
+
+  <!--
+    2. Chat transport/state.
+    Updated final v4.
+  -->
   <script
     type="module"
-    src="/js/components/chat.js?v=3"
+    src="/js/components/chat.js?v=4"
   ></script>
 
-  <!-- Send / Stop controller — v3, only once -->
+
+  <!--
+    3. Send/Stop owner.
+    Updated final v4.
+  -->
   <script
     type="module"
-    src="/js/components/send-state.js?v=3"
+    src="/js/components/send-state.js?v=4"
   ></script>
 
-  <!-- ========================================================= -->
-  <!-- UTILITIES                                                 -->
-  <!-- ========================================================= -->
 
-  <!-- Native tooltips -->
-  <script type="module" src="/js/components/native-tooltips.js?v=1"></script>
-  <script type="module" src="/js/components/tooltip-registry.js?v=2"></script>
+  <!-- ===== UTILITIES ===== -->
 
-  <!-- Ads module (v3) — handles Monetag Vignette + Onclick for Free users only -->
-  <script type="module" src="/js/components/ads.js?v=3"></script>
+  <script
+    type="module"
+    src="/js/components/native-tooltips.js?v=1"
+  ></script>
 
-  <!-- Mobile viewport fixes only -->
-  <script type="module" src="/js/components/mobile-viewport.js?v=1"></script>
-  <script type="module" src="/js/components/mobile-keyboard.js?v=1"></script>
+  <script
+    type="module"
+    src="/js/components/tooltip-registry.js?v=2"
+  ></script>
+
+
+  <script
+    type="module"
+    src="/js/components/ads.js?v=3"
+  ></script>
+
+
+  <script
+    type="module"
+    src="/js/components/mobile-viewport.js?v=1"
+  ></script>
+
+  <script
+    type="module"
+    src="/js/components/mobile-keyboard.js?v=1"
+  ></script>
 
 </body>
 </html>

@@ -157,13 +157,19 @@ const ALLOWED_CATEGORIES =
    DATABASE ERRORS
    ===================================================== */
 
-const SCHEMA_ERROR_CODES =
-  new Set([
-    "42P01",
-    "42703",
-    "23503",
-    "PGRST205"   // ✅ added for missing table/column
-  ]);
+const SCHEMA_ERROR_CODES = new Set([
+  "42P01",
+  "42703",
+  "23503",
+  "PGRST204",
+  "PGRST205"
+]);
+
+function isSchemaError(error) {
+  return SCHEMA_ERROR_CODES.has(
+    String(error?.code || "")
+  );
+}
 
 
 /* =====================================================
@@ -506,7 +512,7 @@ function createSupabaseAdmin() {
 
 
 /* =====================================================
-   PLAN — NEW ROBUST VERSION
+   PLAN
    ===================================================== */
 
 function isProPlan(
@@ -536,113 +542,62 @@ function isProPlan(
 
 
 /* =====================================================
-   USER PLAN — UPDATED WITH FALLBACK
+   USER PLAN — UPDATED: uses profiles, fallback to free
    ===================================================== */
 
 async function getUserPlan(
   supabase,
-  userId
+  userId,
+  auth = null
 ) {
-  /*
-  Try known user/profile tables.
+  const {
+    data,
+    error
+  } = await supabase
+    .from("profiles")
+    .select("plan_type")
+    .eq("id", userId)
+    .maybeSingle();
 
-  Missing tables should NOT crash chat.
-  They simply mean plan infrastructure
-  is not configured yet → default Free.
-  */
-
-  const candidates = [
-    {
-      table: "app_users",
-      column: "plan_type"
-    },
-    {
-      table: "users",
-      column: "plan_type"
-    },
-    {
-      table: "profiles",
-      column: "plan_type"
-    },
-    {
-      table: "profiles",
-      column: "plan"
-    }
-  ];
-
-  for (
-    const candidate
-    of candidates
-  ) {
-    const {
-      data,
-      error
-    } =
-      await supabase
-        .from(
-          candidate.table
-        )
-        .select(
-          candidate.column
-        )
-        .eq(
-          "id",
-          userId
-        )
-        .maybeSingle();
-
-    if (!error) {
-      const value =
-        data?.[
-          candidate.column
-        ];
-
-      if (value) {
-        return String(
-          value
-        );
-      }
-
-      /*
-      Table exists but user has
-      no explicit plan → Free.
-      */
-
-      return "free";
-    }
-
-    /*
-    Missing table / column:
-    try next known schema.
-    */
-
-    if (
-      [
-        "PGRST205",
-        "42P01",
-        "42703"
-      ].includes(
-        String(
-          error?.code ||
-          ""
-        )
-      )
-    ) {
-      continue;
-    }
-
-    /*
-    Real DB failure should still surface.
-    */
-
-    throw error;
+  if (!error) {
+    return (
+      data?.plan_type ||
+      auth?.planType ||
+      auth?.plan_type ||
+      "free"
+    );
   }
 
-  console.warn(
-    "[NEYO Chat] No plan table found; defaulting to free plan."
-  );
+  /*
+   * Plan lookup should never destroy normal chat.
+   * Missing plan schema => session plan => Free fallback.
+   */
+  if (
+    [
+      "PGRST204",
+      "PGRST205",
+      "42P01",
+      "42703"
+    ].includes(
+      String(error?.code || "")
+    )
+  ) {
+    console.warn(
+      "[NEYO Chat] Plan lookup unavailable; using session/free fallback.",
+      {
+        code: error?.code,
+        message: error?.message
+      }
+    );
 
-  return "free";
+    return (
+      auth?.planType ||
+      auth?.plan_type ||
+      "free"
+    );
+  }
+
+  throw error;
 }
 
 
@@ -851,7 +806,7 @@ async function recordUsage(
 
 
 /* =====================================================
-   CREATE CONVERSATION
+   CREATE CONVERSATION — UPDATED: no model_used
    ===================================================== */
 
 async function createConversation(
@@ -860,36 +815,36 @@ async function createConversation(
   title,
   model
 ) {
+  /*
+   * IMPORTANT:
+   * Current production chat_conversations schema
+   * does NOT contain model_used.
+   *
+   * Keep model argument for API compatibility,
+   * but do not write it to Supabase.
+   */
 
   const {
     data,
     error
-  } =
-    await supabase
-      .from(
-        "chat_conversations"
-      )
-      .insert({
-
-        user_id:
-          userId,
-
-        title,
-
-        model_used:
-          model
-      })
-      .select(
-        "id"
-      )
-      .single();
-
+  } = await supabase
+    .from("chat_conversations")
+    .insert({
+      user_id: userId,
+      title
+    })
+    .select("id")
+    .single();
 
   if (error) {
-
     throw error;
   }
 
+  if (!data?.id) {
+    throw new Error(
+      "Conversation could not be created."
+    );
+  }
 
   return data.id;
 }
@@ -2133,8 +2088,10 @@ async function buildAttachmentParts({
   const parts =
     [];
 
+
   const temporaryGeminiFiles =
     [];
+
 
   let usedCharacters =
     0;
@@ -2998,7 +2955,8 @@ export default async function handler(
     const plan =
       await getUserPlan(
         supabase,
-        auth.userId
+        auth.userId,
+        auth
       );
 
 

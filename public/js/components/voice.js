@@ -1,40 +1,31 @@
 /*
 =========================================================
-NEYO — GEMINI LIVE VOICE ENGINE v4
+NEYO — GEMINI LIVE VOICE ENGINE v5
+Character-aware production version
 
-Production baseline
+Fixed character voices:
+- Neyo → Kore
+- Zadi → Orus
+- Wizi → Charon
 
-Features:
-- Gemini 3.1 Flash Live
-- Ephemeral token authentication
-- Character-aware voice
-- Neyo = female Kore voice
-- Continuous microphone
-- Server VAD
-- Natural interruption / barge-in
-- Real mic RMS
-- Real output RMS
-- Hidden input transcription
-- Hidden assistant transcription
-- Mascot mood intelligence bridge
-- Mic mute
-- Speaker mute
-- Clean listening / thinking / speaking states
-
-Character flow:
-neyo.js
-  ↓
-NeyoCharacter.getActive()
-  ↓
-voice.preferredVoice
-  ↓
-Gemini Live speechConfig
+Owns:
+- Gemini Live connection
+- ephemeral token auth
+- microphone capture
+- PCM conversion
+- output playback
+- server VAD
+- interruption
+- transcripts
+- character voice selection
+- mic / speaker control
+- real mic + output energy events
 
 Does NOT own:
 - mascot geometry
-- mascot intelligence
-- voice-mode UI
-- camera
+- mood intelligence
+- voice-mode visual UI
+- character picker UI
 =========================================================
 */
 
@@ -43,41 +34,18 @@ Does NOT own:
 
 
   /* =====================================================
-     BUTTON ISOLATION
+     DOM
      ===================================================== */
 
-  function isolateButton(element) {
-    if (!element) return null;
-
-    const clone =
-      element.cloneNode(true);
-
-    element.replaceWith(
-      clone
-    );
-
-    return clone;
-  }
-
-
   const micBtn =
-    isolateButton(
-      document.getElementById(
-        "micBtn"
-      )
+    document.getElementById(
+      "micBtn"
     );
 
   const stopRecBtn =
-    isolateButton(
-      document.getElementById(
-        "stopRecBtn"
-      )
+    document.getElementById(
+      "stopRecBtn"
     );
-
-
-  /* =====================================================
-     DOM
-     ===================================================== */
 
   const composerInputRow =
     document.querySelector(
@@ -94,6 +62,7 @@ Does NOT own:
     !micBtn ||
     !composerInputRow
   ) {
+
     console.warn(
       "[NEYO Voice] Required DOM missing."
     );
@@ -115,6 +84,9 @@ Does NOT own:
       websocketEndpoint:
         "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained",
 
+      defaultCharacter:
+        "neyo",
+
       defaultVoice:
         "Kore",
 
@@ -131,25 +103,50 @@ Does NOT own:
         256,
 
       setupTimeoutMs:
-        10000,
+        12000,
 
       maxSessionMs:
-        30 * 60 * 1000,
+        28 * 60 * 1000,
 
       playbackLeadSeconds:
         0.08,
 
       vadPrefixPaddingMs:
-        80,
+        90,
 
       vadSilenceDurationMs:
-        850,
+        760,
 
       vadStartSensitivity:
         "START_SENSITIVITY_HIGH",
 
       vadEndSensitivity:
-        "END_SENSITIVITY_LOW"
+        "END_SENSITIVITY_LOW",
+
+      debug:
+        true
+    });
+
+
+  /* =====================================================
+     FIXED VOICE POLICY
+
+     Character profile remains the preferred source.
+     This map protects identity if a profile is missing,
+     stale, or accidentally edited.
+     ===================================================== */
+
+  const CHARACTER_VOICES =
+    Object.freeze({
+
+      neyo:
+        "Kore",
+
+      zadi:
+        "Orus",
+
+      wizi:
+        "Charon"
     });
 
 
@@ -179,26 +176,29 @@ Does NOT own:
     0;
 
 
-  let assistantSpeaking =
-    false;
-
-  let assistantResponsePending =
-    false;
-
-
-  /* =====================================================
-     CHARACTER SESSION
-     ===================================================== */
-
   let sessionCharacterId =
-    "neyo";
+    CONFIG.defaultCharacter;
 
   let sessionVoiceName =
     CONFIG.defaultVoice;
 
 
   /* =====================================================
-     TRANSCRIPTION STATE
+     TURN STATE
+     ===================================================== */
+
+  let assistantSpeaking =
+    false;
+
+  let responsePending =
+    false;
+
+  let lastPhase =
+    "idle";
+
+
+  /* =====================================================
+     TRANSCRIPT STATE
      ===================================================== */
 
   let userTranscriptBuffer =
@@ -239,6 +239,9 @@ Does NOT own:
   let browserInputRate =
     48000;
 
+  let muted =
+    false;
+
 
   /* =====================================================
      OUTPUT STATE
@@ -256,19 +259,42 @@ Does NOT own:
   let playbackStarted =
     false;
 
+  let speakerEnabled =
+    true;
+
   const playingSources =
     new Set();
 
 
   /* =====================================================
-     WAVEFORM
+     WAVEFORM STATE
      ===================================================== */
 
   let waveRaf =
     0;
 
-  let smoothLevel =
+  let smoothMicLevel =
     0;
+
+
+  /* =====================================================
+     LOG
+     ===================================================== */
+
+  function debug(
+    ...args
+  ) {
+
+    if (!CONFIG.debug) {
+      return;
+    }
+
+
+    console.log(
+      "[NEYO Voice]",
+      ...args
+    );
+  }
 
 
   /* =====================================================
@@ -294,17 +320,17 @@ Does NOT own:
     }
 
 
-    const activeId =
+    const id =
       window
         .NeyoCharacters
         ?.active ||
-      "neyo";
+      CONFIG.defaultCharacter;
 
 
     return (
       window
         .NeyoCharacters
-        ?.[activeId]
+        ?.[id]
       ||
       window
         .NeyoCharacters
@@ -312,32 +338,6 @@ Does NOT own:
       ||
       null
     );
-  }
-
-
-  function getActiveVoiceName() {
-
-    const character =
-      getActiveCharacter();
-
-
-    const preferred =
-      character
-        ?.voice
-        ?.preferredVoice;
-
-
-    if (
-      typeof preferred ===
-        "string" &&
-      preferred.trim()
-    ) {
-
-      return preferred.trim();
-    }
-
-
-    return CONFIG.defaultVoice;
   }
 
 
@@ -349,7 +349,75 @@ Does NOT own:
       window
         .NeyoCharacters
         ?.active ||
-      "neyo"
+      CONFIG.defaultCharacter
+    );
+  }
+
+
+  function getActiveVoiceName() {
+
+    const character =
+      getActiveCharacter();
+
+
+    const id =
+      character?.id ||
+      CONFIG.defaultCharacter;
+
+
+    /*
+    Fixed voice policy wins for known
+    production characters.
+    */
+
+    const fixedVoice =
+      CHARACTER_VOICES[id];
+
+
+    if (fixedVoice) {
+      return fixedVoice;
+    }
+
+
+    const profileVoice =
+      character
+        ?.voice
+        ?.preferredVoice;
+
+
+    if (
+      typeof profileVoice ===
+        "string" &&
+      profileVoice.trim()
+    ) {
+
+      return profileVoice.trim();
+    }
+
+
+    return CONFIG.defaultVoice;
+  }
+
+
+  function lockSessionIdentity() {
+
+    sessionCharacterId =
+      getActiveCharacterId();
+
+
+    sessionVoiceName =
+      getActiveVoiceName();
+
+
+    debug(
+      "Session identity locked",
+      {
+        character:
+          sessionCharacterId,
+
+        voice:
+          sessionVoiceName
+      }
     );
   }
 
@@ -374,10 +442,23 @@ Does NOT own:
   }
 
 
-  function setVoiceState(
+  function setPhase(
     phase,
     detail = {}
   ) {
+
+    if (
+      lastPhase ===
+      phase
+    ) {
+
+      return;
+    }
+
+
+    lastPhase =
+      phase;
+
 
     emit(
       `neyo:voice-${phase}`,
@@ -385,19 +466,23 @@ Does NOT own:
         character:
           sessionCharacterId,
 
+        voice:
+          sessionVoiceName,
+
         ...detail
       }
     );
   }
 
 
-  function emitUserText(text) {
+  function emitUserText(
+    text
+  ) {
 
     const value =
       String(
         text || ""
-      )
-        .trim();
+      ).trim();
 
 
     if (!value) {
@@ -418,13 +503,14 @@ Does NOT own:
   }
 
 
-  function emitAssistantText(text) {
+  function emitAssistantText(
+    text
+  ) {
 
     const value =
       String(
         text || ""
-      )
-        .trim();
+      ).trim();
 
 
     if (!value) {
@@ -446,7 +532,7 @@ Does NOT own:
 
 
   /* =====================================================
-     UI
+     UI SYNC
      ===================================================== */
 
   function syncUi() {
@@ -455,7 +541,8 @@ Does NOT own:
       .classList
       .toggle(
         "is-transcribing",
-        connecting || active
+        connecting ||
+        active
       );
 
 
@@ -539,7 +626,7 @@ Does NOT own:
 
   function resetWaveform() {
 
-    smoothLevel =
+    smoothMicLevel =
       0;
 
 
@@ -566,7 +653,7 @@ Does NOT own:
   }
 
 
-  function calculateRms() {
+  function calculateMicRms() {
 
     if (
       !analyser ||
@@ -589,7 +676,8 @@ Does NOT own:
 
     for (
       let i = 0;
-      i < analyserData.length;
+      i <
+      analyserData.length;
       i += 1
     ) {
 
@@ -614,7 +702,9 @@ Does NOT own:
   }
 
 
-  function animateWave(timestamp) {
+  function animateWave(
+    timestamp
+  ) {
 
     if (!active) {
       return;
@@ -622,34 +712,32 @@ Does NOT own:
 
 
     const rms =
-      calculateRms();
+      calculateMicRms();
 
 
     const target =
-      Math.max(
+      clamp(
+        (
+          rms -
+          0.012
+        ) /
+        0.11,
         0,
-        Math.min(
-          1,
-          (
-            rms -
-            0.012
-          ) /
-          0.11
-        )
+        1
       );
 
 
     const smoothing =
       target >
-      smoothLevel
+      smoothMicLevel
         ? 0.30
         : 0.10;
 
 
-    smoothLevel +=
+    smoothMicLevel +=
       (
         target -
-        smoothLevel
+        smoothMicLevel
       ) *
       smoothing;
 
@@ -658,7 +746,9 @@ Does NOT own:
       "neyo:voice-mic-level",
       {
         level:
-          smoothLevel
+          muted
+            ? 0
+            : smoothMicLevel
       }
     );
 
@@ -710,15 +800,15 @@ Does NOT own:
 
 
         const energy =
-          Math.max(
-            0,
-            Math.min(
-              1,
-              smoothLevel *
-              weight *
-              movement
-            )
-          );
+          muted
+            ? 0
+            : clamp(
+                smoothMicLevel *
+                weight *
+                movement,
+                0,
+                1
+              );
 
 
         bar.style.height =
@@ -747,7 +837,27 @@ Does NOT own:
 
 
   /* =====================================================
-     RESAMPLING
+     MATH
+     ===================================================== */
+
+  function clamp(
+    value,
+    min,
+    max
+  ) {
+
+    return Math.max(
+      min,
+      Math.min(
+        max,
+        value
+      )
+    );
+  }
+
+
+  /* =====================================================
+     RESAMPLE
      ===================================================== */
 
   function resampleFloat32(
@@ -790,59 +900,56 @@ Does NOT own:
 
     for (
       let i = 0;
-      i < outputLength;
+      i <
+      outputLength;
       i += 1
     ) {
 
-      const start =
+      const sourcePosition =
+        i *
+        ratio;
+
+
+      const index =
         Math.floor(
-          i *
-          ratio
+          sourcePosition
         );
 
 
-      const end =
-        Math.max(
-          start + 1,
+      const fraction =
+        sourcePosition -
+        index;
+
+
+      const a =
+        input[
           Math.min(
-            input.length,
-            Math.floor(
-              (
-                i +
-                1
-              ) *
-              ratio
-            )
+            index,
+            input.length -
+            1
           )
-        );
-
-
-      let sum =
-        0;
-
-      let count =
+        ] ||
         0;
 
 
-      for (
-        let j = start;
-        j < end;
-        j += 1
-      ) {
-
-        sum +=
-          input[j];
-
-        count +=
-          1;
-      }
+      const b =
+        input[
+          Math.min(
+            index + 1,
+            input.length -
+            1
+          )
+        ] ||
+        a;
 
 
       output[i] =
-        count
-          ? sum /
-            count
-          : 0;
+        a +
+        (
+          b -
+          a
+        ) *
+        fraction;
     }
 
 
@@ -854,7 +961,9 @@ Does NOT own:
      FLOAT32 → PCM16
      ===================================================== */
 
-  function float32ToPcm16(samples) {
+  function float32ToPcm16(
+    samples
+  ) {
 
     const bytes =
       new Uint8Array(
@@ -871,17 +980,16 @@ Does NOT own:
 
     for (
       let i = 0;
-      i < samples.length;
+      i <
+      samples.length;
       i += 1
     ) {
 
       const sample =
-        Math.max(
+        clamp(
+          samples[i],
           -1,
-          Math.min(
-            1,
-            samples[i]
-          )
+          1
         );
 
 
@@ -909,7 +1017,9 @@ Does NOT own:
      PCM16 → FLOAT32
      ===================================================== */
 
-  function pcm16ToFloat32(bytes) {
+  function pcm16ToFloat32(
+    bytes
+  ) {
 
     const count =
       Math.floor(
@@ -934,7 +1044,8 @@ Does NOT own:
 
     for (
       let i = 0;
-      i < count;
+      i <
+      count;
       i += 1
     ) {
 
@@ -963,7 +1074,9 @@ Does NOT own:
      BASE64
      ===================================================== */
 
-  function bytesToBase64(bytes) {
+  function bytesToBase64(
+    bytes
+  ) {
 
     let binary =
       "";
@@ -975,7 +1088,8 @@ Does NOT own:
 
     for (
       let i = 0;
-      i < bytes.length;
+      i <
+      bytes.length;
       i += chunkSize
     ) {
 
@@ -1004,10 +1118,14 @@ Does NOT own:
   }
 
 
-  function base64ToBytes(value) {
+  function base64ToBytes(
+    value
+  ) {
 
     const binary =
-      atob(value);
+      atob(
+        value
+      );
 
 
     const bytes =
@@ -1018,7 +1136,8 @@ Does NOT own:
 
     for (
       let i = 0;
-      i < binary.length;
+      i <
+      binary.length;
       i += 1
     ) {
 
@@ -1088,7 +1207,9 @@ Does NOT own:
 
 
     masterGain.gain.value =
-      1;
+      speakerEnabled
+        ? 1
+        : 0;
 
 
     masterGain.connect(
@@ -1107,6 +1228,10 @@ Does NOT own:
     return outputContext;
   }
 
+
+  /* =====================================================
+     OUTPUT RATE
+     ===================================================== */
 
   function getSampleRateFromMime(
     mimeType
@@ -1138,6 +1263,58 @@ Does NOT own:
     )
       ? rate
       : CONFIG.outputSampleRate;
+  }
+
+
+  /* =====================================================
+     OUTPUT RMS
+     ===================================================== */
+
+  function calculateOutputLevel(
+    samples
+  ) {
+
+    if (
+      !samples.length
+    ) {
+
+      return 0;
+    }
+
+
+    let sum =
+      0;
+
+
+    for (
+      let i = 0;
+      i <
+      samples.length;
+      i += 1
+    ) {
+
+      sum +=
+        samples[i] *
+        samples[i];
+    }
+
+
+    const rms =
+      Math.sqrt(
+        sum /
+        samples.length
+      );
+
+
+    return clamp(
+      (
+        rms -
+        0.008
+      ) /
+      0.16,
+      0,
+      1
+    );
   }
 
 
@@ -1174,48 +1351,14 @@ Does NOT own:
     if (
       !samples.length
     ) {
+
       return;
     }
 
 
-    /*
-    Real assistant audio RMS
-    */
-
-    let sum =
-      0;
-
-
-    for (
-      let i = 0;
-      i < samples.length;
-      i += 1
-    ) {
-
-      sum +=
-        samples[i] *
-        samples[i];
-    }
-
-
-    const outputRms =
-      Math.sqrt(
-        sum /
-        samples.length
-      );
-
-
     const outputLevel =
-      Math.max(
-        0,
-        Math.min(
-          1,
-          (
-            outputRms -
-            0.01
-          ) /
-          0.16
-        )
+      calculateOutputLevel(
+        samples
       );
 
 
@@ -1244,7 +1387,9 @@ Does NOT own:
 
     buffer
       .getChannelData(0)
-      .set(samples);
+      .set(
+        samples
+      );
 
 
     const source =
@@ -1269,11 +1414,11 @@ Does NOT own:
       assistantSpeaking =
         true;
 
-      assistantResponsePending =
+      responsePending =
         false;
 
 
-      setVoiceState(
+      setPhase(
         "speaking"
       );
     }
@@ -1369,7 +1514,7 @@ Does NOT own:
     assistantSpeaking =
       false;
 
-    assistantResponsePending =
+    responsePending =
       false;
 
 
@@ -1387,26 +1532,39 @@ Does NOT own:
      MIC MUTE
      ===================================================== */
 
-  function setMuted(muted) {
+  function setMuted(
+    value
+  ) {
 
-    const value =
+    muted =
       Boolean(
-        muted
+        value
       );
 
 
     if (micTrack) {
 
       micTrack.enabled =
-        !value;
+        !muted;
+    }
+
+
+    if (muted) {
+
+      emit(
+        "neyo:voice-mic-level",
+        {
+          level:
+            0
+        }
+      );
     }
 
 
     emit(
       "neyo:voice-muted",
       {
-        muted:
-          value
+        muted
       }
     );
   }
@@ -1417,12 +1575,12 @@ Does NOT own:
      ===================================================== */
 
   function setSpeakerEnabled(
-    enabled
+    value
   ) {
 
-    const value =
+    speakerEnabled =
       Boolean(
-        enabled
+        value
       );
 
 
@@ -1431,7 +1589,7 @@ Does NOT own:
     ) {
 
       masterGain.gain.value =
-        value
+        speakerEnabled
           ? 1
           : 0;
     }
@@ -1441,7 +1599,7 @@ Does NOT own:
       "neyo:voice-speaker",
       {
         enabled:
-          value
+          speakerEnabled
       }
     );
   }
@@ -1489,9 +1647,7 @@ Does NOT own:
     } catch {}
 
 
-    if (
-      !response.ok
-    ) {
+    if (!response.ok) {
 
       throw new Error(
         data?.error ||
@@ -1527,6 +1683,18 @@ Does NOT own:
     }
 
 
+    if (
+      !navigator
+        .mediaDevices
+        ?.getUserMedia
+    ) {
+
+      throw new Error(
+        "Microphone unavailable."
+      );
+    }
+
+
     micStream =
       await navigator
         .mediaDevices
@@ -1552,14 +1720,18 @@ Does NOT own:
         });
 
 
-    const tracks =
-      micStream
-        .getAudioTracks();
-
-
     micTrack =
-      tracks[0] ||
+      micStream
+        .getAudioTracks()
+        [0] ||
       null;
+
+
+    if (micTrack) {
+
+      micTrack.enabled =
+        !muted;
+    }
 
 
     const AudioContextClass =
@@ -1662,18 +1834,12 @@ Does NOT own:
         if (
           !active ||
           !setupComplete ||
+          muted ||
           !socket ||
           socket.readyState !==
             WebSocket.OPEN
         ) {
-          return;
-        }
 
-
-        if (
-          micTrack &&
-          !micTrack.enabled
-        ) {
           return;
         }
 
@@ -1698,31 +1864,38 @@ Does NOT own:
           );
 
 
-        socket.send(
-          JSON.stringify({
-            realtimeInput: {
-              audio: {
-                data:
-                  bytesToBase64(
-                    pcm
-                  ),
+        try {
 
-                mimeType:
-                  "audio/pcm;rate=16000"
+          socket.send(
+            JSON.stringify({
+
+              realtimeInput: {
+
+                audio: {
+
+                  data:
+                    bytesToBase64(
+                      pcm
+                    ),
+
+                  mimeType:
+                    "audio/pcm;rate=16000"
+                }
               }
-            }
-          })
-        );
+            })
+          );
+
+        } catch {}
       };
 
 
-    console.log(
-      "[NEYO Voice] Microphone active",
+    debug(
+      "Microphone ready",
       {
         browserRate:
           browserInputRate,
 
-        liveRate:
+        sentRate:
           CONFIG.inputSampleRate
       }
     );
@@ -1853,7 +2026,7 @@ Does NOT own:
 
 
   /* =====================================================
-     SOCKET DECODER
+     SOCKET MESSAGE DECODER
      ===================================================== */
 
   async function decodeSocketMessage(
@@ -1910,7 +2083,7 @@ Does NOT own:
 
 
   /* =====================================================
-     TRANSCRIPTION
+     TRANSCRIPT
      ===================================================== */
 
   function appendTranscript(
@@ -1925,22 +2098,47 @@ Does NOT own:
 
 
     if (!value) {
-
       return current;
     }
 
 
     if (!current) {
-
       return value;
     }
 
 
     /*
-    Gemini transcript chunks may already
-    include punctuation/spaces.
-    Keep accumulation simple.
+    Avoid obvious duplicate cumulative chunks.
     */
+
+    if (
+      value ===
+      current
+    ) {
+
+      return current;
+    }
+
+
+    if (
+      value.startsWith(
+        current
+      )
+    ) {
+
+      return value;
+    }
+
+
+    if (
+      current.endsWith(
+        value
+      )
+    ) {
+
+      return current;
+    }
+
 
     return `${current} ${value}`
       .replace(
@@ -1961,9 +2159,7 @@ Does NOT own:
         ?.text;
 
 
-    if (
-      inputText
-    ) {
+    if (inputText) {
 
       userTranscriptBuffer =
         appendTranscript(
@@ -1984,9 +2180,7 @@ Does NOT own:
         ?.text;
 
 
-    if (
-      outputText
-    ) {
+    if (outputText) {
 
       assistantTranscriptBuffer =
         appendTranscript(
@@ -2003,174 +2197,12 @@ Does NOT own:
 
 
   /* =====================================================
-     SERVER MESSAGE
+     MODEL AUDIO PARTS
      ===================================================== */
 
-  async function handleServerMessage(
-    message
+  async function handleModelParts(
+    parts
   ) {
-
-    /* ---------------------------------------------
-       SETUP COMPLETE
-       --------------------------------------------- */
-
-    if (
-      message
-        ?.setupComplete
-    ) {
-
-      console.log(
-        "[NEYO Voice] Gemini setup complete",
-        {
-          character:
-            sessionCharacterId,
-
-          voice:
-            sessionVoiceName
-        }
-      );
-
-
-      clearTimeout(
-        setupTimer
-      );
-
-
-      setupTimer =
-        0;
-
-
-      setupComplete =
-        true;
-
-
-      userTranscriptBuffer =
-        "";
-
-      assistantTranscriptBuffer =
-        "";
-
-
-      await startMicrophone();
-
-
-      active =
-        true;
-
-      connecting =
-        false;
-
-
-      assistantSpeaking =
-        false;
-
-      assistantResponsePending =
-        false;
-
-
-      syncUi();
-
-      resetWaveform();
-
-
-      waveRaf =
-        requestAnimationFrame(
-          animateWave
-        );
-
-
-      setVoiceState(
-        "listening"
-      );
-
-
-      clearTimeout(
-        sessionTimer
-      );
-
-
-      sessionTimer =
-        setTimeout(
-          () => {
-
-            stopConversation();
-
-          },
-          CONFIG.maxSessionMs
-        );
-
-
-      return;
-    }
-
-
-    const serverContent =
-      message
-        ?.serverContent;
-
-
-    if (!serverContent) {
-      return;
-    }
-
-
-    handleTranscription(
-      serverContent
-    );
-
-
-    /* ---------------------------------------------
-       INTERRUPTED
-       --------------------------------------------- */
-
-    if (
-      serverContent.interrupted
-    ) {
-
-      stopPlayback();
-
-
-      assistantTranscriptBuffer =
-        "";
-
-
-      setVoiceState(
-        "interrupted"
-      );
-
-
-      setTimeout(
-        () => {
-
-          if (
-            active &&
-            !assistantSpeaking
-          ) {
-
-            setVoiceState(
-              "listening"
-            );
-          }
-
-        },
-        140
-      );
-
-
-      return;
-    }
-
-
-    /* ---------------------------------------------
-       MODEL AUDIO
-       --------------------------------------------- */
-
-    const parts =
-      serverContent
-        ?.modelTurn
-        ?.parts ||
-      [];
-
 
     let hasAudio =
       false;
@@ -2203,23 +2235,6 @@ Does NOT own:
         true;
 
 
-      if (
-        !assistantSpeaking
-      ) {
-
-        assistantSpeaking =
-          true;
-
-        assistantResponsePending =
-          false;
-
-
-        setVoiceState(
-          "speaking"
-        );
-      }
-
-
       await playAudioChunk(
         inline.data,
         inline.mimeType
@@ -2227,39 +2242,236 @@ Does NOT own:
     }
 
 
-    /* ---------------------------------------------
-       THINKING
-       --------------------------------------------- */
+    return hasAudio;
+  }
+
+
+  /* =====================================================
+     SERVER MESSAGE
+     ===================================================== */
+
+  async function handleServerMessage(
+    message
+  ) {
 
     if (
-      serverContent.modelTurn &&
-      !hasAudio &&
-      !assistantSpeaking
+      message?.setupComplete
     ) {
 
-      assistantResponsePending =
+      debug(
+        "Gemini setup complete",
+        {
+          character:
+            sessionCharacterId,
+
+          voice:
+            sessionVoiceName
+        }
+      );
+
+
+      clearTimeout(
+        setupTimer
+      );
+
+
+      setupTimer =
+        0;
+
+      setupComplete =
         true;
 
 
-      setVoiceState(
-        "thinking"
+      await startMicrophone();
+
+
+      active =
+        true;
+
+      connecting =
+        false;
+
+
+      assistantSpeaking =
+        false;
+
+      responsePending =
+        false;
+
+
+      userTranscriptBuffer =
+        "";
+
+      assistantTranscriptBuffer =
+        "";
+
+
+      syncUi();
+
+      resetWaveform();
+
+
+      waveRaf =
+        requestAnimationFrame(
+          animateWave
+        );
+
+
+      lastPhase =
+        "";
+
+      setPhase(
+        "listening"
       );
+
+
+      clearTimeout(
+        sessionTimer
+      );
+
+
+      sessionTimer =
+        setTimeout(
+          () => {
+
+            stopConversation();
+
+          },
+          CONFIG.maxSessionMs
+        );
+
+
+      return;
     }
 
 
-    /* ---------------------------------------------
+    const serverContent =
+      message
+        ?.serverContent;
+
+
+    if (!serverContent) {
+
+      return;
+    }
+
+
+    handleTranscription(
+      serverContent
+    );
+
+
+    /* =================================================
+       INTERRUPTION
+       ================================================= */
+
+    if (
+      serverContent.interrupted
+    ) {
+
+      stopPlayback();
+
+
+      assistantTranscriptBuffer =
+        "";
+
+
+      lastPhase =
+        "";
+
+      setPhase(
+        "interrupted"
+      );
+
+
+      setTimeout(
+        () => {
+
+          if (
+            active &&
+            !assistantSpeaking
+          ) {
+
+            setPhase(
+              "listening"
+            );
+          }
+
+        },
+        120
+      );
+
+
+      return;
+    }
+
+
+    /* =================================================
+       MODEL TURN
+       ================================================= */
+
+    const parts =
+      serverContent
+        ?.modelTurn
+        ?.parts ||
+      [];
+
+
+    if (
+      serverContent.modelTurn
+    ) {
+
+      if (
+        !assistantSpeaking
+      ) {
+
+        responsePending =
+          true;
+
+
+        setPhase(
+          "thinking"
+        );
+      }
+
+
+      const hasAudio =
+        await handleModelParts(
+          parts
+        );
+
+
+      if (
+        hasAudio
+      ) {
+
+        responsePending =
+          false;
+
+        assistantSpeaking =
+          true;
+
+
+        setPhase(
+          "speaking"
+        );
+      }
+    }
+
+
+    /* =================================================
        TURN COMPLETE
-       --------------------------------------------- */
+       ================================================= */
 
     if (
       serverContent.turnComplete
     ) {
 
-      assistantResponsePending =
+      responsePending =
         false;
 
 
-      const waitForPlayback =
+      const waitUntilPlaybackEnds =
         () => {
 
           if (
@@ -2268,8 +2480,8 @@ Does NOT own:
           ) {
 
             setTimeout(
-              waitForPlayback,
-              30
+              waitUntilPlaybackEnds,
+              25
             );
 
 
@@ -2281,13 +2493,6 @@ Does NOT own:
             false;
 
 
-          userTranscriptBuffer =
-            "";
-
-          assistantTranscriptBuffer =
-            "";
-
-
           emit(
             "neyo:voice-output-level",
             {
@@ -2297,17 +2502,68 @@ Does NOT own:
           );
 
 
+          userTranscriptBuffer =
+            "";
+
+          assistantTranscriptBuffer =
+            "";
+
+
           if (active) {
 
-            setVoiceState(
+            setPhase(
               "listening"
             );
           }
         };
 
 
-      waitForPlayback();
+      waitUntilPlaybackEnds();
     }
+  }
+
+
+  /* =====================================================
+     SYSTEM INSTRUCTION
+     ===================================================== */
+
+  function buildSystemInstruction() {
+
+    const character =
+      getActiveCharacter();
+
+
+    const name =
+      character
+        ?.name ||
+      "Neyo";
+
+
+    const tone =
+      character
+        ?.voice
+        ?.tone ||
+      "natural";
+
+
+    const responseStyle =
+      character
+        ?.behavior
+        ?.responseStyle ||
+      "balanced";
+
+
+    return [
+      `You are ${name}, a conversational AI assistant.`,
+      `Speak naturally and fluidly.`,
+      `Use a ${tone} vocal manner.`,
+      `Your response style is ${responseStyle}.`,
+      `Do not mention voice configuration or character metadata.`,
+      `Keep spoken answers concise unless the user asks for depth.`,
+      `Allow natural interruptions and continue conversationally.`
+    ].join(
+      " "
+    );
   }
 
 
@@ -2319,29 +2575,7 @@ Does NOT own:
     credentials
   ) {
 
-    /*
-    Voice is locked once per Live session.
-    Character change should start a fresh session.
-    */
-
-    sessionCharacterId =
-      getActiveCharacterId();
-
-
-    sessionVoiceName =
-      getActiveVoiceName();
-
-
-    console.log(
-      "[NEYO Voice] Session identity",
-      {
-        character:
-          sessionCharacterId,
-
-        voice:
-          sessionVoiceName
-      }
-    );
+    lockSessionIdentity();
 
 
     return {
@@ -2373,12 +2607,16 @@ Does NOT own:
         },
 
 
-        /*
-        Hidden transcription feeds
-        mascot-intelligence.js.
+        systemInstruction: {
 
-        Not shown in chat UI.
-        */
+          parts: [
+            {
+              text:
+                buildSystemInstruction()
+            }
+          ]
+        },
+
 
         inputAudioTranscription:
           {},
@@ -2422,6 +2660,28 @@ Does NOT own:
 
 
   /* =====================================================
+     SOCKET
+     ===================================================== */
+
+  function createSocket(
+    token
+  ) {
+
+    const url =
+      `${CONFIG.websocketEndpoint}?access_token=${
+        encodeURIComponent(
+          token
+        )
+      }`;
+
+
+    return new WebSocket(
+      url
+    );
+  }
+
+
+  /* =====================================================
      START
      ===================================================== */
 
@@ -2437,22 +2697,16 @@ Does NOT own:
     }
 
 
-    /*
-    Open screen first.
-    Character should already be selected
-    before this point.
-    */
-
-    window
-      .NeyoVoiceMode
-      ?.open
-      ?.();
-
-
     connecting =
       true;
 
     setupComplete =
+      false;
+
+    assistantSpeaking =
+      false;
+
+    responsePending =
       false;
 
 
@@ -2466,23 +2720,13 @@ Does NOT own:
     syncUi();
 
 
+    window
+      .NeyoVoiceMode
+      ?.open
+      ?.();
+
+
     try {
-
-      if (
-        !navigator
-          .mediaDevices
-          ?.getUserMedia
-      ) {
-
-        throw new Error(
-          "Microphone unavailable."
-        );
-      }
-
-
-      /*
-      User gesture unlocks audio.
-      */
 
       await ensureOutputContext();
 
@@ -2491,23 +2735,9 @@ Does NOT own:
         await fetchVoiceToken();
 
 
-      console.log(
-        "[NEYO Voice] Token received",
-        credentials.model
-      );
-
-
-      const socketUrl =
-        `${CONFIG.websocketEndpoint}?access_token=${
-          encodeURIComponent(
-            credentials.token
-          )
-        }`;
-
-
       socket =
-        new WebSocket(
-          socketUrl
+        createSocket(
+          credentials.token
         );
 
 
@@ -2517,11 +2747,6 @@ Does NOT own:
 
       socket.onopen =
         () => {
-
-          console.log(
-            "[NEYO Voice] WebSocket opened"
-          );
-
 
           const setupMessage =
             buildSetupMessage(
@@ -2536,21 +2761,17 @@ Does NOT own:
           );
 
 
-          console.log(
-            "[NEYO Voice] Setup sent",
+          debug(
+            "Setup sent",
             {
+              model:
+                credentials.model,
+
               character:
                 sessionCharacterId,
 
               voice:
-                sessionVoiceName,
-
-              transcription:
-                true,
-
-              vadSilenceMs:
-                CONFIG
-                  .vadSilenceDurationMs
+                sessionVoiceName
             }
           );
 
@@ -2569,7 +2790,12 @@ Does NOT own:
                 ) {
 
                   console.error(
-                    "[NEYO Voice] Setup timed out"
+                    "[NEYO Voice] Setup timeout"
+                  );
+
+
+                  setPhase(
+                    "error"
                   );
 
 
@@ -2606,7 +2832,7 @@ Does NOT own:
           } catch (error) {
 
             console.error(
-              "[NEYO Voice] Invalid server message:",
+              "[NEYO Voice] Message error:",
               error
             );
           }
@@ -2614,15 +2840,15 @@ Does NOT own:
 
 
       socket.onerror =
-        event => {
+        error => {
 
           console.error(
-            "[NEYO Voice] WebSocket error:",
-            event
+            "[NEYO Voice] Socket error:",
+            error
           );
 
 
-          setVoiceState(
+          setPhase(
             "error"
           );
         };
@@ -2631,20 +2857,24 @@ Does NOT own:
       socket.onclose =
         event => {
 
-          console.log(
-            "[NEYO Voice] WebSocket closed",
+          debug(
+            "Socket closed",
             {
               code:
                 event.code,
 
               reason:
                 event.reason ||
-                "(no reason)",
+                "(none)",
 
               clean:
                 event.wasClean
             }
           );
+
+
+          socket =
+            null;
 
 
           if (
@@ -2671,50 +2901,12 @@ Does NOT own:
       );
 
 
-      connecting =
-        false;
-
-      active =
-        false;
-
-      setupComplete =
-        false;
-
-
-      clearTimeout(
-        setupTimer
+      setPhase(
+        "error"
       );
 
 
-      setupTimer =
-        0;
-
-
-      await stopMicrophone();
-
-      stopPlayback();
-
-
-      if (socket) {
-
-        try {
-          socket.close();
-        } catch {}
-
-
-        socket =
-          null;
-      }
-
-
-      userTranscriptBuffer =
-        "";
-
-      assistantTranscriptBuffer =
-        "";
-
-
-      syncUi();
+      await cleanupSession();
 
 
       window
@@ -2722,56 +2914,17 @@ Does NOT own:
         ?.close
         ?.({
           stopVoice:
-            false,
-
-          emitClose:
-            true
+            false
         });
-
-
-      setVoiceState(
-        "error"
-      );
     }
   }
 
 
   /* =====================================================
-     STOP
+     CLEANUP
      ===================================================== */
 
-  async function stopConversation({
-    closeSocket = true
-  } = {}) {
-
-    if (stopping) {
-      return;
-    }
-
-
-    if (
-      !active &&
-      !connecting &&
-      !socket
-    ) {
-
-      return;
-    }
-
-
-    stopping =
-      true;
-
-
-    active =
-      false;
-
-    connecting =
-      false;
-
-    setupComplete =
-      false;
-
+  async function cleanupSession() {
 
     clearTimeout(
       setupTimer
@@ -2791,29 +2944,26 @@ Does NOT own:
       0;
 
 
+    active =
+      false;
+
+    connecting =
+      false;
+
+    setupComplete =
+      false;
+
+
+    assistantSpeaking =
+      false;
+
+    responsePending =
+      false;
+
+
     await stopMicrophone();
 
     stopPlayback();
-
-
-    if (
-      closeSocket &&
-      socket
-    ) {
-
-      try {
-
-        socket.close(
-          1000,
-          "User ended voice conversation"
-        );
-
-      } catch {}
-    }
-
-
-    socket =
-      null;
 
 
     userTranscriptBuffer =
@@ -2824,36 +2974,104 @@ Does NOT own:
 
 
     syncUi();
+  }
+
+
+  /* =====================================================
+     STOP
+     ===================================================== */
+
+  async function stopConversation({
+    closeSocket = true,
+    closeUi = true
+  } = {}) {
+
+    if (stopping) {
+      return;
+    }
+
+
+    if (
+      !active &&
+      !connecting &&
+      !socket
+    ) {
+
+      if (closeUi) {
+
+        window
+          .NeyoVoiceMode
+          ?.close
+          ?.({
+            stopVoice:
+              false
+          });
+      }
+
+
+      return;
+    }
+
+
+    stopping =
+      true;
+
+
+    const currentSocket =
+      socket;
+
+
+    socket =
+      null;
+
+
+    await cleanupSession();
+
+
+    if (
+      closeSocket &&
+      currentSocket
+    ) {
+
+      try {
+
+        currentSocket.close(
+          1000,
+          "Voice session ended"
+        );
+
+      } catch {}
+    }
 
 
     stopping =
       false;
 
 
-    /*
-    voice-mode.js owns visual close.
-    stopVoice:false avoids recursion.
-    */
+    lastPhase =
+      "";
 
-    window
-      .NeyoVoiceMode
-      ?.close
-      ?.({
-        stopVoice:
-          false,
-
-        emitClose:
-          true
-      });
-
-
-    setVoiceState(
+    setPhase(
       "idle"
     );
 
 
-    console.log(
-      "[NEYO Voice] Conversation stopped"
+    if (closeUi) {
+
+      window
+        .NeyoVoiceMode
+        ?.close
+        ?.({
+          stopVoice:
+            false,
+          emitClose:
+            true
+        });
+    }
+
+
+    debug(
+      "Conversation stopped"
     );
   }
 
@@ -2861,12 +3079,57 @@ Does NOT own:
   /* =====================================================
      CHARACTER CHANGE
 
-     Voice cannot safely swap inside the
-     existing Live session.
-
-     Character selector can listen to this
-     and restart voice when needed later.
+     Voice is session-scoped.
+     Character changes during a running session
+     require a fresh Live session.
      ===================================================== */
+
+  async function restartForCharacter(
+    characterId
+  ) {
+
+    const wasRunning =
+      active ||
+      connecting;
+
+
+    if (!wasRunning) {
+      return;
+    }
+
+
+    debug(
+      "Restarting for character",
+      characterId
+    );
+
+
+    await stopConversation({
+      closeSocket:
+        true,
+
+      closeUi:
+        false
+    });
+
+
+    /*
+    Give previous socket a tiny moment
+    to release audio/session resources.
+    */
+
+    await new Promise(
+      resolve =>
+        setTimeout(
+          resolve,
+          120
+        )
+    );
+
+
+    await startConversation();
+  }
+
 
   window.addEventListener(
     "neyo:character-change",
@@ -2883,9 +3146,16 @@ Does NOT own:
       }
 
 
-      console.log(
-        "[NEYO Voice] Character changed:",
-        id
+      emit(
+        "neyo:voice-character-changed",
+        {
+          character:
+            id,
+
+          voice:
+            CHARACTER_VOICES[id] ||
+            getActiveVoiceName()
+        }
       );
 
 
@@ -2894,12 +3164,8 @@ Does NOT own:
         connecting
       ) {
 
-        emit(
-          "neyo:voice-character-restart-required",
-          {
-            character:
-              id
-          }
+        restartForCharacter(
+          id
         );
       }
     }
@@ -2907,7 +3173,7 @@ Does NOT own:
 
 
   /* =====================================================
-     BUTTON EVENTS
+     MAIN BUTTON
      ===================================================== */
 
   micBtn.addEventListener(
@@ -2915,10 +3181,6 @@ Does NOT own:
     event => {
 
       event.preventDefault();
-
-      event.stopPropagation();
-
-      event.stopImmediatePropagation();
 
 
       if (
@@ -2938,9 +3200,7 @@ Does NOT own:
 
         startConversation();
       }
-
-    },
-    true
+    }
   );
 
 
@@ -2951,17 +3211,15 @@ Does NOT own:
 
         event.preventDefault();
 
-        event.stopPropagation();
-
-        event.stopImmediatePropagation();
-
 
         stopConversation();
-
-      },
-      true
+      }
     );
 
+
+  /* =====================================================
+     ESCAPE
+     ===================================================== */
 
   document.addEventListener(
     "keydown",
@@ -2982,12 +3240,18 @@ Does NOT own:
   );
 
 
+  /* =====================================================
+     PAGE CLEANUP
+     ===================================================== */
+
   window.addEventListener(
     "pagehide",
     () => {
 
-      stopConversation();
-
+      stopConversation({
+        closeUi:
+          false
+      });
     },
     {
       once:
@@ -3009,9 +3273,13 @@ Does NOT own:
       stop:
         stopConversation,
 
+      restartForCharacter,
+
       setMuted,
 
       setSpeakerEnabled,
+
+      getActiveVoiceName,
 
       isActive:
         () =>
@@ -3023,20 +3291,31 @@ Does NOT own:
 
       getSessionInfo:
         () => ({
+
           active,
+
           connecting,
+
+          setupComplete,
 
           character:
             sessionCharacterId,
 
           voice:
-            sessionVoiceName
+            sessionVoiceName,
+
+          muted,
+
+          speakerEnabled
         }),
 
-      getActiveVoiceName,
+      getVoiceMap:
+        () => ({
+          ...CHARACTER_VOICES
+        }),
 
       engine:
-        "gemini-live-character-aware-v4"
+        "gemini-live-character-aware-v5"
     });
 
 
@@ -3049,14 +3328,17 @@ Does NOT own:
   syncUi();
 
 
-  console.log(
-    "[NEYO Voice] Character-aware engine v4 ready",
+  debug(
+    "Engine ready",
     {
-      character:
+      selectedCharacter:
         getActiveCharacterId(),
 
-      voice:
-        getActiveVoiceName()
+      selectedVoice:
+        getActiveVoiceName(),
+
+      voiceMap:
+        CHARACTER_VOICES
     }
   );
 

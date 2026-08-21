@@ -1,49 +1,38 @@
 /*
 =========================================================
 NEYO — ATTACHMENT UPLOAD AUTHORIZATION
-FINAL v1
+FINAL v2
 
 FILE:
 api/attachments/upload.js
 
-PURPOSE:
-- Authenticate current NEYO user
-- Validate attachment metadata
-- Generate secure user-scoped storage path
-- Create Supabase signed upload URL
-- Return upload contract to attachments.js
+RESPONSIBILITIES
+---------------------------------------------------------
+✅ Authenticate user
+✅ Validate file metadata
+✅ Enforce upload size limit
+✅ Create isolated user storage path
+✅ Create signed Supabase upload URL
+✅ Return upload session to frontend
 
-IMPORTANT:
-- This endpoint DOES NOT receive file bytes.
-- Browser uploads directly to Supabase Storage.
-- Service role key NEVER leaves the server.
-- No anonymous upload paths.
-- neo.js is untouched.
-
-FLOW:
-
-attachments.js
-    ↓
-POST /api/attachments/upload
-    ↓
-authenticate user
-    ↓
-validate metadata
-    ↓
-users/{userId}/{uploadId}/{filename}
-    ↓
-Supabase createSignedUploadUrl()
-    ↓
-signedUrl + token
-    ↓
-browser uploads file directly
-
+DOES NOT:
+❌ Receive file bytes
+❌ Parse files
+❌ Process files
+❌ Touch chat
+❌ Touch neo.js
 =========================================================
 */
 
 import crypto from "node:crypto";
-import { createClient } from "@supabase/supabase-js";
-import { getAuthenticatedUser } from "../../lib/auth.js";
+
+import {
+  createClient
+} from "@supabase/supabase-js";
+
+import {
+  getAuthenticatedUser
+} from "../../lib/auth.js";
 
 
 /* =====================================================
@@ -53,29 +42,27 @@ import { getAuthenticatedUser } from "../../lib/auth.js";
 const BUCKET =
   "neyo-attachments";
 
+
 const MAX_FILE_SIZE =
   100 * 1024 * 1024;
+
 
 const MAX_BODY_SIZE =
   64 * 1024;
 
-const MAX_FILE_NAME_LENGTH =
+
+const MAX_FILENAME_LENGTH =
   220;
 
-const MAX_MIME_LENGTH =
-  180;
-
-const MAX_CATEGORY_LENGTH =
-  64;
 
 const ALLOWED_CATEGORIES =
   new Set([
-    "image",
-    "audio",
-    "video",
     "document",
     "spreadsheet",
     "presentation",
+    "image",
+    "audio",
+    "video",
     "archive",
     "data",
     "code",
@@ -85,75 +72,98 @@ const ALLOWED_CATEGORIES =
 
 
 /* =====================================================
-   SUPABASE ENV
+   ENV
    ===================================================== */
 
-const SUPABASE_URL =
-  process.env.SUPABASE_URL;
-
-const SUPABASE_SERVICE_ROLE_KEY =
-  process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-
-/* =====================================================
-   SUPABASE SERVER CLIENT
-   ===================================================== */
-
-let supabaseAdmin =
-  null;
-
-
-function getSupabaseAdmin() {
-  if (supabaseAdmin) {
-    return supabaseAdmin;
-  }
-
-
-  if (!SUPABASE_URL) {
-    throw new Error(
-      "SUPABASE_URL is not configured."
-    );
-  }
-
-
-  if (!SUPABASE_SERVICE_ROLE_KEY) {
-    throw new Error(
-      "SUPABASE_SERVICE_ROLE_KEY is not configured."
-    );
-  }
-
-
-  supabaseAdmin =
-    createClient(
-      SUPABASE_URL,
-      SUPABASE_SERVICE_ROLE_KEY,
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false,
-          detectSessionInUrl: false
-        }
-      }
-    );
-
-
-  return supabaseAdmin;
+function cleanEnv(
+  value
+) {
+  return typeof value ===
+    "string"
+      ? value
+          .trim()
+          .replace(
+            /^["']|["']$/g,
+            ""
+          )
+      : "";
 }
 
 
 /* =====================================================
-   RESPONSE HELPERS
+   SUPABASE ADMIN
    ===================================================== */
 
-function setCommonHeaders(res) {
+function createSupabaseAdmin() {
+  const url =
+    cleanEnv(
+      process.env
+        .SUPABASE_URL
+    );
+
+
+  const key =
+    cleanEnv(
+      process.env
+        .SUPABASE_SERVICE_ROLE_KEY
+    );
+
+
+  if (!url) {
+    throw new Error(
+      "SUPABASE_URL is missing."
+    );
+  }
+
+
+  if (!key) {
+    throw new Error(
+      "SUPABASE_SERVICE_ROLE_KEY is missing."
+    );
+  }
+
+
+  return createClient(
+    url,
+    key,
+    {
+      auth: {
+        persistSession:
+          false,
+
+        autoRefreshToken:
+          false,
+
+        detectSessionInUrl:
+          false
+      },
+
+      global: {
+        headers: {
+          "X-Client-Info":
+            "signaturesi-neyo-attachment-upload"
+        }
+      }
+    }
+  );
+}
+
+
+/* =====================================================
+   JSON HEADERS
+   ===================================================== */
+
+function setJsonHeaders(
+  res
+) {
   res.setHeader(
-    "Cache-Control",
-    "no-store, no-cache, must-revalidate"
+    "Content-Type",
+    "application/json; charset=utf-8"
   );
 
   res.setHeader(
-    "Pragma",
-    "no-cache"
+    "Cache-Control",
+    "no-store, max-age=0"
   );
 
   res.setHeader(
@@ -163,130 +173,98 @@ function setCommonHeaders(res) {
 }
 
 
-function sendJson(
-  res,
-  status,
-  body
-) {
-  setCommonHeaders(
-    res
-  );
-
-  return res
-    .status(status)
-    .json(body);
-}
-
-
 /* =====================================================
-   REQUEST BODY READER
-
-   Supports:
-   - Vercel parsed req.body object
-   - JSON string
-   - Buffer
-   - raw request stream
-
-   This prevents the previous:
-   "File name is required."
-   issue caused by body-format mismatch.
+   REQUEST BODY
    ===================================================== */
 
-async function readRequestBody(req) {
-  const existing =
-    req.body;
-
-
-  /* -----------------------------------------------------
-     Already parsed object
-     ----------------------------------------------------- */
+async function readJsonBody(
+  req
+) {
+  /*
+   * Vercel often pre-parses JSON.
+   */
 
   if (
-    existing &&
-    typeof existing === "object" &&
-    !Buffer.isBuffer(existing)
+    req.body &&
+    typeof req.body ===
+      "object" &&
+    !Buffer.isBuffer(
+      req.body
+    ) &&
+    !Array.isArray(
+      req.body
+    )
   ) {
-    return existing;
+    return req.body;
   }
 
 
-  /* -----------------------------------------------------
-     Buffer
-     ----------------------------------------------------- */
-
   if (
-    Buffer.isBuffer(existing)
+    Buffer.isBuffer(
+      req.body
+    )
   ) {
     if (
-      existing.length >
+      req.body.length >
       MAX_BODY_SIZE
     ) {
-      throw createHttpError(
-        413,
-        "Request metadata is too large."
+      throw new Error(
+        "Request body is too large."
       );
     }
 
 
-    const text =
-      existing
-        .toString("utf8")
-        .trim();
-
-
-    if (!text) {
-      return {};
+    try {
+      return JSON.parse(
+        req.body
+          .toString(
+            "utf8"
+          )
+      );
+    } catch {
+      throw new Error(
+        "Invalid JSON request body."
+      );
     }
-
-
-    return parseJson(
-      text
-    );
   }
 
 
-  /* -----------------------------------------------------
-     String
-     ----------------------------------------------------- */
-
   if (
-    typeof existing === "string"
+    typeof req.body ===
+    "string"
   ) {
     if (
       Buffer.byteLength(
-        existing,
+        req.body,
         "utf8"
       ) >
       MAX_BODY_SIZE
     ) {
-      throw createHttpError(
-        413,
-        "Request metadata is too large."
+      throw new Error(
+        "Request body is too large."
       );
     }
 
 
-    const text =
-      existing.trim();
-
-
-    if (!text) {
-      return {};
+    try {
+      return JSON.parse(
+        req.body
+      );
+    } catch {
+      throw new Error(
+        "Invalid JSON request body."
+      );
     }
-
-
-    return parseJson(
-      text
-    );
   }
 
 
-  /* -----------------------------------------------------
-     Raw stream fallback
-     ----------------------------------------------------- */
+  /*
+   * Fallback for raw Node request streams.
+   */
 
   const chunks =
     [];
+
 
   let total =
     0;
@@ -296,29 +274,22 @@ async function readRequestBody(req) {
     const chunk
     of req
   ) {
-    const buffer =
-      Buffer.isBuffer(chunk)
-        ? chunk
-        : Buffer.from(chunk);
-
-
     total +=
-      buffer.length;
+      chunk.length;
 
 
     if (
       total >
       MAX_BODY_SIZE
     ) {
-      throw createHttpError(
-        413,
-        "Request metadata is too large."
+      throw new Error(
+        "Request body is too large."
       );
     }
 
 
     chunks.push(
-      buffer
+      chunk
     );
   }
 
@@ -331,49 +302,22 @@ async function readRequestBody(req) {
   }
 
 
-  const text =
+  const raw =
     Buffer
-      .concat(chunks)
-      .toString("utf8")
-      .trim();
-
-
-  if (!text) {
-    return {};
-  }
-
-
-  return parseJson(
-    text
-  );
-}
-
-
-/* =====================================================
-   JSON PARSER
-   ===================================================== */
-
-function parseJson(text) {
-  try {
-    const parsed =
-      JSON.parse(
-        text
+      .concat(
+        chunks
+      )
+      .toString(
+        "utf8"
       );
 
 
-    if (
-      !parsed ||
-      typeof parsed !== "object" ||
-      Array.isArray(parsed)
-    ) {
-      throw new Error();
-    }
-
-
-    return parsed;
+  try {
+    return JSON.parse(
+      raw
+    );
   } catch {
-    throw createHttpError(
-      400,
+    throw new Error(
       "Invalid JSON request body."
     );
   }
@@ -381,40 +325,20 @@ function parseJson(text) {
 
 
 /* =====================================================
-   HTTP ERROR
-   ===================================================== */
-
-function createHttpError(
-  status,
-  message
-) {
-  const error =
-    new Error(
-      message
-    );
-
-
-  error.statusCode =
-    status;
-
-
-  return error;
-}
-
-
-/* =====================================================
-   STRING CLEANUP
+   STRING HELPERS
    ===================================================== */
 
 function cleanString(
   value,
-  maxLength
+  maxLength =
+    512
 ) {
   return String(
-    value ?? ""
+    value ??
+    ""
   )
     .replace(
-      /[\u0000-\u001F\u007F]/g,
+      /\u0000/g,
       ""
     )
     .trim()
@@ -426,348 +350,216 @@ function cleanString(
 
 
 /* =====================================================
-   SAFE FILE NAME
-
-   Example:
-
-   "My Report (final).pdf"
-
-   →
-
-   "My_Report_final.pdf"
-
-   Keeps filename readable while preventing:
-   - path traversal
-   - slashes
-   - control characters
-   - dangerous path syntax
+   PATH SAFE
    ===================================================== */
 
-function sanitizeFileName(
+function sanitizePathSegment(
+  value,
+  fallback =
+    "file"
+) {
+  const cleaned =
+    String(
+      value ??
+      ""
+    )
+      .normalize(
+        "NFKC"
+      )
+      .replace(
+        /[\u0000-\u001f\u007f]/g,
+        ""
+      )
+      .replace(
+        /[^a-zA-Z0-9._-]+/g,
+        "_"
+      )
+      .replace(
+        /_+/g,
+        "_"
+      )
+      .replace(
+        /^[._-]+/,
+        ""
+      )
+      .replace(
+        /[._-]+$/,
+        ""
+      )
+      .slice(
+        0,
+        180
+      );
+
+
+  return (
+    cleaned ||
+    fallback
+  );
+}
+
+
+/* =====================================================
+   EXTENSION
+   ===================================================== */
+
+function normalizeExtension(
   value
 ) {
-  let name =
+  return String(
+    value ??
+    ""
+  )
+    .trim()
+    .toLowerCase()
+    .replace(
+      /^\./,
+      ""
+    )
+    .replace(
+      /[^a-z0-9]/g,
+      ""
+    )
+    .slice(
+      0,
+      32
+    );
+}
+
+
+/* =====================================================
+   CATEGORY
+   ===================================================== */
+
+function normalizeCategory(
+  value
+) {
+  const category =
+    String(
+      value ??
+      ""
+    )
+      .trim()
+      .toLowerCase();
+
+
+  return ALLOWED_CATEGORIES
+    .has(
+      category
+    )
+      ? category
+      : "unknown";
+}
+
+
+/* =====================================================
+   FILENAME
+   ===================================================== */
+
+function buildSafeFilename(
+  originalName,
+  extension
+) {
+  const name =
     cleanString(
-      value,
-      MAX_FILE_NAME_LENGTH
+      originalName,
+      MAX_FILENAME_LENGTH
     );
 
 
-  /*
-  Remove any fake path supplied by browser/client.
-  */
-
-  name =
-    name
-      .replace(
-        /\\/g,
-        "/"
-      )
-      .split("/")
-      .pop() || "";
+  const ext =
+    normalizeExtension(
+      extension
+    );
 
 
-  /*
-  Remove path traversal.
-  */
-
-  name =
-    name.replace(
-      /\.\.+/g,
+  const lastDot =
+    name.lastIndexOf(
       "."
     );
 
 
-  /*
-  Replace unsupported characters.
-  */
+  let baseName =
+    lastDot >
+      0
+      ? name.slice(
+          0,
+          lastDot
+        )
+      : name;
 
-  name =
-    name.replace(
-      /[^a-zA-Z0-9._()\- ]+/g,
-      "_"
+
+  baseName =
+    sanitizePathSegment(
+      baseName,
+      "attachment"
     );
 
 
-  /*
-  Spaces → underscores.
-  */
-
-  name =
-    name.replace(
-      /\s+/g,
-      "_"
-    );
+  if (!ext) {
+    return baseName;
+  }
 
 
-  /*
-  Collapse repeated underscores.
-  */
-
-  name =
-    name.replace(
-      /_+/g,
-      "_"
-    );
-
-
-  /*
-  Avoid hidden/dot-only names.
-  */
-
-  name =
-    name.replace(
-      /^\.+/,
-      ""
-    );
-
-
-  /*
-  Trim filename again.
-  */
-
-  name =
-    name
-      .trim()
-      .slice(
-        0,
-        MAX_FILE_NAME_LENGTH
-      );
-
-
-  return name;
+  return (
+    `${baseName}.${ext}`
+  );
 }
 
 
 /* =====================================================
-   USER ID SAFETY
-
-   User ID comes from authentication, not browser body.
-
-   Still sanitize it before using in Storage path.
+   VALIDATION
    ===================================================== */
 
-function sanitizePathSegment(
-  value
-) {
-  const result =
-    String(
-      value ?? ""
-    )
-      .trim()
-      .replace(
-        /[^a-zA-Z0-9_-]/g,
-        "_"
-      )
-      .slice(
-        0,
-        128
-      );
-
-
-  if (!result) {
-    throw createHttpError(
-      401,
-      "Invalid authenticated user."
-    );
-  }
-
-
-  return result;
-}
-
-
-/* =====================================================
-   NUMBER PARSER
-   ===================================================== */
-
-function parseFileSize(
-  value
-) {
-  const size =
-    Number(
-      value
-    );
-
-
-  if (
-    !Number.isFinite(size)
-  ) {
-    return null;
-  }
-
-
-  if (
-    !Number.isSafeInteger(size)
-  ) {
-    return null;
-  }
-
-
-  return size;
-}
-
-
-/* =====================================================
-   METADATA VALIDATION
-   ===================================================== */
-
-function validateMetadata(
+function validatePayload(
   body
 ) {
   if (
     !body ||
-    typeof body !== "object" ||
-    Array.isArray(body)
+    typeof body !==
+      "object" ||
+    Array.isArray(
+      body
+    )
   ) {
-    throw createHttpError(
-      400,
-      "Invalid attachment metadata."
-    );
-  }
-
-
-  /* -----------------------------------------------------
-     NAME
-     ----------------------------------------------------- */
-
-  const originalName =
-    cleanString(
-      body.name,
-      MAX_FILE_NAME_LENGTH
-    );
-
-
-  if (!originalName) {
-    throw createHttpError(
-      400,
-      "File name is required."
+    throw new Error(
+      "Invalid upload metadata."
     );
   }
 
 
   const name =
-    sanitizeFileName(
-      originalName
+    cleanString(
+      body.name,
+      MAX_FILENAME_LENGTH
     );
 
-
-  if (!name) {
-    throw createHttpError(
-      400,
-      "File name is invalid."
-    );
-  }
-
-
-  /* -----------------------------------------------------
-     SIZE
-     ----------------------------------------------------- */
 
   const size =
-    parseFileSize(
+    Number(
       body.size
     );
 
 
-  if (
-    size === null
-  ) {
-    throw createHttpError(
-      400,
-      "Valid file size is required."
-    );
-  }
-
-
-  if (
-    size <= 0
-  ) {
-    throw createHttpError(
-      400,
-      "File is empty."
-    );
-  }
-
-
-  if (
-    size >
-    MAX_FILE_SIZE
-  ) {
-    throw createHttpError(
-      413,
-      `File exceeds the ${Math.round(
-        MAX_FILE_SIZE /
-        (
-          1024 *
-          1024
-        )
-      )} MB limit.`
-    );
-  }
-
-
-  /* -----------------------------------------------------
-     MIME
-     ----------------------------------------------------- */
-
   const mime =
     cleanString(
-      body.mime,
-      MAX_MIME_LENGTH
-    ) ||
-    "application/octet-stream";
+      body.mime ||
+      "application/octet-stream",
+      180
+    );
 
-
-  /* -----------------------------------------------------
-     EXTENSION
-     ----------------------------------------------------- */
 
   const extension =
-    cleanString(
-      body.extension,
-      32
-    )
-      .toLowerCase()
-      .replace(
-        /^\./,
-        ""
-      )
-      .replace(
-        /[^a-z0-9]+/g,
-        ""
-      );
+    normalizeExtension(
+      body.extension
+    );
 
 
-  /* -----------------------------------------------------
-     CATEGORY
-     ----------------------------------------------------- */
+  const category =
+    normalizeCategory(
+      body.category
+    );
 
-  let category =
-    cleanString(
-      body.category,
-      MAX_CATEGORY_LENGTH
-    )
-      .toLowerCase();
-
-
-  if (
-    !ALLOWED_CATEGORIES.has(
-      category
-    )
-  ) {
-    category =
-      "unknown";
-  }
-
-
-  /* -----------------------------------------------------
-     CLIENT ATTACHMENT ID
-
-     Useful only for correlating frontend state.
-
-     Never trusted for ownership/security.
-     ----------------------------------------------------- */
 
   const clientAttachmentId =
     cleanString(
@@ -776,8 +568,53 @@ function validateMetadata(
     );
 
 
+  if (!name) {
+    throw new Error(
+      "File name is required."
+    );
+  }
+
+
+  if (
+    !Number.isSafeInteger(
+      size
+    ) ||
+    size <=
+      0
+  ) {
+    throw new Error(
+      "Invalid file size."
+    );
+  }
+
+
+  if (
+    size >
+    MAX_FILE_SIZE
+  ) {
+    throw new Error(
+      `File exceeds the ${Math.round(
+        MAX_FILE_SIZE /
+        (
+          1024 *
+          1024
+        )
+      )} MB upload limit.`
+    );
+  }
+
+
+  if (
+    mime.length >
+    180
+  ) {
+    throw new Error(
+      "Invalid MIME type."
+    );
+  }
+
+
   return {
-    originalName,
     name,
     size,
     mime,
@@ -789,103 +626,46 @@ function validateMetadata(
 
 
 /* =====================================================
-   AUTHENTICATION
+   PUBLIC ERROR
    ===================================================== */
 
-async function resolveAuthenticatedUser(
-  req
+function publicError(
+  error
 ) {
-  let auth;
+  const message =
+    String(
+      error?.message ||
+      ""
+    );
 
 
-  try {
-    /*
-    Promise.resolve supports both:
-    - synchronous getAuthenticatedUser()
-    - asynchronous getAuthenticatedUser()
-    */
+  const safePhrases =
+    [
+      "File name",
+      "file size",
+      "upload limit",
+      "Invalid upload metadata",
+      "Invalid MIME",
+      "Request body",
+      "Invalid JSON"
+    ];
 
-    auth =
-      await Promise.resolve(
-        getAuthenticatedUser(
-          req
+
+  if (
+    safePhrases.some(
+      phrase =>
+        message.includes(
+          phrase
         )
-      );
-  } catch {
-    throw createHttpError(
-      401,
-      "Authentication required."
-    );
+    )
+  ) {
+    return message;
   }
 
 
-  /*
-  Existing NEYO auth helper uses userId.
-
-  Also tolerate an id property without trusting
-  anything coming from the request body.
-  */
-
-  const userId =
-    auth?.userId ||
-    auth?.id ||
-    auth?.user?.id ||
-    null;
-
-
-  if (!userId) {
-    throw createHttpError(
-      401,
-      "Authentication required."
-    );
-  }
-
-
-  return {
-    userId:
-      String(
-        userId
-      )
-  };
-}
-
-
-/* =====================================================
-   STORAGE PATH
-
-   Every object lives under authenticated user prefix:
-
-   users/
-     {userId}/
-       {uploadId}/
-         filename.ext
-
-   Chat/process APIs can enforce the same prefix.
-   ===================================================== */
-
-function createStoragePath({
-  userId,
-  uploadId,
-  fileName
-}) {
-  const safeUserId =
-    sanitizePathSegment(
-      userId
-    );
-
-
-  const safeUploadId =
-    sanitizePathSegment(
-      uploadId
-    );
-
-
-  return [
-    "users",
-    safeUserId,
-    safeUploadId,
-    fileName
-  ].join("/");
+  return (
+    "Unable to prepare this file for upload."
+  );
 }
 
 
@@ -897,14 +677,14 @@ export default async function handler(
   req,
   res
 ) {
-  setCommonHeaders(
+  setJsonHeaders(
     res
   );
 
 
-  /* -----------------------------------------------------
+  /* ===================================================
      METHOD
-     ----------------------------------------------------- */
+     =================================================== */
 
   if (
     req.method !==
@@ -916,98 +696,201 @@ export default async function handler(
     );
 
 
-    return sendJson(
-      res,
-      405,
-      {
+    return res
+      .status(
+        405
+      )
+      .json({
         error:
-          "Method not allowed."
-      }
+          "Method Not Allowed"
+      });
+  }
+
+
+  /* ===================================================
+     AUTH
+     =================================================== */
+
+  let auth;
+
+
+  try {
+    auth =
+      await Promise.resolve(
+        getAuthenticatedUser(
+          req
+        )
+      );
+  } catch (
+    error
+  ) {
+    console.error(
+      "[NEYO Attachment Upload] Auth error:",
+      error?.message
     );
+
+
+    return res
+      .status(
+        401
+      )
+      .json({
+        error:
+          "Authentication required."
+      });
+  }
+
+
+  const userId =
+    auth?.userId ||
+    auth?.id ||
+    auth?.user?.id;
+
+
+  if (!userId) {
+    return res
+      .status(
+        401
+      )
+      .json({
+        error:
+          "Authentication required."
+      });
+  }
+
+
+  /* ===================================================
+     BODY
+     =================================================== */
+
+  let body;
+
+
+  try {
+    body =
+      await readJsonBody(
+        req
+      );
+  } catch (
+    error
+  ) {
+    return res
+      .status(
+        400
+      )
+      .json({
+        error:
+          publicError(
+            error
+          )
+      });
+  }
+
+
+  /* ===================================================
+     VALIDATE
+     =================================================== */
+
+  let file;
+
+
+  try {
+    file =
+      validatePayload(
+        body
+      );
+  } catch (
+    error
+  ) {
+    return res
+      .status(
+        400
+      )
+      .json({
+        error:
+          publicError(
+            error
+          )
+      });
+  }
+
+
+  /* ===================================================
+     SUPABASE
+     =================================================== */
+
+  let supabase;
+
+
+  try {
+    supabase =
+      createSupabaseAdmin();
+  } catch (
+    error
+  ) {
+    console.error(
+      "[NEYO Attachment Upload] Supabase configuration error:",
+      error?.message
+    );
+
+
+    return res
+      .status(
+        500
+      )
+      .json({
+        error:
+          "Attachment storage is not configured."
+      });
   }
 
 
   try {
-    /* ---------------------------------------------------
-       AUTHENTICATE FIRST
-       --------------------------------------------------- */
-
-    const user =
-      await resolveAuthenticatedUser(
-        req
-      );
-
-
-    /* ---------------------------------------------------
-       READ + VALIDATE METADATA
-       --------------------------------------------------- */
-
-    const body =
-      await readRequestBody(
-        req
-      );
-
-
-    const file =
-      validateMetadata(
-        body
-      );
-
-
-    /* ---------------------------------------------------
-       SERVER-GENERATED UPLOAD ID
-
-       Browser cannot choose storage ownership/path.
-       --------------------------------------------------- */
+    /* =================================================
+       IDS / PATH
+       ================================================= */
 
     const uploadId =
       crypto.randomUUID();
 
 
+    const safeUserId =
+      sanitizePathSegment(
+        userId,
+        "user"
+      );
+
+
+    const safeFilename =
+      buildSafeFilename(
+        file.name,
+        file.extension
+      );
+
+
+    /*
+     * Tenant-isolated storage layout:
+     *
+     * users/
+     *   {userId}/
+     *     {uploadId}/
+     *       {filename}
+     */
+
     const path =
-      createStoragePath({
-        userId:
-          user.userId,
-
+      [
+        "users",
+        safeUserId,
         uploadId,
-
-        fileName:
-          file.name
-      });
-
-
-    /* ---------------------------------------------------
-       DEBUG
-
-       Never log tokens or service-role credentials.
-       --------------------------------------------------- */
-
-    console.log(
-      "[NEYO Upload] authorization",
-      {
-        uploadId,
-        userId:
-          user.userId,
-        name:
-          file.name,
-        size:
-          file.size,
-        mime:
-          file.mime,
-        category:
-          file.category,
-        path
-      }
-    );
+        safeFilename
+      ].join(
+        "/"
+      );
 
 
-    /* ---------------------------------------------------
-       CREATE SIGNED UPLOAD URL
-       --------------------------------------------------- */
-
-    const supabase =
-      getSupabaseAdmin();
-
+    /* =================================================
+       SIGNED UPLOAD URL
+       ================================================= */
 
     const {
       data,
@@ -1021,11 +904,6 @@ export default async function handler(
         .createSignedUploadUrl(
           path,
           {
-            /*
-            Every upload receives a unique UUID path,
-            so overwriting should never be necessary.
-            */
-
             upsert:
               false
           }
@@ -1033,77 +911,48 @@ export default async function handler(
 
 
     if (error) {
-      console.error(
-        "[NEYO Upload] Supabase signing failed",
-        {
-          uploadId,
-          message:
-            error.message,
-          status:
-            error.statusCode ||
-            error.status ||
-            null
-        }
-      );
-
-
-      throw createHttpError(
-        502,
-        "Could not prepare file upload."
-      );
+      throw error;
     }
 
 
     if (
       !data?.signedUrl
     ) {
-      console.error(
-        "[NEYO Upload] Missing signedUrl",
-        {
-          uploadId,
-          hasData:
-            Boolean(data)
-        }
-      );
-
-
-      throw createHttpError(
-        502,
-        "Storage did not return a signed upload URL."
+      throw new Error(
+        "Supabase did not return a signed upload URL."
       );
     }
 
 
-    if (
-      !data?.token
-    ) {
-      console.error(
-        "[NEYO Upload] Missing signed token",
-        {
-          uploadId
-        }
-      );
-
-
-      throw createHttpError(
-        502,
-        "Storage did not return a signed upload token."
-      );
-    }
-
-
-    /* ---------------------------------------------------
+    /* =================================================
        SUCCESS
+       ================================================= */
 
-       Contract matches attachments.js.
-       --------------------------------------------------- */
-
-    return sendJson(
-      res,
-      200,
+    console.log(
+      "[NEYO Attachment Upload] Authorized",
       {
+        userId,
+        uploadId,
+        name:
+          file.name,
+        size:
+          file.size,
+        category:
+          file.category
+      }
+    );
+
+
+    return res
+      .status(
+        200
+      )
+      .json({
         ok:
           true,
+
+        status:
+          "authorized",
 
         uploadId,
 
@@ -1118,13 +967,8 @@ export default async function handler(
           data.signedUrl,
 
         token:
-          data.token,
-
-        /*
-        Supabase uploadToSignedUrl uses PUT.
-        attachments.js currently performs the
-        signed request directly.
-        */
+          data.token ||
+          null,
 
         method:
           "PUT",
@@ -1136,10 +980,10 @@ export default async function handler(
 
         file: {
           name:
-            file.name,
+            safeFilename,
 
           originalName:
-            file.originalName,
+            file.name,
 
           size:
             file.size,
@@ -1155,71 +999,39 @@ export default async function handler(
         },
 
         clientAttachmentId:
-          file.clientAttachmentId,
-
-        status:
-          "authorized"
-      }
-    );
+          file.clientAttachmentId ||
+          null
+      });
 
 
   } catch (
     error
   ) {
-    const status =
-      Number(
-        error?.statusCode
-      ) || 500;
-
-
-    const safeStatus =
-      status >= 400 &&
-      status <= 599
-        ? status
-        : 500;
-
-
-    /*
-    Never expose internal Supabase/service errors
-    to browser for unexpected failures.
-    */
-
-    const message =
-      safeStatus >= 500
-        ? (
-            error?.statusCode
-              ? error.message
-              : "Could not prepare attachment upload."
-          )
-        : (
-            error?.message ||
-            "Invalid upload request."
-          );
-
-
     console.error(
-      "[NEYO Upload] request failed",
+      "[NEYO Attachment Upload] Failed",
       {
-        status:
-          safeStatus,
-
         message:
-          error?.message ||
-          "Unknown error"
+          error?.message,
+
+        code:
+          error?.code,
+
+        details:
+          error?.details,
+
+        hint:
+          error?.hint
       }
     );
 
 
-    return sendJson(
-      res,
-      safeStatus,
-      {
-        ok:
-          false,
-
+    return res
+      .status(
+        500
+      )
+      .json({
         error:
-          message
-      }
-    );
+          "Unable to prepare this file for upload."
+      });
   }
 }

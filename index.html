@@ -96,6 +96,12 @@
   <link rel="stylesheet" href="/css/components/voice-mode.css?v=3">
   <link rel="stylesheet" href="/css/components/mascot.css?v=3">
 
+  <!-- ===== CHARACTER PICKER ===== -->
+  <link
+    rel="stylesheet"
+    href="/css/components/character-picker.css?v=1"
+  >
+
   <!-- KaTeX -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css">
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js"></script>
@@ -1301,7 +1307,7 @@
   </div>
 
   <!-- ========================================================= -->
-  <!-- NEYO VOICE MODE — MASCOT MARKUP (UNCHANGED)               -->
+  <!-- NEYO VOICE MODE — WITH CHARACTER PICKER INSIDE            -->
   <!-- ========================================================= -->
 
   <div
@@ -1392,7 +1398,7 @@
         Ready
       </div>
 
-      <!-- CONTROLS -->
+      <!-- CONTROLS — WITH CHARACTER BUTTON -->
       <div class="voice-mode-controls">
 
         <button
@@ -1419,6 +1425,40 @@
           aria-pressed="true"
         ></button>
 
+        <!-- CHARACTER BUTTON -->
+        <button
+          id="characterPickerBtn"
+          class="voice-mode-control"
+          type="button"
+          aria-label="Choose character"
+          aria-haspopup="dialog"
+          aria-controls="characterPicker"
+        >
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <rect
+              x="5"
+              y="5"
+              width="14"
+              height="14"
+              rx="5"
+              stroke="currentColor"
+              stroke-width="1.8"
+            />
+            <path
+              d="M9 10h.01M15 10h.01"
+              stroke="currentColor"
+              stroke-width="2.2"
+              stroke-linecap="round"
+            />
+            <path
+              d="M9 15c1.8 1.2 4.2 1.2 6 0"
+              stroke="currentColor"
+              stroke-width="1.7"
+              stroke-linecap="round"
+            />
+          </svg>
+        </button>
+
         <button
           id="voiceModeEndBtn"
           class="voice-mode-control voice-mode-end"
@@ -1429,10 +1469,69 @@
       </div>
 
     </div>
+
+    <!-- ========================================================= -->
+    <!-- CHARACTER PICKER — INSIDE VOICE MODE SHELL                -->
+    <!-- ========================================================= -->
+
+    <div
+      id="characterPicker"
+      class="character-picker-shell"
+      aria-hidden="true"
+    >
+      <section
+        class="character-picker-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="characterPickerTitle"
+      >
+        <header class="character-picker-header">
+
+          <div class="character-picker-heading">
+            <h2
+              id="characterPickerTitle"
+              class="character-picker-title"
+            >
+              Choose a character
+            </h2>
+
+            <p class="character-picker-subtitle">
+              Pick who you want to talk with.
+            </p>
+          </div>
+
+          <button
+            id="characterPickerCloseBtn"
+            class="character-picker-close"
+            type="button"
+            aria-label="Close character picker"
+          >
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path
+                d="M7 7l10 10M17 7L7 17"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+              />
+            </svg>
+          </button>
+
+        </header>
+
+        <div
+          id="characterPickerList"
+          class="character-picker-list"
+          role="listbox"
+          aria-label="Available characters"
+        ></div>
+      </section>
+    </div>
+
   </div>
+  <!-- END #neyoVoiceMode -->
 
   <!-- ========================================================= -->
-  <!-- SCRIPTS — FINAL LOCKED ORDER WITH NEYO CHARACTER          -->
+  <!-- SCRIPTS — FINAL LOCKED ORDER WITH CHARACTER PICKER        -->
   <!-- ========================================================= -->
 
   <!-- Main working app -->
@@ -1453,7 +1552,7 @@
   <!-- Composer scrollbar (NEW) -->
   <script type="module" src="/js/components/composer-scrollbar.js?v=1"></script>
 
-  <!-- ===== NEYO VOICE + PREMIUM MASCOT — FINAL STACK ===== -->
+  <!-- ===== NEYO VOICE + PREMIUM MASCOT + CHARACTER PICKER ===== -->
 
   <!-- NEYO character definition -->
   <script
@@ -1483,6 +1582,12 @@
   <script
     type="module"
     src="/js/components/voice-mode.js?v=3"
+  ></script>
+
+  <!-- Character Picker UI -->
+  <script
+    type="module"
+    src="/js/components/character-picker.js?v=1"
   ></script>
 
   <!-- Native tooltips (restored) -->

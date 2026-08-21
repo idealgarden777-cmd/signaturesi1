@@ -1,49 +1,50 @@
 /*
 =========================================================
-NEYO — CHAT FRONTEND CONTROLLER
-FINAL v1
+NEYO — CHAT CORE
+FINAL v4 — ATTACHMENT SAFE / CONFLICT FREE
 
 FILE:
 public/js/components/chat.js
 
-RESPONSIBILITIES:
-- Listen for neyo:chat-send-request
-- Read READY attachments from window.NeyoAttachments
-- POST message + attachments to /api/chat
-- Render user message
-- Render assistant thinking state
-- Render assistant response
-- Support attachment-only messages
-- Support Stop / Abort
-- Clear attachments ONLY after successful response
-- Keep message history for API context
-- Preserve existing NEYO UI classes
-- Copy / Share / Regenerate assistant actions
-- Dispatch state events for send-state.js
-- Never directly owns #sendBtn
-- Never modifies neo.js
-- Never uploads files itself
+OWNS
+---------------------------------------------------------
+✅ Conversation state
+✅ /api/chat transport
+✅ Conversation ID
+✅ Attachment metadata transport
+✅ Abort / stop generation
+✅ API response parsing
+✅ Usage / limit lifecycle events
+✅ History synchronization events
+✅ Preferences used by chat API
 
-IMPORTANT OWNERSHIP:
+DOES NOT OWN
+---------------------------------------------------------
+❌ #sendBtn
+❌ #chatInput key handling
+❌ Attachment upload
+❌ File picker
+❌ Attachment chip UI
+❌ Voice
+❌ Mascot
+❌ Character picker
+❌ neo.js
+❌ History DOM
+❌ Composer DOM
+
+INTEGRATION
+---------------------------------------------------------
+attachments.js
+    ↓
+window.NeyoAttachments
 
 send-state.js
     ↓
 neyo:chat-send-request
-    ↓
-THIS FILE
-    ↓
-/api/chat
-    ↓
-response
-    ↓
-UI
 
-attachments.js
+chat.js
     ↓
-window.NeyoAttachments.getReady()
-    ↓
-THIS FILE
-
+POST /api/chat
 =========================================================
 */
 
@@ -52,22 +53,17 @@ THIS FILE
 
 
   /* =====================================================
-     VERSION
+     VERSION / DUPLICATE GUARD
      ===================================================== */
 
   const VERSION =
-    "neyo-chat-final-v1";
+    "neyo-chat-final-v4";
 
-
-  /* =====================================================
-     DUPLICATE INIT PROTECTION
-     ===================================================== */
 
   if (
-    window.NeyoChat &&
-    window.NeyoChat.__controller === true
+    window.NeyoChat?.__controller ===
+    true
   ) {
-
     console.warn(
       "[NEYO Chat] Controller already initialized."
     );
@@ -82,18 +78,26 @@ THIS FILE
 
   const CONFIG =
     Object.freeze({
-
       endpoint:
         "/api/chat",
 
       maxHistoryMessages:
         50,
 
-      maxMessageLength:
-        50_000,
+      maxAttachments:
+        10,
+
+      attachmentBucket:
+        "neyo-attachments",
 
       requestTimeoutMs:
-        120_000,
+        95_000,
+
+      fallbackAttachmentPrompt:
+        "Please analyze the attached file or files.",
+
+      maxTitleCharacters:
+        80,
 
       debug:
         true
@@ -101,72 +105,52 @@ THIS FILE
 
 
   /* =====================================================
-     DOM
-
-     Existing NEYO UI IDs.
-     ===================================================== */
-
-  const chatMessages =
-    document.getElementById(
-      "chatMessages"
-    );
-
-
-  const heroSection =
-    document.getElementById(
-      "heroSection"
-    );
-
-
-  const scrollArea =
-    document.getElementById(
-      "scrollArea"
-    );
-
-
-  const chatInput =
-    document.getElementById(
-      "chatInput"
-    );
-
-
-  /* =====================================================
-     REQUIRED DOM
-     ===================================================== */
-
-  if (!chatMessages) {
-
-    console.error(
-      "[NEYO Chat] #chatMessages is missing."
-    );
-
-    return;
-  }
-
-
-  /* =====================================================
      STATE
      ===================================================== */
 
-  const state = {
+  let conversation =
+    [];
 
-    messages:
-      [],
 
-    currentConversationId:
-      null,
+  let currentConversationId =
+    null;
 
-    generating:
+
+  let isGenerating =
+    false;
+
+
+  let abortController =
+    null;
+
+
+  let requestTimeout =
+    null;
+
+
+  let activeRequestId =
+    null;
+
+
+  /* =====================================================
+     PREFERENCES
+     ===================================================== */
+
+  let preferences = {
+    intelligence:
+      "standard",
+
+    language:
+      "auto",
+
+    personality:
+      "neyo",
+
+    privateChat:
       false,
 
-    controller:
-      null,
-
-    currentThinkingElement:
-      null,
-
-    lastRequest:
-      null
+    isDeepResearch:
+      false
   };
 
 
@@ -177,11 +161,9 @@ THIS FILE
   function debug(
     ...args
   ) {
-
     if (
       !CONFIG.debug
     ) {
-
       return;
     }
 
@@ -194,53 +176,62 @@ THIS FILE
 
 
   /* =====================================================
-     ID
+     EVENTS
      ===================================================== */
 
-  function createId() {
-
-    if (
-      globalThis.crypto
-        ?.randomUUID
-    ) {
-
-      return globalThis
-        .crypto
-        .randomUUID();
-    }
-
-
-    return (
-      "msg_" +
-      Date.now() +
-      "_" +
-      Math.random()
-        .toString(36)
-        .slice(2)
+  function emit(
+    name,
+    detail =
+      {}
+  ) {
+    window.dispatchEvent(
+      new CustomEvent(
+        name,
+        {
+          detail
+        }
+      )
     );
   }
 
 
   /* =====================================================
-     TEXT
+     GENERAL HELPERS
      ===================================================== */
 
   function cleanText(
-    value,
-    maxLength =
-      CONFIG.maxMessageLength
+    value
   ) {
-
     if (
       typeof value !==
       "string"
     ) {
-
       return "";
     }
 
 
     return value
+      .replace(
+        /\r\n?/g,
+        "\n"
+      )
+      .replace(
+        /\u0000/g,
+        ""
+      )
+      .trim();
+  }
+
+
+  function cleanString(
+    value,
+    maxLength =
+      512
+  ) {
+    return String(
+      value ??
+      ""
+    )
       .replace(
         /\u0000/g,
         ""
@@ -253,980 +244,87 @@ THIS FILE
   }
 
 
-  /* =====================================================
-     HTML
-     ===================================================== */
-
-  function escapeHtml(
-    value
-  ) {
-
-    return String(
-      value ?? ""
-    )
-      .replace(
-        /&/g,
-        "&amp;"
-      )
-      .replace(
-        /</g,
-        "&lt;"
-      )
-      .replace(
-        />/g,
-        "&gt;"
-      )
-      .replace(
-        /"/g,
-        "&quot;"
-      )
-      .replace(
-        /'/g,
-        "&#039;"
-      );
-  }
-
-
-  /* =====================================================
-     SAFE MARKDOWN
-     ===================================================== */
-
-  function renderMarkdown(
-    text
-  ) {
-
-    const value =
-      String(
-        text ?? ""
-      );
-
-
-    /*
-    Best path:
-    marked + DOMPurify
-    */
-
+  function createId() {
     if (
-      window.marked &&
-      window.DOMPurify
+      globalThis.crypto
+        ?.randomUUID
     ) {
-
-      try {
-
-        const html =
-          window.marked.parse(
-            value,
-            {
-              breaks:
-                true,
-
-              gfm:
-                true
-            }
-          );
-
-
-        return window
-          .DOMPurify
-          .sanitize(
-            html,
-            {
-              USE_PROFILES: {
-                html:
-                  true
-              }
-            }
-          );
-
-      } catch (
-        error
-      ) {
-
-        console.warn(
-          "[NEYO Chat] Markdown render failed:",
-          error?.message
-        );
-      }
+      return globalThis
+        .crypto
+        .randomUUID();
     }
-
-
-    /*
-    Safe fallback:
-    plain escaped text.
-    */
-
-    return escapeHtml(
-      value
-    ).replace(
-      /\n/g,
-      "<br>"
-    );
-  }
-
-
-  /* =====================================================
-     ICONS
-     ===================================================== */
-
-  function refreshIcons() {
-
-    try {
-
-      window
-        .lucide
-        ?.createIcons
-        ?.();
-
-    } catch {}
-  }
-
-
-  /* =====================================================
-     SCROLL
-     ===================================================== */
-
-  function scrollToBottom() {
-
-    requestAnimationFrame(
-      () => {
-
-        if (
-          scrollArea
-        ) {
-
-          scrollArea.scrollTop =
-            scrollArea.scrollHeight;
-        }
-      }
-    );
-  }
-
-
-  /* =====================================================
-     START CHAT UI
-     ===================================================== */
-
-  function startChatUI() {
-
-    if (
-      heroSection
-    ) {
-
-      heroSection.style.display =
-        "none";
-    }
-  }
-
-
-  /* =====================================================
-     ATTACHMENT HELPERS
-     ===================================================== */
-
-  function getReadyAttachments() {
-
-    try {
-
-      const controller =
-        window.NeyoAttachments;
-
-
-      if (
-        !controller ||
-        typeof controller
-          .getReady !==
-          "function"
-      ) {
-
-        return [];
-      }
-
-
-      const attachments =
-        controller.getReady();
-
-
-      return Array.isArray(
-        attachments
-      )
-        ? attachments
-        : [];
-
-    } catch (
-      error
-    ) {
-
-      console.error(
-        "[NEYO Chat] Could not read attachments:",
-        error
-      );
-
-
-      return [];
-    }
-  }
-
-
-  function hasPendingAttachments() {
-
-    try {
-
-      return Boolean(
-        window
-          .NeyoAttachments
-          ?.hasPending
-          ?.()
-      );
-
-    } catch {
-
-      return false;
-    }
-  }
-
-
-  /* =====================================================
-     ATTACHMENT SERIALIZATION
-
-     Only metadata required by api/chat.js.
-
-     Browser chunks/document text are NOT sent.
-
-     Server independently reads private Storage.
-     ===================================================== */
-
-  function serializeAttachments(
-    attachments
-  ) {
-
-    return attachments.map(
-      attachment => ({
-
-        id:
-          attachment.id ||
-          null,
-
-        uploadId:
-          attachment.uploadId ||
-          null,
-
-        bucket:
-          attachment.bucket ||
-          "neyo-attachments",
-
-        path:
-          attachment.path ||
-          "",
-
-        name:
-          attachment.name ||
-          "attachment",
-
-        mime:
-          attachment.mime ||
-          attachment.mimeType ||
-          "application/octet-stream",
-
-        mimeType:
-          attachment.mime ||
-          attachment.mimeType ||
-          "application/octet-stream",
-
-        extension:
-          attachment.extension ||
-          "",
-
-        category:
-          attachment.category ||
-          "unknown",
-
-        size:
-          Number(
-            attachment.size
-          ) ||
-          0
-      })
-    );
-  }
-
-
-  /* =====================================================
-     FILE ICON
-     ===================================================== */
-
-  function attachmentIcon(
-    category
-  ) {
-
-    const icons = {
-
-      image:
-        "image",
-
-      audio:
-        "audio-lines",
-
-      video:
-        "video",
-
-      document:
-        "file-text",
-
-      spreadsheet:
-        "table-2",
-
-      presentation:
-        "presentation",
-
-      archive:
-        "archive",
-
-      data:
-        "database",
-
-      code:
-        "file-code-2",
-
-      text:
-        "file-text",
-
-      unknown:
-        "file"
-    };
 
 
     return (
-      icons[
-        category
-      ] ||
-      "file"
+      `chat_${Date.now()}_` +
+      Math.random()
+        .toString(36)
+        .slice(2)
     );
   }
 
 
   /* =====================================================
-     USER ATTACHMENT UI
+     ERROR NORMALIZATION
      ===================================================== */
 
-  function renderUserAttachments(
-    wrapper,
-    attachments
+  function createApiError(
+    response,
+    data,
+    raw
   ) {
-
-    if (
-      !attachments?.length
-    ) {
-
-      return;
-    }
-
-
-    const container =
-      document.createElement(
-        "div"
-      );
-
-
-    container.className =
-      "message-attachments";
-
-
-    for (
-      const attachment
-      of attachments
-    ) {
-
-      const file =
-        document.createElement(
-          "div"
-        );
-
-
-      file.className =
-        "message-attachment";
-
-
-      file.innerHTML = `
-        <div class="message-attachment-icon">
-          <i
-            data-lucide="${attachmentIcon(
-              attachment.category
-            )}"
-            size="16"
-            aria-hidden="true"
-          ></i>
-        </div>
-
-        <div class="message-attachment-info">
-
-          <div class="message-attachment-name">
-            ${escapeHtml(
-              attachment.name
-            )}
-          </div>
-
-          <div class="message-attachment-type">
-            ${escapeHtml(
-              attachment.category ||
-              "file"
-            )}
-          </div>
-
-        </div>
-      `;
-
-
-      container.appendChild(
-        file
-      );
-    }
-
-
-    wrapper.appendChild(
-      container
-    );
-  }
-
-
-  /* =====================================================
-     USER MESSAGE
-     ===================================================== */
-
-  function renderUserMessage(
-    text,
-    attachments = []
-  ) {
-
-    startChatUI();
-
-
     const message =
-      document.createElement(
-        "div"
+      cleanString(
+        data?.error ||
+        data?.message ||
+        raw ||
+        `Request failed (${response.status}).`,
+        2000
       );
 
 
-    message.className =
-      "message user";
-
-
-    message.dataset
-      .messageId =
-      createId();
-
-
-    const wrapper =
-      document.createElement(
-        "div"
+    const error =
+      new Error(
+        message ||
+        "Chat request failed."
       );
 
 
-    wrapper.className =
-      "message-wrapper";
+    error.status =
+      response.status;
 
 
-    if (text) {
-
-      const content =
-        document.createElement(
-          "div"
-        );
-
-
-      content.className =
-        "message-content";
-
-
-      /*
-      User text is always textContent.
-      Never innerHTML.
-      */
-
-      content.textContent =
-        text;
-
-
-      wrapper.appendChild(
-        content
-      );
-    }
-
-
-    renderUserAttachments(
-      wrapper,
-      attachments
-    );
-
-
-    message.appendChild(
-      wrapper
-    );
-
-
-    /*
-    Existing user message actions.
-    */
-
-    const actions =
-      document.createElement(
-        "div"
-      );
-
-
-    actions.className =
-      "message-actions";
-
-
-    actions.innerHTML = `
-      <button
-        type="button"
-        class="msg-action-btn edit-msg-btn"
-        aria-label="Edit message"
-        data-tooltip="Edit"
-      >
-        <i
-          data-lucide="pencil"
-          size="16"
-        ></i>
-      </button>
-
-      <button
-        type="button"
-        class="msg-action-btn copy-msg-btn"
-        aria-label="Copy message"
-        data-tooltip="Copy"
-      >
-        <i
-          data-lucide="copy"
-          size="16"
-        ></i>
-      </button>
-    `;
-
-
-    message.appendChild(
-      actions
-    );
-
-
-    chatMessages.appendChild(
-      message
-    );
-
-
-    refreshIcons();
-
-    scrollToBottom();
-
-
-    return message;
-  }
-
-
-  /* =====================================================
-     THINKING MESSAGE
-     ===================================================== */
-
-  function renderThinkingMessage() {
-
-    startChatUI();
-
-
-    const message =
-      document.createElement(
-        "div"
-      );
-
-
-    message.className =
-      "message assistant is-thinking";
-
-
-    message.dataset
-      .messageId =
-      createId();
-
-
-    const content =
-      document.createElement(
-        "div"
-      );
-
-
-    content.className =
-      "message-content";
-
-
-    const thinking =
-      document.createElement(
-        "span"
-      );
-
-
-    thinking.className =
-      "thinking-shimmer";
-
-
-    thinking.textContent =
-      "Thinking...";
-
-
-    content.appendChild(
-      thinking
-    );
-
-
-    message.appendChild(
-      content
-    );
-
-
-    chatMessages.appendChild(
-      message
-    );
-
-
-    state.currentThinkingElement =
-      message;
-
-
-    scrollToBottom();
-
-
-    return message;
-  }
-
-
-  /* =====================================================
-     ASSISTANT ACTIONS
-     ===================================================== */
-
-  function createAssistantActions() {
-
-    const actions =
-      document.createElement(
-        "div"
-      );
-
-
-    actions.className =
-      "message-actions";
-
-
-    actions.innerHTML = `
-      <button
-        class="msg-action-btn copy-msg-btn"
-        data-action="copy"
-        data-tooltip="Copy"
-        aria-label="Copy response"
-        type="button"
-      >
-        <i
-          data-lucide="copy"
-          size="16"
-        ></i>
-      </button>
-
-      <button
-        class="msg-action-btn share-msg-btn"
-        data-action="share"
-        data-tooltip="Share"
-        aria-label="Share response"
-        type="button"
-      >
-        <i
-          data-lucide="share-2"
-          size="16"
-        ></i>
-      </button>
-
-      <button
-        class="msg-action-btn regen-msg-btn"
-        data-action="regenerate"
-        data-tooltip="Regenerate"
-        aria-label="Regenerate response"
-        type="button"
-      >
-        <i
-          data-lucide="rotate-cw"
-          size="16"
-        ></i>
-      </button>
-    `;
-
-
-    return actions;
-  }
-
-
-  /* =====================================================
-     COMPLETE THINKING MESSAGE
-     ===================================================== */
-
-  function completeAssistantMessage(
-    element,
-    reply
-  ) {
-
-    if (!element) {
-
-      return null;
-    }
-
-
-    element.classList.remove(
-      "is-thinking"
-    );
-
-
-    let content =
-      element.querySelector(
-        ".message-content"
-      );
-
-
-    if (!content) {
-
-      content =
-        document.createElement(
-          "div"
-        );
-
-
-      content.className =
-        "message-content";
-
-
-      element.prepend(
-        content
-      );
-    }
-
-
-    content.innerHTML =
-      renderMarkdown(
-        reply
-      );
-
-
-    /*
-    Math support if existing app exposes it.
-    */
-
-    try {
-
-      window
-        .renderNeoMath
-        ?.(
-          content
-        );
-
-    } catch {}
-
-
-    /*
-    Remove old actions if retry reused same node.
-    */
-
-    element
-      .querySelector(
-        ".message-actions"
-      )
-      ?.remove();
-
-
-    element.appendChild(
-      createAssistantActions()
-    );
-
-
-    element.dataset
-      .rawContent =
-      reply;
-
-
-    refreshIcons();
-
-    scrollToBottom();
-
-
-    state.currentThinkingElement =
+    error.code =
+      data?.code ||
       null;
 
 
-    return element;
-  }
-
-
-  /* =====================================================
-     ERROR MESSAGE
-     ===================================================== */
-
-  function renderAssistantError(
-    element,
-    error
-  ) {
-
-    const message =
-      cleanText(
-        error?.message ||
-        "A server error has occurred.",
-        500
-      );
-
-
-    if (!element) {
-
-      element =
-        renderThinkingMessage();
-    }
-
-
-    element.classList.remove(
-      "is-thinking"
-    );
-
-
-    element.classList.add(
-      "is-error"
-    );
-
-
-    let content =
-      element.querySelector(
-        ".message-content"
-      );
-
-
-    if (!content) {
-
-      content =
-        document.createElement(
-          "div"
-        );
-
-
-      content.className =
-        "message-content";
-
-
-      element.appendChild(
-        content
-      );
-    }
-
-
-    content.textContent =
-      `Error: ${message}`;
-
-
-    element.dataset
-      .errorMessage =
-      message;
-
-
-    element.dataset
-      .rawContent =
-      "";
-
-
-    element
-      .querySelector(
-        ".message-actions"
-      )
-      ?.remove();
-
-
-    /*
-    Error actions:
-    copy not useful;
-    retry is.
-    */
-
-    const actions =
-      document.createElement(
-        "div"
-      );
-
-
-    actions.className =
-      "message-actions";
-
-
-    actions.innerHTML = `
-      <button
-        class="msg-action-btn regen-msg-btn"
-        data-action="regenerate"
-        data-tooltip="Retry"
-        aria-label="Retry"
-        type="button"
-      >
-        <i
-          data-lucide="rotate-cw"
-          size="16"
-        ></i>
-      </button>
-    `;
-
-
-    element.appendChild(
-      actions
-    );
-
-
-    refreshIcons();
-
-    scrollToBottom();
-
-
-    state.currentThinkingElement =
+    error.details =
+      data?.details ||
       null;
 
 
-    return element;
+    error.hint =
+      data?.hint ||
+      null;
+
+
+    error.data =
+      data ||
+      null;
+
+
+    return error;
   }
 
 
   /* =====================================================
-     HISTORY
-     ===================================================== */
-
-  function pushMessage(
-    role,
-    content
-  ) {
-
-    state.messages.push({
-      role,
-
-      content:
-        String(
-          content ??
-          ""
-        )
-    });
-
-
-    if (
-      state.messages.length >
-      CONFIG.maxHistoryMessages
-    ) {
-
-      state.messages =
-        state.messages.slice(
-          -CONFIG.maxHistoryMessages
-        );
-    }
-  }
-
-
-  /* =====================================================
-     API RESPONSE READER
+     RESPONSE READER
      ===================================================== */
 
   async function readApiResponse(
     response
   ) {
-
     const raw =
       await response.text();
 
@@ -1236,14 +334,11 @@ THIS FILE
 
 
     if (raw) {
-
       try {
-
         data =
           JSON.parse(
             raw
           );
-
       } catch {}
     }
 
@@ -1251,44 +346,21 @@ THIS FILE
     if (
       !response.ok
     ) {
-
-      const message =
-        data?.error ||
-        data?.message ||
-        (
-          response.status >=
-          500
-            ? "A server error has occurred."
-            : `Request failed (${response.status}).`
-        );
-
-
-      const error =
-        new Error(
-          message
-        );
-
-
-      error.status =
-        response.status;
-
-
-      error.data =
-        data;
-
-
-      throw error;
+      throw createApiError(
+        response,
+        data,
+        raw
+      );
     }
 
 
     if (
       !data ||
       typeof data !==
-      "object"
+        "object"
     ) {
-
       throw new Error(
-        "The server returned an invalid response."
+        "Chat API returned an invalid response."
       );
     }
 
@@ -1298,155 +370,676 @@ THIS FILE
 
 
   /* =====================================================
-     RESPONSE TEXT
+     MODEL
      ===================================================== */
 
-  function getReplyText(
-    data
-  ) {
-
-    const value =
-      data?.reply ??
-      data?.choices?.[0]
-        ?.message
-        ?.content ??
-      data?.message
-        ?.content ??
-      data?.content ??
-      data?.text;
+  function getSelectedModel() {
+    try {
+      const selected =
+        window.NeyoModelMenu
+          ?.getSelected
+          ?.();
 
 
-    return typeof value ===
-      "string"
-        ? value.trim()
-        : "";
+      if (
+        selected
+      ) {
+        return selected;
+      }
+    } catch {}
+
+
+    /*
+     * Backend still decides the actual provider model
+     * according to the user's plan.
+     */
+
+    return "l1.0";
   }
 
 
   /* =====================================================
-     REQUEST BODY
+     TITLE
      ===================================================== */
 
-  function buildRequestBody({
+  function makeConversationTitle(
     text,
-    attachments
-  }) {
+    attachments =
+      []
+  ) {
+    const clean =
+      cleanText(
+        text
+      );
 
-    const messages =
-      [
-        ...state.messages,
-        {
-          role:
-            "user",
 
-          content:
-            text ||
-            (
-              attachments.length
-                ? "Please analyze the attached file or files."
-                : ""
-            )
-        }
-      ];
+    if (clean) {
+      return clean
+        .replace(
+          /\s+/g,
+          " "
+        )
+        .slice(
+          0,
+          CONFIG
+            .maxTitleCharacters
+        );
+    }
+
+
+    if (
+      Array.isArray(
+        attachments
+      ) &&
+      attachments.length >
+        0
+    ) {
+      return cleanString(
+        attachments[0]
+          ?.name ||
+        "New conversation",
+        CONFIG
+          .maxTitleCharacters
+      );
+    }
+
+
+    return (
+      "New conversation"
+    );
+  }
+
+
+  /* =====================================================
+     ATTACHMENT NORMALIZATION
+
+     IMPORTANT:
+     Never send:
+     - raw File
+     - document.text
+     - chunks
+     - preview blobs
+
+     api/chat.js receives secure storage metadata only.
+     ===================================================== */
+
+  function normalizeAttachment(
+    attachment
+  ) {
+    if (
+      !attachment ||
+      typeof attachment !==
+        "object"
+    ) {
+      return null;
+    }
+
+
+    const uploadId =
+      cleanString(
+        attachment.uploadId,
+        128
+      );
+
+
+    const path =
+      cleanString(
+        attachment.path,
+        1024
+      );
+
+
+    const name =
+      cleanString(
+        attachment.name ||
+        "Attached file",
+        220
+      );
+
+
+    const bucket =
+      cleanString(
+        attachment.bucket ||
+        CONFIG
+          .attachmentBucket,
+        128
+      );
+
+
+    const mime =
+      cleanString(
+        attachment.mime ||
+        attachment.mimeType ||
+        attachment.type ||
+        "application/octet-stream",
+        180
+      );
+
+
+    const extension =
+      cleanString(
+        attachment.extension,
+        32
+      )
+        .replace(
+          /^\./,
+          ""
+        )
+        .toLowerCase();
+
+
+    const category =
+      cleanString(
+        attachment.category ||
+        "unknown",
+        40
+      )
+        .toLowerCase();
+
+
+    const size =
+      Number(
+        attachment.size
+      ) ||
+      0;
+
+
+    /*
+     * Ready attachments must have
+     * an upload ID + private storage path.
+     */
+
+    if (
+      !uploadId ||
+      !path
+    ) {
+      return null;
+    }
 
 
     return {
+      id:
+        cleanString(
+          attachment.id,
+          128
+        ) ||
+        null,
 
-      messages,
+      uploadId,
+
+      bucket,
+
+      path,
+
+      name,
+
+      mime,
+
+      mimeType:
+        mime,
+
+      extension,
+
+      category,
+
+      size
+    };
+  }
+
+
+  function normalizeAttachments(
+    attachments
+  ) {
+    if (
+      !Array.isArray(
+        attachments
+      )
+    ) {
+      return [];
+    }
+
+
+    const output =
+      [];
+
+
+    const seen =
+      new Set();
+
+
+    for (
+      const attachment
+      of attachments
+    ) {
+      if (
+        output.length >=
+        CONFIG.maxAttachments
+      ) {
+        break;
+      }
+
+
+      const normalized =
+        normalizeAttachment(
+          attachment
+        );
+
+
+      if (!normalized) {
+        continue;
+      }
+
+
+      const key =
+        `${normalized.uploadId}:${normalized.path}`;
+
+
+      if (
+        seen.has(
+          key
+        )
+      ) {
+        continue;
+      }
+
+
+      seen.add(
+        key
+      );
+
+
+      output.push(
+        normalized
+      );
+    }
+
+
+    return output;
+  }
+
+
+  /* =====================================================
+     ATTACHMENT CONTROLLER ACCESS
+     ===================================================== */
+
+  function getAttachmentController() {
+    const controller =
+      window.NeyoAttachments;
+
+
+    if (
+      controller &&
+      typeof controller ===
+        "object"
+    ) {
+      return controller;
+    }
+
+
+    return null;
+  }
+
+
+  function getReadyAttachments() {
+    const controller =
+      getAttachmentController();
+
+
+    if (
+      !controller
+        ?.getReady
+    ) {
+      return [];
+    }
+
+
+    try {
+      return normalizeAttachments(
+        controller.getReady()
+      );
+    } catch (
+      error
+    ) {
+      console.warn(
+        "[NEYO Chat] Could not read attachment state:",
+        error
+      );
+
+
+      return [];
+    }
+  }
+
+
+  function attachmentsPending() {
+    const controller =
+      getAttachmentController();
+
+
+    try {
+      return Boolean(
+        controller
+          ?.hasPending
+          ?.()
+      );
+    } catch {
+      return false;
+    }
+  }
+
+
+  function attachmentsHaveErrors() {
+    const controller =
+      getAttachmentController();
+
+
+    try {
+      return Boolean(
+        controller
+          ?.hasErrors
+          ?.()
+      );
+    } catch {
+      return false;
+    }
+  }
+
+
+  /* =====================================================
+     MESSAGE NORMALIZATION
+     ===================================================== */
+
+  function normalizeMessage(
+    message
+  ) {
+    if (
+      !message ||
+      typeof message !==
+        "object"
+    ) {
+      return null;
+    }
+
+
+    if (
+      message.role !==
+        "user" &&
+      message.role !==
+        "assistant"
+    ) {
+      return null;
+    }
+
+
+    const content =
+      cleanText(
+        message.content
+      );
+
+
+    if (!content) {
+      return null;
+    }
+
+
+    const normalized = {
+      role:
+        message.role,
+
+      content
+    };
+
+
+    const attachments =
+      normalizeAttachments(
+        message.attachments
+      );
+
+
+    if (
+      attachments.length >
+      0
+    ) {
+      normalized.attachments =
+        attachments;
+    }
+
+
+    if (
+      Array.isArray(
+        message.sources
+      ) &&
+      message.sources.length >
+        0
+    ) {
+      normalized.sources =
+        message.sources;
+    }
+
+
+    return normalized;
+  }
+
+
+  /* =====================================================
+     CONVERSATION STATE
+     ===================================================== */
+
+  function trimConversation() {
+    if (
+      conversation.length >
+      CONFIG
+        .maxHistoryMessages
+    ) {
+      conversation =
+        conversation.slice(
+          -CONFIG
+            .maxHistoryMessages
+        );
+    }
+  }
+
+
+  function addMessage(
+    role,
+    content,
+    options =
+      {}
+  ) {
+    const message =
+      normalizeMessage({
+        role,
+
+        content,
+
+        attachments:
+          options.attachments,
+
+        sources:
+          options.sources
+      });
+
+
+    if (!message) {
+      return null;
+    }
+
+
+    conversation.push(
+      message
+    );
+
+
+    trimConversation();
+
+
+    emit(
+      "neyo:chat-message-added",
+      {
+        message: {
+          ...message
+        },
+
+        conversation:
+          conversation.map(
+            item => ({
+              ...item
+            })
+          )
+      }
+    );
+
+
+    return message;
+  }
+
+
+  function removeLastUserMessage() {
+    const last =
+      conversation[
+        conversation.length -
+        1
+      ];
+
+
+    if (
+      last?.role !==
+      "user"
+    ) {
+      return null;
+    }
+
+
+    const removed =
+      conversation.pop();
+
+
+    emit(
+      "neyo:chat-message-rolled-back",
+      {
+        message:
+          removed || null
+      }
+    );
+
+
+    return removed;
+  }
+
+
+  /* =====================================================
+     BUILD REQUEST PAYLOAD
+     ===================================================== */
+
+  function buildPayload(
+    userText,
+    attachments
+  ) {
+    const privateChat =
+      Boolean(
+        preferences.privateChat
+      );
+
+
+    return {
+      messages:
+        conversation.map(
+          message => ({
+            ...message
+          })
+        ),
 
       attachments:
-        serializeAttachments(
+        normalizeAttachments(
           attachments
         ),
 
       conversationId:
-        state
-          .currentConversationId,
+        privateChat
+          ? null
+          : currentConversationId,
 
-      /*
-      Backend chooses the real model according
-      to authenticated user's plan.
+      model:
+        getSelectedModel(),
 
-      No client model authority.
-      */
+      intelligence:
+        preferences
+          .intelligence,
+
+      privateChat,
+
+      language:
+        preferences
+          .language,
+
+      personality:
+        preferences
+          .personality,
 
       isDeepResearch:
         Boolean(
-          window
-            .NeyoDeepResearch
-            ?.isEnabled
-            ?.() ||
-          document.body
-            ?.dataset
-            ?.deepResearch ===
-            "true"
+          preferences
+            .isDeepResearch
+        ),
+
+      title:
+        makeConversationTitle(
+          userText,
+          attachments
         )
     };
   }
 
 
   /* =====================================================
-     SEND STATE EVENTS
+     ATTACHMENT RESOLUTION FOR SEND
      ===================================================== */
 
-  function emitSendStart(
-    detail = {}
+  function resolveSendAttachments(
+    suppliedAttachments
   ) {
+    /*
+     * send-state.js normally supplies attachments.
+     *
+     * Defensive fallback:
+     * if it does not, read ready attachments directly
+     * from NeyoAttachments.
+     */
 
-    state.generating =
-      true;
+    const supplied =
+      normalizeAttachments(
+        suppliedAttachments
+      );
 
 
-    window.dispatchEvent(
-      new CustomEvent(
-        "neyo:chat-send-start",
-        {
-          detail
-        }
-      )
-    );
+    if (
+      supplied.length >
+      0
+    ) {
+      return supplied;
+    }
+
+
+    return getReadyAttachments();
   }
 
 
-  function emitSendEnd(
-    detail = {}
-  ) {
+  /* =====================================================
+     REQUEST TIMER
+     ===================================================== */
 
-    state.generating =
-      false;
-
-
-    window.dispatchEvent(
-      new CustomEvent(
-        "neyo:chat-send-end",
-        {
-          detail
-        }
-      )
-    );
-  }
+  function clearRequestTimer() {
+    if (
+      requestTimeout
+    ) {
+      window.clearTimeout(
+        requestTimeout
+      );
 
 
-  function emitError(
-    error
-  ) {
-
-    window.dispatchEvent(
-      new CustomEvent(
-        "neyo:chat-error",
-        {
-          detail: {
-            message:
-              error?.message ||
-              "The request failed.",
-
-            status:
-              error?.status ||
-              null
-          }
-        }
-      )
-    );
+      requestTimeout =
+        null;
+    }
   }
 
 
@@ -1454,177 +1047,241 @@ THIS FILE
      SEND
      ===================================================== */
 
-  async function sendMessage(
-    requestedText = ""
-  ) {
+  async function send({
+    text =
+      "",
+
+    attachments =
+      []
+  } = {}) {
+
+    /* -------------------------------------------------
+       BUSY
+       ------------------------------------------------- */
 
     if (
-      state.generating
+      isGenerating
     ) {
+      emit(
+        "neyo:chat-busy",
+        {
+          conversationId:
+            currentConversationId
+        }
+      );
 
-      return false;
+
+      return null;
     }
 
 
-    const text =
-      cleanText(
-        requestedText ||
-        chatInput?.value ||
-        ""
+    /* -------------------------------------------------
+       DO NOT SEND WHILE FILE IS UPLOADING
+       ------------------------------------------------- */
+
+    if (
+      attachmentsPending()
+    ) {
+      emit(
+        "neyo:chat-attachments-pending",
+        {
+          message:
+            "Please wait for attachments to finish processing."
+        }
       );
+
+
+      return null;
+    }
 
 
     /*
-    Do not send partially uploaded files.
-    */
+     * Failed attachment should be retried or removed.
+     * Prevent silently ignoring it.
+     */
 
     if (
-      hasPendingAttachments()
+      attachmentsHaveErrors()
     ) {
-
-      window.dispatchEvent(
-        new CustomEvent(
-          "neyo:chat-attachments-pending"
-        )
+      emit(
+        "neyo:chat-attachments-error",
+        {
+          message:
+            "Retry or remove failed attachments before sending."
+        }
       );
 
 
-      return false;
+      return null;
     }
 
 
-    const attachments =
-      getReadyAttachments();
+    /* -------------------------------------------------
+       INPUT
+       ------------------------------------------------- */
+
+    const clean =
+      cleanText(
+        text
+      );
+
+
+    const normalizedAttachments =
+      resolveSendAttachments(
+        attachments
+      );
 
 
     if (
-      !text &&
-      attachments.length ===
+      !clean &&
+      normalizedAttachments.length ===
         0
     ) {
-
-      return false;
+      return null;
     }
 
 
-    /*
-    Snapshot request for retry/regenerate.
-    */
-
-    state.lastRequest = {
-      text,
-
-      attachments:
-        serializeAttachments(
-          attachments
-        )
-    };
+    const apiContent =
+      clean ||
+      CONFIG
+        .fallbackAttachmentPrompt;
 
 
-    const userDisplayText =
-      text;
+    /* -------------------------------------------------
+       LOCAL USER MESSAGE
+       ------------------------------------------------- */
 
+    const addedUserMessage =
+      addMessage(
+        "user",
+        apiContent,
+        {
+          attachments:
+            normalizedAttachments
+        }
+      );
 
-    renderUserMessage(
-      userDisplayText,
-      attachments
-    );
-
-
-    /*
-    User's visible text is cleared immediately.
-
-    attachments are NOT cleared until success.
-    */
 
     if (
-      chatInput
+      !addedUserMessage
     ) {
-
-      chatInput.value =
-        "";
-
-
-      chatInput.dispatchEvent(
-        new Event(
-          "input",
-          {
-            bubbles:
-              true
-          }
-        )
-      );
+      return null;
     }
 
 
-    const thinking =
-      renderThinkingMessage();
+    /* -------------------------------------------------
+       REQUEST STATE
+       ------------------------------------------------- */
+
+    isGenerating =
+      true;
 
 
-    emitSendStart({
-      text,
-
-      attachmentCount:
-        attachments.length
-    });
+    activeRequestId =
+      createId();
 
 
-    const controller =
+    abortController =
       new AbortController();
 
 
-    state.controller =
-      controller;
+    const requestId =
+      activeRequestId;
 
 
-    const timeout =
+    emit(
+      "neyo:chat-send-start",
+      {
+        requestId,
+
+        text:
+          clean,
+
+        content:
+          apiContent,
+
+        attachments:
+          normalizedAttachments,
+
+        conversationId:
+          currentConversationId
+      }
+    );
+
+
+    /* -------------------------------------------------
+       TIMEOUT
+       ------------------------------------------------- */
+
+    clearRequestTimer();
+
+
+    requestTimeout =
       window.setTimeout(
         () => {
-
-          controller.abort();
-
+          try {
+            abortController
+              ?.abort(
+                new DOMException(
+                  "Chat request timed out.",
+                  "TimeoutError"
+                )
+              );
+          } catch {
+            abortController
+              ?.abort();
+          }
         },
-        CONFIG.requestTimeoutMs
+        CONFIG
+          .requestTimeoutMs
       );
 
 
     try {
+      /* -------------------------------------------------
+         PAYLOAD
+         ------------------------------------------------- */
 
-      const requestBody =
-        buildRequestBody({
-          text,
-          attachments
-        });
+      const payload =
+        buildPayload(
+          apiContent,
+          normalizedAttachments
+        );
 
 
       debug(
-        "SEND",
+        "request",
         {
+          requestId,
+
           messages:
-            requestBody.messages.length,
+            payload
+              .messages
+              .length,
 
           attachments:
-            requestBody
+            payload
               .attachments
-              .map(
-                item => ({
-                  name:
-                    item.name,
-
-                  category:
-                    item.category,
-
-                  path:
-                    item.path
-                })
-              ),
+              .length,
 
           conversationId:
-            requestBody
-              .conversationId
+            payload
+              .conversationId,
+
+          privateChat:
+            payload
+              .privateChat,
+
+          deepResearch:
+            payload
+              .isDeepResearch
         }
       );
 
+
+      /* -------------------------------------------------
+         FETCH
+         ------------------------------------------------- */
 
       const response =
         await fetch(
@@ -1650,16 +1307,72 @@ THIS FILE
                 VERSION
             },
 
-            signal:
-              controller.signal,
-
             body:
               JSON.stringify(
-                requestBody
-              )
+                payload
+              ),
+
+            signal:
+              abortController
+                .signal
           }
         );
 
+
+      /* -------------------------------------------------
+         LIMIT
+         ------------------------------------------------- */
+
+      if (
+        response.status ===
+        429
+      ) {
+        const raw =
+          await response.text();
+
+
+        let data =
+          {};
+
+
+        try {
+          data =
+            raw
+              ? JSON.parse(
+                  raw
+                )
+              : {};
+        } catch {}
+
+
+        removeLastUserMessage();
+
+
+        emit(
+          "neyo:chat-limit-reached",
+          {
+            requestId,
+
+            data,
+
+            status:
+              429,
+
+            message:
+              data?.error ||
+              data?.message ||
+              "Usage limit reached."
+          }
+        );
+
+
+        return null;
+      }
+
+
+      /* -------------------------------------------------
+         RESPONSE
+         ------------------------------------------------- */
 
       const data =
         await readApiResponse(
@@ -1667,235 +1380,343 @@ THIS FILE
         );
 
 
+      /* -------------------------------------------------
+         REPLY EXTRACTION
+         ------------------------------------------------- */
+
+      const replyValue =
+        data?.reply ??
+        data
+          ?.choices
+          ?.[0]
+          ?.message
+          ?.content ??
+        data
+          ?.message
+          ?.content ??
+        data?.content ??
+        data?.text;
+
+
       const reply =
-        getReplyText(
-          data
-        );
+        typeof replyValue ===
+          "string"
+            ? replyValue
+                .trim()
+            : "";
 
 
       if (!reply) {
-
         throw new Error(
           "The AI response was empty."
         );
       }
 
 
-      /*
-      Server-generated conversation ID.
-      */
+      /* -------------------------------------------------
+         CONVERSATION ID
+         ------------------------------------------------- */
 
       if (
+        !preferences
+          .privateChat &&
         typeof data
-          .conversationId ===
+          ?.conversationId ===
           "string" &&
         data
           .conversationId
           .trim()
       ) {
-
-        state.currentConversationId =
+        currentConversationId =
           data
             .conversationId
             .trim();
       }
 
 
-      /*
-      Add successful turn to local API history.
-      */
+      /* -------------------------------------------------
+         SOURCES
+         ------------------------------------------------- */
 
-      pushMessage(
-        "user",
-        text ||
-        (
-          attachments.length
-            ? `[Attached: ${attachments
-                .map(
-                  item =>
-                    item.name
-                )
-                .join(
-                  ", "
-                )}]`
-            : ""
+      const sources =
+        Array.isArray(
+          data?.sources
         )
-      );
+          ? data.sources
+          : [];
 
 
-      pushMessage(
+      /* -------------------------------------------------
+         ASSISTANT MESSAGE
+         ------------------------------------------------- */
+
+      addMessage(
         "assistant",
-        reply
+        reply,
+        {
+          sources
+        }
       );
 
 
-      completeAssistantMessage(
-        thinking,
-        reply
+      /* -------------------------------------------------
+         RESULT
+         ------------------------------------------------- */
+
+      const result = {
+        requestId,
+
+        reply,
+
+        sources,
+
+        conversationId:
+          currentConversationId,
+
+        plan:
+          data?.plan ||
+          null,
+
+        usage:
+          data?.usage ||
+          null,
+
+        attachments:
+          data?.attachments ||
+          {
+            count:
+              normalizedAttachments
+                .length
+          },
+
+        privateChat:
+          Boolean(
+            data?.privateChat ||
+            preferences
+              .privateChat
+          ),
+
+        research:
+          data?.research ||
+          null,
+
+        grounded:
+          Boolean(
+            data
+              ?.research
+              ?.grounded
+          ),
+
+        usedUrlContext:
+          Boolean(
+            data
+              ?.usedUrlContext
+          ),
+
+        creditType:
+          data?.creditType ||
+          null
+      };
+
+
+      /* -------------------------------------------------
+         SUCCESS EVENT
+         ------------------------------------------------- */
+
+      emit(
+        "neyo:chat-response",
+        result
       );
 
 
       /*
-      ONLY NOW clear attachments.
-      */
+       * Clear attachment chips ONLY AFTER
+       * successful AI response.
+       *
+       * attachments.js listens for this event.
+       */
 
       if (
-        attachments.length
+        normalizedAttachments.length >
+        0
       ) {
+        emit(
+          "neyo:attachments-clear-request",
+          {
+            reason:
+              "chat-success",
 
-        window.dispatchEvent(
-          new CustomEvent(
-            "neyo:attachments-clear-request"
-          )
+            requestId
+          }
         );
       }
 
 
       /*
-      Notify other modules/history.
-      */
+       * Ask existing history controller to refresh.
+       */
 
-      window.dispatchEvent(
-        new CustomEvent(
-          "neyo:chat-response",
+      if (
+        !preferences
+          .privateChat
+      ) {
+        emit(
+          "neyo:history-load-request",
           {
-            detail: {
-              conversationId:
-                state
-                  .currentConversationId,
-
-              reply,
-
-              data
-            }
+            conversationId:
+              currentConversationId
           }
-        )
+        );
+      }
+
+
+      debug(
+        "response",
+        {
+          requestId,
+
+          conversationId:
+            currentConversationId,
+
+          attachmentCount:
+            normalizedAttachments
+              .length,
+
+          replyCharacters:
+            reply.length
+        }
       );
 
 
-      emitSendEnd({
-        success:
-          true,
-
-        conversationId:
-          state
-            .currentConversationId
-      });
-
-
-      return true;
+      return result;
 
 
     } catch (
       error
     ) {
-
-      /*
-      STOP / ABORT
-      */
+      /* -------------------------------------------------
+         ABORT / STOP
+         ------------------------------------------------- */
 
       if (
         error?.name ===
-        "AbortError"
+          "AbortError" ||
+        error?.name ===
+          "TimeoutError"
       ) {
+        removeLastUserMessage();
 
-        thinking?.remove();
 
+        emit(
+          "neyo:chat-aborted",
+          {
+            requestId,
 
-        window.dispatchEvent(
-          new CustomEvent(
-            "neyo:chat-aborted"
-          )
+            timeout:
+              error?.name ===
+              "TimeoutError"
+          }
         );
 
 
-        emitSendEnd({
-          success:
-            false,
-
-          aborted:
-            true
-        });
-
-
-        return false;
+        return null;
       }
+
+
+      /* -------------------------------------------------
+         NORMAL ERROR
+
+         Roll back the unsatisfied user turn from local
+         API context so retry does not duplicate it.
+         ------------------------------------------------- */
+
+      removeLastUserMessage();
 
 
       console.error(
-        "[NEYO Chat] Send failed:",
-        error
+        "[NEYO Chat] Request failed:",
+        {
+          message:
+            error?.message,
+
+          status:
+            error?.status,
+
+          code:
+            error?.code,
+
+          details:
+            error?.details,
+
+          hint:
+            error?.hint
+        }
       );
 
 
-      renderAssistantError(
-        thinking,
-        error
+      emit(
+        "neyo:chat-error",
+        {
+          requestId,
+
+          error,
+
+          message:
+            error?.message ||
+            "Unable to generate a response.",
+
+          status:
+            error?.status ||
+            null,
+
+          code:
+            error?.code ||
+            null,
+
+          data:
+            error?.data ||
+            null
+        }
       );
 
 
-      /*
-      Quota-specific event.
-      */
-
-      if (
-        error?.status ===
-        429
-      ) {
-
-        window.dispatchEvent(
-          new CustomEvent(
-            "neyo:chat-limit-reached",
-            {
-              detail: {
-                message:
-                  error.message,
-
-                data:
-                  error.data
-              }
-            }
-          )
-        );
-      }
-
-
-      emitError(
-        error
-      );
-
-
-      emitSendEnd({
-        success:
-          false,
-
-        error:
-          error.message
-      });
-
-
-      return false;
+      throw error;
 
 
     } finally {
+      clearRequestTimer();
 
-      window.clearTimeout(
-        timeout
-      );
 
+      /*
+       * Don't let an older request reset a newer one.
+       */
 
       if (
-        state.controller ===
-        controller
+        activeRequestId ===
+        requestId
       ) {
+        isGenerating =
+          false;
 
-        state.controller =
+
+        abortController =
+          null;
+
+
+        activeRequestId =
           null;
       }
 
 
-      state.generating =
-        false;
+      emit(
+        "neyo:chat-send-end",
+        {
+          requestId,
+
+          conversationId:
+            currentConversationId
+        }
+      );
     }
   }
 
@@ -1904,22 +1725,20 @@ THIS FILE
      STOP
      ===================================================== */
 
-  function stopGeneration() {
-
+  function stop() {
     if (
-      !state.generating
+      !abortController
     ) {
-
       return false;
     }
 
 
     try {
-
-      state.controller
-        ?.abort();
-
-    } catch {}
+      abortController
+        .abort();
+    } catch {
+      return false;
+    }
 
 
     return true;
@@ -1927,645 +1746,391 @@ THIS FILE
 
 
   /* =====================================================
-     REGENERATE
-
-     Removes last assistant state locally,
-     but does not duplicate the visible user bubble.
+     NEW CONVERSATION
      ===================================================== */
 
-  async function regenerate() {
+  function newConversation() {
+    stop();
 
-    if (
-      state.generating ||
-      !state.lastRequest
-    ) {
 
-      return false;
-    }
+    conversation =
+      [];
+
+
+    currentConversationId =
+      null;
 
 
     /*
-    Remove previous assistant from local history.
-    */
+     * New conversation should not retain
+     * attachments from previous draft.
+     */
 
-    if (
-      state.messages.at(-1)
-        ?.role ===
-      "assistant"
-    ) {
-
-      state.messages.pop();
-    }
-
-
-    if (
-      state.messages.at(-1)
-        ?.role ===
-      "user"
-    ) {
-
-      state.messages.pop();
-    }
+    emit(
+      "neyo:attachments-clear-request",
+      {
+        reason:
+          "new-conversation"
+      }
+    );
 
 
-    const thinking =
-      renderThinkingMessage();
-
-
-    emitSendStart({
-      regenerate:
-        true
-    });
-
-
-    const controller =
-      new AbortController();
-
-
-    state.controller =
-      controller;
-
-
-    const timeout =
-      window.setTimeout(
-        () =>
-          controller.abort(),
-        CONFIG.requestTimeoutMs
-      );
-
-
-    try {
-
-      const attachments =
-        state
-          .lastRequest
-          .attachments ||
-        [];
-
-
-      const text =
-        state
-          .lastRequest
-          .text ||
-        "";
-
-
-      const body = {
-
-        messages: [
-          ...state.messages,
-
-          {
-            role:
-              "user",
-
-            content:
-              text ||
-              "Please analyze the attached file or files."
-          }
-        ],
-
-        attachments,
+    emit(
+      "neyo:chat-new",
+      {
+        conversation:
+          [],
 
         conversationId:
-          state
-            .currentConversationId,
-
-        isDeepResearch:
-          false
-      };
-
-
-      const response =
-        await fetch(
-          CONFIG.endpoint,
-          {
-            method:
-              "POST",
-
-            credentials:
-              "include",
-
-            cache:
-              "no-store",
-
-            headers: {
-              "Content-Type":
-                "application/json",
-
-              Accept:
-                "application/json"
-            },
-
-            signal:
-              controller.signal,
-
-            body:
-              JSON.stringify(
-                body
-              )
-          }
-        );
-
-
-      const data =
-        await readApiResponse(
-          response
-        );
-
-
-      const reply =
-        getReplyText(
-          data
-        );
-
-
-      if (!reply) {
-
-        throw new Error(
-          "The AI response was empty."
-        );
+          null
       }
+    );
 
 
-      pushMessage(
-        "user",
-        text ||
-        "[Attached file]"
-      );
-
-
-      pushMessage(
-        "assistant",
-        reply
-      );
-
-
-      completeAssistantMessage(
-        thinking,
-        reply
-      );
-
-
-      emitSendEnd({
-        success:
-          true,
-
-        regenerated:
-          true
-      });
-
-
-      return true;
-
-
-    } catch (
-      error
-    ) {
-
-      if (
-        error?.name ===
-        "AbortError"
-      ) {
-
-        thinking?.remove();
-
-
-        window.dispatchEvent(
-          new CustomEvent(
-            "neyo:chat-aborted"
-          )
-        );
-
-      } else {
-
-        renderAssistantError(
-          thinking,
-          error
-        );
-
-
-        emitError(
-          error
-        );
-      }
-
-
-      emitSendEnd({
-        success:
-          false
-      });
-
-
-      return false;
-
-
-    } finally {
-
-      window.clearTimeout(
-        timeout
-      );
-
-
-      if (
-        state.controller ===
-        controller
-      ) {
-
-        state.controller =
-          null;
-      }
-
-
-      state.generating =
-        false;
-    }
+    return true;
   }
 
 
   /* =====================================================
-     COPY
+     LOAD EXISTING CONVERSATION
      ===================================================== */
 
-  async function copyMessage(
-    message
-  ) {
+  function loadConversation({
+    conversationId,
+    messages =
+      []
+  } = {}) {
+    /*
+     * Don't allow an in-flight request from
+     * old conversation to mutate the new one.
+     */
 
-    const content =
-      message.querySelector(
-        ".message-content"
-      );
-
-
-    const text =
-      message.dataset
-        .rawContent ||
-      content?.innerText ||
-      "";
+    stop();
 
 
-    if (!text) {
-
-      return;
-    }
-
-
-    try {
-
-      await navigator
-        .clipboard
-        .writeText(
-          text
-        );
+    currentConversationId =
+      cleanString(
+        conversationId,
+        128
+      ) ||
+      null;
 
 
-      window.dispatchEvent(
-        new CustomEvent(
-          "neyo:toast",
-          {
-            detail: {
-              message:
-                "Copied",
-
-              type:
-                "success"
-            }
-          }
-        )
-      );
-
-    } catch (
-      error
-    ) {
-
-      console.warn(
-        "[NEYO Chat] Copy failed:",
-        error
-      );
-    }
-  }
-
-
-  /* =====================================================
-     SHARE
-     ===================================================== */
-
-  async function shareMessage(
-    message
-  ) {
-
-    const content =
-      message.querySelector(
-        ".message-content"
-      );
-
-
-    const text =
-      message.dataset
-        .rawContent ||
-      content?.innerText ||
-      "";
-
-
-    if (!text) {
-
-      return;
-    }
+    const normalized =
+      [];
 
 
     if (
-      navigator.share
+      Array.isArray(
+        messages
+      )
     ) {
-
-      try {
-
-        await navigator.share({
-          text
-        });
-
-
-        return;
-
-      } catch (
-        error
+      for (
+        const message
+        of messages
       ) {
+        const item =
+          normalizeMessage(
+            message
+          );
 
-        if (
-          error?.name ===
-          "AbortError"
-        ) {
 
-          return;
+        if (item) {
+          normalized.push(
+            item
+          );
         }
       }
     }
 
 
-    await copyMessage(
-      message
+    conversation =
+      normalized.slice(
+        -CONFIG
+          .maxHistoryMessages
+      );
+
+
+    emit(
+      "neyo:chat-state-loaded",
+      {
+        conversationId:
+          currentConversationId,
+
+        messages:
+          conversation.map(
+            item => ({
+              ...item
+            })
+          )
+      }
     );
+
+
+    return true;
   }
 
 
   /* =====================================================
-     MESSAGE ACTION DELEGATION
+     PREFERENCES
      ===================================================== */
 
-  chatMessages.addEventListener(
-    "click",
+  function setPreferences(
+    values
+  ) {
+    if (
+      !values ||
+      typeof values !==
+        "object"
+    ) {
+      return false;
+    }
+
+
+    const next = {
+      ...preferences
+    };
+
+
+    if (
+      typeof values
+        .intelligence ===
+      "string"
+    ) {
+      next.intelligence =
+        values
+          .intelligence;
+    }
+
+
+    if (
+      typeof values
+        .language ===
+      "string"
+    ) {
+      next.language =
+        values
+          .language;
+    }
+
+
+    if (
+      typeof values
+        .personality ===
+      "string"
+    ) {
+      next.personality =
+        values
+          .personality;
+    }
+
+
+    if (
+      typeof values
+        .privateChat ===
+      "boolean"
+    ) {
+      next.privateChat =
+        values
+          .privateChat;
+    }
+
+
+    if (
+      typeof values
+        .isDeepResearch ===
+      "boolean"
+    ) {
+      next.isDeepResearch =
+        values
+          .isDeepResearch;
+    }
+
+
+    preferences =
+      next;
+
+
+    emit(
+      "neyo:chat-preferences-change",
+      {
+        preferences: {
+          ...preferences
+        }
+      }
+    );
+
+
+    return true;
+  }
+
+
+  /* =====================================================
+     DEEP RESEARCH SYNC
+
+     Existing UI may emit either event form.
+     ===================================================== */
+
+  window.addEventListener(
+    "neyo:deep-research-change",
     event => {
-
-      const button =
-        event.target
-          ?.closest
-          ?.(
-            ".msg-action-btn"
-          );
-
-
-      if (!button) {
-
-        return;
-      }
-
-
-      const message =
-        button.closest(
-          ".message"
-        );
-
-
-      if (!message) {
-
-        return;
-      }
-
-
-      /*
-      Avoid interfering with legacy edit behavior.
-      */
-
-      if (
-        button.classList
-          .contains(
-            "edit-msg-btn"
-          )
-      ) {
-
-        return;
-      }
-
-
-      event.preventDefault();
-
-      event.stopPropagation();
+      const enabled =
+        event.detail
+          ?.enabled;
 
 
       if (
-        button.classList
-          .contains(
-            "copy-msg-btn"
-          ) ||
-        button.dataset
-          .action ===
-          "copy"
+        typeof enabled ===
+        "boolean"
       ) {
-
-        void copyMessage(
-          message
-        );
-
-
-        return;
+        setPreferences({
+          isDeepResearch:
+            enabled
+        });
       }
+    }
+  );
+
+
+  window.addEventListener(
+    "neyo:deep-research-toggle",
+    event => {
+      const enabled =
+        event.detail
+          ?.enabled;
 
 
       if (
-        button.classList
-          .contains(
-            "share-msg-btn"
-          ) ||
-        button.dataset
-          .action ===
-          "share"
+        typeof enabled ===
+        "boolean"
       ) {
-
-        void shareMessage(
-          message
-        );
-
-
-        return;
-      }
-
-
-      if (
-        button.classList
-          .contains(
-            "regen-msg-btn"
-          ) ||
-        button.dataset
-          .action ===
-          "regenerate"
-      ) {
-
-        void regenerate();
+        setPreferences({
+          isDeepResearch:
+            enabled
+        });
       }
     }
   );
 
 
   /* =====================================================
-     SEND REQUEST EVENT
+     HISTORY CONNECTION
 
-     send-state.js dispatches this.
+     Supports both possible event names so existing
+     history behavior isn't broken.
+     ===================================================== */
+
+  function handleConversationLoaded(
+    event
+  ) {
+    loadConversation({
+      conversationId:
+        event.detail
+          ?.conversationId ||
+        event.detail
+          ?.id,
+
+      messages:
+        event.detail
+          ?.messages ||
+        []
+    });
+  }
+
+
+  window.addEventListener(
+    "neyo:conversation-loaded",
+    handleConversationLoaded
+  );
+
+
+  window.addEventListener(
+    "neyo:chat-load",
+    handleConversationLoaded
+  );
+
+
+  /* =====================================================
+     PUBLIC SEND EVENT
+
+     IMPORTANT:
+     chat.js does NOT listen directly to #sendBtn.
+     send-state.js dispatches this event.
      ===================================================== */
 
   window.addEventListener(
     "neyo:chat-send-request",
     event => {
+      const detail =
+        event.detail ||
+        {};
 
-      const text =
-        cleanText(
-          event?.detail
-            ?.text ||
-          chatInput?.value ||
-          ""
+
+      send({
+        text:
+          detail.text ||
+          detail.content ||
+          "",
+
+        attachments:
+          detail.attachments ||
+          []
+      })
+        .catch(
+          error => {
+            /*
+             * Lifecycle event already emitted.
+             * Keep this catch to prevent
+             * unhandled Promise rejection.
+             */
+
+            debug(
+              "Send rejected:",
+              error?.message
+            );
+          }
         );
-
-
-      void sendMessage(
-        text
-      );
     }
   );
 
 
   /* =====================================================
-     STOP REQUEST EVENT
+     STOP EVENT
      ===================================================== */
 
   window.addEventListener(
     "neyo:chat-stop-request",
     () => {
-
-      stopGeneration();
+      stop();
     }
   );
 
 
   /* =====================================================
-     NEW CHAT
+     NEW CHAT EVENT
 
-     Clear ONLY this module's state.
-     Do not alter neo.js internals.
+     This event is intentionally specific.
+     We don't bind #newChatBtn here because neo.js/history
+     may already own that UI control.
      ===================================================== */
 
   window.addEventListener(
-    "neyo:chat-new",
+    "neyo:chat-new-request",
     () => {
-
-      stopGeneration();
-
-
-      state.messages =
-        [];
-
-
-      state.currentConversationId =
-        null;
-
-
-      state.lastRequest =
-        null;
-
-
-      state.currentThinkingElement =
-        null;
-
-
-      debug(
-        "New chat state created."
-      );
+      newConversation();
     }
   );
 
 
   /* =====================================================
-     EXTERNAL CONVERSATION SYNC
-
-     History module can use this later without
-     changing this file.
+     PREFERENCES EVENT
      ===================================================== */
 
   window.addEventListener(
-    "neyo:chat-load",
+    "neyo:chat-preferences-set",
     event => {
-
-      const detail =
-        event?.detail ||
-        {};
-
-
-      state.currentConversationId =
-        typeof detail
-          .conversationId ===
-          "string"
-          ? detail
-              .conversationId
-              .trim() ||
-            null
-          : null;
-
-
-      state.messages =
-        Array.isArray(
-          detail.messages
-        )
-          ? detail.messages
-              .filter(
-                message =>
-                  message &&
-                  [
-                    "user",
-                    "assistant",
-                    "model"
-                  ].includes(
-                    message.role
-                  )
-              )
-              .map(
-                message => ({
-                  role:
-                    message.role ===
-                    "model"
-                      ? "assistant"
-                      : message.role,
-
-                  content:
-                    cleanText(
-                      message.content
-                    )
-                })
-              )
-              .slice(
-                -CONFIG.maxHistoryMessages
-              )
-          : [];
-
-
-      debug(
-        "Conversation synced",
-        {
-          conversationId:
-            state
-              .currentConversationId,
-
-          messages:
-            state
-              .messages
-              .length
-        }
+      setPreferences(
+        event.detail
       );
     }
   );
@@ -2577,138 +2142,93 @@ THIS FILE
 
   const publicApi =
     Object.freeze({
-
       __controller:
         true,
 
       version:
         VERSION,
 
+      send,
 
-      send:
-        sendMessage,
+      stop,
 
+      newConversation,
 
-      stop:
-        stopGeneration,
+      loadConversation,
 
+      addMessage,
 
-      regenerate,
+      setPreferences,
 
+      getPreferences:
+        () => ({
+          ...preferences
+        }),
 
-      isGenerating:
+      getConversation:
         () =>
-          state.generating,
-
-
-      getConversationId:
-        () =>
-          state
-            .currentConversationId,
-
-
-      setConversationId:
-        value => {
-
-          state.currentConversationId =
-            typeof value ===
-            "string"
-              ? value.trim() ||
-                null
-              : null;
-        },
-
-
-      getMessages:
-        () =>
-          state.messages.map(
+          conversation.map(
             message => ({
-              ...message
+              ...message,
+
+              attachments:
+                Array.isArray(
+                  message.attachments
+                )
+                  ? message
+                      .attachments
+                      .map(
+                        attachment => ({
+                          ...attachment
+                        })
+                      )
+                  : undefined
             })
           ),
 
+      getConversationId:
+        () =>
+          currentConversationId,
 
-      setMessages:
-        messages => {
-
-          state.messages =
-            Array.isArray(
-              messages
-            )
-              ? messages
-                  .filter(
-                    message =>
-                      message &&
-                      [
-                        "user",
-                        "assistant",
-                        "model"
-                      ].includes(
-                        message.role
-                      )
-                  )
-                  .map(
-                    message => ({
-                      role:
-                        message.role ===
-                        "model"
-                          ? "assistant"
-                          : message.role,
-
-                      content:
-                        cleanText(
-                          message.content
-                        )
-                    })
-                  )
-                  .slice(
-                    -CONFIG.maxHistoryMessages
-                  )
-              : [];
-        },
-
-
-      reset:
-        () => {
-
-          stopGeneration();
-
-
-          state.messages =
-            [];
-
-
-          state.currentConversationId =
+      setConversationId:
+        id => {
+          currentConversationId =
+            cleanString(
+              id,
+              128
+            ) ||
             null;
 
 
-          state.lastRequest =
-            null;
+          return (
+            currentConversationId
+          );
         },
 
+      isGenerating:
+        () =>
+          isGenerating,
 
       getState:
         () => ({
-
           version:
             VERSION,
 
-          generating:
-            state.generating,
-
           conversationId:
-            state
-              .currentConversationId,
+            currentConversationId,
 
           messageCount:
-            state
-              .messages
-              .length,
+            conversation.length,
 
-          hasLastRequest:
-            Boolean(
-              state.lastRequest
-            )
+          generating:
+            isGenerating,
+
+          requestId:
+            activeRequestId,
+
+          preferences: {
+            ...preferences
+          }
         })
     });
 
@@ -2733,31 +2253,36 @@ THIS FILE
 
 
   /* =====================================================
-     READY
+     INIT
      ===================================================== */
 
+  emit(
+    "neyo:chat-ready",
+    {
+      version:
+        VERSION
+    }
+  );
+
+
   debug(
-    "FINAL CONTROLLER READY",
+    "FINAL v4 READY",
     {
       version:
         VERSION,
 
-      chatMessages:
-        Boolean(
-          chatMessages
-        ),
+      endpoint:
+        CONFIG.endpoint,
 
-      heroSection:
-        Boolean(
-          heroSection
-        ),
+      attachmentBucket:
+        CONFIG
+          .attachmentBucket,
 
-      scrollArea:
-        Boolean(
-          scrollArea
-        ),
+      maxAttachments:
+        CONFIG
+          .maxAttachments,
 
-      attachmentController:
+      attachmentsController:
         Boolean(
           window
             .NeyoAttachments

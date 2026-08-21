@@ -161,7 +161,8 @@ const SCHEMA_ERROR_CODES =
   new Set([
     "42P01",
     "42703",
-    "23503"
+    "23503",
+    "PGRST205"   // ✅ added for missing table/column
   ]);
 
 
@@ -505,7 +506,7 @@ function createSupabaseAdmin() {
 
 
 /* =====================================================
-   PLAN
+   PLAN — NEW ROBUST VERSION
    ===================================================== */
 
 function isProPlan(
@@ -535,103 +536,113 @@ function isProPlan(
 
 
 /* =====================================================
-   USER PLAN
+   USER PLAN — UPDATED WITH FALLBACK
    ===================================================== */
 
 async function getUserPlan(
   supabase,
   userId
 ) {
+  /*
+  Try known user/profile tables.
 
-  const {
-    data,
-    error
-  } =
-    await supabase
-      .from(
-        "app_users"
-      )
-      .select(
-        "plan_type"
-      )
-      .eq(
-        "id",
-        userId
-      )
-      .maybeSingle();
+  Missing tables should NOT crash chat.
+  They simply mean plan infrastructure
+  is not configured yet → default Free.
+  */
 
+  const candidates = [
+    {
+      table: "app_users",
+      column: "plan_type"
+    },
+    {
+      table: "users",
+      column: "plan_type"
+    },
+    {
+      table: "profiles",
+      column: "plan_type"
+    },
+    {
+      table: "profiles",
+      column: "plan"
+    }
+  ];
 
-  if (error) {
+  for (
+    const candidate
+    of candidates
+  ) {
+    const {
+      data,
+      error
+    } =
+      await supabase
+        .from(
+          candidate.table
+        )
+        .select(
+          candidate.column
+        )
+        .eq(
+          "id",
+          userId
+        )
+        .maybeSingle();
+
+    if (!error) {
+      const value =
+        data?.[
+          candidate.column
+        ];
+
+      if (value) {
+        return String(
+          value
+        );
+      }
+
+      /*
+      Table exists but user has
+      no explicit plan → Free.
+      */
+
+      return "free";
+    }
+
+    /*
+    Missing table / column:
+    try next known schema.
+    */
+
+    if (
+      [
+        "PGRST205",
+        "42P01",
+        "42703"
+      ].includes(
+        String(
+          error?.code ||
+          ""
+        )
+      )
+    ) {
+      continue;
+    }
+
+    /*
+    Real DB failure should still surface.
+    */
 
     throw error;
   }
 
-
-  return (
-    data?.plan_type ||
-    "free"
+  console.warn(
+    "[NEYO Chat] No plan table found; defaulting to free plan."
   );
-}
 
-
-/* =====================================================
-   SCHEMA ERROR
-   ===================================================== */
-
-function isSchemaError(
-  error
-) {
-
-  return SCHEMA_ERROR_CODES.has(
-    String(
-      error?.code ||
-      ""
-    )
-  );
-}
-
-
-/* =====================================================
-   CONVERSATION OWNERSHIP
-   ===================================================== */
-
-async function verifyConversationOwnership(
-  supabase,
-  conversationId,
-  userId
-) {
-
-  const {
-    data,
-    error
-  } =
-    await supabase
-      .from(
-        "chat_conversations"
-      )
-      .select(
-        "id"
-      )
-      .eq(
-        "id",
-        conversationId
-      )
-      .eq(
-        "user_id",
-        userId
-      )
-      .maybeSingle();
-
-
-  if (error) {
-
-    throw error;
-  }
-
-
-  return Boolean(
-    data
-  );
+  return "free";
 }
 
 
@@ -2122,10 +2133,8 @@ async function buildAttachmentParts({
   const parts =
     [];
 
-
   const temporaryGeminiFiles =
     [];
-
 
   let usedCharacters =
     0;

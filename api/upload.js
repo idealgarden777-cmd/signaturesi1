@@ -28,7 +28,8 @@ import crypto from "node:crypto";
 
 import { createClient } from "@supabase/supabase-js";
 
-import { getAuthenticatedUser } from "../../lib/auth.js";
+// ✅ CORRECTED: relative path to lib/auth.js
+import { getAuthenticatedUser } from "../lib/auth.js";
 
 
 /* =====================================================

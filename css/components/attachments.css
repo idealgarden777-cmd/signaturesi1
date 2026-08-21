@@ -1,79 +1,87 @@
 /*
 =========================================================
 NEYO — ATTACHMENTS
-PRODUCTION / COMPOSER-SAFE VERSION
-
-Owns:
-- Attachment popup
-- Drag overlay visuals
-- Attachment preview rail
-- Image preview cards
-- Generic file preview cards
-- Remove button
-- Attachment-state composer integration
-- Responsive behavior
-- Dark mode
-
-Does NOT own:
-- File selection logic
-- Drag/drop JS
-- Upload API
-- Composer width
-- Base composer colors/shadow
-- Composer typing behavior
+CHAT-STYLE COMPOSER UI
+=========================================================
+Goals:
+- Compact attachment chips
+- Minimal vertical expansion
+- Clean ChatGPT-style composer feel
+- Image thumbnails when useful
+- File icon + filename + size
+- Thin upload progress
+- Simple remove / retry button
+- Horizontal scrolling for many files
+- No large preview cards
 =========================================================
 */
 
 
-/* =========================================================
+/* =====================================================
    1. TOKENS
-   ========================================================= */
+   ===================================================== */
 
 #composerWrapper {
-    --attachment-preview-height: 76px;
-    --attachment-card-width: 132px;
-    --attachment-card-height: 64px;
-    --attachment-card-radius: 12px;
-    --attachment-gap: 8px;
+    --attachment-chip-height: 54px;
+    --attachment-chip-width: 220px;
+    --attachment-chip-radius: 14px;
+    --attachment-chip-gap: 7px;
+
+    --attachment-preview-height: 68px;
+
+    --attachment-border:
+        rgba(0, 0, 0, 0.08);
+
+    --attachment-bg:
+        rgba(0, 0, 0, 0.035);
+
+    --attachment-hover-bg:
+        rgba(0, 0, 0, 0.055);
+
+    --attachment-text:
+        var(--text-primary, #1d1d1f);
+
+    --attachment-muted:
+        var(--text-secondary, #6e6e73);
 }
 
 
-/* =========================================================
+/* =====================================================
    2. POPUP MENU
-   ========================================================= */
+   ===================================================== */
 
 .attachment-popup-menu {
     position: absolute;
 
     left: 0;
-    bottom: calc(100% + 12px);
+    bottom: calc(100% + 10px);
 
-    min-width: 180px;
+    min-width: 190px;
 
     display: none;
     flex-direction: column;
 
     gap: 2px;
 
-    padding: 8px 6px;
+    padding: 6px;
 
     border:
         1px solid
-        rgba(0, 0, 0, 0.05);
+        rgba(0, 0, 0, 0.06);
 
-    border-radius: 18px;
+    border-radius: 16px;
 
     background:
-        rgba(255, 255, 255, 0.96);
+        rgba(255, 255, 255, 0.97);
 
     -webkit-backdrop-filter:
-        blur(16px);
+        blur(18px);
 
     backdrop-filter:
-        blur(16px);
+        blur(18px);
 
     box-shadow:
-        0 12px 40px
+        0 10px 34px
         rgba(0, 0, 0, 0.12);
 
     z-index: 1000;
@@ -82,14 +90,16 @@ Does NOT own:
 }
 
 
-.attachment-popup-menu.show {
+.attachment-popup-menu.show,
+.attachment-popup-menu.open,
+.attachment-popup-menu.active {
     display: flex;
 }
 
 
-/* =========================================================
+/* =====================================================
    3. POPUP ITEM
-   ========================================================= */
+   ===================================================== */
 
 .attachment-popup-item {
     width: 100%;
@@ -97,12 +107,12 @@ Does NOT own:
     display: flex;
     align-items: center;
 
-    gap: 12px;
+    gap: 11px;
 
-    padding: 10px 14px;
+    padding: 10px 12px;
 
     border: 0;
-    border-radius: 12px;
+    border-radius: 11px;
 
     background: transparent;
 
@@ -111,6 +121,8 @@ Does NOT own:
     font-size: 14px;
     font-weight: 500;
 
+    line-height: 1.2;
+
     text-align: left;
 
     cursor: pointer;
@@ -118,8 +130,7 @@ Does NOT own:
     box-sizing: border-box;
 
     transition:
-        background-color 120ms ease,
-        color 120ms ease;
+        background-color 120ms ease;
 }
 
 
@@ -129,12 +140,18 @@ Does NOT own:
 }
 
 
+.attachment-popup-item:active {
+    background:
+        rgba(0, 0, 0, 0.075);
+}
+
+
 .attachment-popup-item svg,
 .attachment-popup-item i {
-    width: 20px;
-    height: 20px;
+    width: 19px;
+    height: 19px;
 
-    flex: 0 0 20px;
+    flex: 0 0 19px;
 
     opacity: 0.72;
 }
@@ -150,31 +167,26 @@ Does NOT own:
 .attachment-popup-item .popup-shortcut {
     flex: 0 0 auto;
 
-    font-size: 12px;
-    font-weight: 400;
+    font-size: 11px;
 
-    letter-spacing: 0.25px;
-
-    opacity: 0.42;
+    opacity: 0.4;
 }
 
 
 .attachment-popup-item.danger {
-    color: #e5484d;
+    color: #d83b40;
 }
 
 
 .attachment-popup-item.danger:hover {
     background:
-        rgba(229, 72, 77, 0.08);
+        rgba(216, 59, 64, 0.07);
 }
 
 
-/* =========================================================
+/* =====================================================
    4. DRAG OVERLAY
-   Visual only.
-   Must NEVER capture drag/drop events.
-   ========================================================= */
+   ===================================================== */
 
 #composerWrapper {
     position: relative;
@@ -192,20 +204,20 @@ Does NOT own:
     align-items: center;
     justify-content: center;
 
-    gap: 8px;
+    gap: 7px;
 
     border-radius: inherit;
 
     background:
-        rgba(20, 20, 20, 0.68);
+        rgba(20, 20, 20, 0.72);
 
     -webkit-backdrop-filter:
-        blur(6px);
+        blur(5px);
 
     backdrop-filter:
-        blur(6px);
+        blur(5px);
 
-    color: #ffffff;
+    color: #fff;
 
     opacity: 0;
     visibility: hidden;
@@ -220,7 +232,8 @@ Does NOT own:
 }
 
 
-.drag-drop-overlay.show {
+.drag-drop-overlay.show,
+.drag-drop-overlay.active {
     opacity: 1;
     visibility: visible;
 
@@ -230,54 +243,98 @@ Does NOT own:
 
 .drag-drop-overlay > svg,
 .drag-drop-overlay > i {
-    width: 28px;
-    height: 28px;
+    width: 25px;
+    height: 25px;
 
-    flex: 0 0 28px;
+    flex: 0 0 25px;
 
-    margin: 0 0 2px;
-
-    pointer-events: none;
+    margin: 0;
 }
 
 
 .drag-drop-overlay > span {
-    font-size: 14px;
-    font-weight: 500;
-    line-height: 1.3;
+    font-size: 13px;
 
-    pointer-events: none;
+    font-weight: 500;
+
+    line-height: 1.3;
 }
 
 
-/* =========================================================
-   5. EMPTY PREVIEW WRAPPER
-   ========================================================= */
+/* =====================================================
+   5. ATTACHMENT LIST / PREVIEW RAIL
+   ===================================================== */
 
-#attachedChipsWrapper:empty {
+#attachedChipsWrapper:empty,
+#attachmentList:empty {
     display: none !important;
+}
 
-    width: 0 !important;
-    height: 0 !important;
 
-    min-width: 0 !important;
-    min-height: 0 !important;
+#glassInputContainer
+#attachedChipsWrapper:not(:empty),
+
+#glassInputContainer
+#attachmentList:not(:empty) {
+    position: relative !important;
+
+    width: 100% !important;
+
+    display: flex !important;
+
+    align-items: center !important;
+
+    flex-wrap: nowrap !important;
+
+    gap:
+        var(--attachment-chip-gap) !important;
+
+    height:
+        var(--attachment-preview-height) !important;
+
+    min-height:
+        var(--attachment-preview-height) !important;
+
+    max-height:
+        var(--attachment-preview-height) !important;
 
     margin: 0 !important;
-    padding: 0 !important;
+
+    padding:
+        7px 10px 4px !important;
+
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+
+    box-sizing: border-box !important;
+
+    scrollbar-width: none;
+
+    -ms-overflow-style: none;
 }
 
 
-/* =========================================================
-   6. ATTACHMENT STATE — OUTER COMPOSER
+#glassInputContainer
+#attachedChipsWrapper:not(:empty)::-webkit-scrollbar,
 
-   Important:
-   Attachment only adds preview row.
-   Lower control rail keeps normal composer geometry.
-   ========================================================= */
+#glassInputContainer
+#attachmentList:not(:empty)::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    display: none;
+}
+
+
+/* =====================================================
+   6. COMPOSER WITH ATTACHMENTS
+   ===================================================== */
 
 #glassInputContainer:has(
     #attachedChipsWrapper:not(:empty)
+):not(.is-writing-expanded),
+
+#glassInputContainer:has(
+    #attachmentList:not(:empty)
 ):not(.is-writing-expanded) {
     position: relative !important;
 
@@ -295,187 +352,223 @@ Does NOT own:
 
     padding: 0 !important;
 
-    overflow: hidden !important;
+    overflow: visible !important;
 
     box-sizing: border-box !important;
 }
 
 
-/* =========================================================
-   7. PREVIEW RAIL
-   ========================================================= */
+/* =====================================================
+   7. ATTACHMENT CHIP
+   ===================================================== */
 
 #glassInputContainer
-#attachedChipsWrapper:not(:empty) {
-    position: relative !important;
-
-    width: 100% !important;
-
-    height:
-        var(--attachment-preview-height) !important;
-
-    min-height:
-        var(--attachment-preview-height) !important;
-
-    max-height:
-        var(--attachment-preview-height) !important;
-
-    display: flex !important;
-    align-items: center !important;
-
-    flex-wrap: nowrap !important;
-    flex: 0 0 auto !important;
-
-    gap:
-        var(--attachment-gap) !important;
-
-    margin: 0 !important;
-
-    padding:
-        8px
-        12px
-        4px !important;
-
-    overflow-x: auto !important;
-    overflow-y: hidden !important;
-
-    visibility: visible !important;
-    opacity: 1 !important;
-
-    box-sizing: border-box !important;
-
-    z-index: 4 !important;
-
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-}
-
+#attachedChipsWrapper
+.attachment-chip,
 
 #glassInputContainer
-#attachedChipsWrapper:not(:empty)::-webkit-scrollbar {
-    display: none;
-    width: 0;
-    height: 0;
-}
+#attachmentList
+.attachment-chip {
 
-
-/* =========================================================
-   8. ATTACHMENT CARD
-   ========================================================= */
-
-#glassInputContainer
-#attachedChipsWrapper:not(:empty)
-.attachment-preview-card {
-    position: relative !important;
-
-    width:
-        var(--attachment-card-width) !important;
-
-    height:
-        var(--attachment-card-height) !important;
-
-    min-width:
-        var(--attachment-card-width) !important;
-
-    min-height:
-        var(--attachment-card-height) !important;
-
-    max-width:
-        var(--attachment-card-width) !important;
-
-    max-height:
-        var(--attachment-card-height) !important;
+    position: relative;
 
     flex:
-        0 0 var(--attachment-card-width) !important;
+        0 0 var(--attachment-chip-width);
 
-    display: block !important;
+    width:
+        var(--attachment-chip-width);
 
-    margin: 0 !important;
-    padding: 0 !important;
+    min-width:
+        var(--attachment-chip-width);
+
+    height:
+        var(--attachment-chip-height);
+
+    min-height:
+        var(--attachment-chip-height);
+
+    display: flex;
+
+    align-items: center;
+
+    gap: 9px;
+
+    padding:
+        6px 30px 6px 7px;
 
     border:
         1px solid
-        rgba(0, 0, 0, 0.06) !important;
+        var(--attachment-border);
 
     border-radius:
-        var(--attachment-card-radius) !important;
+        var(--attachment-chip-radius);
 
     background:
-        rgba(0, 0, 0, 0.025) !important;
+        var(--attachment-bg);
 
-    overflow: hidden !important;
+    color:
+        var(--attachment-text);
 
-    visibility: visible !important;
-    opacity: 1 !important;
+    box-sizing: border-box;
 
-    box-sizing: border-box !important;
+    overflow: hidden;
 
-    flex-shrink: 0 !important;
+    transition:
+        background-color 120ms ease,
+        border-color 120ms ease;
 }
 
 
-/* =========================================================
+#glassInputContainer
+#attachedChipsWrapper
+.attachment-chip:hover,
+
+#glassInputContainer
+#attachmentList
+.attachment-chip:hover {
+    background:
+        var(--attachment-hover-bg);
+
+    border-color:
+        rgba(0, 0, 0, 0.12);
+}
+
+
+/* =====================================================
+   8. CHIP ICON
+   ===================================================== */
+
+#glassInputContainer
+.attachment-chip-icon {
+
+    width: 38px;
+    height: 38px;
+
+    flex: 0 0 38px;
+
+    display: flex;
+
+    align-items: center;
+    justify-content: center;
+
+    border-radius: 10px;
+
+    background:
+        rgba(0, 0, 0, 0.055);
+
+    color:
+        var(--attachment-text);
+}
+
+
+#glassInputContainer
+.attachment-chip-icon svg,
+
+#glassInputContainer
+.attachment-chip-icon i {
+
+    width: 18px;
+    height: 18px;
+
+    opacity: 0.72;
+}
+
+
+/* =====================================================
    9. IMAGE PREVIEW
-   ========================================================= */
+   ===================================================== */
 
 #glassInputContainer
-#attachedChipsWrapper:not(:empty)
-.attachment-preview-card > img {
-    display: block !important;
+.attachment-chip-preview {
 
-    width: 100% !important;
-    height: 100% !important;
+    width: 38px;
+    height: 38px;
 
-    min-width: 100% !important;
-    min-height: 100% !important;
+    flex: 0 0 38px;
 
-    max-width: 100% !important;
-    max-height: 100% !important;
+    overflow: hidden;
 
-    margin: 0 !important;
-    padding: 0 !important;
-
-    object-fit: cover !important;
-    object-position: center !important;
-
-    border-radius: inherit !important;
-
-    visibility: visible !important;
-    opacity: 1 !important;
+    border-radius: 10px;
 
     background:
-        rgba(0, 0, 0, 0.035);
-}
-
-
-/* =========================================================
-   10. IMAGE ERROR FALLBACK
-   ========================================================= */
-
-#glassInputContainer
-.attachment-preview-card.attachment-preview-error {
-    background:
-        rgba(0, 0, 0, 0.04) !important;
+        rgba(0, 0, 0, 0.05);
 }
 
 
 #glassInputContainer
-.attachment-preview-card.attachment-preview-error > img {
-    opacity: 0.28 !important;
-}
+.attachment-chip-preview img {
 
+    display: block;
 
-/* =========================================================
-   11. GENERIC FILE PREVIEW
-   Current JS creates direct icon + span.
-   ========================================================= */
-
-#glassInputContainer
-.attachment-preview-card
-.attachment-preview-file {
     width: 100%;
     height: 100%;
+
+    object-fit: cover;
+    object-position: center;
+
+    margin: 0;
+    padding: 0;
+
+    border-radius: inherit;
+}
+
+
+/* =====================================================
+   10. CHIP BODY
+   ===================================================== */
+
+#glassInputContainer
+.attachment-chip-body {
+
+    min-width: 0;
+
+    flex:
+        1 1 auto;
+
+    display: flex;
+
+    flex-direction: column;
+
+    justify-content: center;
+
+    gap: 3px;
+
+    overflow: hidden;
+}
+
+
+/* =====================================================
+   11. FILE NAME
+   ===================================================== */
+
+#glassInputContainer
+.attachment-chip-name {
+
+    min-width: 0;
+
+    overflow: hidden;
+
+    text-overflow: ellipsis;
+
+    white-space: nowrap;
+
+    font-size: 12.5px;
+
+    font-weight: 550;
+
+    line-height: 1.25;
+
+    color:
+        var(--attachment-text);
+}
+
+
+/* =====================================================
+   12. META / STATUS
+   ===================================================== */
+
+#glassInputContainer
+.attachment-chip-meta {
 
     min-width: 0;
 
@@ -483,167 +576,228 @@ Does NOT own:
 
     align-items: center;
 
-    gap: 10px;
+    gap: 4px;
 
-    margin: 0;
+    overflow: hidden;
 
-    padding:
-        10px
-        30px
-        10px
-        10px;
+    white-space: nowrap;
 
-    border: 0;
+    font-size: 10.5px;
 
-    border-radius: inherit;
-
-    background:
-        rgba(0, 0, 0, 0.025);
+    line-height: 1.2;
 
     color:
-        var(--text-primary, #1d1d1f);
-
-    box-sizing: border-box;
+        var(--attachment-muted);
 }
 
 
 #glassInputContainer
-.attachment-preview-card
-.attachment-preview-file > svg,
+.attachment-chip-status {
+
+    min-width: 0;
+
+    overflow: hidden;
+
+    text-overflow: ellipsis;
+
+    white-space: nowrap;
+}
+
+
+/* =====================================================
+   13. REMOVE BUTTON
+   ===================================================== */
 
 #glassInputContainer
-.attachment-preview-card
-.attachment-preview-file > i {
+.attachment-chip-remove,
+
+#glassInputContainer
+.attachment-chip-retry {
+
+    position: absolute;
+
+    top: 6px;
+
+    right: 6px;
+
     width: 20px;
     height: 20px;
 
-    flex: 0 0 20px;
+    display: inline-flex;
+
+    align-items: center;
+    justify-content: center;
+
+    padding: 0;
+
+    border: 0;
+
+    border-radius: 999px;
+
+    background:
+        rgba(0, 0, 0, 0.11);
+
+    color:
+        var(--attachment-text);
+
+    cursor: pointer;
+
+    opacity: 0.72;
+
+    transition:
+        opacity 120ms ease,
+        background-color 120ms ease;
+}
+
+
+#glassInputContainer
+.attachment-chip-remove:hover,
+
+#glassInputContainer
+.attachment-chip-retry:hover {
+
+    opacity: 1;
+
+    background:
+        rgba(0, 0, 0, 0.17);
+}
+
+
+#glassInputContainer
+.attachment-chip-remove:active,
+
+#glassInputContainer
+.attachment-chip-retry:active {
+
+    opacity: 0.8;
+}
+
+
+#glassInputContainer
+.attachment-chip-remove svg,
+
+#glassInputContainer
+.attachment-chip-remove i,
+
+#glassInputContainer
+.attachment-chip-retry svg,
+
+#glassInputContainer
+.attachment-chip-retry i {
+
+    width: 12px;
+    height: 12px;
+
+    pointer-events: none;
+
+    transition: none;
+}
+
+
+/* =====================================================
+   14. UPLOAD PROGRESS
+   ===================================================== */
+
+#glassInputContainer
+.attachment-chip-progress {
+
+    position: absolute;
+
+    left: 7px;
+    right: 7px;
+
+    bottom: 5px;
+
+    height: 2px;
+
+    overflow: hidden;
+
+    border-radius: 999px;
+
+    background:
+        rgba(0, 0, 0, 0.08);
+}
+
+
+#glassInputContainer
+.attachment-chip-progress span {
+
+    display: block;
+
+    height: 100%;
+
+    width: 0;
+
+    border-radius: inherit;
+
+    background:
+        currentColor;
+
+    opacity: 0.72;
+
+    transition:
+        width 160ms ease;
+}
+
+
+/* =====================================================
+   15. ERROR STATE
+   ===================================================== */
+
+#glassInputContainer
+.attachment-chip[data-status="error"] {
+
+    border-color:
+        rgba(216, 59, 64, 0.22);
+
+    background:
+        rgba(216, 59, 64, 0.045);
+}
+
+
+#glassInputContainer
+.attachment-chip[data-status="error"]
+.attachment-chip-status {
+
+    color:
+        #c9363e;
+}
+
+
+/* =====================================================
+   16. UPLOADING STATE
+   ===================================================== */
+
+#glassInputContainer
+.attachment-chip[data-status="uploading"]
+.attachment-chip-status {
+
+    opacity: 0.72;
+}
+
+
+#glassInputContainer
+.attachment-chip[data-status="ready"]
+.attachment-chip-status {
 
     opacity: 0.62;
 }
 
 
-#glassInputContainer
-.attachment-preview-card
-.attachment-preview-file > span {
-    min-width: 0;
-
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-
-    font-size: 13px;
-    font-weight: 500;
-}
-
-
-/* =========================================================
-   REMOVE BUTTON — FADE ONLY
-   No zoom / no movement / no scale
-   ========================================================= */
-
-#glassInputContainer
-.attachment-preview-card
-.attachment-remove-btn {
-    position: absolute !important;
-
-    top: 6px !important;
-    right: 6px !important;
-
-    width: 22px !important;
-    height: 22px !important;
-
-    min-width: 22px !important;
-    min-height: 22px !important;
-
-    max-width: 22px !important;
-    max-height: 22px !important;
-
-    display: inline-flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-
-    margin: 0 !important;
-    padding: 0 !important;
-
-    border: 0 !important;
-    border-radius: 999px !important;
-
-    background:
-        rgba(0, 0, 0, 0.54) !important;
-
-    color: #ffffff !important;
-
-    cursor: pointer !important;
-
-    z-index: 6 !important;
-
-    box-sizing: border-box !important;
-
-    opacity: 0.72 !important;
-
-    transform: none !important;
-
-    transition:
-        opacity 140ms ease,
-        background-color 140ms ease !important;
-}
-
-
-/* Hover = only fade stronger */
-
-#glassInputContainer
-.attachment-preview-card
-.attachment-remove-btn:hover {
-    opacity: 1 !important;
-
-    background:
-        rgba(0, 0, 0, 0.68) !important;
-
-    transform: none !important;
-}
-
-
-/* Click = no zoom / no movement */
-
-#glassInputContainer
-.attachment-preview-card
-.attachment-remove-btn:active {
-    opacity: 0.82 !important;
-
-    transform: none !important;
-}
-
-
-/* Icon itself never animates */
-
-#glassInputContainer
-.attachment-preview-card
-.attachment-remove-btn svg,
-
-#glassInputContainer
-.attachment-preview-card
-.attachment-remove-btn i {
-    width: 12px !important;
-    height: 12px !important;
-
-    pointer-events: none !important;
-
-    transform: none !important;
-
-    transition: none !important;
-}
-
-
-/* =========================================================
-   13. LOWER INPUT ROW
-   Exact normal composer geometry.
-   ========================================================= */
+/* =====================================================
+   17. LOWER INPUT ROW
+   ===================================================== */
 
 #glassInputContainer:has(
     #attachedChipsWrapper:not(:empty)
 ):not(.is-writing-expanded)
+.composer-input-row,
+
+#glassInputContainer:has(
+    #attachmentList:not(:empty)
+):not(.is-writing-expanded)
 .composer-input-row {
+
     position: relative !important;
 
     display: block !important;
@@ -660,19 +814,24 @@ Does NOT own:
         var(--neyo-pill-height, 56px) !important;
 
     margin: 0 !important;
+
     padding: 0 !important;
 
     box-sizing: border-box !important;
 }
 
 
-/* =========================================================
-   14. CONTROLS
-   Same coordinates as normal composer.
-   ========================================================= */
+/* =====================================================
+   18. CONTROL POSITIONS
+   ===================================================== */
 
 #glassInputContainer:has(
     #attachedChipsWrapper:not(:empty)
+):not(.is-writing-expanded)
+#attachBtn,
+
+#glassInputContainer:has(
+    #attachmentList:not(:empty)
 ):not(.is-writing-expanded)
 #attachBtn,
 
@@ -682,15 +841,26 @@ Does NOT own:
 #micBtn,
 
 #glassInputContainer:has(
+    #attachmentList:not(:empty)
+):not(.is-writing-expanded)
+#micBtn,
+
+#glassInputContainer:has(
     #attachedChipsWrapper:not(:empty)
 ):not(.is-writing-expanded)
-#sendBtn {
-    position: absolute !important;
+#sendBtn,
 
-    top: auto !important;
+#glassInputContainer:has(
+    #attachmentList:not(:empty)
+):not(.is-writing-expanded)
+#sendBtn {
+
+    position: absolute !important;
 
     bottom:
         var(--neyo-control-bottom, 8px) !important;
+
+    top: auto !important;
 
     margin: 0 !important;
 
@@ -698,12 +868,20 @@ Does NOT own:
 }
 
 
-/* + */
+/* =====================================================
+   19. ATTACH BUTTON
+   ===================================================== */
 
 #glassInputContainer:has(
     #attachedChipsWrapper:not(:empty)
 ):not(.is-writing-expanded)
+#attachBtn,
+
+#glassInputContainer:has(
+    #attachmentList:not(:empty)
+):not(.is-writing-expanded)
 #attachBtn {
+
     left:
         var(--neyo-edge-x, 8px) !important;
 
@@ -711,12 +889,20 @@ Does NOT own:
 }
 
 
-/* Send */
+/* =====================================================
+   20. SEND BUTTON
+   ===================================================== */
 
 #glassInputContainer:has(
     #attachedChipsWrapper:not(:empty)
 ):not(.is-writing-expanded)
+#sendBtn,
+
+#glassInputContainer:has(
+    #attachmentList:not(:empty)
+):not(.is-writing-expanded)
 #sendBtn {
+
     right:
         var(--neyo-edge-x, 8px) !important;
 
@@ -724,12 +910,20 @@ Does NOT own:
 }
 
 
-/* Mic */
+/* =====================================================
+   21. MICROPHONE BUTTON
+   ===================================================== */
 
 #glassInputContainer:has(
     #attachedChipsWrapper:not(:empty)
 ):not(.is-writing-expanded)
+#micBtn,
+
+#glassInputContainer:has(
+    #attachmentList:not(:empty)
+):not(.is-writing-expanded)
 #micBtn {
+
     right:
         calc(
             var(--neyo-edge-x, 8px) +
@@ -741,23 +935,29 @@ Does NOT own:
 }
 
 
-/* =========================================================
-   15. TEXTAREA — ONE LINE WITH ATTACHMENT
-   Same lower-row alignment as normal composer.
-   ========================================================= */
+/* =====================================================
+   22. TEXTAREA — NORMAL ONE LINE
+   ===================================================== */
 
 #glassInputContainer:has(
     #attachedChipsWrapper:not(:empty)
 ):not(.is-writing-expanded):not(.composer-multiline)
+textarea#chatInput,
+
+#glassInputContainer:has(
+    #attachmentList:not(:empty)
+):not(.is-writing-expanded):not(.composer-multiline)
 textarea#chatInput {
+
     position: absolute !important;
 
     left: 0 !important;
     right: 0 !important;
 
-    top: auto !important;
     bottom:
         var(--neyo-control-bottom, 8px) !important;
+
+    top: auto !important;
 
     width: 100% !important;
 
@@ -780,21 +980,22 @@ textarea#chatInput {
 
     line-height: 24px !important;
 
-    transform: none !important;
-
     box-sizing: border-box !important;
 }
 
 
-/* =========================================================
-   16. MULTILINE WITH ATTACHMENTS
-   Keep typing logic owned by composer-scrollbar.css.
-   Only ensure preview row remains separate.
-   ========================================================= */
+/* =====================================================
+   23. MULTILINE
+   ===================================================== */
 
 #glassInputContainer:has(
     #attachedChipsWrapper:not(:empty)
+).composer-multiline:not(.is-writing-expanded),
+
+#glassInputContainer:has(
+    #attachmentList:not(:empty)
 ).composer-multiline:not(.is-writing-expanded) {
+
     height: auto !important;
 
     min-height:
@@ -810,7 +1011,13 @@ textarea#chatInput {
 #glassInputContainer:has(
     #attachedChipsWrapper:not(:empty)
 ).composer-multiline:not(.is-writing-expanded)
+.composer-input-row,
+
+#glassInputContainer:has(
+    #attachmentList:not(:empty)
+).composer-multiline:not(.is-writing-expanded)
 .composer-input-row {
+
     height: auto !important;
 
     min-height:
@@ -820,41 +1027,67 @@ textarea#chatInput {
 }
 
 
-/* =========================================================
-   17. SUGGESTIONS
-   Do not force display.
-   Only prevent attachment-specific hiding.
-   ========================================================= */
+/* =====================================================
+   24. SUGGESTIONS
+   ===================================================== */
 
 #composerWrapper:has(
     #attachedChipsWrapper:not(:empty)
 )
+.live-suggestions,
+
+#composerWrapper:has(
+    #attachmentList:not(:empty)
+)
 .live-suggestions {
+
     visibility: visible;
+
     opacity: 1;
 }
 
 
-/* =========================================================
-   18. DARK MODE
-   ========================================================= */
+/* =====================================================
+   25. DARK MODE
+   ===================================================== */
+
+body.dark-mode #composerWrapper {
+
+    --attachment-border:
+        rgba(255, 255, 255, 0.09);
+
+    --attachment-bg:
+        rgba(255, 255, 255, 0.045);
+
+    --attachment-hover-bg:
+        rgba(255, 255, 255, 0.075);
+
+    --attachment-text:
+        rgba(255, 255, 255, 0.94);
+
+    --attachment-muted:
+        rgba(255, 255, 255, 0.55);
+}
+
 
 body.dark-mode
 .attachment-popup-menu {
+
     border-color:
         rgba(255, 255, 255, 0.08);
 
     background:
-        rgba(28, 28, 28, 0.94);
+        rgba(28, 28, 28, 0.96);
 
     box-shadow:
-        0 14px 46px
-        rgba(0, 0, 0, 0.34);
+        0 14px 44px
+        rgba(0, 0, 0, 0.38);
 }
 
 
 body.dark-mode
 .attachment-popup-item {
+
     color:
         rgba(255, 255, 255, 0.94);
 }
@@ -862,61 +1095,112 @@ body.dark-mode
 
 body.dark-mode
 .attachment-popup-item:hover {
+
     background:
         rgba(255, 255, 255, 0.07);
 }
 
 
 body.dark-mode
-#glassInputContainer
-.attachment-preview-card {
-    border-color:
-        rgba(255, 255, 255, 0.08) !important;
+.attachment-chip-icon {
 
     background:
-        rgba(255, 255, 255, 0.045) !important;
+        rgba(255, 255, 255, 0.07);
 }
 
 
 body.dark-mode
-#glassInputContainer
-.attachment-preview-card
-.attachment-preview-file {
+.attachment-chip-progress {
+
     background:
-        rgba(255, 255, 255, 0.035);
+        rgba(255, 255, 255, 0.10);
+}
+
+
+body.dark-mode
+.attachment-chip-remove,
+
+body.dark-mode
+.attachment-chip-retry {
+
+    background:
+        rgba(255, 255, 255, 0.10);
 
     color:
         rgba(255, 255, 255, 0.92);
 }
 
 
-/* =========================================================
-   19. MOBILE
-   ========================================================= */
+body.dark-mode
+.attachment-chip-remove:hover,
+
+body.dark-mode
+.attachment-chip-retry:hover {
+
+    background:
+        rgba(255, 255, 255, 0.17);
+}
+
+
+body.dark-mode
+.attachment-chip[data-status="error"] {
+
+    border-color:
+        rgba(255, 90, 95, 0.28);
+
+    background:
+        rgba(255, 90, 95, 0.07);
+}
+
+
+body.dark-mode
+.attachment-chip[data-status="error"]
+.attachment-chip-status {
+
+    color:
+        #ff8b8e;
+}
+
+
+/* =====================================================
+   26. MOBILE
+   ===================================================== */
 
 @media (max-width: 767px) {
 
     #composerWrapper {
-        --attachment-preview-height: 70px;
-        --attachment-card-width: 118px;
-        --attachment-card-height: 60px;
-        --attachment-card-radius: 11px;
-        --attachment-gap: 6px;
+
+        --attachment-chip-height: 50px;
+
+        --attachment-chip-width: 196px;
+
+        --attachment-preview-height: 64px;
+
+        --attachment-chip-radius: 13px;
+
+        --attachment-chip-gap: 6px;
     }
 
 
     #glassInputContainer
-    #attachedChipsWrapper:not(:empty) {
+    #attachedChipsWrapper:not(:empty),
+
+    #glassInputContainer
+    #attachmentList:not(:empty) {
+
         padding:
-            6px
-            8px
-            4px !important;
+            6px 8px 4px !important;
     }
 
 
     #glassInputContainer:has(
         #attachedChipsWrapper:not(:empty)
+    ):not(.is-writing-expanded),
+
+    #glassInputContainer:has(
+        #attachmentList:not(:empty)
     ):not(.is-writing-expanded) {
+
         min-height:
             calc(
                 var(--attachment-preview-height) +
@@ -928,7 +1212,13 @@ body.dark-mode
     #glassInputContainer:has(
         #attachedChipsWrapper:not(:empty)
     ):not(.is-writing-expanded)
+    .composer-input-row,
+
+    #glassInputContainer:has(
+        #attachmentList:not(:empty)
+    ):not(.is-writing-expanded)
     .composer-input-row {
+
         height:
             var(--neyo-pill-height, 54px) !important;
 
@@ -943,7 +1233,13 @@ body.dark-mode
     #glassInputContainer:has(
         #attachedChipsWrapper:not(:empty)
     ):not(.is-writing-expanded):not(.composer-multiline)
+    textarea#chatInput,
+
+    #glassInputContainer:has(
+        #attachmentList:not(:empty)
+    ):not(.is-writing-expanded):not(.composer-multiline)
     textarea#chatInput {
+
         height:
             var(--neyo-control-size, 38px) !important;
 
@@ -959,81 +1255,75 @@ body.dark-mode
             7px
             var(--neyo-oneline-left, 52px) !important;
 
-        line-height: 24px !important;
+        line-height:
+            24px !important;
     }
 
 
     .attachment-popup-menu {
-        min-width: 160px;
+
+        min-width: 165px;
 
         bottom:
-            calc(100% + 10px);
+            calc(100% + 8px);
 
         padding:
-            6px
-            4px;
+            5px;
     }
 
 
     .attachment-popup-item {
-        gap: 10px;
+
+        gap: 9px;
 
         padding:
-            9px
-            12px;
+            9px 11px;
 
-        font-size: 13px;
-    }
-
-
-    .drag-drop-overlay {
-        gap: 6px;
-    }
-
-
-    .drag-drop-overlay > svg,
-    .drag-drop-overlay > i {
-        width: 24px;
-        height: 24px;
-
-        flex-basis: 24px;
-    }
-
-
-    .drag-drop-overlay > span {
-        font-size: 13px;
+        font-size:
+            13px;
     }
 }
 
 
-/* =========================================================
-   20. SMALL MOBILE
-   ========================================================= */
+/* =====================================================
+   27. SMALL MOBILE
+   ===================================================== */
 
 @media (max-width: 380px) {
 
     #composerWrapper {
-        --attachment-card-width: 108px;
-        --attachment-gap: 5px;
+
+        --attachment-chip-width: 172px;
+
+        --attachment-chip-gap: 5px;
     }
 
 
     #glassInputContainer
-    #attachedChipsWrapper:not(:empty) {
+    #attachedChipsWrapper:not(:empty),
+
+    #glassInputContainer
+    #attachmentList:not(:empty) {
+
         padding-left: 6px !important;
+
         padding-right: 6px !important;
     }
 }
 
 
-/* =========================================================
-   21. TOUCH
-   ========================================================= */
+/* =====================================================
+   28. TOUCH
+   ===================================================== */
 
 @media (pointer: coarse) {
 
     .attachment-popup-item,
-    .attachment-remove-btn {
+
+    .attachment-chip-remove,
+
+    .attachment-chip-retry {
+
         touch-action:
             manipulation;
 
@@ -1043,15 +1333,24 @@ body.dark-mode
 }
 
 
-/* =========================================================
-   22. REDUCED MOTION
-   ========================================================= */
+/* =====================================================
+   29. REDUCED MOTION
+   ===================================================== */
 
 @media (prefers-reduced-motion: reduce) {
 
     .attachment-popup-item,
-    .attachment-remove-btn,
+
+    .attachment-chip,
+
+    .attachment-chip-remove,
+
+    .attachment-chip-retry,
+
+    .attachment-chip-progress span,
+
     .drag-drop-overlay {
+
         transition:
             none !important;
     }

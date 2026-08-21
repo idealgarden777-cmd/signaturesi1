@@ -1,24 +1,23 @@
 /*
 =========================================================
-NEYO — GEMINI LIVE VOICE ENGINE v7
-HOT SWITCH + ERROR SAFE
+NEYO — GEMINI LIVE VOICE ENGINE
+NEYO-ONLY DEBUG LOCK
 
-Fixed character voices:
-- Neyo → Kore
-- Zadi → Orus
-- Wizi → Charon
+Temporary validation build
 
-Goals:
-- No page refresh
-- No voice-mode close during character switch
-- No microphone restart during character switch
-- No camera restart
-- No stale previous-character audio
-- Server-authoritative character + voice
-- Voice screen stays open on connection error
-- Natural interruption + VAD
-- Real mic/output energy
-- Hidden transcription for mascot intelligence
+Hard lock:
+- Character: neyo
+- Voice: Kore
+
+Goal:
+- Prove Neyo always starts with Kore
+- Remove stale character state
+- Remove hot-switch complexity temporarily
+- Keep voice mode open on errors
+- No page refresh required
+
+After Neyo is verified repeatedly,
+we will re-enable Zadi, then Wizi.
 =========================================================
 */
 
@@ -60,92 +59,78 @@ Goals:
 
 
   /* =====================================================
-     CONFIG
+     HARD LOCK
      ===================================================== */
 
-  const CONFIG = Object.freeze({
+  const FORCE_NEYO_ONLY =
+    true;
 
-    tokenEndpoint:
-      "/api/voice-token",
+  const LOCKED_CHARACTER =
+    "neyo";
 
-    websocketEndpoint:
-      "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained",
-
-    defaultCharacter:
-      "neyo",
-
-    defaultVoice:
-      "Kore",
-
-    inputSampleRate:
-      16000,
-
-    outputSampleRate:
-      24000,
-
-    processorBufferSize:
-      4096,
-
-    analyserFftSize:
-      256,
-
-    setupTimeoutMs:
-      12000,
-
-    maxSessionMs:
-      28 * 60 * 1000,
-
-    playbackLeadSeconds:
-      0.06,
-
-    vadPrefixPaddingMs:
-      90,
-
-    vadSilenceDurationMs:
-      760,
-
-    vadStartSensitivity:
-      "START_SENSITIVITY_HIGH",
-
-    vadEndSensitivity:
-      "END_SENSITIVITY_LOW",
-
-    debug:
-      true
-  });
+  const LOCKED_VOICE =
+    "Kore";
 
 
   /* =====================================================
-     LOCAL VOICE MAP
-
-     Server remains final authority.
+     CONFIG
      ===================================================== */
 
-  const CHARACTER_VOICES =
+  const CONFIG =
     Object.freeze({
 
-      neyo:
-        "Kore",
+      tokenEndpoint:
+        "/api/voice-token",
 
-      zadi:
-        "Orus",
+      websocketEndpoint:
+        "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained",
 
-      wizi:
-        "Charon"
+      inputSampleRate:
+        16000,
+
+      outputSampleRate:
+        24000,
+
+      processorBufferSize:
+        4096,
+
+      analyserFftSize:
+        256,
+
+      setupTimeoutMs:
+        12000,
+
+      maxSessionMs:
+        28 * 60 * 1000,
+
+      playbackLeadSeconds:
+        0.06,
+
+      vadPrefixPaddingMs:
+        90,
+
+      vadSilenceDurationMs:
+        760,
+
+      vadStartSensitivity:
+        "START_SENSITIVITY_HIGH",
+
+      vadEndSensitivity:
+        "END_SENSITIVITY_LOW",
+
+      debug:
+        true
     });
 
 
   /* =====================================================
-     CONNECTION STATE
+     SESSION STATE
      ===================================================== */
 
   let socket =
     null;
 
   let socketGeneration =
-    0;
-
-  let switchRequestId =
     0;
 
   let connecting =
@@ -160,10 +145,6 @@ Goals:
   let stopping =
     false;
 
-  let switchingCharacter =
-    false;
-
-
   let setupTimer =
     0;
 
@@ -171,15 +152,11 @@ Goals:
     0;
 
 
-  /* =====================================================
-     SESSION IDENTITY
-     ===================================================== */
-
   let sessionCharacterId =
-    CONFIG.defaultCharacter;
+    LOCKED_CHARACTER;
 
   let sessionVoiceName =
-    CONFIG.defaultVoice;
+    LOCKED_VOICE;
 
 
   /* =====================================================
@@ -312,77 +289,6 @@ Goals:
   }
 
 
-  function getCharacter(
-    id
-  ) {
-
-    return (
-      window
-        .NeyoCharacters
-        ?.[id] ||
-      null
-    );
-  }
-
-
-  function getActiveCharacterId() {
-
-    return (
-      window
-        .NeyoCharacters
-        ?.active ||
-
-      window
-        .NeyoMascot
-        ?.getState
-        ?.()
-        ?.characterId ||
-
-      CONFIG.defaultCharacter
-    );
-  }
-
-
-  function getLocalVoiceForCharacter(
-    id
-  ) {
-
-    return (
-      CHARACTER_VOICES[id] ||
-
-      getCharacter(id)
-        ?.voice
-        ?.preferredVoice ||
-
-      CONFIG.defaultVoice
-    );
-  }
-
-
-  function setActiveCharacterLocally(
-    id
-  ) {
-
-    if (
-      !window.NeyoCharacters ||
-      !getCharacter(id)
-    ) {
-      return false;
-    }
-
-
-    window.NeyoCharacters.active =
-      id;
-
-
-    return true;
-  }
-
-
-  /* =====================================================
-     EVENTS
-     ===================================================== */
-
   function emit(
     name,
     detail = {}
@@ -420,13 +326,10 @@ Goals:
       `neyo:voice-${phase}`,
       {
         character:
-          sessionCharacterId,
+          LOCKED_CHARACTER,
 
         voice:
-          sessionVoiceName,
-
-        switching:
-          switchingCharacter,
+          LOCKED_VOICE,
 
         ...detail
       }
@@ -434,64 +337,60 @@ Goals:
   }
 
 
-  function emitUserText(
-    text
-  ) {
+  /* =====================================================
+     HARD CHARACTER ENFORCEMENT
+     ===================================================== */
 
-    const value =
-      String(
-        text || ""
-      ).trim();
+  function forceNeyoIdentity() {
 
+    if (
+      window.NeyoCharacters
+    ) {
 
-    if (!value) {
-      return;
+      window.NeyoCharacters.active =
+        LOCKED_CHARACTER;
     }
 
 
-    emit(
-      "neyo:voice-user-text",
+    sessionCharacterId =
+      LOCKED_CHARACTER;
+
+
+    sessionVoiceName =
+      LOCKED_VOICE;
+
+
+    try {
+
+      window
+        .NeyoMascot
+        ?.setCharacter
+        ?.(
+          LOCKED_CHARACTER,
+          {
+            resetMood:
+              false
+          }
+        );
+
+    } catch {}
+
+
+    debug(
+      "Identity forced",
       {
-        text:
-          value,
-
         character:
-          sessionCharacterId
-      }
-    );
-  }
+          sessionCharacterId,
 
-
-  function emitAssistantText(
-    text
-  ) {
-
-    const value =
-      String(
-        text || ""
-      ).trim();
-
-
-    if (!value) {
-      return;
-    }
-
-
-    emit(
-      "neyo:voice-assistant-text",
-      {
-        text:
-          value,
-
-        character:
-          sessionCharacterId
+        voice:
+          sessionVoiceName
       }
     );
   }
 
 
   /* =====================================================
-     UI SYNC
+     UI
      ===================================================== */
 
   function syncUi() {
@@ -501,8 +400,7 @@ Goals:
       .toggle(
         "is-transcribing",
         active ||
-        connecting ||
-        switchingCharacter
+        connecting
       );
 
 
@@ -510,8 +408,7 @@ Goals:
       .classList
       .toggle(
         "is-processing-transcription",
-        connecting ||
-        switchingCharacter
+        connecting
       );
 
 
@@ -524,24 +421,14 @@ Goals:
     );
 
 
-    if (switchingCharacter) {
-
-      micBtn.dataset.tooltip =
-        "Switching character";
-
-      micBtn.setAttribute(
-        "aria-label",
-        "Switching voice character"
-      );
-
-    } else if (connecting) {
+    if (connecting) {
 
       micBtn.dataset.tooltip =
         "Connecting";
 
       micBtn.setAttribute(
         "aria-label",
-        "Connecting voice"
+        "Connecting Neyo voice"
       );
 
     } else if (active) {
@@ -569,15 +456,13 @@ Goals:
     if (stopRecBtn) {
 
       stopRecBtn.disabled =
-        connecting ||
-        switchingCharacter;
+        connecting;
 
 
       stopRecBtn.setAttribute(
         "aria-busy",
         String(
-          connecting ||
-          switchingCharacter
+          connecting
         )
       );
     }
@@ -638,7 +523,6 @@ Goals:
       !analyser ||
       !analyserData
     ) {
-
       return 0;
     }
 
@@ -687,8 +571,7 @@ Goals:
 
     if (
       !active &&
-      !connecting &&
-      !switchingCharacter
+      !connecting
     ) {
 
       waveRaf =
@@ -904,7 +787,8 @@ Goals:
         input[
           Math.min(
             index,
-            input.length - 1
+            input.length -
+            1
           )
         ] ||
         0;
@@ -914,7 +798,8 @@ Goals:
         input[
           Math.min(
             index + 1,
-            input.length - 1
+            input.length -
+            1
           )
         ] ||
         a;
@@ -935,7 +820,7 @@ Goals:
 
 
   /* =====================================================
-     PCM HELPERS
+     PCM
      ===================================================== */
 
   function float32ToPcm16(
@@ -1121,7 +1006,7 @@ Goals:
 
 
   /* =====================================================
-     OUTPUT CONTEXT
+     AUDIO OUTPUT
      ===================================================== */
 
   async function ensureOutputContext() {
@@ -1191,10 +1076,6 @@ Goals:
       outputContext.currentTime;
 
 
-    playbackStarted =
-      false;
-
-
     return outputContext;
   }
 
@@ -1211,17 +1092,17 @@ Goals:
       );
 
 
-    const parsed =
+    const rate =
       Number(
         match?.[1]
       );
 
 
     return (
-      Number.isFinite(parsed) &&
-      parsed > 0
+      Number.isFinite(rate) &&
+      rate > 0
     )
-      ? parsed
+      ? rate
       : CONFIG.outputSampleRate;
   }
 
@@ -1230,10 +1111,7 @@ Goals:
     samples
   ) {
 
-    if (
-      !samples.length
-    ) {
-
+    if (!samples.length) {
       return 0;
     }
 
@@ -1274,10 +1152,6 @@ Goals:
   }
 
 
-  /* =====================================================
-     PLAYBACK
-     ===================================================== */
-
   async function playAudioChunk(
     base64,
     mimeType,
@@ -1296,14 +1170,6 @@ Goals:
       await ensureOutputContext();
 
 
-    if (
-      generation !==
-      socketGeneration
-    ) {
-      return;
-    }
-
-
     const bytes =
       base64ToBytes(
         base64
@@ -1316,9 +1182,7 @@ Goals:
       );
 
 
-    if (
-      !samples.length
-    ) {
+    if (!samples.length) {
       return;
     }
 
@@ -1485,7 +1349,7 @@ Goals:
 
 
   /* =====================================================
-     MIC / SPEAKER CONTROLS
+     CONTROLS
      ===================================================== */
 
   function setMuted(
@@ -1500,18 +1364,6 @@ Goals:
 
       micTrack.enabled =
         !muted;
-    }
-
-
-    if (muted) {
-
-      emit(
-        "neyo:voice-mic-level",
-        {
-          level:
-            0
-        }
-      );
     }
 
 
@@ -1553,11 +1405,27 @@ Goals:
 
   /* =====================================================
      TOKEN
+
+     ALWAYS request NEYO.
      ===================================================== */
 
-  async function fetchVoiceToken(
-    characterId
-  ) {
+  async function fetchVoiceToken() {
+
+    const character =
+      FORCE_NEYO_ONLY
+        ? LOCKED_CHARACTER
+        : LOCKED_CHARACTER;
+
+
+    debug(
+      "Requesting token",
+      {
+        character,
+        expectedVoice:
+          LOCKED_VOICE
+      }
+    );
+
 
     const response =
       await fetch(
@@ -1580,8 +1448,7 @@ Goals:
 
           body:
             JSON.stringify({
-              character:
-                characterId
+              character
             })
         }
       );
@@ -1603,6 +1470,12 @@ Goals:
     } catch {}
 
 
+    debug(
+      "Token response",
+      data
+    );
+
+
     if (!response.ok) {
 
       throw new Error(
@@ -1615,9 +1488,7 @@ Goals:
 
     if (
       !data?.token ||
-      !data?.model ||
-      !data?.character ||
-      !data?.voice
+      !data?.model
     ) {
 
       throw new Error(
@@ -1626,13 +1497,28 @@ Goals:
     }
 
 
+    /*
+    HARD VERIFICATION.
+    */
+
     if (
       data.character !==
-      characterId
+      LOCKED_CHARACTER
     ) {
 
       throw new Error(
-        `Voice identity mismatch: expected ${characterId}, got ${data.character}.`
+        `Expected character neyo, received ${data.character}.`
+      );
+    }
+
+
+    if (
+      data.voice !==
+      LOCKED_VOICE
+    ) {
+
+      throw new Error(
+        `Expected Kore voice, received ${data.voice}.`
       );
     }
 
@@ -1642,7 +1528,7 @@ Goals:
 
 
   /* =====================================================
-     MICROPHONE PIPELINE
+     MICROPHONE
      ===================================================== */
 
   async function ensureMicrophone() {
@@ -1653,18 +1539,6 @@ Goals:
       processorNode
     ) {
       return;
-    }
-
-
-    if (
-      !navigator
-        .mediaDevices
-        ?.getUserMedia
-    ) {
-
-      throw new Error(
-        "Microphone unavailable."
-      );
     }
 
 
@@ -1709,14 +1583,6 @@ Goals:
     const AudioContextClass =
       window.AudioContext ||
       window.webkitAudioContext;
-
-
-    if (!AudioContextClass) {
-
-      throw new Error(
-        "Web Audio API unavailable."
-      );
-    }
 
 
     inputContext =
@@ -1806,7 +1672,6 @@ Goals:
         if (
           !active ||
           !setupComplete ||
-          switchingCharacter ||
           muted ||
           !socket ||
           socket.readyState !==
@@ -1859,11 +1724,6 @@ Goals:
 
         } catch {}
       };
-
-
-    debug(
-      "Microphone pipeline ready"
-    );
   }
 
 
@@ -1914,10 +1774,6 @@ Goals:
       silentGain =
         null;
     }
-
-
-    analyserData =
-      null;
 
 
     if (micStream) {
@@ -1973,7 +1829,7 @@ Goals:
 
 
   /* =====================================================
-     MESSAGE DECODER
+     SOCKET DECODER
      ===================================================== */
 
   async function decodeSocketMessage(
@@ -2007,22 +1863,10 @@ Goals:
     }
 
 
-    if (
-      ArrayBuffer.isView(
-        data
-      )
-    ) {
-
-      return new TextDecoder(
-        "utf-8"
-      ).decode(
-        data
-      );
-    }
-
-
-    throw new Error(
-      "Unsupported Gemini message type."
+    return new TextDecoder(
+      "utf-8"
+    ).decode(
+      data
     );
   }
 
@@ -2053,14 +1897,6 @@ Goals:
 
 
     if (
-      value ===
-      current
-    ) {
-      return current;
-    }
-
-
-    if (
       value.startsWith(
         current
       )
@@ -2084,53 +1920,6 @@ Goals:
         " "
       )
       .trim();
-  }
-
-
-  function handleTranscription(
-    serverContent
-  ) {
-
-    const inputText =
-      serverContent
-        ?.inputTranscription
-        ?.text;
-
-
-    if (inputText) {
-
-      userTranscriptBuffer =
-        appendTranscript(
-          userTranscriptBuffer,
-          inputText
-        );
-
-
-      emitUserText(
-        userTranscriptBuffer
-      );
-    }
-
-
-    const outputText =
-      serverContent
-        ?.outputTranscription
-        ?.text;
-
-
-    if (outputText) {
-
-      assistantTranscriptBuffer =
-        appendTranscript(
-          assistantTranscriptBuffer,
-          outputText
-        );
-
-
-      emitAssistantText(
-        assistantTranscriptBuffer
-      );
-    }
   }
 
 
@@ -2160,9 +1949,6 @@ Goals:
       );
 
 
-      setupTimer =
-        0;
-
       setupComplete =
         true;
 
@@ -2173,26 +1959,13 @@ Goals:
         true;
 
 
-      const wasSwitching =
-        switchingCharacter;
-
-
-      switchingCharacter =
-        false;
-
-
-      assistantSpeaking =
-        false;
-
-      responsePending =
-        false;
-
-
-      userTranscriptBuffer =
+      lastPhase =
         "";
 
-      assistantTranscriptBuffer =
-        "";
+
+      setPhase(
+        "listening"
+      );
 
 
       syncUi();
@@ -2200,42 +1973,14 @@ Goals:
       ensureWaveLoop();
 
 
-      lastPhase =
-        "";
-
-
-      setPhase(
-        "listening",
-        {
-          hotSwitched:
-            wasSwitching
-        }
-      );
-
-
-      emit(
-        "neyo:voice-session-ready",
-        {
-          character:
-            sessionCharacterId,
-
-          voice:
-            sessionVoiceName,
-
-          hotSwitched:
-            wasSwitching
-        }
-      );
-
-
       debug(
-        "Session ready",
+        "NEYO SESSION CONFIRMED",
         {
           character:
-            sessionCharacterId,
+            LOCKED_CHARACTER,
 
           voice:
-            sessionVoiceName
+            LOCKED_VOICE
         }
       );
 
@@ -2244,29 +1989,76 @@ Goals:
     }
 
 
-    const serverContent =
+    const content =
       message?.serverContent;
 
 
-    if (!serverContent) {
+    if (!content) {
       return;
     }
 
 
-    handleTranscription(
-      serverContent
-    );
+    const userText =
+      content
+        ?.inputTranscription
+        ?.text;
+
+
+    if (userText) {
+
+      userTranscriptBuffer =
+        appendTranscript(
+          userTranscriptBuffer,
+          userText
+        );
+
+
+      emit(
+        "neyo:voice-user-text",
+        {
+          text:
+            userTranscriptBuffer,
+
+          character:
+            LOCKED_CHARACTER
+        }
+      );
+    }
+
+
+    const assistantText =
+      content
+        ?.outputTranscription
+        ?.text;
+
+
+    if (assistantText) {
+
+      assistantTranscriptBuffer =
+        appendTranscript(
+          assistantTranscriptBuffer,
+          assistantText
+        );
+
+
+      emit(
+        "neyo:voice-assistant-text",
+        {
+          text:
+            assistantTranscriptBuffer,
+
+          character:
+            LOCKED_CHARACTER
+        }
+      );
+    }
 
 
     if (
-      serverContent.interrupted
+      content.interrupted
     ) {
 
       stopPlayback();
-
-
-      assistantTranscriptBuffer =
-        "";
 
 
       lastPhase =
@@ -2278,39 +2070,19 @@ Goals:
       );
 
 
-      setTimeout(
-        () => {
-
-          if (
-            generation ===
-              socketGeneration &&
-            active &&
-            !assistantSpeaking
-          ) {
-
-            setPhase(
-              "listening"
-            );
-          }
-
-        },
-        120
-      );
-
-
       return;
     }
 
 
     const parts =
-      serverContent
+      content
         ?.modelTurn
         ?.parts ||
       [];
 
 
     if (
-      serverContent.modelTurn
+      content.modelTurn
     ) {
 
       if (
@@ -2327,22 +2099,10 @@ Goals:
       }
 
 
-      let hasAudio =
-        false;
-
-
       for (
         const part
         of parts
       ) {
-
-        if (
-          generation !==
-          socketGeneration
-        ) {
-          return;
-        }
-
 
         const inline =
           part?.inlineData;
@@ -2351,8 +2111,7 @@ Goals:
         if (
           !inline?.data ||
           !String(
-            inline.mimeType ||
-            ""
+            inline.mimeType || ""
           ).startsWith(
             "audio/"
           )
@@ -2361,56 +2120,21 @@ Goals:
         }
 
 
-        hasAudio =
-          true;
-
-
         await playAudioChunk(
           inline.data,
           inline.mimeType,
           generation
         );
       }
-
-
-      if (
-        hasAudio &&
-        generation ===
-          socketGeneration
-      ) {
-
-        responsePending =
-          false;
-
-        assistantSpeaking =
-          true;
-
-
-        setPhase(
-          "speaking"
-        );
-      }
     }
 
 
     if (
-      serverContent.turnComplete
+      content.turnComplete
     ) {
 
-      responsePending =
-        false;
-
-
-      const waitForPlayback =
+      const wait =
         () => {
-
-          if (
-            generation !==
-            socketGeneration
-          ) {
-            return;
-          }
-
 
           if (
             playingSources.size >
@@ -2418,7 +2142,7 @@ Goals:
           ) {
 
             setTimeout(
-              waitForPlayback,
+              wait,
               25
             );
 
@@ -2428,6 +2152,16 @@ Goals:
 
           assistantSpeaking =
             false;
+
+          responsePending =
+            false;
+
+
+          userTranscriptBuffer =
+            "";
+
+          assistantTranscriptBuffer =
+            "";
 
 
           emit(
@@ -2439,17 +2173,7 @@ Goals:
           );
 
 
-          userTranscriptBuffer =
-            "";
-
-          assistantTranscriptBuffer =
-            "";
-
-
-          if (
-            active &&
-            !switchingCharacter
-          ) {
+          if (active) {
 
             setPhase(
               "listening"
@@ -2458,62 +2182,15 @@ Goals:
         };
 
 
-      waitForPlayback();
+      wait();
     }
   }
 
 
   /* =====================================================
-     SYSTEM INSTRUCTION
-     ===================================================== */
+     SETUP
 
-  function buildSystemInstruction(
-    characterId
-  ) {
-
-    const character =
-      getCharacter(
-        characterId
-      );
-
-
-    const name =
-      character?.name ||
-      "Neyo";
-
-
-    const tone =
-      character
-        ?.voice
-        ?.tone ||
-      "natural";
-
-
-    const style =
-      character
-        ?.behavior
-        ?.responseStyle ||
-      "balanced";
-
-
-    return [
-      `You are ${name}.`,
-      `You are a natural conversational AI assistant.`,
-      `Speak in a ${tone} manner.`,
-      `Use a ${style} conversational style.`,
-      `Respond naturally in the user's language.`,
-      `Do not mention voice configuration or internal character metadata.`,
-      `Do not repeatedly introduce yourself.`,
-      `Keep normal spoken replies concise unless detail is useful.`,
-      `Allow natural interruption.`
-    ].join(
-      " "
-    );
-  }
-
-
-  /* =====================================================
-     SETUP MESSAGE
+     VOICE HARD LOCKED HERE TOO.
      ===================================================== */
 
   function buildSetupMessage(
@@ -2542,7 +2219,7 @@ Goals:
               prebuiltVoiceConfig: {
 
                 voiceName:
-                  credentials.voice
+                  LOCKED_VOICE
               }
             }
           }
@@ -2554,9 +2231,7 @@ Goals:
           parts: [
             {
               text:
-                buildSystemInstruction(
-                  credentials.character
-                )
+                "You are Neyo, a natural, intelligent and friendly conversational AI assistant. Respond naturally in the user's language. Keep spoken replies concise unless more detail is useful. Do not mention internal voice configuration."
             }
           ]
         },
@@ -2604,377 +2279,6 @@ Goals:
 
 
   /* =====================================================
-     SOCKET CLEANUP
-     ===================================================== */
-
-  function detachAndCloseSocket(
-    reason =
-      "Replacing voice session"
-  ) {
-
-    const oldSocket =
-      socket;
-
-
-    socket =
-      null;
-
-
-    socketGeneration +=
-      1;
-
-
-    setupComplete =
-      false;
-
-
-    clearTimeout(
-      setupTimer
-    );
-
-
-    setupTimer =
-      0;
-
-
-    stopPlayback();
-
-
-    if (!oldSocket) {
-      return;
-    }
-
-
-    try {
-
-      oldSocket.onopen =
-        null;
-
-      oldSocket.onmessage =
-        null;
-
-      oldSocket.onerror =
-        null;
-
-      oldSocket.onclose =
-        null;
-
-    } catch {}
-
-
-    try {
-
-      if (
-        oldSocket.readyState ===
-          WebSocket.OPEN ||
-        oldSocket.readyState ===
-          WebSocket.CONNECTING
-      ) {
-
-        oldSocket.close(
-          1000,
-          reason
-        );
-      }
-
-    } catch {}
-  }
-
-
-  /* =====================================================
-     CONNECT
-     ===================================================== */
-
-  async function connectLiveSession(
-    credentials
-  ) {
-
-    sessionCharacterId =
-      credentials.character;
-
-
-    sessionVoiceName =
-      credentials.voice;
-
-
-    await ensureOutputContext();
-
-    await ensureMicrophone();
-
-
-    const generation =
-      ++socketGeneration;
-
-
-    const url =
-      `${CONFIG.websocketEndpoint}?access_token=${
-        encodeURIComponent(
-          credentials.token
-        )
-      }`;
-
-
-    const newSocket =
-      new WebSocket(
-        url
-      );
-
-
-    newSocket.binaryType =
-      "arraybuffer";
-
-
-    socket =
-      newSocket;
-
-
-    return new Promise(
-      (
-        resolve,
-        reject
-      ) => {
-
-        let settled =
-          false;
-
-
-        const fail =
-          error => {
-
-            if (settled) {
-              return;
-            }
-
-
-            settled =
-              true;
-
-
-            reject(
-              error instanceof Error
-                ? error
-                : new Error(
-                    "Voice connection failed."
-                  )
-            );
-          };
-
-
-        newSocket.onopen =
-          () => {
-
-            if (
-              generation !==
-              socketGeneration
-            ) {
-
-              try {
-                newSocket.close();
-              } catch {}
-
-
-              return;
-            }
-
-
-            try {
-
-              newSocket.send(
-                JSON.stringify(
-                  buildSetupMessage(
-                    credentials
-                  )
-                )
-              );
-
-
-              clearTimeout(
-                setupTimer
-              );
-
-
-              setupTimer =
-                setTimeout(
-                  () => {
-
-                    if (
-                      generation ===
-                        socketGeneration &&
-                      !setupComplete
-                    ) {
-
-                      fail(
-                        new Error(
-                          "Gemini Live setup timed out."
-                        )
-                      );
-                    }
-
-                  },
-                  CONFIG.setupTimeoutMs
-                );
-
-
-            } catch (error) {
-
-              fail(error);
-            }
-          };
-
-
-        newSocket.onmessage =
-          async event => {
-
-            if (
-              generation !==
-              socketGeneration
-            ) {
-              return;
-            }
-
-
-            try {
-
-              const raw =
-                await decodeSocketMessage(
-                  event.data
-                );
-
-
-              if (
-                generation !==
-                socketGeneration
-              ) {
-                return;
-              }
-
-
-              const message =
-                JSON.parse(raw);
-
-
-              await handleServerMessage(
-                message,
-                generation
-              );
-
-
-              if (
-                message?.setupComplete &&
-                !settled
-              ) {
-
-                settled =
-                  true;
-
-
-                resolve({
-                  character:
-                    sessionCharacterId,
-
-                  voice:
-                    sessionVoiceName
-                });
-              }
-
-            } catch (error) {
-
-              console.error(
-                "[NEYO Voice] Server message error:",
-                error
-              );
-            }
-          };
-
-
-        newSocket.onerror =
-          () => {
-
-            if (
-              generation !==
-              socketGeneration
-            ) {
-              return;
-            }
-
-
-            fail(
-              new Error(
-                "Gemini Live socket error."
-              )
-            );
-          };
-
-
-        newSocket.onclose =
-          event => {
-
-            if (
-              generation !==
-              socketGeneration
-            ) {
-              return;
-            }
-
-
-            if (
-              socket ===
-              newSocket
-            ) {
-
-              socket =
-                null;
-            }
-
-
-            debug(
-              "Socket closed",
-              {
-                code:
-                  event.code,
-
-                reason:
-                  event.reason ||
-                  "(none)"
-              }
-            );
-
-
-            if (
-              !stopping &&
-              !switchingCharacter &&
-              active
-            ) {
-
-              active =
-                false;
-
-              setupComplete =
-                false;
-
-
-              syncUi();
-
-
-              lastPhase =
-                "";
-
-
-              setPhase(
-                "error",
-                {
-                  message:
-                    "Voice connection lost."
-                }
-              );
-            }
-          };
-      }
-    );
-  }
-
-
-  /* =====================================================
      START
      ===================================================== */
 
@@ -2983,11 +2287,13 @@ Goals:
     if (
       active ||
       connecting ||
-      stopping ||
-      switchingCharacter
+      stopping
     ) {
       return;
     }
+
+
+    forceNeyoIdentity();
 
 
     connecting =
@@ -2997,34 +2303,8 @@ Goals:
       false;
 
 
-    const characterId =
-      getActiveCharacterId();
-
-
-    sessionCharacterId =
-      characterId;
-
-
-    sessionVoiceName =
-      getLocalVoiceForCharacter(
-        characterId
-      );
-
-
-    userTranscriptBuffer =
-      "";
-
-    assistantTranscriptBuffer =
-      "";
-
-
     syncUi();
 
-
-    /*
-    OPEN UI ONCE.
-    Do not close it automatically on error.
-    */
 
     window
       .NeyoVoiceMode
@@ -3056,36 +2336,183 @@ Goals:
 
 
       const credentials =
-        await fetchVoiceToken(
-          characterId
+        await fetchVoiceToken();
+
+
+      /*
+      HARD CHECK AGAIN.
+      */
+
+      if (
+        credentials.character !==
+          LOCKED_CHARACTER ||
+        credentials.voice !==
+          LOCKED_VOICE
+      ) {
+
+        throw new Error(
+          "Neyo voice identity mismatch."
         );
+      }
 
 
       sessionCharacterId =
-        credentials.character;
+        LOCKED_CHARACTER;
 
       sessionVoiceName =
-        credentials.voice;
+        LOCKED_VOICE;
 
 
-      await connectLiveSession(
-        credentials
-      );
+      const generation =
+        ++socketGeneration;
 
 
-      connecting =
-        false;
-
-      active =
-        true;
-
-
-      syncUi();
+      const url =
+        `${CONFIG.websocketEndpoint}?access_token=${
+          encodeURIComponent(
+            credentials.token
+          )
+        }`;
 
 
-      clearTimeout(
-        sessionTimer
-      );
+      socket =
+        new WebSocket(
+          url
+        );
+
+
+      socket.binaryType =
+        "arraybuffer";
+
+
+      socket.onopen =
+        () => {
+
+          socket.send(
+            JSON.stringify(
+              buildSetupMessage(
+                credentials
+              )
+            )
+          );
+
+
+          debug(
+            "SETUP SENT",
+            {
+              character:
+                LOCKED_CHARACTER,
+
+              voice:
+                LOCKED_VOICE
+            }
+          );
+
+
+          setupTimer =
+            setTimeout(
+              () => {
+
+                if (
+                  !setupComplete
+                ) {
+
+                  setPhase(
+                    "error",
+                    {
+                      message:
+                        "Voice setup timed out."
+                    }
+                  );
+                }
+
+              },
+              CONFIG.setupTimeoutMs
+            );
+        };
+
+
+      socket.onmessage =
+        async event => {
+
+          try {
+
+            const raw =
+              await decodeSocketMessage(
+                event.data
+              );
+
+
+            const message =
+              JSON.parse(raw);
+
+
+            await handleServerMessage(
+              message,
+              generation
+            );
+
+          } catch (error) {
+
+            console.error(
+              "[NEYO Voice] Message error:",
+              error
+            );
+          }
+        };
+
+
+      socket.onerror =
+        () => {
+
+          setPhase(
+            "error",
+            {
+              message:
+                "Voice connection error."
+            }
+          );
+        };
+
+
+      socket.onclose =
+        event => {
+
+          debug(
+            "Socket closed",
+            event.code,
+            event.reason
+          );
+
+
+          socket =
+            null;
+
+
+          if (
+            !stopping &&
+            active
+          ) {
+
+            active =
+              false;
+
+            setupComplete =
+              false;
+
+
+            syncUi();
+
+
+            setPhase(
+              "error",
+              {
+                message:
+                  "Voice connection lost."
+              }
+            );
+          }
+        };
 
 
       sessionTimer =
@@ -3116,336 +2543,12 @@ Goals:
       setupComplete =
         false;
 
-      switchingCharacter =
-        false;
-
-
-      detachAndCloseSocket(
-        "Start failed"
-      );
-
-
-      /*
-      IMPORTANT:
-      KEEP microphone + voice-mode alive.
-      User can retry without refresh.
-      */
-
-
-      syncUi();
-
-
-      lastPhase =
-        "";
-
-
-      setPhase(
-        "error",
-        {
-          message:
-            error?.message ||
-            "Couldn't connect."
-        }
-      );
-
-
-      emit(
-        "neyo:voice-start-error",
-        {
-          message:
-            error?.message ||
-            "Couldn't connect."
-        }
-      );
-    }
-  }
-
-
-  /* =====================================================
-     HOT CHARACTER SWITCH
-     ===================================================== */
-
-  async function switchCharacter(
-    id
-  ) {
-
-    const characterId =
-      String(
-        id || ""
-      )
-        .trim()
-        .toLowerCase();
-
-
-    if (
-      !characterId ||
-      !getCharacter(
-        characterId
-      )
-    ) {
-
-      console.warn(
-        "[NEYO Voice] Unknown character:",
-        characterId
-      );
-
-      return false;
-    }
-
-
-    setActiveCharacterLocally(
-      characterId
-    );
-
-
-    const expectedVoice =
-      getLocalVoiceForCharacter(
-        characterId
-      );
-
-
-    /*
-    If voice mode is not live,
-    only update next-session identity.
-    */
-
-    if (
-      !active &&
-      !connecting
-    ) {
-
-      sessionCharacterId =
-        characterId;
-
-      sessionVoiceName =
-        expectedVoice;
-
-
-      emit(
-        "neyo:voice-character-ready",
-        {
-          character:
-            characterId,
-
-          voice:
-            expectedVoice,
-
-          live:
-            false
-        }
-      );
-
-
-      return true;
-    }
-
-
-    const requestId =
-      ++switchRequestId;
-
-
-    switchingCharacter =
-      true;
-
-
-    syncUi();
-
-
-    emit(
-      "neyo:voice-character-switching",
-      {
-        character:
-          characterId,
-
-        voice:
-          expectedVoice
-      }
-    );
-
-
-    /*
-    Stop OLD character speech immediately.
-    */
-
-    stopPlayback();
-
-
-    setupComplete =
-      false;
-
-    assistantSpeaking =
-      false;
-
-    responsePending =
-      false;
-
-
-    userTranscriptBuffer =
-      "";
-
-    assistantTranscriptBuffer =
-      "";
-
-
-    /*
-    Replace socket only.
-    Do not destroy mic/audio context.
-    */
-
-    detachAndCloseSocket(
-      `Switching to ${characterId}`
-    );
-
-
-    /*
-    Keep voice mode alive.
-    */
-
-    active =
-      true;
-
-
-    ensureWaveLoop();
-
-
-    lastPhase =
-      "";
-
-
-    setPhase(
-      "thinking",
-      {
-        switching:
-          true
-      }
-    );
-
-
-    try {
-
-      const credentials =
-        await fetchVoiceToken(
-          characterId
-        );
-
-
-      /*
-      Newer selection wins.
-      */
-
-      if (
-        requestId !==
-        switchRequestId ||
-        getActiveCharacterId() !==
-          characterId
-      ) {
-
-        debug(
-          "Discarded stale character switch",
-          characterId
-        );
-
-
-        return false;
-      }
-
-
-      sessionCharacterId =
-        credentials.character;
-
-      sessionVoiceName =
-        credentials.voice;
-
-
-      await connectLiveSession(
-        credentials
-      );
-
-
-      if (
-        requestId !==
-        switchRequestId
-      ) {
-        return false;
-      }
-
-
-      switchingCharacter =
-        false;
-
-      active =
-        true;
-
-      connecting =
-        false;
-
-
-      syncUi();
-
-
-      emit(
-        "neyo:voice-character-ready",
-        {
-          character:
-            sessionCharacterId,
-
-          voice:
-            sessionVoiceName,
-
-          live:
-            true
-        }
-      );
-
-
-      debug(
-        "Hot switch complete",
-        {
-          character:
-            sessionCharacterId,
-
-          voice:
-            sessionVoiceName
-        }
-      );
-
-
-      return true;
-
-
-    } catch (error) {
-
-      console.error(
-        "[NEYO Voice] Hot switch failed:",
-        error
-      );
-
-
-      if (
-        requestId !==
-        switchRequestId
-      ) {
-
-        return false;
-      }
-
-
-      switchingCharacter =
-        false;
-
-      active =
-        false;
-
-      setupComplete =
-        false;
-
 
       syncUi();
 
 
       /*
-      KEEP voice-mode open.
-      KEEP microphone alive.
+      DO NOT CLOSE UI.
       */
 
       lastPhase =
@@ -3457,31 +2560,15 @@ Goals:
         {
           message:
             error?.message ||
-            "Couldn't switch character."
+            "Couldn't connect Neyo voice."
         }
       );
-
-
-      emit(
-        "neyo:voice-character-error",
-        {
-          character:
-            characterId,
-
-          message:
-            error?.message ||
-            "Couldn't switch character."
-        }
-      );
-
-
-      return false;
     }
   }
 
 
   /* =====================================================
-     FULL STOP
+     STOP
      ===================================================== */
 
   async function stopConversation({
@@ -3497,16 +2584,9 @@ Goals:
       true;
 
 
-    ++switchRequestId;
-
-
     clearTimeout(
       setupTimer
     );
-
-
-    setupTimer =
-      0;
 
 
     clearTimeout(
@@ -3514,39 +2594,43 @@ Goals:
     );
 
 
-    sessionTimer =
-      0;
-
-
-    connecting =
+    active =
       false;
 
-    active =
+    connecting =
       false;
 
     setupComplete =
       false;
 
-    switchingCharacter =
-      false;
 
-
-    detachAndCloseSocket(
-      "Voice conversation ended"
-    );
-
-
-    await destroyMicrophone();
+    ++socketGeneration;
 
 
     stopPlayback();
 
 
-    userTranscriptBuffer =
-      "";
+    if (socket) {
 
-    assistantTranscriptBuffer =
-      "";
+      try {
+
+        socket.onclose =
+          null;
+
+        socket.close(
+          1000,
+          "Voice ended"
+        );
+
+      } catch {}
+
+
+      socket =
+        null;
+    }
+
+
+    await destroyMicrophone();
 
 
     stopping =
@@ -3582,65 +2666,43 @@ Goals:
 
 
   /* =====================================================
-     CHARACTER CHANGE EVENT
+     CHARACTER CHANGE
+
+     TEMPORARY DEBUG:
+     Ignore Zadi/Wizi and restore Neyo.
      ===================================================== */
-
-  let lastCharacterEventId =
-    null;
-
-  let characterEventQueued =
-    false;
-
 
   window.addEventListener(
     "neyo:character-change",
     event => {
 
-      const id =
+      const requested =
         event
           ?.detail
           ?.id;
 
 
-      if (!id) {
-        return;
-      }
-
-
       if (
-        characterEventQueued &&
-        lastCharacterEventId ===
-          id
+        requested ===
+        LOCKED_CHARACTER
       ) {
         return;
       }
 
 
-      lastCharacterEventId =
-        id;
-
-      characterEventQueued =
-        true;
-
-
-      queueMicrotask(
-        () => {
-
-          characterEventQueued =
-            false;
-
-
-          switchCharacter(
-            id
-          );
-        }
+      debug(
+        "Ignoring character during Neyo-only test:",
+        requested
       );
+
+
+      forceNeyoIdentity();
     }
   );
 
 
   /* =====================================================
-     BUTTON EVENTS
+     BUTTONS
      ===================================================== */
 
   micBtn.addEventListener(
@@ -3648,14 +2710,6 @@ Goals:
     event => {
 
       event.preventDefault();
-
-
-      if (
-        stopping ||
-        switchingCharacter
-      ) {
-        return;
-      }
 
 
       if (
@@ -3686,50 +2740,6 @@ Goals:
 
 
   /* =====================================================
-     ESCAPE
-     ===================================================== */
-
-  document.addEventListener(
-    "keydown",
-    event => {
-
-      if (
-        event.key ===
-          "Escape" &&
-        (
-          active ||
-          connecting ||
-          switchingCharacter
-        )
-      ) {
-
-        stopConversation();
-      }
-    }
-  );
-
-
-  /* =====================================================
-     PAGE CLEANUP
-     ===================================================== */
-
-  window.addEventListener(
-    "pagehide",
-    () => {
-
-      stopConversation({
-        closeUi:
-          false
-      });
-    },
-    {
-      once:
-        true
-    }
-  );
-
-
-  /* =====================================================
      PUBLIC API
      ===================================================== */
 
@@ -3742,8 +2752,6 @@ Goals:
       stop:
         stopConversation,
 
-      switchCharacter,
-
       setMuted,
 
       setSpeakerEnabled,
@@ -3751,9 +2759,7 @@ Goals:
 
       getActiveVoiceName:
         () =>
-          getLocalVoiceForCharacter(
-            getActiveCharacterId()
-          ),
+          LOCKED_VOICE,
 
 
       isActive:
@@ -3766,47 +2772,32 @@ Goals:
           connecting,
 
 
-      isSwitchingCharacter:
-        () =>
-          switchingCharacter,
-
-
       getSessionInfo:
         () => ({
+
+          forceNeyoOnly:
+            FORCE_NEYO_ONLY,
 
           active,
 
           connecting,
 
-          switchingCharacter,
-
           setupComplete,
 
-          selectedCharacter:
-            getActiveCharacterId(),
-
           character:
-            sessionCharacterId,
+            LOCKED_CHARACTER,
 
           voice:
-            sessionVoiceName,
+            LOCKED_VOICE,
 
           muted,
 
-          speakerEnabled,
-
-          socketGeneration
-        }),
-
-
-      getVoiceMap:
-        () => ({
-          ...CHARACTER_VOICES
+          speakerEnabled
         }),
 
 
       engine:
-        "gemini-live-hot-switch-v7"
+        "gemini-live-neyo-only-debug"
     });
 
 
@@ -3814,32 +2805,21 @@ Goals:
      INIT
      ===================================================== */
 
-  sessionCharacterId =
-    getActiveCharacterId();
-
-
-  sessionVoiceName =
-    getLocalVoiceForCharacter(
-      sessionCharacterId
-    );
-
+  forceNeyoIdentity();
 
   resetWaveform();
 
   syncUi();
 
 
-  debug(
-    "Engine ready",
+  console.log(
+    "[NEYO Voice] NEYO-ONLY LOCK ACTIVE",
     {
       character:
-        sessionCharacterId,
+        LOCKED_CHARACTER,
 
       voice:
-        sessionVoiceName,
-
-      voices:
-        CHARACTER_VOICES
+        LOCKED_VOICE
     }
   );
 

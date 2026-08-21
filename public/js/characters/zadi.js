@@ -9,7 +9,7 @@ Identity:
 - Expressive
 - Slightly playful
 - Fast reactions
-- Female voice
+- Strong male voice
 - Sharper premium geometry
 
 Purpose:
@@ -385,41 +385,34 @@ Does NOT own:
 
     /* =====================================================
        VOICE IDENTITY
-
        Metadata only.
        voice.js reads preferredVoice.
        ===================================================== */
 
     voice: Object.freeze({
       gender:
-        "female",
+        "male",
 
       identity:
-        "expressive-female",
+        "confident-expressive-male",
 
       tone:
-        "bright",
+        "confident",
 
       pace:
-        "natural-fast",
+        "natural",
 
       energy:
         "energetic",
 
       warmth:
-        "medium-high",
+        "medium",
 
       confidence:
         "strong",
 
-      /*
-      Keep this as character metadata.
-      We can change the actual Gemini voice
-      later without touching picker/mascot code.
-      */
-
       preferredVoice:
-        "Aoede"
+        "Orus"
     }),
 
 
@@ -460,14 +453,8 @@ Does NOT own:
 
 
   /* =====================================================
-     PUBLIC ACCESS
+     FALLBACK ACCESS HELPER
      ===================================================== */
-
-  /*
-  neyo.js normally creates NeyoCharacter helper.
-  This fallback means Zadi can still register safely
-  if file order changes during development.
-  */
 
   if (
     !window.NeyoCharacter
@@ -503,7 +490,14 @@ Does NOT own:
 
 
   console.log(
-    "[NEYO Character] Zadi profile loaded"
+    "[NEYO Character] Zadi profile loaded",
+    {
+      voice:
+        ZADI.voice.preferredVoice,
+
+      gender:
+        ZADI.voice.gender
+    }
   );
 
 })();

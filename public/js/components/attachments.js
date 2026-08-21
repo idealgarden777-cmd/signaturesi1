@@ -1,12 +1,46 @@
 /*
 =========================================================
-NEYO — UNIVERSAL ATTACHMENTS v2
-CLEAN TESTABLE VERSION
+NEYO — UNIVERSAL ATTACHMENTS v3
+FINAL ISOLATED ATTACHMENT CONTROLLER
 
-Changes for phase 1-3:
-- let attachmentList (reassignable)
-- Drag/drop + paste listeners temporarily disabled
-- Test log: EXACT BODY before sending to /api/attachments/upload
+Goals:
+- Keep legacy neo.js untouched
+- Preserve legacy attachment popup
+- Use private file input
+- Prevent old hiddenFileInput upload flow
+- Signed upload architecture
+- Processing pipeline
+- Drag/drop
+- Paste files
+- Multiple files
+- Image previews
+- Retry/remove/clear
+- Chat-ready normalized context
+- Attachment-only messages support
+- Legacy + new DOM compatibility
+- No duplicate file ownership
+
+Architecture:
+
+Legacy + / popup UI
+        ↓
+addFilesMenuBtn
+        ↓
+private #neyoAttachmentInputV3
+        ↓
+attachments.js
+        ↓
+/api/attachments/upload
+        ↓
+Supabase signed upload
+        ↓
+/api/attachments/process
+        ↓
+normalized document/chunks
+        ↓
+window.NeyoAttachments
+        ↓
+chat.js
 
 =========================================================
 */
@@ -14,411 +48,1272 @@ Changes for phase 1-3:
 (() => {
   "use strict";
 
-  /* =====================================================
-     PRIVATE FILE INPUT (no legacy conflict)
-     ===================================================== */
-
-  let fileInput =
-    document.getElementById(
-      "neyoAttachmentInputV2"
-    );
-
-  if (!fileInput) {
-    fileInput = document.createElement("input");
-    fileInput.type = "file";
-    fileInput.id = "neyoAttachmentInputV2";
-    fileInput.multiple = true;
-    fileInput.hidden = true;
-    fileInput.setAttribute("accept", "*/*");
-    document.body.appendChild(fileInput);
-  }
-
 
   /* =====================================================
-     DOM REFERENCES
+     VERSION
      ===================================================== */
 
-  const attachmentBtn =
-    document.getElementById("attachmentBtn") ||
-    document.getElementById("attachBtn");
+  const VERSION =
+    "attachments-v3-final";
 
-  const addFilesMenuBtn =
-    document.getElementById("addFilesMenuBtn");
-
-  // ⚠️ CHANGED: const → let so we can reassign below
-  let attachmentList =
-    document.getElementById("attachmentList") ||
-    document.getElementById("attachedChipsWrapper");
-
-  const dropZone =
-    document.getElementById("composer") ||
-    document.querySelector(".composer") ||
-    document.body;
-
-  // Create fallback container if missing
-  if (!attachmentList) {
-    const container = document.createElement("div");
-    container.id = "attachmentList";
-    container.className = "attachment-list";
-    container.hidden = true;
-    (dropZone || document.body).appendChild(container);
-    attachmentList = container; // ✅ reassignment works now
-  }
 
   /* =====================================================
      CONFIG
      ===================================================== */
 
-  const CONFIG = Object.freeze({
-    uploadSessionEndpoint: "/api/attachments/upload",
-    processEndpoint: "/api/attachments/process",
-    maxFiles: 10,
-    maxFileSize: 100 * 1024 * 1024,
-    maxTotalSize: 300 * 1024 * 1024,
-    uploadTimeoutMs: 120000,
-    processTimeoutMs: 180000,
-    debug: true
-  });
+  const CONFIG =
+    Object.freeze({
+
+      uploadSessionEndpoint:
+        "/api/attachments/upload",
+
+      processEndpoint:
+        "/api/attachments/process",
+
+      maxFiles:
+        10,
+
+      maxFileSize:
+        100 * 1024 * 1024,
+
+      maxTotalSize:
+        300 * 1024 * 1024,
+
+      uploadTimeoutMs:
+        120000,
+
+      processTimeoutMs:
+        180000,
+
+      debug:
+        true
+    });
+
+
+  /* =====================================================
+     PREVENT DUPLICATE COMPONENT INITIALIZATION
+
+     Useful when scripts accidentally load twice.
+     ===================================================== */
+
+  if (
+    window.NeyoAttachments
+      ?.version ===
+    VERSION
+  ) {
+
+    console.warn(
+      "[NEYO Attachments] Already initialized."
+    );
+
+    return;
+  }
+
+
+  /* =====================================================
+     DOM
+     ===================================================== */
+
+  /*
+  IMPORTANT:
+
+  We DO NOT use legacy:
+  #hiddenFileInput
+
+  That input remains available to neo.js,
+  but this system never fires its change event.
+  */
+
+  const newAttachmentBtn =
+    document.getElementById(
+      "attachmentBtn"
+    );
+
+
+  const legacyAttachBtn =
+    document.getElementById(
+      "attachBtn"
+    );
+
+
+  const addFilesMenuBtn =
+    document.getElementById(
+      "addFilesMenuBtn"
+    );
+
+
+  let attachmentList =
+    document.getElementById(
+      "attachmentList"
+    ) ||
+    document.getElementById(
+      "attachedChipsWrapper"
+    );
+
+
+  const composerWrapper =
+    document.getElementById(
+      "composerWrapper"
+    ) ||
+    document.getElementById(
+      "glassInputContainer"
+    ) ||
+    document.querySelector(
+      ".composer-wrapper"
+    ) ||
+    document.querySelector(
+      ".composer"
+    );
+
+
+  const dropZone =
+    composerWrapper ||
+    document.body;
+
+
+  const legacyPopup =
+    document.getElementById(
+      "attachPopupMenu"
+    );
+
+
+  /* =====================================================
+     PRIVATE INPUT
+
+     Only this component owns this input.
+     ===================================================== */
+
+  let fileInput =
+    document.getElementById(
+      "neyoAttachmentInputV3"
+    );
+
+
+  if (!fileInput) {
+
+    fileInput =
+      document.createElement(
+        "input"
+      );
+
+
+    fileInput.type =
+      "file";
+
+
+    fileInput.id =
+      "neyoAttachmentInputV3";
+
+
+    fileInput.multiple =
+      true;
+
+
+    fileInput.hidden =
+      true;
+
+
+    fileInput.tabIndex =
+      -1;
+
+
+    fileInput.setAttribute(
+      "accept",
+      "*/*"
+    );
+
+
+    fileInput.setAttribute(
+      "aria-hidden",
+      "true"
+    );
+
+
+    document.body.appendChild(
+      fileInput
+    );
+  }
+
+
+  /* =====================================================
+     ATTACHMENT LIST FALLBACK
+     ===================================================== */
+
+  if (!attachmentList) {
+
+    attachmentList =
+      document.createElement(
+        "div"
+      );
+
+
+    attachmentList.id =
+      "attachmentList";
+
+
+    attachmentList.className =
+      "attached-chips-wrapper attachment-list";
+
+
+    attachmentList.hidden =
+      true;
+
+
+    if (
+      composerWrapper
+    ) {
+
+      composerWrapper.prepend(
+        attachmentList
+      );
+
+    } else {
+
+      document.body.appendChild(
+        attachmentList
+      );
+    }
+  }
+
 
   /* =====================================================
      STATE
      ===================================================== */
 
   const state = {
-    items: new Map(),
-    order: [],
-    dragging: false
+
+    items:
+      new Map(),
+
+    order:
+      [],
+
+    dragging:
+      false
   };
 
+
   /* =====================================================
-     EXTENSION GROUPS
+     EXTENSIONS
      ===================================================== */
 
-  const EXTENSIONS = Object.freeze({
-    document: new Set([
-      "pdf", "doc", "docx", "odt", "rtf", "txt",
-      "md", "markdown", "tex", "pages"
-    ]),
-    spreadsheet: new Set([
-      "csv", "tsv", "xls", "xlsx", "xlsm", "xlsb", "ods", "numbers"
-    ]),
-    presentation: new Set([
-      "ppt", "pptx", "odp", "key"
-    ]),
-    image: new Set([
-      "png", "jpg", "jpeg", "webp", "gif", "bmp",
-      "tif", "tiff", "svg", "heic", "heif", "avif"
-    ]),
-    audio: new Set([
-      "mp3", "wav", "m4a", "aac", "ogg", "oga",
-      "opus", "flac", "aiff", "wma"
-    ]),
-    video: new Set([
-      "mp4", "mov", "m4v", "webm", "avi",
-      "mkv", "mpeg", "mpg", "wmv"
-    ]),
-    archive: new Set([
-      "zip", "rar", "7z", "tar", "gz", "tgz", "bz2", "xz"
-    ]),
-    data: new Set([
-      "json", "jsonl", "ndjson", "xml", "yaml", "yml",
-      "toml", "ini", "sql", "db", "sqlite", "sqlite3",
-      "parquet", "feather", "arrow"
-    ]),
-    code: new Set([
-      "js", "mjs", "cjs", "jsx", "ts", "tsx",
-      "py", "pyw", "java", "kt", "kts",
-      "c", "h", "cc", "cpp", "cxx", "hpp",
-      "cs", "go", "rs", "php", "rb", "swift",
-      "dart", "scala", "sh", "bash", "zsh", "fish",
-      "ps1", "html", "htm", "css", "scss", "sass",
-      "less", "vue", "svelte", "graphql", "gql",
-      "proto", "dockerfile", "makefile", "env", "gitignore"
-    ])
-  });
+  const EXTENSIONS =
+    Object.freeze({
+
+      document: new Set([
+        "pdf",
+        "doc",
+        "docx",
+        "odt",
+        "rtf",
+        "txt",
+        "md",
+        "markdown",
+        "tex",
+        "pages"
+      ]),
+
+      spreadsheet: new Set([
+        "csv",
+        "tsv",
+        "xls",
+        "xlsx",
+        "xlsm",
+        "xlsb",
+        "ods",
+        "numbers"
+      ]),
+
+      presentation: new Set([
+        "ppt",
+        "pptx",
+        "odp",
+        "key"
+      ]),
+
+      image: new Set([
+        "png",
+        "jpg",
+        "jpeg",
+        "webp",
+        "gif",
+        "bmp",
+        "tif",
+        "tiff",
+        "svg",
+        "heic",
+        "heif",
+        "avif"
+      ]),
+
+      audio: new Set([
+        "mp3",
+        "wav",
+        "m4a",
+        "aac",
+        "ogg",
+        "oga",
+        "opus",
+        "flac",
+        "aiff",
+        "wma"
+      ]),
+
+      video: new Set([
+        "mp4",
+        "mov",
+        "m4v",
+        "webm",
+        "avi",
+        "mkv",
+        "mpeg",
+        "mpg",
+        "wmv"
+      ]),
+
+      archive: new Set([
+        "zip",
+        "rar",
+        "7z",
+        "tar",
+        "gz",
+        "tgz",
+        "bz2",
+        "xz"
+      ]),
+
+      data: new Set([
+        "json",
+        "jsonl",
+        "ndjson",
+        "xml",
+        "yaml",
+        "yml",
+        "toml",
+        "ini",
+        "sql",
+        "db",
+        "sqlite",
+        "sqlite3",
+        "parquet",
+        "feather",
+        "arrow"
+      ]),
+
+      code: new Set([
+        "js",
+        "mjs",
+        "cjs",
+        "jsx",
+        "ts",
+        "tsx",
+        "py",
+        "pyw",
+        "java",
+        "kt",
+        "kts",
+        "c",
+        "h",
+        "cc",
+        "cpp",
+        "cxx",
+        "hpp",
+        "cs",
+        "go",
+        "rs",
+        "php",
+        "rb",
+        "swift",
+        "dart",
+        "scala",
+        "sh",
+        "bash",
+        "zsh",
+        "fish",
+        "ps1",
+        "html",
+        "htm",
+        "css",
+        "scss",
+        "sass",
+        "less",
+        "vue",
+        "svelte",
+        "graphql",
+        "gql",
+        "proto",
+        "dockerfile",
+        "makefile",
+        "env",
+        "gitignore"
+      ])
+    });
+
+
+  /* =====================================================
+     DEBUG
+     ===================================================== */
+
+  function debug(
+    ...args
+  ) {
+
+    if (
+      !CONFIG.debug
+    ) {
+      return;
+    }
+
+
+    console.log(
+      "[NEYO Attachments]",
+      ...args
+    );
+  }
+
 
   /* =====================================================
      UTILS
      ===================================================== */
 
-  function debug(...args) {
-    if (!CONFIG.debug) return;
-    console.log("[NEYO Attachments]", ...args);
+  function clamp(
+    value,
+    min,
+    max
+  ) {
+
+    return Math.max(
+      min,
+      Math.min(
+        max,
+        value
+      )
+    );
   }
 
-  function clamp(value, min, max) {
-    return Math.max(min, Math.min(max, value));
-  }
 
   function createId() {
-    if (crypto?.randomUUID) {
-      return crypto.randomUUID();
+
+    if (
+      globalThis.crypto
+        ?.randomUUID
+    ) {
+
+      return globalThis
+        .crypto
+        .randomUUID();
     }
-    return `att_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+
+
+    return (
+      "att_" +
+      Date.now() +
+      "_" +
+      Math.random()
+        .toString(36)
+        .slice(2)
+    );
   }
 
-  function getExtension(name) {
-    const value = String(name || "");
-    const index = value.lastIndexOf(".");
-    if (index === -1 || index === value.length - 1) {
+
+  function getExtension(
+    name
+  ) {
+
+    const value =
+      String(
+        name ||
+        ""
+      );
+
+
+    const index =
+      value.lastIndexOf(
+        "."
+      );
+
+
+    if (
+      index < 0 ||
+      index ===
+        value.length - 1
+    ) {
+
       return "";
     }
-    return value.slice(index + 1).toLowerCase();
+
+
+    return value
+      .slice(
+        index + 1
+      )
+      .toLowerCase();
   }
 
-  function formatBytes(bytes) {
-    const value = Number(bytes) || 0;
-    if (value < 1024) return `${value} B`;
-    if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
-    if (value < 1024 * 1024 * 1024) return `${(value / (1024 * 1024)).toFixed(1)} MB`;
-    return `${(value / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+
+  function formatBytes(
+    bytes
+  ) {
+
+    const value =
+      Number(
+        bytes
+      ) ||
+      0;
+
+
+    if (
+      value <
+      1024
+    ) {
+
+      return `${value} B`;
+    }
+
+
+    if (
+      value <
+      1024 * 1024
+    ) {
+
+      return `${(
+        value /
+        1024
+      ).toFixed(1)} KB`;
+    }
+
+
+    if (
+      value <
+      1024 *
+      1024 *
+      1024
+    ) {
+
+      return `${(
+        value /
+        (
+          1024 *
+          1024
+        )
+      ).toFixed(1)} MB`;
+    }
+
+
+    return `${(
+      value /
+      (
+        1024 *
+        1024 *
+        1024
+      )
+    ).toFixed(2)} GB`;
   }
 
-  function escapeHtml(value) {
-    return String(value || "")
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#039;");
+
+  function escapeHtml(
+    value
+  ) {
+
+    return String(
+      value ||
+      ""
+    )
+      .replace(
+        /&/g,
+        "&amp;"
+      )
+      .replace(
+        /</g,
+        "&lt;"
+      )
+      .replace(
+        />/g,
+        "&gt;"
+      )
+      .replace(
+        /"/g,
+        "&quot;"
+      )
+      .replace(
+        /'/g,
+        "&#039;"
+      );
   }
+
 
   /* =====================================================
      CATEGORY
      ===================================================== */
 
-  function getCategory(file) {
-    const mime = String(file?.type || "").toLowerCase();
-    const ext = getExtension(file?.name);
+  function getCategory(
+    file
+  ) {
 
-    if (mime.startsWith("image/") || EXTENSIONS.image.has(ext)) return "image";
-    if (mime.startsWith("audio/") || EXTENSIONS.audio.has(ext)) return "audio";
-    if (mime.startsWith("video/") || EXTENSIONS.video.has(ext)) return "video";
-    if (mime === "application/pdf" || EXTENSIONS.document.has(ext)) return "document";
-    if (EXTENSIONS.spreadsheet.has(ext)) return "spreadsheet";
-    if (EXTENSIONS.presentation.has(ext)) return "presentation";
-    if (EXTENSIONS.archive.has(ext)) return "archive";
-    if (EXTENSIONS.code.has(ext)) return "code";
-    if (EXTENSIONS.data.has(ext)) return "data";
-    if (mime.startsWith("text/")) return "text";
+    const mime =
+      String(
+        file?.type ||
+        ""
+      ).toLowerCase();
+
+
+    const extension =
+      getExtension(
+        file?.name
+      );
+
+
+    if (
+      mime.startsWith(
+        "image/"
+      ) ||
+      EXTENSIONS.image.has(
+        extension
+      )
+    ) {
+
+      return "image";
+    }
+
+
+    if (
+      mime.startsWith(
+        "audio/"
+      ) ||
+      EXTENSIONS.audio.has(
+        extension
+      )
+    ) {
+
+      return "audio";
+    }
+
+
+    if (
+      mime.startsWith(
+        "video/"
+      ) ||
+      EXTENSIONS.video.has(
+        extension
+      )
+    ) {
+
+      return "video";
+    }
+
+
+    if (
+      mime ===
+        "application/pdf" ||
+      EXTENSIONS.document.has(
+        extension
+      )
+    ) {
+
+      return "document";
+    }
+
+
+    if (
+      EXTENSIONS.spreadsheet.has(
+        extension
+      )
+    ) {
+
+      return "spreadsheet";
+    }
+
+
+    if (
+      EXTENSIONS.presentation.has(
+        extension
+      )
+    ) {
+
+      return "presentation";
+    }
+
+
+    if (
+      EXTENSIONS.archive.has(
+        extension
+      )
+    ) {
+
+      return "archive";
+    }
+
+
+    if (
+      EXTENSIONS.code.has(
+        extension
+      )
+    ) {
+
+      return "code";
+    }
+
+
+    if (
+      EXTENSIONS.data.has(
+        extension
+      )
+    ) {
+
+      return "data";
+    }
+
+
+    if (
+      mime.startsWith(
+        "text/"
+      )
+    ) {
+
+      return "text";
+    }
+
+
     return "unknown";
   }
+
 
   /* =====================================================
      ICON
      ===================================================== */
 
-  function getIcon(category) {
+  function getIcon(
+    category
+  ) {
+
     return ({
-      image: "image",
-      audio: "audio-lines",
-      video: "video",
-      document: "file-text",
-      spreadsheet: "table-2",
-      presentation: "presentation",
-      archive: "archive",
-      code: "file-code-2",
-      data: "database",
-      text: "file-text",
-      unknown: "file"
-    })[category] || "file";
+      image:
+        "image",
+
+      audio:
+        "audio-lines",
+
+      video:
+        "video",
+
+      document:
+        "file-text",
+
+      spreadsheet:
+        "table-2",
+
+      presentation:
+        "presentation",
+
+      archive:
+        "archive",
+
+      code:
+        "file-code-2",
+
+      data:
+        "database",
+
+      text:
+        "file-text",
+
+      unknown:
+        "file"
+    })[
+      category
+    ] ||
+    "file";
   }
+
 
   /* =====================================================
      TOTAL SIZE
      ===================================================== */
 
   function getTotalSize() {
-    let total = 0;
-    for (const item of state.items.values()) {
-      total += item.size || 0;
+
+    let total =
+      0;
+
+
+    for (
+      const item
+      of state.items.values()
+    ) {
+
+      total +=
+        Number(
+          item.size
+        ) ||
+        0;
     }
+
+
     return total;
   }
 
+
   /* =====================================================
-     VALIDATION
+     VALIDATE FILE
      ===================================================== */
 
-  function validateFile(file) {
-    if (!(file instanceof File)) {
-      return { valid: false, message: "Invalid file." };
-    }
-    if (file.size <= 0) {
-      return { valid: false, message: `${file.name} is empty.` };
-    }
-    if (file.size > CONFIG.maxFileSize) {
+  function validateFile(
+    file
+  ) {
+
+    if (
+      !(file instanceof File)
+    ) {
+
       return {
-        valid: false,
-        message: `${file.name} is larger than ${formatBytes(CONFIG.maxFileSize)}.`
+        valid:
+          false,
+
+        message:
+          "Invalid file."
       };
     }
-    if (state.items.size >= CONFIG.maxFiles) {
+
+
+    if (
+      !file.name?.trim()
+    ) {
+
       return {
-        valid: false,
-        message: `You can attach up to ${CONFIG.maxFiles} files.`
+        valid:
+          false,
+
+        message:
+          "File name is missing."
       };
     }
-    if (getTotalSize() + file.size > CONFIG.maxTotalSize) {
+
+
+    if (
+      file.size <=
+      0
+    ) {
+
       return {
-        valid: false,
-        message: `Total attachments cannot exceed ${formatBytes(CONFIG.maxTotalSize)}.`
+        valid:
+          false,
+
+        message:
+          `${file.name} is empty.`
       };
     }
-    return { valid: true };
+
+
+    if (
+      file.size >
+      CONFIG.maxFileSize
+    ) {
+
+      return {
+        valid:
+          false,
+
+        message:
+          `${file.name} is larger than ${formatBytes(
+            CONFIG.maxFileSize
+          )}.`
+      };
+    }
+
+
+    if (
+      state.items.size >=
+      CONFIG.maxFiles
+    ) {
+
+      return {
+        valid:
+          false,
+
+        message:
+          `You can attach up to ${CONFIG.maxFiles} files.`
+      };
+    }
+
+
+    if (
+      getTotalSize() +
+      file.size >
+      CONFIG.maxTotalSize
+    ) {
+
+      return {
+        valid:
+          false,
+
+        message:
+          `Total attachments cannot exceed ${formatBytes(
+            CONFIG.maxTotalSize
+          )}.`
+      };
+    }
+
+
+    return {
+      valid:
+        true
+    };
   }
 
+
   /* =====================================================
-     DUPLICATE
+     DUPLICATE CHECK
      ===================================================== */
 
-  function isDuplicate(file) {
-    for (const item of state.items.values()) {
+  function isDuplicate(
+    file
+  ) {
+
+    for (
+      const item
+      of state.items.values()
+    ) {
+
       if (
-        item.name === file.name &&
-        item.size === file.size &&
-        item.file?.lastModified === file.lastModified
+        item.name ===
+          file.name &&
+        item.size ===
+          file.size &&
+        item.file
+          ?.lastModified ===
+          file.lastModified
       ) {
+
         return true;
       }
     }
+
+
     return false;
   }
 
+
   /* =====================================================
-     ITEM
+     CREATE ITEM
      ===================================================== */
 
-  function createItem(file) {
-    const category = getCategory(file);
+  function createItem(
+    file
+  ) {
+
     return {
-      id: createId(),
+
+      id:
+        createId(),
+
       file,
-      name: file.name,
-      size: file.size,
-      mime: file.type || "application/octet-stream",
-      extension: getExtension(file.name),
-      category,
-      status: "queued",
-      progress: 0,
-      error: null,
-      uploadId: null,
-      bucket: null,
-      path: null,
-      signedToken: null,
-      processId: null,
-      documentId: null,
-      document: null,
-      chunks: [],
-      stats: null,
-      extraction: null,
-      warnings: [],
-      ready: false,
-      previewUrl: null,
-      createdAt: Date.now()
+
+      name:
+        file.name,
+
+      size:
+        file.size,
+
+      mime:
+        file.type ||
+        "application/octet-stream",
+
+      extension:
+        getExtension(
+          file.name
+        ),
+
+      category:
+        getCategory(
+          file
+        ),
+
+
+      status:
+        "queued",
+
+      progress:
+        0,
+
+      error:
+        null,
+
+
+      uploadId:
+        null,
+
+      bucket:
+        null,
+
+      path:
+        null,
+
+      signedToken:
+        null,
+
+
+      processId:
+        null,
+
+      documentId:
+        null,
+
+      document:
+        null,
+
+      chunks:
+        [],
+
+      stats:
+        null,
+
+      extraction:
+        null,
+
+      warnings:
+        [],
+
+      ready:
+        false,
+
+
+      previewUrl:
+        null,
+
+      createdAt:
+        Date.now()
     };
   }
+
 
   /* =====================================================
      IMAGE PREVIEW
      ===================================================== */
 
-  function createPreviewUrl(item) {
-    if (item.category !== "image") return null;
+  function createPreviewUrl(
+    item
+  ) {
+
+    if (
+      item.category !==
+      "image"
+    ) {
+
+      return null;
+    }
+
+
     try {
-      return URL.createObjectURL(item.file);
+
+      return URL.createObjectURL(
+        item.file
+      );
+
     } catch {
+
       return null;
     }
   }
+
 
   /* =====================================================
      STATUS
      ===================================================== */
 
-  function getStatusText(item) {
-    switch (item.status) {
-      case "queued": return "Queued";
-      case "authorizing": return "Preparing…";
-      case "uploading": return `Uploading ${Math.round(item.progress)}%`;
-      case "uploaded": return "Uploaded";
-      case "processing": return "Reading file…";
-      case "queued-processing": return "Processing…";
-      case "ready": return "Ready";
-      case "error": return item.error || "Couldn't process";
-      default: return item.status;
+  function getStatusText(
+    item
+  ) {
+
+    switch (
+      item.status
+    ) {
+
+      case "queued":
+        return "Queued";
+
+      case "authorizing":
+        return "Preparing…";
+
+      case "uploading":
+        return `Uploading ${Math.round(
+          item.progress
+        )}%`;
+
+      case "uploaded":
+        return "Uploaded";
+
+      case "processing":
+        return "Reading file…";
+
+      case "queued-processing":
+        return "Processing…";
+
+      case "ready":
+        return "Ready";
+
+      case "error":
+        return (
+          item.error ||
+          "Couldn't process"
+        );
+
+      default:
+        return (
+          item.status ||
+          ""
+        );
     }
   }
 
+
   /* =====================================================
-     RENDER
+     RENDER ITEM
      ===================================================== */
 
-  function renderItem(item) {
-    const container = attachmentList;
-    if (!container) return;
+  function renderItem(
+    item
+  ) {
 
-    let element = container.querySelector(
-      `[data-attachment-id="${item.id}"]`
-    );
+    if (
+      !attachmentList
+    ) {
 
-    if (!element) {
-      element = document.createElement("div");
-      element.className = "attachment-chip";
-      element.dataset.attachmentId = item.id;
-      container.appendChild(element);
+      return;
     }
 
-    const preview =
+
+    let element =
+      attachmentList
+        .querySelector(
+          `[data-attachment-id="${item.id}"]`
+        );
+
+
+    if (!element) {
+
+      element =
+        document.createElement(
+          "div"
+        );
+
+
+      element.className =
+        "attachment-chip";
+
+
+      element.dataset
+        .attachmentId =
+        item.id;
+
+
+      attachmentList.appendChild(
+        element
+      );
+    }
+
+
+    element.dataset.status =
+      item.status;
+
+
+    const visual =
       item.previewUrl
         ? `
           <div class="attachment-chip-preview">
-            <img src="${escapeHtml(item.previewUrl)}" alt="" />
+            <img
+              src="${escapeHtml(
+                item.previewUrl
+              )}"
+              alt=""
+              draggable="false"
+            >
           </div>
         `
         : `
           <div class="attachment-chip-icon">
-            <i data-lucide="${getIcon(item.category)}" aria-hidden="true"></i>
+            <i
+              data-lucide="${getIcon(
+                item.category
+              )}"
+              aria-hidden="true"
+            ></i>
           </div>
         `;
 
-    element.dataset.status = item.status;
 
     element.innerHTML = `
-      ${preview}
+      ${visual}
 
       <div class="attachment-chip-body">
+
         <div class="attachment-chip-name">
-          ${escapeHtml(item.name)}
+          ${escapeHtml(
+            item.name
+          )}
         </div>
+
         <div class="attachment-chip-meta">
-          <span>${escapeHtml(formatBytes(item.size))}</span>
-          <span aria-hidden="true">·</span>
-          <span class="attachment-chip-status">
-            ${escapeHtml(getStatusText(item))}
+
+          <span>
+            ${escapeHtml(
+              formatBytes(
+                item.size
+              )
+            )}
           </span>
+
+          <span aria-hidden="true">
+            ·
+          </span>
+
+          <span class="attachment-chip-status">
+            ${escapeHtml(
+              getStatusText(
+                item
+              )
+            )}
+          </span>
+
         </div>
+
         ${
-          item.status === "uploading"
+          item.status ===
+          "uploading"
             ? `
-              <div class="attachment-chip-progress" aria-hidden="true">
-                <span style="width:${clamp(item.progress, 0, 100)}%"></span>
+              <div
+                class="attachment-chip-progress"
+                aria-hidden="true"
+              >
+                <span
+                  style="width:${clamp(
+                    item.progress,
+                    0,
+                    100
+                  )}%"
+                ></span>
               </div>
             `
             : ""
         }
+
       </div>
 
       ${
-        item.status === "error"
+        item.status ===
+        "error"
           ? `
             <button
               type="button"
               class="attachment-chip-retry"
               data-action="retry"
-              aria-label="Retry ${escapeHtml(item.name)}"
+              aria-label="Retry ${escapeHtml(
+                item.name
+              )}"
             >
-              <i data-lucide="refresh-cw" aria-hidden="true"></i>
+              <i
+                data-lucide="refresh-cw"
+                aria-hidden="true"
+              ></i>
             </button>
           `
           : ""
@@ -428,673 +1323,2380 @@ Changes for phase 1-3:
         type="button"
         class="attachment-chip-remove"
         data-action="remove"
-        aria-label="Remove ${escapeHtml(item.name)}"
+        aria-label="Remove ${escapeHtml(
+          item.name
+        )}"
       >
-        <i data-lucide="x" aria-hidden="true"></i>
+        <i
+          data-lucide="x"
+          aria-hidden="true"
+        ></i>
       </button>
     `;
 
+
     try {
-      window.lucide?.createIcons?.();
+
+      window
+        .lucide
+        ?.createIcons
+        ?.();
+
     } catch {}
   }
 
-  function renderAll() {
-    const container = attachmentList;
-    if (!container) return;
 
-    for (const id of state.order) {
-      const item = state.items.get(id);
-      if (item) renderItem(item);
+  /* =====================================================
+     RENDER ALL
+     ===================================================== */
+
+  function renderAll() {
+
+    if (
+      !attachmentList
+    ) {
+
+      return;
     }
 
-    container.hidden = state.items.size === 0;
+
+    for (
+      const id
+      of state.order
+    ) {
+
+      const item =
+        state.items.get(
+          id
+        );
+
+
+      if (item) {
+
+        renderItem(
+          item
+        );
+      }
+    }
+
+
+    attachmentList.hidden =
+      state.items.size ===
+      0;
+
+
+    attachmentList.classList.toggle(
+      "has-attachments",
+      state.items.size >
+      0
+    );
+
 
     emitState();
   }
 
+
   /* =====================================================
-     STATE EVENTS
+     SERIALIZE
      ===================================================== */
 
-  function serializeItem(item) {
+  function serializeItem(
+    item
+  ) {
+
     return {
-      id: item.id,
-      uploadId: item.uploadId,
-      processId: item.processId,
-      documentId: item.documentId,
-      name: item.name,
-      mime: item.mime,
-      extension: item.extension,
-      size: item.size,
-      category: item.category,
-      status: item.status,
-      ready: item.ready,
-      bucket: item.bucket,
-      path: item.path,
-      document: item.document,
-      chunks: item.chunks,
-      stats: item.stats,
-      extraction: item.extraction,
-      warnings: item.warnings,
-      error: item.error
+
+      id:
+        item.id,
+
+      uploadId:
+        item.uploadId,
+
+      processId:
+        item.processId,
+
+      documentId:
+        item.documentId,
+
+      name:
+        item.name,
+
+      mime:
+        item.mime,
+
+      mimeType:
+        item.mime,
+
+      extension:
+        item.extension,
+
+      size:
+        item.size,
+
+      category:
+        item.category,
+
+      status:
+        item.status,
+
+      ready:
+        item.ready,
+
+      bucket:
+        item.bucket,
+
+      path:
+        item.path,
+
+      document:
+        item.document,
+
+      chunks:
+        item.chunks,
+
+      stats:
+        item.stats,
+
+      extraction:
+        item.extraction,
+
+      warnings:
+        item.warnings,
+
+      error:
+        item.error
     };
   }
 
+
+  /* =====================================================
+     STATE EVENT
+     ===================================================== */
+
   function emitState() {
-    const attachments = state.order
-      .map(id => state.items.get(id))
-      .filter(Boolean)
-      .map(serializeItem);
+
+    const attachments =
+      state.order
+        .map(
+          id =>
+            state.items.get(
+              id
+            )
+        )
+        .filter(Boolean)
+        .map(
+          serializeItem
+        );
+
 
     window.dispatchEvent(
-      new CustomEvent("neyo:attachments-change", {
-        detail: { attachments }
-      })
+      new CustomEvent(
+        "neyo:attachments-change",
+        {
+          detail: {
+
+            /*
+            New architecture
+            */
+
+            attachments,
+
+
+            /*
+            Legacy compatibility
+            */
+
+            files:
+              attachments,
+
+            count:
+              attachments.length
+          }
+        }
+      )
     );
   }
 
-  function emitError(message) {
-    console.warn("[NEYO Attachments]", message);
+
+  function emitError(
+    message,
+    item = null
+  ) {
+
+    console.warn(
+      "[NEYO Attachments]",
+      message
+    );
+
+
     window.dispatchEvent(
-      new CustomEvent("neyo:attachment-error", {
-        detail: { message }
-      })
+      new CustomEvent(
+        "neyo:attachment-error",
+        {
+          detail: {
+
+            message,
+
+            attachment:
+              item
+                ? serializeItem(
+                    item
+                  )
+                : null
+          }
+        }
+      )
     );
   }
+
 
   /* =====================================================
      ADD FILES
      ===================================================== */
 
-  async function addFiles(files) {
-    const incoming = Array.from(files || []);
-    if (!incoming.length) return;
+  async function addFiles(
+    files
+  ) {
 
-    for (const file of incoming) {
-      if (isDuplicate(file)) {
-        debug("Duplicate ignored:", file.name);
-        continue;
-      }
+    const incoming =
+      Array.from(
+        files ||
+        []
+      );
 
-      const validation = validateFile(file);
-      if (!validation.valid) {
-        emitError(validation.message);
-        continue;
-      }
 
-      const item = createItem(file);
-      item.previewUrl = createPreviewUrl(item);
+    if (
+      !incoming.length
+    ) {
 
-      state.items.set(item.id, item);
-      state.order.push(item.id);
-      renderItem(item);
-
-      // Fire pipeline asynchronously
-      processPipeline(item.id);
+      return;
     }
+
+
+    for (
+      const file
+      of incoming
+    ) {
+
+      if (
+        isDuplicate(
+          file
+        )
+      ) {
+
+        debug(
+          "Duplicate ignored:",
+          file.name
+        );
+
+        continue;
+      }
+
+
+      const validation =
+        validateFile(
+          file
+        );
+
+
+      if (
+        !validation.valid
+      ) {
+
+        emitError(
+          validation.message
+        );
+
+        continue;
+      }
+
+
+      const item =
+        createItem(
+          file
+        );
+
+
+      item.previewUrl =
+        createPreviewUrl(
+          item
+        );
+
+
+      state.items.set(
+        item.id,
+        item
+      );
+
+
+      state.order.push(
+        item.id
+      );
+
+
+      renderItem(
+        item
+      );
+
+
+      emitState();
+
+
+      /*
+      Run independently.
+
+      One file failure must not break
+      other attachment uploads.
+      */
+
+      void processPipeline(
+        item.id
+      );
+    }
+
 
     renderAll();
   }
 
+
   /* =====================================================
-     STEP 1 — CREATE SIGNED UPLOAD SESSION
+     STEP 1
+     CREATE SIGNED UPLOAD SESSION
      ===================================================== */
 
-  async function createUploadSession(item) {
-    const payload = {
-      name: item?.name || "",
-      size: Number(item?.size) || 0,
-      mime: item?.mime || "application/octet-stream",
-      category: item?.category || "unknown",
-      clientAttachmentId: item?.id || ""
-    };
+  async function createUploadSession(
+    item
+  ) {
 
-    // ═══════════════════════════════════════════════
-    // 🧪 TEST LOG — EXACT BODY SENT TO BACKEND
-    // ═══════════════════════════════════════════════
-    console.log(
-      "[NEYO TEST] EXACT BODY",
-      JSON.stringify(payload)
-    );
+    if (
+      !item?.name
+    ) {
 
-    console.log(
-      "[NEYO Attachments] 📤 creating upload session",
-      {
-        payload,
-        file: {
-          name: item?.name,
-          size: item?.size,
-          mime: item?.mime,
-          category: item?.category
-        }
-      }
-    );
-
-    const response = await fetch(CONFIG.uploadSessionEndpoint, {
-      method: "POST",
-      credentials: "same-origin",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json"
-      },
-      body: JSON.stringify(payload)
-    });
-
-    const raw = await response.text();
-    let data = null;
-    try {
-      data = JSON.parse(raw);
-    } catch {}
-
-    console.log(
-      "[NEYO Attachments] 📥 upload session response",
-      {
-        status: response.status,
-        ok: response.ok,
-        data
-      }
-    );
-
-    if (!response.ok) {
       throw new Error(
-        data?.error || raw || `Upload authorization failed (${response.status})`
+        "Attachment filename is missing before upload."
       );
     }
 
-    if (!data?.uploadId || !data?.path || !data?.token || !data?.bucket) {
-      throw new Error("Invalid upload authorization response.");
+
+    const payload = {
+
+      name:
+        String(
+          item.name
+        ),
+
+      size:
+        Number(
+          item.size
+        ),
+
+      mime:
+        String(
+          item.mime ||
+          "application/octet-stream"
+        ),
+
+      category:
+        String(
+          item.category ||
+          "unknown"
+        ),
+
+      clientAttachmentId:
+        String(
+          item.id ||
+          ""
+        )
+    };
+
+
+    /*
+    Critical debugging checkpoint.
+
+    This proves exactly what leaves
+    the frontend.
+    */
+
+    debug(
+      "UPLOAD_SESSION_REQUEST",
+      payload
+    );
+
+
+    const response =
+      await fetch(
+        CONFIG.uploadSessionEndpoint,
+        {
+          method:
+            "POST",
+
+          credentials:
+            "same-origin",
+
+          cache:
+            "no-store",
+
+          headers: {
+
+            "Content-Type":
+              "application/json",
+
+            Accept:
+              "application/json",
+
+            "X-Neyo-Attachment-Client":
+              VERSION
+          },
+
+          body:
+            JSON.stringify(
+              payload
+            )
+        }
+      );
+
+
+    const raw =
+      await response.text();
+
+
+    let data =
+      null;
+
+
+    try {
+
+      data =
+        JSON.parse(
+          raw
+        );
+
+    } catch {}
+
+
+    debug(
+      "UPLOAD_SESSION_RESPONSE",
+      {
+        status:
+          response.status,
+
+        ok:
+          response.ok,
+
+        data,
+
+        raw:
+          data
+            ? undefined
+            : raw
+      }
+    );
+
+
+    if (
+      !response.ok
+    ) {
+
+      throw new Error(
+        data?.error ||
+        raw ||
+        `Upload authorization failed (${response.status})`
+      );
     }
+
+
+    if (
+      !data ||
+      typeof data !==
+      "object"
+    ) {
+
+      throw new Error(
+        "Upload API returned an invalid response."
+      );
+    }
+
+
+    if (
+      !data.uploadId
+    ) {
+
+      throw new Error(
+        "Upload ID missing."
+      );
+    }
+
+
+    if (
+      !data.bucket
+    ) {
+
+      throw new Error(
+        "Storage bucket missing."
+      );
+    }
+
+
+    if (
+      !data.path
+    ) {
+
+      throw new Error(
+        "Storage path missing."
+      );
+    }
+
+
+    if (
+      !data.token
+    ) {
+
+      throw new Error(
+        "Signed upload token missing."
+      );
+    }
+
+
+    if (
+      !data.signedUrl
+    ) {
+
+      throw new Error(
+        "Signed upload URL missing."
+      );
+    }
+
 
     return data;
   }
 
+
   /* =====================================================
-     STEP 2 — DIRECT SIGNED UPLOAD
+     STEP 2
+     SIGNED STORAGE UPLOAD
      ===================================================== */
 
-  function uploadToSignedUrl(item, session) {
-    return new Promise((resolve, reject) => {
-      if (!session.signedUrl) {
-        reject(new Error("Signed upload URL missing."));
-        return;
-      }
+  function uploadToSignedUrl(
+    item,
+    session
+  ) {
 
-      const xhr = new XMLHttpRequest();
-      xhr.open("PUT", session.signedUrl, true);
-      xhr.timeout = CONFIG.uploadTimeoutMs;
+    return new Promise(
+      (
+        resolve,
+        reject
+      ) => {
 
-      xhr.setRequestHeader(
-        "Content-Type",
-        item.mime || "application/octet-stream"
-      );
+        const signedUrl =
+          String(
+            session?.signedUrl ||
+            ""
+          );
 
-      xhr.upload.onprogress = event => {
-        if (!event.lengthComputable) return;
-        item.progress = clamp((event.loaded / event.total) * 100, 0, 100);
-        renderItem(item);
-      };
 
-      xhr.onload = () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          resolve(true);
+        if (
+          !signedUrl
+        ) {
+
+          reject(
+            new Error(
+              "Signed upload URL missing."
+            )
+          );
+
           return;
         }
-        reject(new Error(`Storage upload failed (${xhr.status}).`));
-      };
 
-      xhr.onerror = () => {
-        reject(new Error("Network error during storage upload."));
-      };
 
-      xhr.ontimeout = () => {
-        reject(new Error("File upload timed out."));
-      };
+        const xhr =
+          new XMLHttpRequest();
 
-      xhr.send(item.file);
-    });
+
+        /*
+        Backend contract currently returns a
+        direct signed upload URL.
+
+        Keep method centralized here so if
+        storage contract changes later,
+        only this function changes.
+        */
+
+        const method =
+          String(
+            session?.method ||
+            session?.uploadMethod ||
+            "PUT"
+          )
+            .trim()
+            .toUpperCase();
+
+
+        xhr.open(
+          method,
+          signedUrl,
+          true
+        );
+
+
+        xhr.timeout =
+          CONFIG.uploadTimeoutMs;
+
+
+        xhr.setRequestHeader(
+          "Content-Type",
+          item.mime ||
+          "application/octet-stream"
+        );
+
+
+        xhr.setRequestHeader(
+          "Cache-Control",
+          "no-store"
+        );
+
+
+        xhr.upload.onprogress =
+          event => {
+
+            if (
+              !event.lengthComputable
+            ) {
+
+              return;
+            }
+
+
+            item.progress =
+              clamp(
+                (
+                  event.loaded /
+                  event.total
+                ) *
+                100,
+                0,
+                100
+              );
+
+
+            renderItem(
+              item
+            );
+
+
+            emitState();
+          };
+
+
+        xhr.onload =
+          () => {
+
+            if (
+              xhr.status >=
+                200 &&
+              xhr.status <
+                300
+            ) {
+
+              resolve(
+                true
+              );
+
+              return;
+            }
+
+
+            let message =
+              `Storage upload failed (${xhr.status}).`;
+
+
+            try {
+
+              const result =
+                JSON.parse(
+                  xhr.responseText
+                );
+
+
+              message =
+                result?.message ||
+                result?.error ||
+                message;
+
+            } catch {}
+
+
+            reject(
+              new Error(
+                message
+              )
+            );
+          };
+
+
+        xhr.onerror =
+          () => {
+
+            reject(
+              new Error(
+                "Network error during storage upload."
+              )
+            );
+          };
+
+
+        xhr.onabort =
+          () => {
+
+            reject(
+              new DOMException(
+                "Upload aborted.",
+                "AbortError"
+              )
+            );
+          };
+
+
+        xhr.ontimeout =
+          () => {
+
+            reject(
+              new Error(
+                "File upload timed out."
+              )
+            );
+          };
+
+
+        xhr.send(
+          item.file
+        );
+      }
+    );
   }
 
+
   /* =====================================================
-     STEP 3 — PROCESS
+     STEP 3
+     PROCESS FILE
      ===================================================== */
 
-  async function requestProcessing(item) {
-    const controller = new AbortController();
-    const timer = setTimeout(() => {
-      controller.abort();
-    }, CONFIG.processTimeoutMs);
+  async function requestProcessing(
+    item
+  ) {
+
+    const controller =
+      new AbortController();
+
+
+    const timer =
+      window.setTimeout(
+        () => {
+
+          controller.abort();
+
+        },
+        CONFIG.processTimeoutMs
+      );
+
 
     try {
-      const response = await fetch(CONFIG.processEndpoint, {
-        method: "POST",
-        credentials: "same-origin",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json"
-        },
-        body: JSON.stringify({
-          uploadId: item.uploadId,
-          path: item.path,
-          name: item.name,
-          mime: item.mime,
-          extension: item.extension,
-          category: item.category
-        }),
-        signal: controller.signal
-      });
 
-      const raw = await response.text();
-      let data = null;
+      const payload = {
+
+        uploadId:
+          item.uploadId,
+
+        path:
+          item.path,
+
+        name:
+          item.name,
+
+        mime:
+          item.mime,
+
+        extension:
+          item.extension,
+
+        category:
+          item.category
+      };
+
+
+      debug(
+        "PROCESS_REQUEST",
+        payload
+      );
+
+
+      const response =
+        await fetch(
+          CONFIG.processEndpoint,
+          {
+            method:
+              "POST",
+
+            credentials:
+              "same-origin",
+
+            cache:
+              "no-store",
+
+            headers: {
+
+              "Content-Type":
+                "application/json",
+
+              Accept:
+                "application/json",
+
+              "X-Neyo-Attachment-Client":
+                VERSION
+            },
+
+            body:
+              JSON.stringify(
+                payload
+              ),
+
+            signal:
+              controller.signal
+          }
+        );
+
+
+      const raw =
+        await response.text();
+
+
+      let data =
+        null;
+
+
       try {
-        data = JSON.parse(raw);
+
+        data =
+          JSON.parse(
+            raw
+          );
+
       } catch {}
 
-      if (response.status === 202) {
-        return { queued: true, data: data || {} };
+
+      debug(
+        "PROCESS_RESPONSE",
+        {
+          status:
+            response.status,
+
+          data
+        }
+      );
+
+
+      if (
+        response.status ===
+        202
+      ) {
+
+        return {
+          queued:
+            true,
+
+          data:
+            data ||
+            {}
+        };
       }
 
-      if (!response.ok) {
+
+      if (
+        !response.ok
+      ) {
+
         throw new Error(
-          data?.error || raw || `File processing failed (${response.status})`
+          data?.error ||
+          raw ||
+          `File processing failed (${response.status})`
         );
       }
 
-      return { queued: false, data: data || {} };
+
+      return {
+        queued:
+          false,
+
+        data:
+          data ||
+          {}
+      };
+
+
     } finally {
-      clearTimeout(timer);
+
+      window.clearTimeout(
+        timer
+      );
     }
   }
+
 
   /* =====================================================
      COMPLETE PIPELINE
      ===================================================== */
 
-  async function processPipeline(id) {
-    const item = state.items.get(id);
-    if (!item) return false;
+  async function processPipeline(
+    id
+  ) {
+
+    const item =
+      state.items.get(
+        id
+      );
+
+
+    if (!item) {
+
+      return false;
+    }
+
 
     try {
-      // AUTHORIZE
-      item.status = "authorizing";
-      item.error = null;
-      item.progress = 0;
-      renderItem(item);
 
-      const session = await createUploadSession(item);
-      if (!state.items.has(id)) return false;
+      /* -------------------------------------------------
+         AUTHORIZE
+         ------------------------------------------------- */
 
-      item.uploadId = session.uploadId;
-      item.bucket = session.bucket;
-      item.path = session.path;
-      item.signedToken = session.token;
+      item.status =
+        "authorizing";
 
-      // UPLOAD
-      item.status = "uploading";
-      renderItem(item);
 
-      await uploadToSignedUrl(item, session);
-      if (!state.items.has(id)) return false;
+      item.error =
+        null;
 
-      item.progress = 100;
-      item.status = "uploaded";
-      renderItem(item);
 
-      // PROCESS
-      item.status = "processing";
-      renderItem(item);
+      item.progress =
+        0;
 
-      const processing = await requestProcessing(item);
-      if (!state.items.has(id)) return false;
 
-      const data = processing.data;
-      item.processId = data.processId || null;
-      item.documentId = data.documentId || null;
+      item.ready =
+        false;
 
-      if (processing.queued) {
-        item.status = "queued-processing";
-        item.ready = false;
-        item.stats = data.stats || null;
-        item.warnings = Array.isArray(data.warnings) ? data.warnings : [];
-        renderItem(item);
+
+      renderItem(
+        item
+      );
+
+
+      emitState();
+
+
+      const session =
+        await createUploadSession(
+          item
+        );
+
+
+      if (
+        !state.items.has(
+          id
+        )
+      ) {
+
+        return false;
+      }
+
+
+      item.uploadId =
+        session.uploadId;
+
+
+      item.bucket =
+        session.bucket;
+
+
+      item.path =
+        session.path;
+
+
+      item.signedToken =
+        session.token;
+
+
+      /* -------------------------------------------------
+         UPLOAD
+         ------------------------------------------------- */
+
+      item.status =
+        "uploading";
+
+
+      renderItem(
+        item
+      );
+
+
+      emitState();
+
+
+      await uploadToSignedUrl(
+        item,
+        session
+      );
+
+
+      if (
+        !state.items.has(
+          id
+        )
+      ) {
+
+        return false;
+      }
+
+
+      item.progress =
+        100;
+
+
+      item.status =
+        "uploaded";
+
+
+      renderItem(
+        item
+      );
+
+
+      emitState();
+
+
+      /* -------------------------------------------------
+         PROCESS
+         ------------------------------------------------- */
+
+      item.status =
+        "processing";
+
+
+      renderItem(
+        item
+      );
+
+
+      emitState();
+
+
+      const processing =
+        await requestProcessing(
+          item
+        );
+
+
+      if (
+        !state.items.has(
+          id
+        )
+      ) {
+
+        return false;
+      }
+
+
+      const data =
+        processing.data ||
+        {};
+
+
+      item.processId =
+        data.processId ||
+        null;
+
+
+      item.documentId =
+        data.documentId ||
+        null;
+
+
+      /* -------------------------------------------------
+         ASYNC BACKEND JOB
+         ------------------------------------------------- */
+
+      if (
+        processing.queued
+      ) {
+
+        item.status =
+          "queued-processing";
+
+
+        item.ready =
+          false;
+
+
+        item.stats =
+          data.stats ||
+          null;
+
+
+        item.warnings =
+          Array.isArray(
+            data.warnings
+          )
+            ? data.warnings
+            : [];
+
+
+        renderItem(
+          item
+        );
+
+
         emitState();
-        debug("Attachment queued", { name: item.name, processId: item.processId });
+
+
+        window.dispatchEvent(
+          new CustomEvent(
+            "neyo:attachment-processing-queued",
+            {
+              detail: {
+                attachment:
+                  serializeItem(
+                    item
+                  )
+              }
+            }
+          )
+        );
+
+
+        debug(
+          "Attachment processing queued:",
+          item.name
+        );
+
+
+        /*
+        IMPORTANT:
+
+        We deliberately do not invent a polling
+        API contract here.
+
+        If process.js later returns 202,
+        its real status endpoint can be connected
+        to this event without corrupting this file.
+        */
+
+
         return true;
       }
 
-      // NORMALIZED RESPONSE
-      item.document = data.document || null;
-      item.chunks = Array.isArray(data.chunks) ? data.chunks : [];
-      item.stats = data.stats || null;
-      item.extraction = data.extraction || null;
-      item.warnings = Array.isArray(data.warnings) ? data.warnings : [];
-      item.ready = Boolean(data.ready);
 
-      if (data.ready) {
-        item.status = "ready";
-      } else {
-        item.status = "ready";
-        item.ready = true;
-      }
+      /* -------------------------------------------------
+         NORMALIZED RESULT
+         ------------------------------------------------- */
 
-      renderItem(item);
+      item.document =
+        data.document ||
+        null;
+
+
+      item.chunks =
+        Array.isArray(
+          data.chunks
+        )
+          ? data.chunks
+          : [];
+
+
+      item.stats =
+        data.stats ||
+        null;
+
+
+      item.extraction =
+        data.extraction ||
+        null;
+
+
+      item.warnings =
+        Array.isArray(
+          data.warnings
+        )
+          ? data.warnings
+          : [];
+
+
+      /*
+      Successful process response means the
+      attachment is available to chat.
+
+      Some media files legitimately have no
+      extracted text because api/chat will use
+      Gemini multimodal fallback.
+      */
+
+      item.ready =
+        true;
+
+
+      item.status =
+        "ready";
+
+
+      renderItem(
+        item
+      );
+
+
       emitState();
 
-      debug("Attachment ready", {
-        name: item.name,
-        documentId: item.documentId,
-        chunks: item.chunks.length,
-        parser: item.extraction?.parser
-      });
+
+      window.dispatchEvent(
+        new CustomEvent(
+          "neyo:attachment-ready",
+          {
+            detail: {
+              attachment:
+                serializeItem(
+                  item
+                )
+            }
+          }
+        )
+      );
+
+
+      debug(
+        "Attachment ready",
+        {
+          name:
+            item.name,
+
+          category:
+            item.category,
+
+          path:
+            item.path,
+
+          documentId:
+            item.documentId,
+
+          chunks:
+            item.chunks.length,
+
+          parser:
+            item.extraction
+              ?.parser
+        }
+      );
+
 
       return true;
+
+
     } catch (error) {
-      if (!state.items.has(id)) return false;
 
-      item.status = "error";
-      item.ready = false;
+      if (
+        !state.items.has(
+          id
+        )
+      ) {
+
+        return false;
+      }
+
+
+      item.status =
+        "error";
+
+
+      item.ready =
+        false;
+
+
       item.error =
-        error?.name === "AbortError"
-          ? "File processing timed out."
-          : error?.message || "Couldn't process this file.";
+        error?.name ===
+          "AbortError"
+          ? "Attachment operation was cancelled."
+          : (
+              error?.message ||
+              "Couldn't process this file."
+            );
 
-      renderItem(item);
+
+      renderItem(
+        item
+      );
+
+
       emitState();
-      emitError(item.error);
+
+
+      emitError(
+        item.error,
+        item
+      );
+
+
       return false;
     }
   }
+
 
   /* =====================================================
      RETRY
      ===================================================== */
 
-  function retryAttachment(id) {
-    const item = state.items.get(id);
-    if (!item) return;
+  function retryAttachment(
+    id
+  ) {
 
-    item.uploadId = null;
-    item.bucket = null;
-    item.path = null;
-    item.signedToken = null;
-    item.processId = null;
-    item.documentId = null;
-    item.document = null;
-    item.chunks = [];
-    item.stats = null;
-    item.extraction = null;
-    item.warnings = [];
-    item.ready = false;
-    item.error = null;
+    const item =
+      state.items.get(
+        id
+      );
 
-    processPipeline(id);
+
+    if (!item) {
+
+      return false;
+    }
+
+
+    item.uploadId =
+      null;
+
+
+    item.bucket =
+      null;
+
+
+    item.path =
+      null;
+
+
+    item.signedToken =
+      null;
+
+
+    item.processId =
+      null;
+
+
+    item.documentId =
+      null;
+
+
+    item.document =
+      null;
+
+
+    item.chunks =
+      [];
+
+
+    item.stats =
+      null;
+
+
+    item.extraction =
+      null;
+
+
+    item.warnings =
+      [];
+
+
+    item.ready =
+      false;
+
+
+    item.progress =
+      0;
+
+
+    item.error =
+      null;
+
+
+    void processPipeline(
+      id
+    );
+
+
+    return true;
   }
+
 
   /* =====================================================
      REMOVE
      ===================================================== */
 
-  function removeAttachment(id) {
-    const item = state.items.get(id);
-    if (!item) return false;
+  function removeAttachment(
+    id
+  ) {
 
-    if (item.previewUrl) {
+    const item =
+      state.items.get(
+        id
+      );
+
+
+    if (!item) {
+
+      return false;
+    }
+
+
+    if (
+      item.previewUrl
+    ) {
+
       try {
-        URL.revokeObjectURL(item.previewUrl);
+
+        URL.revokeObjectURL(
+          item.previewUrl
+        );
+
       } catch {}
     }
 
-    state.items.delete(id);
-    state.order = state.order.filter(value => value !== id);
 
-    const container = attachmentList;
-    if (container) {
-      container.querySelector(`[data-attachment-id="${id}"]`)?.remove();
-    }
+    state.items.delete(
+      id
+    );
+
+
+    state.order =
+      state.order.filter(
+        value =>
+          value !==
+          id
+      );
+
+
+    attachmentList
+      ?.querySelector(
+        `[data-attachment-id="${id}"]`
+      )
+      ?.remove();
+
 
     renderAll();
 
+
     window.dispatchEvent(
-      new CustomEvent("neyo:attachment-removed", {
-        detail: {
-          id,
-          uploadId: item.uploadId,
-          path: item.path
+      new CustomEvent(
+        "neyo:attachment-removed",
+        {
+          detail: {
+
+            id,
+
+            uploadId:
+              item.uploadId,
+
+            path:
+              item.path
+          }
         }
-      })
+      )
     );
+
 
     return true;
   }
+
 
   /* =====================================================
      CLEAR
      ===================================================== */
 
   function clearAttachments() {
-    for (const id of [...state.order]) {
-      removeAttachment(id);
+
+    for (
+      const id
+      of [
+        ...state.order
+      ]
+    ) {
+
+      removeAttachment(
+        id
+      );
     }
+
+
+    if (
+      attachmentList
+    ) {
+
+      attachmentList.innerHTML =
+        "";
+
+
+      attachmentList.hidden =
+        true;
+    }
+
+
+    emitState();
   }
+
 
   /* =====================================================
      GETTERS
      ===================================================== */
 
   function getAll() {
+
     return state.order
-      .map(id => state.items.get(id))
+      .map(
+        id =>
+          state.items.get(
+            id
+          )
+      )
       .filter(Boolean)
-      .map(serializeItem);
+      .map(
+        serializeItem
+      );
   }
+
 
   function getReady() {
+
     return state.order
-      .map(id => state.items.get(id))
-      .filter(item => item && item.status === "ready")
-      .map(item => ({
-        id: item.id,
-        uploadId: item.uploadId,
-        processId: item.processId,
-        documentId: item.documentId,
-        name: item.name,
-        mime: item.mime,
-        extension: item.extension,
-        category: item.category,
-        size: item.size,
-        path: item.path,
-        document: item.document,
-        chunks: item.chunks,
-        stats: item.stats,
-        extraction: item.extraction,
-        warnings: item.warnings
-      }));
+      .map(
+        id =>
+          state.items.get(
+            id
+          )
+      )
+      .filter(
+        item =>
+          item &&
+          item.status ===
+            "ready" &&
+          item.ready ===
+            true
+      )
+      .map(
+        item => ({
+
+          id:
+            item.id,
+
+          uploadId:
+            item.uploadId,
+
+          processId:
+            item.processId,
+
+          documentId:
+            item.documentId,
+
+          name:
+            item.name,
+
+          mime:
+            item.mime,
+
+          mimeType:
+            item.mime,
+
+          extension:
+            item.extension,
+
+          category:
+            item.category,
+
+          size:
+            item.size,
+
+          bucket:
+            item.bucket,
+
+          path:
+            item.path,
+
+          document:
+            item.document,
+
+          chunks:
+            item.chunks,
+
+          stats:
+            item.stats,
+
+          extraction:
+            item.extraction,
+
+          warnings:
+            item.warnings
+        })
+      );
   }
 
+
+  function hasPending() {
+
+    return getAll()
+      .some(
+        item =>
+          [
+            "queued",
+            "authorizing",
+            "uploading",
+            "uploaded",
+            "processing",
+            "queued-processing"
+          ].includes(
+            item.status
+          )
+      );
+  }
+
+
+  function hasErrors() {
+
+    return getAll()
+      .some(
+        item =>
+          item.status ===
+          "error"
+      );
+  }
+
+
   /* =====================================================
-     EVENT BINDINGS — CAPTURE PHASE TO BLOCK NEO.JS
+     OPEN FILE PICKER
      ===================================================== */
 
-  // Main attach button
-  if (attachmentBtn) {
-    attachmentBtn.addEventListener(
-      "click",
-      event => {
-        event.preventDefault();
-        event.stopPropagation();
-        event.stopImmediatePropagation();
-        fileInput.click();
-      },
-      true // capture phase
+  function openPicker() {
+
+    /*
+    Reset first.
+
+    Allows selecting same filename again.
+    */
+
+    fileInput.value =
+      "";
+
+
+    fileInput.click();
+  }
+
+
+  /* =====================================================
+     NEW ATTACHMENT BUTTON
+
+     New architecture button:
+     direct file picker.
+     ===================================================== */
+
+  if (
+    newAttachmentBtn
+  ) {
+
+    newAttachmentBtn
+      .addEventListener(
+        "click",
+        event => {
+
+          event.preventDefault();
+
+
+          event.stopPropagation();
+
+
+          event
+            .stopImmediatePropagation();
+
+
+          openPicker();
+
+        },
+        true
+      );
+  }
+
+
+  /* =====================================================
+     LEGACY ATTACH BUTTON
+
+     CRITICAL:
+
+     DO NOT intercept legacy #attachBtn.
+
+     neo.js is allowed to open its existing popup.
+
+     This preserves current UI.
+
+     Actual Add Files menu action is intercepted below.
+     ===================================================== */
+
+  if (
+    legacyAttachBtn
+  ) {
+
+    debug(
+      "Legacy attach button preserved for popup UI."
     );
   }
 
-  // Legacy addFilesMenuBtn (if present)
-  if (addFilesMenuBtn) {
-    addFilesMenuBtn.addEventListener(
-      "click",
-      event => {
-        event.preventDefault();
-        event.stopPropagation();
-        event.stopImmediatePropagation();
-        fileInput.click();
 
-        const popup = document.getElementById("attachPopupMenu");
-        if (popup) {
-          popup.classList.remove("open");
+  /* =====================================================
+     ADD FILES MENU BUTTON
+
+     This is where old hiddenFileInput would
+     normally become involved.
+
+     Capture phase intercepts ONLY this action.
+     ===================================================== */
+
+  if (
+    addFilesMenuBtn
+  ) {
+
+    addFilesMenuBtn
+      .addEventListener(
+        "click",
+        event => {
+
+          event.preventDefault();
+
+
+          event.stopPropagation();
+
+
+          event
+            .stopImmediatePropagation();
+
+
+          openPicker();
+
+
+          /*
+          Close existing popup gracefully.
+          Support common legacy active classes.
+          */
+
+          legacyPopup
+            ?.classList
+            .remove(
+              "open",
+              "active",
+              "show",
+              "visible"
+            );
+
+
+          legacyPopup
+            ?.setAttribute(
+              "aria-hidden",
+              "true"
+            );
+
+        },
+        true
+      );
+  }
+
+
+  /* =====================================================
+     PRIVATE INPUT CHANGE
+     ===================================================== */
+
+  fileInput.addEventListener(
+    "change",
+    async event => {
+
+      const files =
+        event.target
+          ?.files;
+
+
+      if (
+        files?.length
+      ) {
+
+        await addFiles(
+          files
+        );
+      }
+
+
+      fileInput.value =
+        "";
+    }
+  );
+
+
+  /* =====================================================
+     DRAG DROP — ISOLATED CAPTURE MODE
+
+     neo.js may also own drag/drop.
+
+     Capture-phase handlers only intercept when
+     actual Files are present.
+     ===================================================== */
+
+  function eventHasFiles(
+    event
+  ) {
+
+    return Array
+      .from(
+        event
+          ?.dataTransfer
+          ?.types ||
+        []
+      )
+      .includes(
+        "Files"
+      );
+  }
+
+
+  function isInsideComposer(
+    event
+  ) {
+
+    if (
+      !composerWrapper
+    ) {
+
+      return true;
+    }
+
+
+    const path =
+      typeof event
+        .composedPath ===
+        "function"
+        ? event.composedPath()
+        : [];
+
+
+    if (
+      path.includes(
+        composerWrapper
+      )
+    ) {
+
+      return true;
+    }
+
+
+    return composerWrapper.contains(
+      event.target
+    );
+  }
+
+
+  document.addEventListener(
+    "dragenter",
+    event => {
+
+      if (
+        !eventHasFiles(
+          event
+        ) ||
+        !isInsideComposer(
+          event
+        )
+      ) {
+
+        return;
+      }
+
+
+      event.preventDefault();
+
+
+      event.stopPropagation();
+
+
+      event
+        .stopImmediatePropagation();
+
+
+      state.dragging =
+        true;
+
+
+      dropZone.classList.add(
+        "is-file-dragging"
+      );
+
+    },
+    true
+  );
+
+
+  document.addEventListener(
+    "dragover",
+    event => {
+
+      if (
+        !eventHasFiles(
+          event
+        ) ||
+        !isInsideComposer(
+          event
+        )
+      ) {
+
+        return;
+      }
+
+
+      event.preventDefault();
+
+
+      event.stopPropagation();
+
+
+      event
+        .stopImmediatePropagation();
+
+
+      if (
+        event.dataTransfer
+      ) {
+
+        event.dataTransfer.dropEffect =
+          "copy";
+      }
+
+    },
+    true
+  );
+
+
+  document.addEventListener(
+    "drop",
+    event => {
+
+      if (
+        !eventHasFiles(
+          event
+        ) ||
+        !isInsideComposer(
+          event
+        )
+      ) {
+
+        return;
+      }
+
+
+      event.preventDefault();
+
+
+      event.stopPropagation();
+
+
+      event
+        .stopImmediatePropagation();
+
+
+      state.dragging =
+        false;
+
+
+      dropZone.classList.remove(
+        "is-file-dragging"
+      );
+
+
+      const files =
+        event.dataTransfer
+          ?.files;
+
+
+      if (
+        files?.length
+      ) {
+
+        void addFiles(
+          files
+        );
+      }
+
+    },
+    true
+  );
+
+
+  /*
+  Drag leave doesn't need to block
+  legacy logic aggressively.
+  */
+
+  document.addEventListener(
+    "dragleave",
+    event => {
+
+      if (
+        !state.dragging
+      ) {
+
+        return;
+      }
+
+
+      if (
+        event.relatedTarget &&
+        dropZone.contains(
+          event.relatedTarget
+        )
+      ) {
+
+        return;
+      }
+
+
+      state.dragging =
+        false;
+
+
+      dropZone.classList.remove(
+        "is-file-dragging"
+      );
+
+    },
+    true
+  );
+
+
+  /* =====================================================
+     PASTE FILES — ISOLATED CAPTURE MODE
+
+     Normal text paste is untouched.
+
+     Only intercept clipboard events containing files.
+     ===================================================== */
+
+  document.addEventListener(
+    "paste",
+    event => {
+
+      const clipboard =
+        event.clipboardData;
+
+
+      if (
+        !clipboard
+      ) {
+
+        return;
+      }
+
+
+      const files =
+        [];
+
+
+      for (
+        const clipboardItem
+        of clipboard.items ||
+        []
+      ) {
+
+        if (
+          clipboardItem.kind !==
+          "file"
+        ) {
+
+          continue;
         }
-      },
-      true
-    );
-  }
 
-  // Private input change
-  fileInput.addEventListener("change", async event => {
-    const files = event.target.files;
-    if (files?.length) {
-      await addFiles(files);
-    }
-    fileInput.value = "";
-  });
 
-  /* =====================================================
-     DRAG DROP — ⚠️ TEMPORARILY DISABLED
-     To avoid duplicate sources with neo.js.
-     Re-enable after basic upload test passes.
-     ===================================================== */
+        const file =
+          clipboardItem
+            .getAsFile();
 
-  /*
-  function hasFiles(event) {
-    return Array.from(event?.dataTransfer?.types || []).includes("Files");
-  }
 
-  dropZone.addEventListener("dragenter", event => {
-    if (!hasFiles(event)) return;
-    event.preventDefault();
-    state.dragging = true;
-    dropZone.classList.add("is-file-dragging");
-  });
+        if (file) {
 
-  dropZone.addEventListener("dragover", event => {
-    if (!hasFiles(event)) return;
-    event.preventDefault();
-    if (event.dataTransfer) {
-      event.dataTransfer.dropEffect = "copy";
-    }
-  });
+          files.push(
+            file
+          );
+        }
+      }
 
-  dropZone.addEventListener("dragleave", event => {
-    if (event.relatedTarget && dropZone.contains(event.relatedTarget)) return;
-    state.dragging = false;
-    dropZone.classList.remove("is-file-dragging");
-  });
 
-  dropZone.addEventListener("drop", async event => {
-    if (!hasFiles(event)) return;
-    event.preventDefault();
-    state.dragging = false;
-    dropZone.classList.remove("is-file-dragging");
-    await addFiles(event.dataTransfer.files);
-  });
-  */
+      if (
+        !files.length
+      ) {
 
-  /* =====================================================
-     PASTE — ⚠️ TEMPORARILY DISABLED
-     Re-enable after basic upload test passes.
-     ===================================================== */
+        /*
+        Normal text paste continues normally.
+        */
 
-  /*
-  document.addEventListener("paste", async event => {
-    const clipboard = event.clipboardData;
-    if (!clipboard) return;
+        return;
+      }
 
-    const files = [];
-    for (const clipboardItem of clipboard.items) {
-      if (clipboardItem.kind !== "file") continue;
-      const file = clipboardItem.getAsFile();
-      if (file) files.push(file);
-    }
 
-    if (!files.length) return;
-    await addFiles(files);
-  });
-  */
+      /*
+      Block legacy file-paste upload only.
+      */
+
+      event.preventDefault();
+
+
+      event.stopPropagation();
+
+
+      event
+        .stopImmediatePropagation();
+
+
+      void addFiles(
+        files
+      );
+
+    },
+    true
+  );
+
 
   /* =====================================================
      CHIP ACTIONS
      ===================================================== */
 
-  if (attachmentList) {
-    attachmentList.addEventListener("click", event => {
-      const button = event.target.closest("[data-action]");
-      if (!button) return;
+  attachmentList
+    ?.addEventListener(
+      "click",
+      event => {
 
-      const chip = button.closest("[data-attachment-id]");
-      const id = chip?.dataset?.attachmentId;
-      if (!id) return;
+        const action =
+          event.target
+            ?.closest
+            ?.(
+              "[data-action]"
+            );
 
-      if (button.dataset.action === "remove") {
-        removeAttachment(id);
+
+        if (!action) {
+
+          return;
+        }
+
+
+        const chip =
+          action.closest(
+            "[data-attachment-id]"
+          );
+
+
+        const id =
+          chip?.dataset
+            ?.attachmentId;
+
+
+        if (!id) {
+
+          return;
+        }
+
+
+        event.preventDefault();
+
+
+        event.stopPropagation();
+
+
+        if (
+          action.dataset
+            .action ===
+          "remove"
+        ) {
+
+          removeAttachment(
+            id
+          );
+
+          return;
+        }
+
+
+        if (
+          action.dataset
+            .action ===
+          "retry"
+        ) {
+
+          retryAttachment(
+            id
+          );
+        }
       }
-      if (button.dataset.action === "retry") {
-        retryAttachment(id);
-      }
-    });
-  }
+    );
+
+
+  /* =====================================================
+     PUBLIC CLEAR REQUEST
+     ===================================================== */
+
+  window.addEventListener(
+    "neyo:attachments-clear-request",
+    () => {
+
+      clearAttachments();
+    }
+  );
+
+
+  /* =====================================================
+     PUBLIC PICKER REQUEST
+     ===================================================== */
+
+  window.addEventListener(
+    "neyo:attachments-open-request",
+    () => {
+
+      openPicker();
+    }
+  );
+
 
   /* =====================================================
      PUBLIC API
      ===================================================== */
 
-  window.NeyoAttachments = Object.freeze({
-    addFiles,
-    remove: removeAttachment,
-    retry: retryAttachment,
-    clear: clearAttachments,
-    getAll,
-    getReady,
-    hasPending: () =>
-      getAll().some(item =>
-        [
-          "queued",
-          "authorizing",
-          "uploading",
-          "uploaded",
-          "processing",
-          "queued-processing"
-        ].includes(item.status)
-      ),
-    hasErrors: () =>
-      getAll().some(item => item.status === "error"),
-    getState: () => ({
-      count: state.items.size,
-      totalSize: getTotalSize(),
-      dragging: state.dragging,
-      attachments: getAll()
-    })
-  });
+  window.NeyoAttachments =
+    Object.freeze({
 
-  /* =====================================================
-     PUBLIC CLEAR REQUEST (from composer.js)
-     ===================================================== */
+      version:
+        VERSION,
 
-  window.addEventListener("neyo:attachments-clear-request", () => {
-    clearAttachments();
-  });
+
+      open:
+        openPicker,
+
+
+      addFiles,
+
+
+      remove:
+        removeAttachment,
+
+
+      retry:
+        retryAttachment,
+
+
+      clear:
+        clearAttachments,
+
+
+      getAll,
+
+
+      getReady,
+
+
+      hasPending,
+
+
+      hasErrors,
+
+
+      getState:
+        () => ({
+
+          version:
+            VERSION,
+
+          count:
+            state.items.size,
+
+          ready:
+            getReady().length,
+
+          pending:
+            hasPending(),
+
+          errors:
+            getAll()
+              .filter(
+                item =>
+                  item.status ===
+                  "error"
+              )
+              .length,
+
+          totalSize:
+            getTotalSize(),
+
+          dragging:
+            state.dragging,
+
+          attachments:
+            getAll()
+        })
+    });
+
 
   /* =====================================================
      INIT
      ===================================================== */
 
-  if (attachmentList) {
-    attachmentList.hidden = true;
-  }
+  attachmentList.hidden =
+    state.items.size ===
+    0;
+
+
+  fileInput.multiple =
+    true;
+
+
+  fileInput.setAttribute(
+    "accept",
+    "*/*"
+  );
+
+
+  emitState();
+
 
   debug(
-    "Isolated attachments system ready (private input, capture-phase, drag/drop+paste disabled for test)",
+    "Universal attachments ready",
     {
-      maxFiles: CONFIG.maxFiles,
-      maxFileSize: formatBytes(CONFIG.maxFileSize)
+      version:
+        VERSION,
+
+      privateInput:
+        fileInput.id,
+
+      maxFiles:
+        CONFIG.maxFiles,
+
+      maxFileSize:
+        formatBytes(
+          CONFIG.maxFileSize
+        ),
+
+      legacyPopup:
+        Boolean(
+          legacyPopup
+        ),
+
+      legacyAttachBtn:
+        Boolean(
+          legacyAttachBtn
+        ),
+
+      addFilesMenuBtn:
+        Boolean(
+          addFilesMenuBtn
+        )
     }
   );
+
 })();

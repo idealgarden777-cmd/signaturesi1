@@ -1,24 +1,30 @@
 /*
 =========================================================
-NEYO — VOICE MODE UI v3
+NEYO — VOICE MODE UI v4
+ERROR SAFE + HOT CHARACTER SWITCH AWARE
 
 Owns:
 - voice mode open / close
-- premium status transitions
-- mic button
-- speaker button
-- camera button + preview
+- status transitions
+- mic control
+- speaker control
+- camera control
+- character switch status
+- connection error status
 - end button
 - keyboard escape
 - focus handling
-- UI-only state
 
 Does NOT own:
-- Gemini
-- WebSocket
+- Gemini connection
+- character voice selection
 - VAD
-- mascot mood logic
-- mascot motion
+- mascot mood intelligence
+- mascot rendering
+
+Important:
+- Voice errors DO NOT auto-close screen
+- Character hot switch DOES NOT close screen
 =========================================================
 */
 
@@ -31,34 +37,53 @@ Does NOT own:
      ===================================================== */
 
   const shell =
-    document.getElementById("neyoVoiceMode");
+    document.getElementById(
+      "neyoVoiceMode"
+    );
 
   const stage =
-    shell?.querySelector(".voice-mode-stage");
+    shell?.querySelector(
+      ".voice-mode-stage"
+    );
 
   const statusEl =
-    document.getElementById("neyoMascotStatus");
+    document.getElementById(
+      "neyoMascotStatus"
+    );
 
   const micBtn =
-    document.getElementById("voiceModeMicBtn");
+    document.getElementById(
+      "voiceModeMicBtn"
+    );
 
   const cameraBtn =
-    document.getElementById("voiceModeCameraBtn");
+    document.getElementById(
+      "voiceModeCameraBtn"
+    );
 
   const speakerBtn =
-    document.getElementById("voiceModeSpeakerBtn");
+    document.getElementById(
+      "voiceModeSpeakerBtn"
+    );
 
   const endBtn =
-    document.getElementById("voiceModeEndBtn");
+    document.getElementById(
+      "voiceModeEndBtn"
+    );
 
   const cameraPreview =
-    document.getElementById("neyoCameraPreview");
+    document.getElementById(
+      "neyoCameraPreview"
+    );
 
   const cameraVideo =
-    document.getElementById("neyoCameraVideo");
+    document.getElementById(
+      "neyoCameraVideo"
+    );
 
 
   if (!shell) {
+
     console.warn(
       "[NEYO Voice Mode] Shell missing."
     );
@@ -72,6 +97,7 @@ Does NOT own:
      ===================================================== */
 
   const state = {
+
     open:
       false,
 
@@ -93,11 +119,23 @@ Does NOT own:
     cameraStream:
       null,
 
-    lastFocusedElement:
+    switchingCharacter:
+      false,
+
+    character:
+      "neyo",
+
+    voice:
+      "Kore",
+
+    error:
       null,
 
     status:
-      "Ready"
+      "Ready",
+
+    lastFocusedElement:
+      null
   };
 
 
@@ -116,27 +154,58 @@ Does NOT own:
     name,
     detail = {}
   ) {
+
     window.dispatchEvent(
       new CustomEvent(
         name,
-        { detail }
+        {
+          detail
+        }
       )
     );
   }
 
 
-  function safeFocus(element) {
+  function safeFocus(
+    element
+  ) {
+
     try {
+
       element?.focus?.({
         preventScroll:
           true
       });
+
     } catch {}
   }
 
 
+  function capitalize(
+    value
+  ) {
+
+    const text =
+      String(
+        value || ""
+      );
+
+
+    if (!text) {
+      return "";
+    }
+
+
+    return (
+      text.charAt(0)
+        .toUpperCase() +
+      text.slice(1)
+    );
+  }
+
+
   /* =====================================================
-     STATUS
+     STATUS MAP
      ===================================================== */
 
   const STATUS_MAP =
@@ -145,6 +214,9 @@ Does NOT own:
       idle:
         "Ready",
 
+      connecting:
+        "Connecting…",
+
       listening:
         "Listening…",
 
@@ -152,15 +224,22 @@ Does NOT own:
         "Thinking…",
 
       speaking:
-        "NEYO is speaking",
+        "Speaking…",
 
       interrupted:
         "Listening…",
 
+      switching:
+        "Switching character…",
+
       error:
-        "Something went wrong"
+        "Couldn't connect"
     });
 
+
+  /* =====================================================
+     STATUS RENDER
+     ===================================================== */
 
   function setStatus(
     text,
@@ -173,6 +252,7 @@ Does NOT own:
       String(
         text || ""
       ).trim();
+
 
     if (!value) {
       return;
@@ -204,8 +284,10 @@ Does NOT own:
         "is-entering"
       );
 
+
       statusEl.textContent =
         value;
+
 
       return;
     }
@@ -223,9 +305,11 @@ Does NOT own:
           statusEl.textContent =
             value;
 
+
           statusEl.classList.remove(
             "is-leaving"
           );
+
 
           statusEl.classList.add(
             "is-entering"
@@ -234,8 +318,10 @@ Does NOT own:
 
           requestAnimationFrame(
             () => {
+
               requestAnimationFrame(
                 () => {
+
                   statusEl.classList.remove(
                     "is-entering"
                   );
@@ -250,7 +336,35 @@ Does NOT own:
   }
 
 
+  /* =====================================================
+     STATUS RESOLUTION
+     ===================================================== */
+
   function syncStatus() {
+
+    if (state.error) {
+
+      setStatus(
+        state.error
+      );
+
+      return;
+    }
+
+
+    if (
+      state.switchingCharacter
+    ) {
+
+      setStatus(
+        `Switching to ${capitalize(
+          state.character
+        )}…`
+      );
+
+      return;
+    }
+
 
     if (state.muted) {
 
@@ -272,10 +386,79 @@ Does NOT own:
     }
 
 
+    if (
+      state.phase ===
+      "speaking"
+    ) {
+
+      setStatus(
+        `${
+          capitalize(
+            state.character
+          ) ||
+          "NEYO"
+        } is speaking`
+      );
+
+      return;
+    }
+
+
     setStatus(
-      STATUS_MAP[state.phase] ||
+      STATUS_MAP[
+        state.phase
+      ] ||
       "Ready"
     );
+  }
+
+
+  /* =====================================================
+     PHASE
+     ===================================================== */
+
+  function setPhase(
+    phase,
+    detail = {}
+  ) {
+
+    state.phase =
+      phase;
+
+
+    shell.dataset.phase =
+      phase;
+
+
+    if (
+      phase !==
+      "error"
+    ) {
+
+      state.error =
+        null;
+    }
+
+
+    if (
+      detail.character
+    ) {
+
+      state.character =
+        detail.character;
+    }
+
+
+    if (
+      detail.voice
+    ) {
+
+      state.voice =
+        detail.voice;
+    }
+
+
+    syncStatus();
   }
 
 
@@ -292,37 +475,56 @@ Does NOT own:
 
     micBtn.innerHTML =
       state.muted
+
         ? `
-          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M9 9v3a3 3 0 0 0 4.2 2.75"
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            aria-hidden="true"
+          >
+            <path
+              d="M9 9v3a3 3 0 0 0 4.2 2.75"
               stroke="currentColor"
               stroke-width="1.8"
               stroke-linecap="round"
             />
-            <path d="M15 9V5a3 3 0 0 0-6 0v1"
+
+            <path
+              d="M15 9V5a3 3 0 0 0-6 0v1"
               stroke="currentColor"
               stroke-width="1.8"
               stroke-linecap="round"
             />
-            <path d="M5 5l14 14"
+
+            <path
+              d="M5 5l14 14"
               stroke="currentColor"
               stroke-width="1.8"
               stroke-linecap="round"
             />
-            <path d="M5 11a7 7 0 0 0 11.2 5.6"
+
+            <path
+              d="M5 11a7 7 0 0 0 11.2 5.6"
               stroke="currentColor"
               stroke-width="1.8"
               stroke-linecap="round"
             />
-            <path d="M12 19v3"
+
+            <path
+              d="M12 19v3"
               stroke="currentColor"
               stroke-width="1.8"
               stroke-linecap="round"
             />
           </svg>
         `
+
         : `
-          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            aria-hidden="true"
+          >
             <rect
               x="9"
               y="3"
@@ -332,12 +534,14 @@ Does NOT own:
               stroke="currentColor"
               stroke-width="1.8"
             />
+
             <path
               d="M5 11a7 7 0 0 0 14 0"
               stroke="currentColor"
               stroke-width="1.8"
               stroke-linecap="round"
             />
+
             <path
               d="M12 18v4"
               stroke="currentColor"
@@ -358,14 +562,20 @@ Does NOT own:
 
     speakerBtn.innerHTML =
       state.speakerOn
+
         ? `
-          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            aria-hidden="true"
+          >
             <path
               d="M5 10v4h4l5 4V6l-5 4H5Z"
               stroke="currentColor"
               stroke-width="1.8"
               stroke-linejoin="round"
             />
+
             <path
               d="M17 9a4 4 0 0 1 0 6"
               stroke="currentColor"
@@ -374,20 +584,27 @@ Does NOT own:
             />
           </svg>
         `
+
         : `
-          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            aria-hidden="true"
+          >
             <path
               d="M5 10v4h4l5 4V6l-5 4H5Z"
               stroke="currentColor"
               stroke-width="1.8"
               stroke-linejoin="round"
             />
+
             <path
               d="M17 9l4 6"
               stroke="currentColor"
               stroke-width="1.8"
               stroke-linecap="round"
             />
+
             <path
               d="M21 9l-4 6"
               stroke="currentColor"
@@ -408,8 +625,13 @@ Does NOT own:
 
     cameraBtn.innerHTML =
       state.cameraOn
+
         ? `
-          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            aria-hidden="true"
+          >
             <rect
               x="3"
               y="6"
@@ -419,6 +641,7 @@ Does NOT own:
               stroke="currentColor"
               stroke-width="1.8"
             />
+
             <path
               d="M16 10l5-3v10l-5-3"
               stroke="currentColor"
@@ -427,8 +650,13 @@ Does NOT own:
             />
           </svg>
         `
+
         : `
-          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            aria-hidden="true"
+          >
             <rect
               x="3"
               y="6"
@@ -438,12 +666,14 @@ Does NOT own:
               stroke="currentColor"
               stroke-width="1.8"
             />
+
             <path
               d="M16 10l5-3v10l-5-3"
               stroke="currentColor"
               stroke-width="1.8"
               stroke-linejoin="round"
             />
+
             <path
               d="M4 4l16 16"
               stroke="currentColor"
@@ -463,13 +693,18 @@ Does NOT own:
 
 
     endBtn.innerHTML = `
-      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        aria-hidden="true"
+      >
         <path
           d="M7 7l10 10"
           stroke="currentColor"
           stroke-width="1.9"
           stroke-linecap="round"
         />
+
         <path
           d="M17 7L7 17"
           stroke="currentColor"
@@ -494,15 +729,20 @@ Does NOT own:
         !state.muted
       );
 
+
       micBtn.classList.toggle(
         "is-muted",
         state.muted
       );
 
+
       micBtn.setAttribute(
         "aria-pressed",
-        String(!state.muted)
+        String(
+          !state.muted
+        )
       );
+
 
       micBtn.setAttribute(
         "aria-label",
@@ -520,15 +760,20 @@ Does NOT own:
         state.speakerOn
       );
 
+
       speakerBtn.classList.toggle(
         "is-muted",
         !state.speakerOn
       );
 
+
       speakerBtn.setAttribute(
         "aria-pressed",
-        String(state.speakerOn)
+        String(
+          state.speakerOn
+        )
       );
+
 
       speakerBtn.setAttribute(
         "aria-label",
@@ -546,10 +791,14 @@ Does NOT own:
         state.cameraOn
       );
 
+
       cameraBtn.setAttribute(
         "aria-pressed",
-        String(state.cameraOn)
+        String(
+          state.cameraOn
+        )
       );
+
 
       cameraBtn.setAttribute(
         "aria-label",
@@ -561,8 +810,11 @@ Does NOT own:
 
 
     renderMicIcon();
+
     renderSpeakerIcon();
+
     renderCameraIcon();
+
     renderEndIcon();
   }
 
@@ -589,8 +841,14 @@ Does NOT own:
     state.open =
       true;
 
+
     state.phase =
-      "idle";
+      "connecting";
+
+
+    state.error =
+      null;
+
 
     state.lastFocusedElement =
       document.activeElement;
@@ -612,7 +870,12 @@ Does NOT own:
     );
 
 
-    document.documentElement
+    shell.dataset.phase =
+      "connecting";
+
+
+    document
+      .documentElement
       .classList
       .add(
         "neyo-voice-mode-open"
@@ -620,7 +883,7 @@ Does NOT own:
 
 
     setStatus(
-      "Ready",
+      "Connecting…",
       {
         immediate:
           true
@@ -632,7 +895,7 @@ Does NOT own:
 
 
     dispatch(
-      "neyo:voice-open"
+      "neyo:voice-mode-open"
     );
 
 
@@ -649,11 +912,6 @@ Does NOT own:
           stage
         );
       }
-    );
-
-
-    console.log(
-      "[NEYO Voice Mode] Open"
     );
   }
 
@@ -706,6 +964,7 @@ Does NOT own:
       state.cameraStream =
         stream;
 
+
       state.cameraOn =
         true;
 
@@ -717,7 +976,9 @@ Does NOT own:
 
 
         try {
+
           await cameraVideo.play();
+
         } catch {}
       }
 
@@ -748,7 +1009,11 @@ Does NOT own:
       syncControls();
 
 
+      syncStatus();
+
+
       return true;
+
 
     } catch (error) {
 
@@ -760,6 +1025,7 @@ Does NOT own:
 
       state.cameraStream =
         null;
+
 
       state.cameraOn =
         false;
@@ -809,7 +1075,8 @@ Does NOT own:
 
       for (
         const track
-        of state.cameraStream
+        of state
+          .cameraStream
           .getTracks()
       ) {
 
@@ -822,6 +1089,7 @@ Does NOT own:
 
     state.cameraStream =
       null;
+
 
     state.cameraOn =
       false;
@@ -897,19 +1165,10 @@ Does NOT own:
     } catch (error) {
 
       console.warn(
-        "[NEYO Voice Mode] Mic hook failed:",
+        "[NEYO Voice Mode] Mic control failed:",
         error
       );
     }
-
-
-    dispatch(
-      "neyo:voice-muted",
-      {
-        muted:
-          state.muted
-      }
-    );
 
 
     syncControls();
@@ -940,19 +1199,10 @@ Does NOT own:
     } catch (error) {
 
       console.warn(
-        "[NEYO Voice Mode] Speaker hook failed:",
+        "[NEYO Voice Mode] Speaker control failed:",
         error
       );
     }
-
-
-    dispatch(
-      "neyo:voice-speaker",
-      {
-        enabled:
-          state.speakerOn
-      }
-    );
 
 
     syncControls();
@@ -963,14 +1213,17 @@ Does NOT own:
 
   /* =====================================================
      CLOSE
+
+     Only USER ending conversation should
+     normally call this.
+
+     Errors and character switches do NOT.
      ===================================================== */
 
-  async function close(
-    {
-      stopVoice = true,
-      emitClose = true
-    } = {}
-  ) {
+  async function close({
+    stopVoice = true,
+    emitClose = true
+  } = {}) {
 
     if (
       !state.open ||
@@ -983,6 +1236,11 @@ Does NOT own:
     state.closing =
       true;
 
+
+    /*
+    Full voice-mode exit:
+    camera should stop.
+    */
 
     stopCamera();
 
@@ -1002,7 +1260,10 @@ Does NOT own:
         await window
           .NeyoVoice
           ?.stop
-          ?.();
+          ?.({
+            closeUi:
+              false
+          });
 
       } catch (error) {
 
@@ -1045,7 +1306,12 @@ Does NOT own:
           );
 
 
-          document.documentElement
+          shell.dataset.phase =
+            "idle";
+
+
+          document
+            .documentElement
             .classList
             .remove(
               "neyo-voice-mode-open"
@@ -1055,14 +1321,26 @@ Does NOT own:
           state.open =
             false;
 
+
           state.closing =
             false;
+
 
           state.phase =
             "idle";
 
+
+          state.error =
+            null;
+
+
+          state.switchingCharacter =
+            false;
+
+
           state.muted =
             false;
+
 
           state.speakerOn =
             true;
@@ -1091,11 +1369,6 @@ Does NOT own:
         },
         240
       );
-
-
-    console.log(
-      "[NEYO Voice Mode] Close"
-    );
   }
 
 
@@ -1103,37 +1376,29 @@ Does NOT own:
 
     await close({
       stopVoice:
+        true,
+
+      emitClose:
         true
     });
   }
 
 
   /* =====================================================
-     PHASE SYNC
+     VOICE STATE EVENTS
      ===================================================== */
-
-  function setPhase(
-    phase
-  ) {
-
-    state.phase =
-      phase;
-
-
-    shell.dataset.phase =
-      phase;
-
-
-    syncStatus();
-  }
-
 
   window.addEventListener(
     "neyo:voice-idle",
-    () => {
+    event => {
+
+      state.switchingCharacter =
+        false;
+
 
       setPhase(
-        "idle"
+        "idle",
+        event.detail
       );
     }
   );
@@ -1141,10 +1406,15 @@ Does NOT own:
 
   window.addEventListener(
     "neyo:voice-listening",
-    () => {
+    event => {
+
+      state.switchingCharacter =
+        false;
+
 
       setPhase(
-        "listening"
+        "listening",
+        event.detail
       );
     }
   );
@@ -1152,10 +1422,22 @@ Does NOT own:
 
   window.addEventListener(
     "neyo:voice-thinking",
-    () => {
+    event => {
+
+      if (
+        event
+          ?.detail
+          ?.switching
+      ) {
+
+        state.switchingCharacter =
+          true;
+      }
+
 
       setPhase(
-        "thinking"
+        "thinking",
+        event.detail
       );
     }
   );
@@ -1163,10 +1445,15 @@ Does NOT own:
 
   window.addEventListener(
     "neyo:voice-speaking",
-    () => {
+    event => {
+
+      state.switchingCharacter =
+        false;
+
 
       setPhase(
-        "speaking"
+        "speaking",
+        event.detail
       );
     }
   );
@@ -1174,28 +1461,266 @@ Does NOT own:
 
   window.addEventListener(
     "neyo:voice-interrupted",
-    () => {
+    event => {
 
       setPhase(
-        "interrupted"
-      );
-    }
-  );
-
-
-  window.addEventListener(
-    "neyo:voice-error",
-    () => {
-
-      setPhase(
-        "error"
+        "interrupted",
+        event.detail
       );
     }
   );
 
 
   /* =====================================================
-     BUTTON EVENTS
+     CONNECTION ERROR
+
+     IMPORTANT:
+     NEVER close voice mode here.
+     ===================================================== */
+
+  window.addEventListener(
+    "neyo:voice-error",
+    event => {
+
+      state.phase =
+        "error";
+
+
+      state.switchingCharacter =
+        false;
+
+
+      state.error =
+        String(
+          event
+            ?.detail
+            ?.message ||
+          "Couldn't connect"
+        );
+
+
+      shell.dataset.phase =
+        "error";
+
+
+      setStatus(
+        state.error
+      );
+
+
+      syncControls();
+    }
+  );
+
+
+  window.addEventListener(
+    "neyo:voice-start-error",
+    event => {
+
+      state.phase =
+        "error";
+
+
+      state.error =
+        String(
+          event
+            ?.detail
+            ?.message ||
+          "Couldn't connect"
+        );
+
+
+      shell.dataset.phase =
+        "error";
+
+
+      setStatus(
+        state.error
+      );
+    }
+  );
+
+
+  /* =====================================================
+     HOT CHARACTER SWITCH
+     ===================================================== */
+
+  window.addEventListener(
+    "neyo:voice-character-switching",
+    event => {
+
+      state.switchingCharacter =
+        true;
+
+
+      state.error =
+        null;
+
+
+      if (
+        event
+          ?.detail
+          ?.character
+      ) {
+
+        state.character =
+          event.detail.character;
+      }
+
+
+      if (
+        event
+          ?.detail
+          ?.voice
+      ) {
+
+        state.voice =
+          event.detail.voice;
+      }
+
+
+      shell.dataset.phase =
+        "switching";
+
+
+      shell.dataset.character =
+        state.character;
+
+
+      setStatus(
+        `Switching to ${
+          capitalize(
+            state.character
+          )
+        }…`
+      );
+    }
+  );
+
+
+  window.addEventListener(
+    "neyo:voice-character-ready",
+    event => {
+
+      state.switchingCharacter =
+        false;
+
+
+      state.error =
+        null;
+
+
+      if (
+        event
+          ?.detail
+          ?.character
+      ) {
+
+        state.character =
+          event.detail.character;
+      }
+
+
+      if (
+        event
+          ?.detail
+          ?.voice
+      ) {
+
+        state.voice =
+          event.detail.voice;
+      }
+
+
+      shell.dataset.character =
+        state.character;
+
+
+      if (
+        event
+          ?.detail
+          ?.live
+      ) {
+
+        setPhase(
+          "listening",
+          event.detail
+        );
+
+      } else {
+
+        syncStatus();
+      }
+    }
+  );
+
+
+  window.addEventListener(
+    "neyo:voice-character-error",
+    event => {
+
+      state.switchingCharacter =
+        false;
+
+
+      state.phase =
+        "error";
+
+
+      state.error =
+        String(
+          event
+            ?.detail
+            ?.message ||
+          "Couldn't switch character"
+        );
+
+
+      shell.dataset.phase =
+        "error";
+
+
+      setStatus(
+        state.error
+      );
+    }
+  );
+
+
+  /* =====================================================
+     GENERAL CHARACTER CHANGE
+
+     Instantly update visible identity.
+     Actual audio switching remains voice.js job.
+     ===================================================== */
+
+  window.addEventListener(
+    "neyo:character-change",
+    event => {
+
+      const id =
+        event
+          ?.detail
+          ?.id;
+
+
+      if (!id) {
+        return;
+      }
+
+
+      state.character =
+        id;
+
+
+      shell.dataset.character =
+        id;
+    }
+  );
+
+
+  /* =====================================================
+     CONTROL EVENTS
      ===================================================== */
 
   micBtn?.addEventListener(
@@ -1205,6 +1730,7 @@ Does NOT own:
       event.preventDefault();
 
       event.stopPropagation();
+
 
       toggleMic();
     }
@@ -1219,6 +1745,7 @@ Does NOT own:
 
       event.stopPropagation();
 
+
       toggleSpeaker();
     }
   );
@@ -1231,6 +1758,7 @@ Does NOT own:
       event.preventDefault();
 
       event.stopPropagation();
+
 
       toggleCamera();
     }
@@ -1245,22 +1773,25 @@ Does NOT own:
 
       event.stopPropagation();
 
+
       endSession();
     }
   );
 
 
   /* =====================================================
-     KEYBOARD
+     ESCAPE
+
+     Let voice-mode own UI exit.
+     voice.js also hears Escape, so stopping
+     functions must remain idempotent.
      ===================================================== */
 
   document.addEventListener(
     "keydown",
     event => {
 
-      if (
-        !state.open
-      ) {
+      if (!state.open) {
         return;
       }
 
@@ -1271,6 +1802,7 @@ Does NOT own:
       ) {
 
         event.preventDefault();
+
 
         endSession();
       }
@@ -1287,6 +1819,7 @@ Does NOT own:
     () => {
 
       stopCamera();
+
     },
     {
       once:
@@ -1319,12 +1852,15 @@ Does NOT own:
 
       setPhase,
 
+
       isOpen:
         () =>
           state.open,
 
+
       getState:
         () => ({
+
           open:
             state.open,
 
@@ -1334,6 +1870,15 @@ Does NOT own:
           phase:
             state.phase,
 
+          character:
+            state.character,
+
+          voice:
+            state.voice,
+
+          switchingCharacter:
+            state.switchingCharacter,
+
           muted:
             state.muted,
 
@@ -1342,6 +1887,9 @@ Does NOT own:
 
           cameraOn:
             state.cameraOn,
+
+          error:
+            state.error,
 
           status:
             state.status
@@ -1361,6 +1909,17 @@ Does NOT own:
 
   shell.dataset.phase =
     "idle";
+
+
+  shell.dataset.character =
+    window
+      .NeyoCharacters
+      ?.active ||
+    "neyo";
+
+
+  state.character =
+    shell.dataset.character;
 
 
   cameraPreview
@@ -1383,7 +1942,7 @@ Does NOT own:
 
 
   console.log(
-    "[NEYO Voice Mode] Premium UI v3 loaded"
+    "[NEYO Voice Mode] Error-safe hot-switch UI v4 ready"
   );
 
 })();

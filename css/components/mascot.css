@@ -2008,3 +2008,340 @@ body.dark
     translateX(-50%)
     rotate(-2deg);
 }
+/* =====================================================
+   WIZI — CHARACTER #3
+   Curious / imaginative / exploratory
+   ===================================================== */
+
+#neyoMascot[data-character="wizi"] {
+  --neyo-surface-top:
+    rgba(252, 254, 255, 0.998);
+
+  --neyo-surface-bottom:
+    rgba(240, 245, 248, 0.992);
+
+  --neyo-border:
+    rgba(18, 26, 32, 0.06);
+
+  --neyo-shadow-main:
+    rgba(0, 0, 0, 0.07);
+
+  --neyo-shadow-soft:
+    rgba(0, 0, 0, 0.028);
+
+  --neyo-ink:
+    rgba(14, 18, 22, 0.97);
+}
+
+
+/* Soft orb silhouette */
+
+#neyoMascot[data-character="wizi"]
+.neyo-mascot-face {
+  border-radius:
+    43% 47% 44% 46%;
+
+  transform:
+    scale(
+      var(--neyo-character-face-scale)
+    );
+
+  box-shadow:
+    0 18px 48px
+    rgba(0, 0, 0, 0.068),
+
+    0 5px 14px
+    rgba(0, 0, 0, 0.026),
+
+    inset 0 1px 0
+    rgba(255, 255, 255, 0.96);
+}
+
+
+/* Wizi eyes slightly closer + higher */
+
+#neyoMascot[data-character="wizi"]
+.neyo-eye {
+  top:
+    32.8%;
+
+  width:
+    21%;
+}
+
+
+#neyoMascot[data-character="wizi"]
+.neyo-eye-left {
+  left:
+    22%;
+}
+
+
+#neyoMascot[data-character="wizi"]
+.neyo-eye-right {
+  right:
+    22%;
+}
+
+
+/* Friendly round eyes */
+
+#neyoMascot[data-character="wizi"][data-mood="friendly"]
+.neyo-eye-core {
+  transform:
+    scale(0.94);
+}
+
+
+/* Curious identity */
+
+#neyoMascot[data-character="wizi"][data-mood="curious"]
+.neyo-eye-left {
+  transform:
+    translate(
+      var(--neyo-gaze-x),
+      calc(
+        var(--neyo-gaze-y)
+        + 1px
+      )
+    )
+    rotate(-7deg)
+    scale(0.94);
+}
+
+
+#neyoMascot[data-character="wizi"][data-mood="curious"]
+.neyo-eye-right {
+  transform:
+    translate(
+      var(--neyo-gaze-x),
+      calc(
+        var(--neyo-gaze-y)
+        - 3px
+      )
+    )
+    rotate(7deg)
+    scale(1.08);
+}
+
+
+/* Thinking loop feels more organic */
+
+#neyoMascot[data-character="wizi"][data-eye="loop"]
+.neyo-eye-core {
+  border-radius:
+    52% 48% 57% 43%;
+
+  animation-duration:
+    2s;
+}
+
+
+/* Excited Wizi */
+
+#neyoMascot[data-character="wizi"][data-mood="excited"]
+.neyo-eye {
+  scale:
+    1.07;
+}
+
+
+/* Wizi mouth */
+
+#neyoMascot[data-character="wizi"]
+.neyo-mouth {
+  top:
+    61.5%;
+
+  width:
+    36%;
+
+  gap:
+    5.3%;
+}
+
+
+/* Friendly smile slightly compact */
+
+#neyoMascot[data-character="wizi"][data-mouth="smile"]
+.neyo-mouth {
+  width:
+    35%;
+}
+
+
+/* Curious mouth is intentionally asymmetric */
+
+#neyoMascot[data-character="wizi"][data-mouth="curious"]
+.neyo-mouth {
+  width:
+    31%;
+
+  transform:
+    translateX(-50%)
+    rotate(2deg)
+    translateY(-1px);
+}
+
+
+/* Speaking */
+
+#neyoMascot[data-character="wizi"][data-mouth="speak-soft"]
+.neyo-mouth {
+  width:
+    36%;
+}
+
+
+#neyoMascot[data-character="wizi"][data-mouth="speak-medium"]
+.neyo-mouth {
+  width:
+    39%;
+}
+
+
+#neyoMascot[data-character="wizi"][data-mouth="speak-active"]
+.neyo-mouth {
+  width:
+    42%;
+}
+
+
+/* Playful */
+
+#neyoMascot[data-character="wizi"][data-mouth="smirk"]
+.neyo-mouth {
+  transform:
+    translateX(-50%)
+    rotate(3deg)
+    translateY(-1px);
+}
+
+
+/* Thinking silhouette becomes slightly less circular */
+
+#neyoMascot[data-character="wizi"][data-phase="thinking"]
+.neyo-mascot-face {
+  border-radius:
+    40% 45% 42% 47%;
+}
+
+
+/* Listening: subtle visual attention */
+
+#neyoMascot[data-character="wizi"][data-phase="listening"]
+.neyo-mascot-face {
+  box-shadow:
+    0 18px 48px
+    rgba(0, 0, 0, 0.067),
+
+    0 0
+    calc(
+      4px +
+      (
+        var(--neyo-mic-level)
+        * 11px
+      )
+    )
+    rgba(
+      78,
+      114,
+      140,
+      calc(
+        0.008 +
+        (
+          var(--neyo-mic-level)
+          * 0.04
+        )
+      )
+    ),
+
+    inset 0 1px 0
+    rgba(255, 255, 255, 0.96);
+}
+
+
+/* Speaking presence */
+
+#neyoMascot[data-character="wizi"][data-phase="speaking"]
+.neyo-mascot-face {
+  box-shadow:
+    0 20px 52px
+    rgba(0, 0, 0, 0.072),
+
+    0 0
+    calc(
+      4px +
+      (
+        var(--neyo-output-level)
+        * 10px
+      )
+    )
+    rgba(
+      60,
+      90,
+      110,
+      calc(
+        0.006 +
+        (
+          var(--neyo-output-level)
+          * 0.024
+        )
+      )
+    ),
+
+    inset 0 1px 0
+    rgba(255, 255, 255, 0.96);
+}
+
+
+/* =====================================================
+   WIZI — PICKER PREVIEW
+   ===================================================== */
+
+.character-picker-preview[data-character="wizi"]
+.character-picker-face {
+  border-radius:
+    43% 47% 44% 46%;
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(252, 254, 255, 0.995),
+      rgba(240, 245, 248, 0.985)
+    );
+}
+
+
+.character-picker-preview[data-character="wizi"]
+.character-picker-eye {
+  top:
+    33%;
+}
+
+
+.character-picker-preview[data-character="wizi"]
+.character-picker-eye-left {
+  transform:
+    rotate(-4deg)
+    scale(0.94);
+}
+
+
+.character-picker-preview[data-character="wizi"]
+.character-picker-eye-right {
+  transform:
+    rotate(4deg)
+    scale(1.06);
+}
+
+
+.character-picker-preview[data-character="wizi"]
+.character-picker-mouth {
+  width:
+    35%;
+
+  transform:
+    translateX(-50%)
+    rotate(1deg);
+}

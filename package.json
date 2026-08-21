@@ -10,7 +10,11 @@
   },
   "dependencies": {
     "@google/genai": "^1.27.0",
-    "@supabase/supabase-js": "^2.57.4"
+    "@supabase/supabase-js": "^2.57.4",
+    "jszip": "^3.10.1",
+    "mammoth": "^1.9.1",
+    "pdf-parse": "1.1.1",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "vite": "^7.0.0"

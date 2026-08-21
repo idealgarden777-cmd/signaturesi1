@@ -1,76 +1,115 @@
 /*
 =========================================================
-NEYO — ATTACHMENT PROCESSOR API v2
+NEYO — ATTACHMENT PROCESSOR
+FINAL v1
 
-Purpose:
-- Validate uploaded attachment reference
-- Verify storage ownership
-- Download private object from Supabase Storage
-- Extract raw content
-- Normalize + chunk extracted content
-- Return model-ready attachment structure
-- Keep large files safe for future background processing
+FILE:
+api/attachments/process.js
 
-Requires:
-- @supabase/supabase-js
-- lib/attachments/extractors.js
-- lib/attachments/normalize.js
+PURPOSE:
+- Authenticate current user
+- Validate uploaded Storage path ownership
+- Never trust browser supplied ownership
+- Download readable files from private Supabase bucket
+- Pass file bytes to extractors.js
+- Normalize extracted content using normalize.js
+- Return document + chunks to attachments.js
+- Keep large media as secure Storage references
+- Never execute uploaded code/files
 
-Environment:
-- SUPABASE_URL
-- SUPABASE_SERVICE_ROLE_KEY
-- ATTACHMENTS_BUCKET
+EXPECTED MODULE CONTRACTS:
+
+lib/attachments/extractors.js
+--------------------------------
+export async function extractAttachment({
+  buffer,
+  name,
+  mime,
+  extension,
+  category
+})
+
+returns:
+{
+  text: string,
+  parser: string,
+  metadata: object,
+  warnings: string[],
+  kind: string
+}
+
+
+lib/attachments/normalize.js
+--------------------------------
+export function normalizeAttachment({
+  text,
+  file,
+  extraction
+})
+
+returns:
+{
+  document: object,
+  chunks: array,
+  stats: object,
+  warnings: string[]
+}
+
 =========================================================
 */
 
 import crypto from "node:crypto";
+import { createClient } from "@supabase/supabase-js";
 
 import {
-  createClient
-} from "@supabase/supabase-js";
+  getAuthenticatedUser
+} from "../../lib/auth.js";
 
 import {
   extractAttachment
 } from "../../lib/attachments/extractors.js";
 
 import {
-  normalizeAttachment,
-  buildRetrievalRecords
+  normalizeAttachment
 } from "../../lib/attachments/normalize.js";
 
 
-/* =========================================================
+/* =====================================================
    CONFIG
-   ========================================================= */
+   ===================================================== */
 
 const BUCKET =
-  process.env.ATTACHMENTS_BUCKET ||
   "neyo-attachments";
 
+
+/*
+Frontend allows uploads up to 100 MB.
+
+But text extraction inside a serverless function
+must have a smaller memory-safe ceiling.
+
+Large images/audio/video are NOT downloaded here.
+*/
 
 const MAX_FILE_SIZE =
   100 * 1024 * 1024;
 
 
-const MAX_INLINE_PROCESS_SIZE =
+const MAX_EXTRACTABLE_FILE_SIZE =
   25 * 1024 * 1024;
 
 
-const MAX_FILENAME_LENGTH =
+const MAX_REQUEST_BODY_SIZE =
+  64 * 1024;
+
+
+const MAX_FILE_NAME_LENGTH =
   220;
 
 
 const MAX_PATH_LENGTH =
-  1000;
+  1024;
 
-
-const MAX_RESPONSE_CHUNKS =
-  60;
-
-
-/* =========================================================
-   CATEGORY POLICY
-   ========================================================= */
 
 const ALLOWED_CATEGORIES =
   new Set([
@@ -88,111 +127,185 @@ const ALLOWED_CATEGORIES =
   ]);
 
 
-/* =========================================================
-   BLOCKED EXECUTABLE EXTENSIONS
-   ========================================================= */
+/* =====================================================
+   CATEGORY BEHAVIOR
+   ===================================================== */
 
-const BLOCKED_EXTENSIONS =
+/*
+These categories should later be consumed
+by api/chat through multimodal Storage loading.
+
+No need to download 50–100 MB media into
+this processing function.
+*/
+
+const MULTIMODAL_CATEGORIES =
   new Set([
-    "exe",
-    "dll",
-    "com",
-    "scr",
-    "msi",
-    "bat",
-    "cmd",
-    "vbs",
-    "vbe",
-    "wsf",
-    "wsh",
-    "apk",
-    "app",
-    "dmg",
-    "pkg",
-    "deb",
-    "rpm"
+    "image",
+    "audio",
+    "video"
   ]);
 
 
-/* =========================================================
-   JSON
-   ========================================================= */
+/*
+Unknown binary file:
 
-function sendJson(
-  res,
-  status,
-  body
+Store it safely and expose metadata,
+but never pretend that its contents were read.
+*/
+
+const REFERENCE_ONLY_CATEGORIES =
+  new Set([
+    "unknown"
+  ]);
+
+
+/* =====================================================
+   ENV
+   ===================================================== */
+
+const SUPABASE_URL =
+  process.env.SUPABASE_URL;
+
+
+const SUPABASE_SERVICE_ROLE_KEY =
+  process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+
+/* =====================================================
+   SUPABASE ADMIN CLIENT
+   ===================================================== */
+
+let supabaseAdmin =
+  null;
+
+
+function getSupabaseAdmin() {
+
+  if (supabaseAdmin) {
+    return supabaseAdmin;
+  }
+
+
+  if (!SUPABASE_URL) {
+    throw new Error(
+      "SUPABASE_URL is not configured."
+    );
+  }
+
+
+  if (!SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error(
+      "SUPABASE_SERVICE_ROLE_KEY is not configured."
+    );
+  }
+
+
+  supabaseAdmin =
+    createClient(
+      SUPABASE_URL,
+      SUPABASE_SERVICE_ROLE_KEY,
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false,
+          detectSessionInUrl: false
+        }
+      }
+    );
+
+
+  return supabaseAdmin;
+}
+
+
+/* =====================================================
+   HTTP ERROR
+   ===================================================== */
+
+function createHttpError(
+  statusCode,
+  message
 ) {
 
-  res.status(status);
+  const error =
+    new Error(
+      message
+    );
 
-  res.setHeader(
-    "Content-Type",
-    "application/json; charset=utf-8"
-  );
+
+  error.statusCode =
+    statusCode;
+
+
+  return error;
+}
+
+
+/* =====================================================
+   RESPONSE
+   ===================================================== */
+
+function setCommonHeaders(
+  res
+) {
 
   res.setHeader(
     "Cache-Control",
-    "no-store"
+    "no-store, no-cache, must-revalidate"
   );
 
-  return res.end(
-    JSON.stringify(body)
+
+  res.setHeader(
+    "Pragma",
+    "no-cache"
+  );
+
+
+  res.setHeader(
+    "X-Content-Type-Options",
+    "nosniff"
   );
 }
 
 
-/* =========================================================
-   BODY
-   ========================================================= */
-
-function readBody(
-  req
+function sendJson(
+  res,
+  statusCode,
+  body
 ) {
 
-  if (
-    req.body &&
-    typeof req.body === "object"
-  ) {
-
-    return req.body;
-  }
+  setCommonHeaders(
+    res
+  );
 
 
-  if (
-    typeof req.body === "string"
-  ) {
-
-    try {
-
-      return JSON.parse(
-        req.body
-      );
-
-    } catch {
-
-      return {};
-    }
-  }
-
-
-  return {};
+  return res
+    .status(
+      statusCode
+    )
+    .json(
+      body
+    );
 }
 
 
-/* =========================================================
-   STRING HELPERS
-   ========================================================= */
+/* =====================================================
+   STRING CLEANUP
+   ===================================================== */
 
 function cleanString(
   value,
-  maxLength = 500
+  maxLength
 ) {
 
   return String(
-    value || ""
+    value ?? ""
   )
-    .normalize("NFKC")
+    .replace(
+      /[\u0000-\u001F\u007F]/g,
+      ""
+    )
     .trim()
     .slice(
       0,
@@ -201,333 +314,1042 @@ function cleanString(
 }
 
 
-function getExtension(
-  filename
+/* =====================================================
+   JSON
+   ===================================================== */
+
+function parseJson(
+  value
 ) {
 
-  const name =
-    String(
-      filename || ""
+  try {
+
+    const parsed =
+      JSON.parse(
+        value
+      );
+
+
+    if (
+      !parsed ||
+      typeof parsed !== "object" ||
+      Array.isArray(parsed)
+    ) {
+
+      throw new Error();
+    }
+
+
+    return parsed;
+
+  } catch {
+
+    throw createHttpError(
+      400,
+      "Invalid JSON request body."
     );
-
-
-  const index =
-    name.lastIndexOf(".");
-
-
-  if (
-    index === -1 ||
-    index === name.length - 1
-  ) {
-
-    return "";
   }
-
-
-  return name
-    .slice(
-      index + 1
-    )
-    .toLowerCase();
 }
 
 
-/* =========================================================
-   AUTH / USER
+/* =====================================================
+   BODY READER
 
-   Replace this with your real Signaturesi auth resolver.
-   Never trust userId from request body.
-   ========================================================= */
+   Handles:
+   - already parsed body
+   - Buffer
+   - string
+   - raw stream
 
-function resolveUserId(
+   ===================================================== */
+
+async function readRequestBody(
   req
 ) {
 
-  const raw =
-    req.headers[
-      "x-neyo-user-id"
-    ];
+  const existing =
+    req.body;
 
+
+  /* -------------------------------------------------
+     Already parsed object
+     ------------------------------------------------- */
 
   if (
-    typeof raw === "string" &&
-    raw.trim()
+    existing &&
+    typeof existing === "object" &&
+    !Buffer.isBuffer(existing)
   ) {
 
-    const safe =
-      raw
-        .trim()
-        .replace(
-          /[^a-zA-Z0-9_-]/g,
-          ""
-        )
-        .slice(
-          0,
-          100
-        );
-
-
-    if (safe) {
-      return safe;
-    }
+    return existing;
   }
 
 
-  return "anonymous";
+  /* -------------------------------------------------
+     Buffer
+     ------------------------------------------------- */
+
+  if (
+    Buffer.isBuffer(existing)
+  ) {
+
+    if (
+      existing.length >
+      MAX_REQUEST_BODY_SIZE
+    ) {
+
+      throw createHttpError(
+        413,
+        "Request metadata is too large."
+      );
+    }
+
+
+    const text =
+      existing
+        .toString(
+          "utf8"
+        )
+        .trim();
+
+
+    if (!text) {
+      return {};
+    }
+
+
+    return parseJson(
+      text
+    );
+  }
+
+
+  /* -------------------------------------------------
+     String
+     ------------------------------------------------- */
+
+  if (
+    typeof existing ===
+    "string"
+  ) {
+
+    if (
+      Buffer.byteLength(
+        existing,
+        "utf8"
+      ) >
+      MAX_REQUEST_BODY_SIZE
+    ) {
+
+      throw createHttpError(
+        413,
+        "Request metadata is too large."
+      );
+    }
+
+
+    const text =
+      existing.trim();
+
+
+    if (!text) {
+      return {};
+    }
+
+
+    return parseJson(
+      text
+    );
+  }
+
+
+  /* -------------------------------------------------
+     Stream
+     ------------------------------------------------- */
+
+  const parts =
+    [];
+
+
+  let total =
+    0;
+
+
+  for await (
+    const chunk
+    of req
+  ) {
+
+    const buffer =
+      Buffer.isBuffer(chunk)
+        ? chunk
+        : Buffer.from(chunk);
+
+
+    total +=
+      buffer.length;
+
+
+    if (
+      total >
+      MAX_REQUEST_BODY_SIZE
+    ) {
+
+      throw createHttpError(
+        413,
+        "Request metadata is too large."
+      );
+    }
+
+
+    parts.push(
+      buffer
+    );
+  }
+
+
+  if (
+    parts.length ===
+    0
+  ) {
+
+    return {};
+  }
+
+
+  const text =
+    Buffer
+      .concat(
+        parts
+      )
+      .toString(
+        "utf8"
+      )
+      .trim();
+
+
+  if (!text) {
+    return {};
+  }
+
+
+  return parseJson(
+    text
+  );
 }
 
 
-/* =========================================================
-   REQUEST VALIDATION
-   ========================================================= */
+/* =====================================================
+   AUTH
+   ===================================================== */
 
-function validateRequest(
-  body
+async function resolveAuthenticatedUser(
+  req
 ) {
 
-  const uploadId =
-    cleanString(
-      body?.uploadId,
-      100
+  let auth;
+
+
+  try {
+
+    /*
+    Works whether existing auth helper
+    is sync or async.
+    */
+
+    auth =
+      await Promise.resolve(
+        getAuthenticatedUser(
+          req
+        )
+      );
+
+  } catch {
+
+    throw createHttpError(
+      401,
+      "Authentication required."
     );
-
-
-  const path =
-    cleanString(
-      body?.path,
-      MAX_PATH_LENGTH
-    );
-
-
-  const name =
-    cleanString(
-      body?.name,
-      MAX_FILENAME_LENGTH
-    );
-
-
-  const mime =
-    cleanString(
-      body?.mime ||
-      "application/octet-stream",
-      200
-    )
-      .toLowerCase();
-
-
-  const category =
-    cleanString(
-      body?.category ||
-      "unknown",
-      50
-    )
-      .toLowerCase();
-
-
-  const extension =
-    cleanString(
-      body?.extension ||
-      getExtension(name),
-      30
-    )
-      .toLowerCase();
-
-
-  if (!uploadId) {
-
-    return {
-      ok:
-        false,
-
-      error:
-        "Upload ID is required."
-    };
   }
 
 
-  if (!path) {
+  const userId =
+    auth?.userId ||
+    auth?.id ||
+    auth?.user?.id ||
+    null;
 
-    return {
-      ok:
-        false,
 
-      error:
-        "Storage path is required."
-    };
+  if (!userId) {
+
+    throw createHttpError(
+      401,
+      "Authentication required."
+    );
   }
 
 
-  if (!name) {
+  return {
+    userId:
+      String(
+        userId
+      )
+  };
+}
 
-    return {
-      ok:
-        false,
 
-      error:
-        "File name is required."
-    };
-  }
+/* =====================================================
+   SAFE PATH SEGMENT
+   ===================================================== */
+
+function sanitizePathSegment(
+  value
+) {
+
+  return String(
+    value ?? ""
+  )
+    .trim()
+    .replace(
+      /[^a-zA-Z0-9_-]/g,
+      "_"
+    )
+    .slice(
+      0,
+      128
+    );
+}
+
+
+/* =====================================================
+   FILE SIZE
+   ===================================================== */
+
+function parseFileSize(
+  value
+) {
+
+  const number =
+    Number(
+      value
+    );
 
 
   if (
-    !ALLOWED_CATEGORIES.has(
+    !Number.isFinite(number) ||
+    !Number.isSafeInteger(number)
+  ) {
+
+    return null;
+  }
+
+
+  return number;
+}
+
+
+/* =====================================================
+   EXTENSION
+   ===================================================== */
+
+function cleanExtension(
+  value
+) {
+
+  return String(
+    value ?? ""
+  )
+    .trim()
+    .toLowerCase()
+    .replace(
+      /^\./,
+      ""
+    )
+    .replace(
+      /[^a-z0-9]/g,
+      ""
+    )
+    .slice(
+      0,
+      32
+    );
+}
+
+
+/* =====================================================
+   CATEGORY
+   ===================================================== */
+
+function cleanCategory(
+  value
+) {
+
+  const category =
+    String(
+      value ?? ""
+    )
+      .trim()
+      .toLowerCase();
+
+
+  if (
+    ALLOWED_CATEGORIES.has(
       category
     )
   ) {
 
-    return {
-      ok:
-        false,
-
-      error:
-        "Invalid attachment category."
-    };
+    return category;
   }
+
+
+  return "unknown";
+}
+
+
+/* =====================================================
+   REQUEST VALIDATION
+   ===================================================== */
+
+function validateRequestMetadata(
+  body
+) {
+
+  if (
+    !body ||
+    typeof body !== "object" ||
+    Array.isArray(body)
+  ) {
+
+    throw createHttpError(
+      400,
+      "Invalid attachment metadata."
+    );
+  }
+
+
+  const uploadId =
+    cleanString(
+      body.uploadId,
+      128
+    );
+
+
+  if (!uploadId) {
+
+    throw createHttpError(
+      400,
+      "Upload ID is required."
+    );
+  }
+
+
+  const bucket =
+    cleanString(
+      body.bucket ||
+      BUCKET,
+      128
+    );
 
 
   if (
-    BLOCKED_EXTENSIONS.has(
-      extension
+    bucket !==
+    BUCKET
+  ) {
+
+    throw createHttpError(
+      400,
+      "Invalid attachment bucket."
+    );
+  }
+
+
+  const path =
+    cleanString(
+      body.path,
+      MAX_PATH_LENGTH
+    );
+
+
+  if (!path) {
+
+    throw createHttpError(
+      400,
+      "Storage path is required."
+    );
+  }
+
+
+  /*
+  Storage paths must always be relative.
+  */
+
+  if (
+    path.startsWith("/") ||
+    path.includes("\\") ||
+    path.includes("../") ||
+    path.includes("/..")
+  ) {
+
+    throw createHttpError(
+      400,
+      "Invalid storage path."
+    );
+  }
+
+
+  const name =
+    cleanString(
+      body.name,
+      MAX_FILE_NAME_LENGTH
+    );
+
+
+  if (!name) {
+
+    throw createHttpError(
+      400,
+      "File name is required."
+    );
+  }
+
+
+  const size =
+    parseFileSize(
+      body.size
+    );
+
+
+  /*
+  Older frontend versions may not send size.
+
+  Storage download will give us the authoritative
+  byte length later.
+
+  Therefore missing size is allowed here.
+  */
+
+  if (
+    size !== null &&
+    (
+      size <= 0 ||
+      size >
+      MAX_FILE_SIZE
     )
   ) {
 
-    return {
-      ok:
-        false,
-
-      error:
-        "Executable files cannot be processed."
-    };
+    throw createHttpError(
+      413,
+      "Invalid or unsupported file size."
+    );
   }
+
+
+  const mime =
+    cleanString(
+      body.mime,
+      180
+    ) ||
+    "application/octet-stream";
+
+
+  const extension =
+    cleanExtension(
+      body.extension
+    );
+
+
+  const category =
+    cleanCategory(
+      body.category
+    );
+
+
+  return {
+    uploadId,
+    bucket,
+    path,
+    name,
+    size,
+    mime,
+    extension,
+    category
+  };
+}
+
+
+/* =====================================================
+   OWNERSHIP CHECK
+
+   upload.js creates:
+
+   users/{authenticatedUserId}/{uploadId}/{filename}
+
+   process.js accepts ONLY that authenticated prefix.
+   ===================================================== */
+
+function assertPathOwnership({
+  userId,
+  uploadId,
+  path
+}) {
+
+  const safeUserId =
+    sanitizePathSegment(
+      userId
+    );
+
+
+  const safeUploadId =
+    sanitizePathSegment(
+      uploadId
+    );
+
+
+  if (
+    !safeUserId ||
+    !safeUploadId
+  ) {
+
+    throw createHttpError(
+      403,
+      "Attachment ownership validation failed."
+    );
+  }
+
+
+  const expectedPrefix =
+    `users/${safeUserId}/${safeUploadId}/`;
+
+
+  if (
+    !path.startsWith(
+      expectedPrefix
+    )
+  ) {
+
+    throw createHttpError(
+      403,
+      "You do not have access to this attachment."
+    );
+  }
+
+
+  /*
+  A valid path must contain an actual filename
+  after the upload directory.
+  */
+
+  const fileName =
+    path.slice(
+      expectedPrefix.length
+    );
+
+
+  if (
+    !fileName ||
+    fileName.includes("/")
+  ) {
+
+    throw createHttpError(
+      400,
+      "Invalid attachment path."
+    );
+  }
+
+
+  return {
+    expectedPrefix,
+    fileName
+  };
+}
+
+
+/* =====================================================
+   DOCUMENT IDs
+   ===================================================== */
+
+function createProcessId() {
+
+  return crypto.randomUUID();
+}
+
+
+function createDocumentId() {
+
+  return crypto.randomUUID();
+}
+
+
+/* =====================================================
+   BASE DOCUMENT
+
+   Shared by:
+   - extracted documents
+   - multimodal references
+   - unknown file fallback
+   ===================================================== */
+
+function createBaseDocument({
+  documentId,
+  uploadId,
+  bucket,
+  path,
+  name,
+  mime,
+  extension,
+  category,
+  size
+}) {
+
+  return {
+    id:
+      documentId,
+
+    uploadId,
+
+    provider:
+      "supabase",
+
+    bucket,
+
+    path,
+
+    name,
+
+    mime,
+
+    mimeType:
+      mime,
+
+    extension,
+
+    category,
+
+    size:
+      Number(size) || 0,
+
+    createdAt:
+      new Date()
+        .toISOString()
+  };
+}
+
+
+/* =====================================================
+   REFERENCE-ONLY RESULT
+
+   Used for image/audio/video and unknown binary.
+
+   It explicitly does NOT claim text extraction.
+   ===================================================== */
+
+function createReferenceResult({
+  metadata,
+  processId,
+  documentId,
+  parser,
+  warning
+}) {
+
+  const document =
+    createBaseDocument({
+      documentId,
+      uploadId:
+        metadata.uploadId,
+      bucket:
+        metadata.bucket,
+      path:
+        metadata.path,
+      name:
+        metadata.name,
+      mime:
+        metadata.mime,
+      extension:
+        metadata.extension,
+      category:
+        metadata.category,
+      size:
+        metadata.size
+    });
+
+
+  const warnings =
+    warning
+      ? [warning]
+      : [];
 
 
   return {
     ok:
       true,
 
-    value: {
-      uploadId,
-      path,
-      name,
-      mime,
-      category,
-      extension
-    }
+    ready:
+      true,
+
+    processId,
+
+    documentId,
+
+    document,
+
+    chunks:
+      [],
+
+    stats: {
+      bytes:
+        Number(
+          metadata.size
+        ) || 0,
+
+      characters:
+        0,
+
+      chunks:
+        0,
+
+      processingMode:
+        "storage-reference"
+    },
+
+    extraction: {
+      parser,
+
+      kind:
+        metadata.category,
+
+      extractedText:
+        false,
+
+      storageReference:
+        true
+    },
+
+    warnings
   };
 }
 
 
-/* =========================================================
-   PATH OWNERSHIP
-   ========================================================= */
+/* =====================================================
+   DOWNLOAD FILE
 
-function validateOwnershipPath({
-  path,
-  userId
+   Private bucket; service-role server client only.
+   ===================================================== */
+
+async function downloadStorageFile({
+  bucket,
+  path
 }) {
 
-  const normalized =
-    String(
-      path || ""
-    )
-      .replace(
-        /\\/g,
-        "/"
+  const supabase =
+    getSupabaseAdmin();
+
+
+  const {
+    data,
+    error
+  } =
+    await supabase
+      .storage
+      .from(
+        bucket
+      )
+      .download(
+        path
       );
 
 
-  if (
-    normalized.includes("..") ||
-    normalized.startsWith("/")
-  ) {
+  if (error) {
 
-    return false;
+    console.error(
+      "[NEYO Process] Storage download failed",
+      {
+        path,
+        message:
+          error.message
+      }
+    );
+
+
+    throw createHttpError(
+      404,
+      "Uploaded attachment could not be found."
+    );
   }
 
 
-  const expectedPrefix =
-    `users/${userId}/`;
+  if (!data) {
+
+    throw createHttpError(
+      404,
+      "Uploaded attachment could not be found."
+    );
+  }
 
 
-  return normalized.startsWith(
-    expectedPrefix
-  );
+  const arrayBuffer =
+    await data.arrayBuffer();
+
+
+  const buffer =
+    Buffer.from(
+      arrayBuffer
+    );
+
+
+  return buffer;
 }
 
 
-/* =========================================================
-   RESPONSE-SAFE CHUNKS
+/* =====================================================
+   EXTRACTION RESULT VALIDATION
+   ===================================================== */
 
-   Don't dump hundreds of chunks into a single API response.
-   Full indexing records can later be stored in DB/vector store.
-   ========================================================= */
-
-function createResponseChunks(
-  normalized
+function normalizeExtractionResult(
+  result,
+  fallbackCategory
 ) {
 
-  if (
-    !Array.isArray(
-      normalized?.chunks
-    )
-  ) {
-
-    return [];
-  }
+  const extraction =
+    result &&
+    typeof result === "object"
+      ? result
+      : {};
 
 
-  return normalized
-    .chunks
-    .slice(
-      0,
-      MAX_RESPONSE_CHUNKS
-    )
-    .map(
-      chunk => ({
+  return {
+    text:
+      typeof extraction.text ===
+      "string"
+        ? extraction.text
+        : "",
 
-        id:
-          chunk.id,
+    parser:
+      cleanString(
+        extraction.parser ||
+        "fallback",
+        100
+      ),
 
-        index:
-          chunk.index,
+    kind:
+      cleanString(
+        extraction.kind ||
+        fallbackCategory ||
+        "unknown",
+        64
+      ),
 
-        heading:
-          chunk.heading,
+    metadata:
+      extraction.metadata &&
+      typeof extraction.metadata ===
+      "object" &&
+      !Array.isArray(
+        extraction.metadata
+      )
+        ? extraction.metadata
+        : {},
 
-        startChar:
-          chunk.startChar,
-
-        endChar:
-          chunk.endChar,
-
-        characters:
-          chunk.characters,
-
-        text:
-          chunk.text,
-
-        source:
-          chunk.source
-      })
-    );
+    warnings:
+      Array.isArray(
+        extraction.warnings
+      )
+        ? extraction.warnings
+            .map(
+              warning =>
+                cleanString(
+                  warning,
+                  500
+                )
+            )
+            .filter(Boolean)
+        : []
+  };
 }
 
 
-/* =========================================================
-   HANDLER
-   ========================================================= */
+/* =====================================================
+   NORMALIZED RESULT VALIDATION
+
+   Prevents a malformed normalize.js response
+   from breaking the API contract.
+   ===================================================== */
+
+function validateNormalizedResult(
+  result,
+  fallbackDocument
+) {
+
+  const normalized =
+    result &&
+    typeof result === "object"
+      ? result
+      : {};
+
+
+  const document =
+    normalized.document &&
+    typeof normalized.document ===
+      "object"
+      ? {
+          ...fallbackDocument,
+          ...normalized.document
+        }
+      : fallbackDocument;
+
+
+  const chunks =
+    Array.isArray(
+      normalized.chunks
+    )
+      ? normalized.chunks
+      : [];
+
+
+  const stats =
+    normalized.stats &&
+    typeof normalized.stats ===
+      "object"
+      ? normalized.stats
+      : {};
+
+
+  const warnings =
+    Array.isArray(
+      normalized.warnings
+    )
+      ? normalized.warnings
+      : [];
+
+
+  return {
+    document,
+    chunks,
+    stats,
+    warnings
+  };
+}
+
+
+/* =====================================================
+   MAIN HANDLER
+   ===================================================== */
 
 export default async function handler(
   req,
   res
 ) {
 
-  /* -------------------------------------------------------
-     POST ONLY
-     ------------------------------------------------------- */
+  setCommonHeaders(
+    res
+  );
+
+
+  /* -------------------------------------------------
+     METHOD
+     ------------------------------------------------- */
 
   if (
-    req.method !== "POST"
+    req.method !==
+    "POST"
   ) {
 
     res.setHeader(
@@ -540,6 +1362,9 @@ export default async function handler(
       res,
       405,
       {
+        ok:
+          false,
+
         error:
           "Method not allowed."
       }
@@ -547,676 +1372,637 @@ export default async function handler(
   }
 
 
-  /* -------------------------------------------------------
-     ENV
-     ------------------------------------------------------- */
-
-  const supabaseUrl =
-    process.env.SUPABASE_URL;
-
-
-  const serviceRoleKey =
-    process.env
-      .SUPABASE_SERVICE_ROLE_KEY;
-
-
-  if (
-    !supabaseUrl ||
-    !serviceRoleKey
-  ) {
-
-    console.error(
-      "[NEYO Attachment Processor] Supabase environment missing."
-    );
-
-
-    return sendJson(
-      res,
-      500,
-      {
-        error:
-          "Attachment processing is not configured."
-      }
-    );
-  }
-
-
-  /* -------------------------------------------------------
-     REQUEST
-     ------------------------------------------------------- */
-
-  const body =
-    readBody(
-      req
-    );
-
-
-  const validation =
-    validateRequest(
-      body
-    );
-
-
-  if (
-    !validation.ok
-  ) {
-
-    return sendJson(
-      res,
-      400,
-      {
-        error:
-          validation.error
-      }
-    );
-  }
-
-
-  const attachment =
-    validation.value;
-
-
-  /* -------------------------------------------------------
-     USER
-     ------------------------------------------------------- */
-
-  const userId =
-    resolveUserId(
-      req
-    );
-
-
-  /* -------------------------------------------------------
-     OWNERSHIP CHECK
-     ------------------------------------------------------- */
-
-  if (
-    !validateOwnershipPath({
-      path:
-        attachment.path,
-
-      userId
-    })
-  ) {
-
-    console.warn(
-      "[NEYO Attachment Processor] Invalid ownership path",
-      {
-        userId,
-        path:
-          attachment.path
-      }
-    );
-
-
-    return sendJson(
-      res,
-      403,
-      {
-        error:
-          "You do not have access to this attachment."
-      }
-    );
-  }
-
-
-  /* -------------------------------------------------------
-     IDS
-     ------------------------------------------------------- */
-
-  const processId =
-    crypto.randomUUID();
-
-
-  const documentId =
-    crypto.randomUUID();
-
-
   try {
 
-    /* -----------------------------------------------------
-       SUPABASE
-       ----------------------------------------------------- */
+    /* =================================================
+       AUTHENTICATION
+       ================================================= */
 
-    const supabase =
-      createClient(
-        supabaseUrl,
-        serviceRoleKey,
-        {
-          auth: {
-            persistSession:
-              false,
-
-            autoRefreshToken:
-              false
-          }
-        }
+    const user =
+      await resolveAuthenticatedUser(
+        req
       );
 
 
-    /* -----------------------------------------------------
-       DOWNLOAD
-       ----------------------------------------------------- */
+    /* =================================================
+       BODY
+       ================================================= */
 
-    const {
-      data: blob,
-      error: downloadError
-    } =
-      await supabase
-        .storage
-        .from(
-          BUCKET
-        )
-        .download(
-          attachment.path
-        );
-
-
-    if (
-      downloadError ||
-      !blob
-    ) {
-
-      throw (
-        downloadError ||
-        new Error(
-          "Stored attachment could not be downloaded."
-        )
-      );
-    }
-
-
-    const size =
-      Number(
-        blob.size
-      ) ||
-      0;
-
-
-    if (
-      size <= 0
-    ) {
-
-      return sendJson(
-        res,
-        400,
-        {
-          error:
-            "Uploaded file is empty."
-        }
-      );
-    }
-
-
-    if (
-      size >
-      MAX_FILE_SIZE
-    ) {
-
-      return sendJson(
-        res,
-        413,
-        {
-          error:
-            "Uploaded file exceeds the processing limit."
-        }
-      );
-    }
-
-
-    /* -----------------------------------------------------
-       LARGE FILE POLICY
-       ----------------------------------------------------- */
-
-    if (
-      size >
-      MAX_INLINE_PROCESS_SIZE
-    ) {
-
-      console.log(
-        "[NEYO Attachment Processor] Background processing required",
-        {
-          processId,
-          documentId,
-          uploadId:
-            attachment.uploadId,
-          name:
-            attachment.name,
-          size
-        }
+    const body =
+      await readRequestBody(
+        req
       );
 
 
-      return sendJson(
-        res,
-        202,
-        {
-
-          processId,
-
-
-          documentId,
-
-
-          uploadId:
-            attachment.uploadId,
-
-
-          status:
-            "queued",
-
-
-          ready:
-            false,
-
-
-          extracted:
-            false,
-
-
-          processingMode:
-            "background",
-
-
-          file: {
-
-            name:
-              attachment.name,
-
-            mime:
-              attachment.mime,
-
-            extension:
-              attachment.extension,
-
-            category:
-              attachment.category,
-
-            size,
-
-            path:
-              attachment.path
-          },
-
-
-          message:
-            "Large attachment accepted for background processing."
-        }
-      );
-    }
-
-
-    /* -----------------------------------------------------
-       BLOB → BUFFER
-       ----------------------------------------------------- */
-
-    const arrayBuffer =
-      await blob.arrayBuffer();
-
-
-    const buffer =
-      Buffer.from(
-        arrayBuffer
+    const metadata =
+      validateRequestMetadata(
+        body
       );
 
 
-    /* -----------------------------------------------------
-       RAW EXTRACTION
-       ----------------------------------------------------- */
+    /* =================================================
+       OWNERSHIP
+       ================================================= */
 
-    const extraction =
-      await extractAttachment({
+    assertPathOwnership({
+      userId:
+        user.userId,
 
-        buffer,
+      uploadId:
+        metadata.uploadId,
 
+      path:
+        metadata.path
+    });
+
+
+    /* =================================================
+       IDS
+       ================================================= */
+
+    const processId =
+      createProcessId();
+
+
+    const documentId =
+      createDocumentId();
+
+
+    console.log(
+      "[NEYO Process] start",
+      {
+        processId,
+        documentId,
+
+        userId:
+          user.userId,
+
+        uploadId:
+          metadata.uploadId,
 
         name:
-          attachment.name,
-
-
-        mime:
-          attachment.mime,
-
-
-        extension:
-          attachment.extension,
-
+          metadata.name,
 
         category:
-          attachment.category,
+          metadata.category,
+
+        mime:
+          metadata.mime,
+
+        size:
+          metadata.size,
+
+        path:
+          metadata.path
+      }
+    );
 
 
-        size
+    /* =================================================
+       IMAGE / AUDIO / VIDEO
+
+       Do NOT download here.
+
+       api/chat.js will later consume these
+       as multimodal Storage references.
+       ================================================= */
+
+    if (
+      MULTIMODAL_CATEGORIES.has(
+        metadata.category
+      )
+    ) {
+
+      return sendJson(
+        res,
+        200,
+        createReferenceResult({
+          metadata,
+          processId,
+          documentId,
+
+          parser:
+            "multimodal-storage-reference",
+
+          warning:
+            null
+        })
+      );
+    }
+
+
+    /* =================================================
+       UNKNOWN BINARY
+
+       Safe fallback.
+
+       We do not execute it.
+       We do not claim to understand it.
+       ================================================= */
+
+    if (
+      REFERENCE_ONLY_CATEGORIES.has(
+        metadata.category
+      )
+    ) {
+
+      return sendJson(
+        res,
+        200,
+        createReferenceResult({
+          metadata,
+          processId,
+          documentId,
+
+          parser:
+            "binary-storage-reference",
+
+          warning:
+            "This file was stored safely, but its contents were not automatically extracted."
+        })
+      );
+    }
+
+
+    /* =================================================
+       EXTRACTION SIZE GUARD
+
+       Prevent serverless memory exhaustion.
+
+       Common text/docs should normally be much
+       smaller than this.
+       ================================================= */
+
+    if (
+      metadata.size !==
+        null &&
+      metadata.size >
+        MAX_EXTRACTABLE_FILE_SIZE
+    ) {
+
+      throw createHttpError(
+        413,
+        `This ${metadata.category} file is too large for inline text extraction. Maximum extractable size is ${Math.round(
+          MAX_EXTRACTABLE_FILE_SIZE /
+          (
+            1024 *
+            1024
+          )
+        )} MB.`
+      );
+    }
+
+
+    /* =================================================
+       DOWNLOAD
+       ================================================= */
+
+    const buffer =
+      await downloadStorageFile({
+        bucket:
+          metadata.bucket,
+
+        path:
+          metadata.path
       });
 
 
-    /* -----------------------------------------------------
-       NORMALIZATION + CHUNKING
-       ----------------------------------------------------- */
+    /* =================================================
+       ACTUAL SIZE CHECK
 
-    const normalized =
-      normalizeAttachment(
-        extraction,
+       Browser metadata is not authoritative.
+       ================================================= */
+
+    if (
+      buffer.length <= 0
+    ) {
+
+      throw createHttpError(
+        400,
+        "Uploaded attachment is empty."
+      );
+    }
+
+
+    if (
+      buffer.length >
+      MAX_FILE_SIZE
+    ) {
+
+      throw createHttpError(
+        413,
+        "Uploaded attachment exceeds the maximum file size."
+      );
+    }
+
+
+    if (
+      buffer.length >
+      MAX_EXTRACTABLE_FILE_SIZE
+    ) {
+
+      throw createHttpError(
+        413,
+        `This file is too large for inline extraction. Maximum extractable size is ${Math.round(
+          MAX_EXTRACTABLE_FILE_SIZE /
+          (
+            1024 *
+            1024
+          )
+        )} MB.`
+      );
+    }
+
+
+    metadata.size =
+      buffer.length;
+
+
+    /* =================================================
+       EXTRACT
+
+       extractors.js must NEVER execute uploaded files.
+
+       Examples:
+       txt  → UTF-8
+       pdf  → pdf parser
+       docx → mammoth
+       xlsx → worksheet extraction
+       pptx → XML text extraction
+       zip  → safe archive inspection
+       ================================================= */
+
+    let extraction;
+
+
+    try {
+
+      extraction =
+        await extractAttachment({
+          buffer,
+
+          name:
+            metadata.name,
+
+          mime:
+            metadata.mime,
+
+          extension:
+            metadata.extension,
+
+          category:
+            metadata.category
+        });
+
+    } catch (
+      error
+    ) {
+
+      console.error(
+        "[NEYO Process] extraction failed",
         {
-
-          documentId,
-
-
-          uploadId:
-            attachment.uploadId,
-
-
           processId,
 
+          name:
+            metadata.name,
 
-          storagePath:
-            attachment.path
+          category:
+            metadata.category,
+
+          message:
+            error?.message ||
+            "Unknown extraction error"
         }
       );
 
 
-    /* -----------------------------------------------------
-       RETRIEVAL RECORDS
+      throw createHttpError(
+        422,
+        error?.message ||
+        "The attachment could not be read."
+      );
+    }
 
-       These are ready for future:
-       - embeddings
-       - Supabase pgvector
-       - semantic retrieval
 
-       For now we only count them.
-       ----------------------------------------------------- */
-
-    const retrievalRecords =
-      buildRetrievalRecords(
-        normalized
+    const safeExtraction =
+      normalizeExtractionResult(
+        extraction,
+        metadata.category
       );
 
 
-    const responseChunks =
-      createResponseChunks(
-        normalized
-      );
+    /* =================================================
+       BASE DOCUMENT
+       ================================================= */
 
-
-    const responseChunksTruncated =
-      normalized
-        .chunks
-        .length >
-      responseChunks.length;
-
-
-    /* -----------------------------------------------------
-       SUCCESS
-       ----------------------------------------------------- */
-
-    console.log(
-      "[NEYO Attachment Processor] Complete",
-      {
-
-        processId,
-
-
+    const baseDocument =
+      createBaseDocument({
         documentId,
 
-
         uploadId:
-          attachment.uploadId,
+          metadata.uploadId,
 
+        bucket:
+          metadata.bucket,
+
+        path:
+          metadata.path,
 
         name:
-          attachment.name,
+          metadata.name,
 
+        mime:
+          metadata.mime,
+
+        extension:
+          metadata.extension,
 
         category:
-          attachment.category,
+          metadata.category,
 
+        size:
+          metadata.size
+      });
+
+
+    /* =================================================
+       NORMALIZE + CHUNK
+
+       normalize.js will own:
+       - text cleanup
+       - length limits
+       - chunk generation
+       - overlap
+       - retrieval-friendly records
+       ================================================= */
+
+    let normalized;
+
+
+    try {
+
+      normalized =
+        normalizeAttachment({
+          text:
+            safeExtraction.text,
+
+          file: {
+            ...baseDocument
+          },
+
+          extraction: {
+            parser:
+              safeExtraction.parser,
+
+            kind:
+              safeExtraction.kind,
+
+            metadata:
+              safeExtraction.metadata,
+
+            warnings:
+              safeExtraction.warnings
+          }
+        });
+
+    } catch (
+      error
+    ) {
+
+      console.error(
+        "[NEYO Process] normalization failed",
+        {
+          processId,
+
+          name:
+            metadata.name,
+
+          message:
+            error?.message ||
+            "Unknown normalization error"
+        }
+      );
+
+
+      throw createHttpError(
+        422,
+        "Attachment text could not be normalized."
+      );
+    }
+
+
+    const result =
+      validateNormalizedResult(
+        normalized,
+        baseDocument
+      );
+
+
+    /* =================================================
+       WARNINGS
+       ================================================= */
+
+    const warnings =
+      [
+        ...safeExtraction.warnings,
+        ...result.warnings
+      ]
+        .map(
+          value =>
+            cleanString(
+              value,
+              500
+            )
+        )
+        .filter(Boolean)
+        .filter(
+          (
+            value,
+            index,
+            array
+          ) =>
+            array.indexOf(
+              value
+            ) === index
+        );
+
+
+    /* =================================================
+       EXTRACTION SUMMARY
+
+       Do not return raw Buffer.
+       ================================================= */
+
+    const extractionSummary = {
+      parser:
+        safeExtraction.parser,
+
+      kind:
+        safeExtraction.kind,
+
+      extractedText:
+        Boolean(
+          safeExtraction.text
+        ),
+
+      characters:
+        safeExtraction.text.length,
+
+      metadata:
+        safeExtraction.metadata
+    };
+
+
+    /* =================================================
+       STATS
+       ================================================= */
+
+    const stats = {
+      bytes:
+        metadata.size,
+
+      characters:
+        safeExtraction.text.length,
+
+      chunks:
+        result.chunks.length,
+
+      processingMode:
+        "inline-extraction",
+
+      ...(
+        result.stats ||
+        {}
+      )
+    };
+
+
+    console.log(
+      "[NEYO Process] complete",
+      {
+        processId,
+        documentId,
+
+        name:
+          metadata.name,
 
         parser:
-          extraction.parser,
+          safeExtraction.parser,
 
-
-        extracted:
-          extraction.extracted,
-
-
-        normalizedReady:
-          normalized.ready,
-
-
-        chunks:
-          normalized.chunks.length,
-
+        bytes:
+          metadata.size,
 
         characters:
-          normalized.stats.characters
+          safeExtraction.text.length,
+
+        chunks:
+          result.chunks.length,
+
+        warnings:
+          warnings.length
       }
     );
 
+
+    /* =================================================
+       SUCCESS
+
+       Contract consumed by attachments.js.
+       ================================================= */
 
     return sendJson(
       res,
       200,
       {
-
-        processId,
-
-
-        documentId,
-
-
-        uploadId:
-          attachment.uploadId,
-
-
-        status:
-          "ready",
-
+        ok:
+          true,
 
         ready:
-          normalized.ready,
-
-
-        extracted:
-          Boolean(
-            extraction.extracted
-          ),
-
-
-        processingMode:
-          "inline",
-
-
-        file: {
-
-          name:
-            attachment.name,
-
-          mime:
-            attachment.mime,
-
-          extension:
-            attachment.extension,
-
-          category:
-            attachment.category,
-
-          size,
-
-          bucket:
-            BUCKET,
-
-          path:
-            attachment.path
-        },
-
-
-        /* -------------------------------------------------
-           RAW EXTRACTION SUMMARY
-           ------------------------------------------------- */
-
-        extraction: {
-
-          type:
-            extraction.type,
-
-
-          parser:
-            extraction.parser,
-
-
-          extracted:
-            extraction.extracted,
-
-
-          truncated:
-            extraction.truncated,
-
-
-          warnings:
-            extraction.warnings,
-
-
-          metadata:
-            extraction.metadata
-        },
-
-
-        /* -------------------------------------------------
-           NORMALIZED DOCUMENT
-           ------------------------------------------------- */
-
-        document:
-          normalized.document,
-
-
-        /* -------------------------------------------------
-           MODEL / RETRIEVAL CHUNKS
-           ------------------------------------------------- */
-
-        chunks:
-          responseChunks,
-
-
-        chunksTruncatedInResponse:
-          responseChunksTruncated,
-
-
-        totalChunks:
-          normalized.chunks.length,
-
-
-        retrievalRecords:
-          retrievalRecords.length,
-
-
-        /* -------------------------------------------------
-           STATS
-           ------------------------------------------------- */
-
-        stats:
-          normalized.stats,
-
-
-        warnings:
-          normalized.warnings,
-
-
-        metadata: {
-
-          storageBucket:
-            BUCKET,
-
-          storagePath:
-            attachment.path,
-
-          originalName:
-            attachment.name,
-
-          mime:
-            attachment.mime,
-
-          extension:
-            attachment.extension,
-
-          category:
-            attachment.category,
-
-          size
-        }
-      }
-    );
-
-
-  } catch (error) {
-
-    console.error(
-      "[NEYO Attachment Processor] Failed",
-      {
+          true,
 
         processId,
 
-
         documentId,
 
+        document:
+          result.document,
 
-        uploadId:
-          attachment.uploadId,
+        chunks:
+          result.chunks,
 
+        stats,
 
-        name:
-          attachment.name,
+        extraction:
+          extractionSummary,
 
+        warnings,
 
-        message:
-          error?.message
+        status:
+          "ready"
       }
     );
 
 
-    const rawMessage =
-      String(
-        error?.message ||
-        ""
-      );
+  } catch (
+    error
+  ) {
+
+    const statusCode =
+      Number(
+        error?.statusCode
+      ) || 500;
 
 
-    const safeMessage =
-      rawMessage &&
-      rawMessage.length < 300
-        ? rawMessage
-        : "Could not process attachment.";
+    const safeStatus =
+      statusCode >= 400 &&
+      statusCode <= 599
+        ? statusCode
+        : 500;
+
+
+    /*
+    Unexpected internal errors should not leak
+    Supabase credentials, stack traces or internals.
+    */
+
+    const publicMessage =
+      safeStatus >= 500
+        ? (
+            error?.statusCode
+              ? error.message
+              : "Could not process attachment."
+          )
+        : (
+            error?.message ||
+            "Invalid attachment processing request."
+          );
+
+
+    console.error(
+      "[NEYO Process] request failed",
+      {
+        status:
+          safeStatus,
+
+        message:
+          error?.message ||
+          "Unknown error"
+      }
+    );
 
 
     return sendJson(
       res,
-      500,
+      safeStatus,
       {
-
-        processId,
-
-
-        documentId,
-
-
-        uploadId:
-          attachment.uploadId,
-
-
-        status:
-          "error",
-
+        ok:
+          false,
 
         ready:
           false,
 
-
-        extracted:
-          false,
-
-
         error:
-          safeMessage ||
-          "Could not process attachment."
+          publicMessage
       }
     );
   }

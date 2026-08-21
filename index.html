@@ -102,6 +102,39 @@
     href="/css/components/character-picker.css?v=1"
   >
 
+  <!-- ===== ZADI VISUAL OVERRIDES (temporary until mascot.css v4) ===== -->
+  <style>
+    /* Zadi: soft-diamond light geometry */
+    .neyo-mascot-face[data-character="zadi"] {
+      --face-shape: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+      --face-bg: #f5efe8;
+      --face-border: #d4c9bc;
+      --face-radius: 0;
+      --eye-color: #2c2a28;
+      --mouth-color: #4a3f38;
+      transform: scale(0.99);
+    }
+    .neyo-mascot-face[data-character="zadi"] .neyo-mascot-features {
+      filter: drop-shadow(0 2px 6px rgba(0,0,0,0.06));
+    }
+    .neyo-mascot-face[data-character="zadi"] .neyo-eye-core {
+      background: #2c2a28;
+    }
+    .neyo-mascot-face[data-character="zadi"] .neyo-mouth-bar {
+      background: #4a3f38;
+    }
+    /* slight diamond glow */
+    .neyo-mascot-face[data-character="zadi"]::after {
+      content: '';
+      position: absolute;
+      inset: -2px;
+      background: radial-gradient(circle at 30% 30%, rgba(255,235,215,0.3), transparent 70%);
+      pointer-events: none;
+      border-radius: inherit;
+      clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+    }
+  </style>
+
   <!-- KaTeX -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css">
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js"></script>
@@ -1531,7 +1564,7 @@
   <!-- END #neyoVoiceMode -->
 
   <!-- ========================================================= -->
-  <!-- SCRIPTS — FINAL LOCKED ORDER WITH CHARACTER PICKER        -->
+  <!-- SCRIPTS — FINAL LOCKED ORDER WITH ZADI                    -->
   <!-- ========================================================= -->
 
   <!-- Main working app -->
@@ -1552,13 +1585,20 @@
   <!-- Composer scrollbar (NEW) -->
   <script type="module" src="/js/components/composer-scrollbar.js?v=1"></script>
 
-  <!-- ===== NEYO VOICE + PREMIUM MASCOT + CHARACTER PICKER ===== -->
-
-  <!-- NEYO character definition -->
+  <!-- ===== CHARACTER DEFINITIONS ===== -->
+  <!-- NEYO character (default) -->
   <script
     type="module"
     src="/js/characters/neyo.js?v=1"
   ></script>
+
+  <!-- ZADI character (new) -->
+  <script
+    type="module"
+    src="/js/characters/zadi.js?v=1"
+  ></script>
+
+  <!-- ===== VOICE + MASCOT + PICKER ===== -->
 
   <!-- Gemini Live voice engine -->
   <script

@@ -1,79 +1,192 @@
 /*
 =========================================================
-NEYO — SEND / STOP STATE
-Modular request control
+NEYO — SEND / STOP STATE v2
+EVENT-DRIVEN + ATTACHMENT AWARE
 
 Purpose:
-- Keep legacy neo.js untouched
-- Detect /api/chat requests
-- Convert Send arrow -> Stop square
-- Stop active generation
-- Restore Send arrow after finish/error/abort
-- Avoid browser native title tooltip
+- Send arrow ↔ Stop square
+- Disable send while attachments process
+- Allow attachment-only sending
+- Stop active chat generation
+- No fetch monkey-patching
+- No duplicate AbortController ownership
+
+Depends on:
+- composer.js
+- chat.js
+- attachments.js
+
 =========================================================
 */
 
 (() => {
   "use strict";
 
+
+  /* =====================================================
+     DOM
+     ===================================================== */
+
   const sendBtn =
-    document.getElementById("sendBtn");
+    document.getElementById(
+      "sendBtn"
+    );
+
+  const textarea =
+    document.getElementById(
+      "chatInput"
+    );
+
 
   if (!sendBtn) {
     return;
   }
 
-  const originalFetch =
-    window.fetch.bind(window);
 
-  let activeController = null;
-  let isGenerating = false;
-  let stopRequested = false;
+  /* =====================================================
+     STATE
+     ===================================================== */
+
+  const state = {
+
+    generating:
+      false,
+
+    hasText:
+      false,
+
+    hasAttachments:
+      false,
+
+    readyAttachments:
+      0,
+
+    attachmentsPending:
+      false,
+
+    attachmentErrors:
+      0
+  };
 
 
   /* =====================================================
-     ICON REFRESH
+     ICONS
      ===================================================== */
 
   function refreshIcons() {
-    if (
-      window.lucide &&
-      typeof window.lucide.createIcons === "function"
-    ) {
-      try {
-        window.lucide.createIcons();
-      } catch {
-        // Safe no-op.
-      }
-    }
+
+    try {
+
+      window
+        .lucide
+        ?.createIcons
+        ?.();
+
+    } catch {}
   }
 
 
   /* =====================================================
-     SEND BUTTON UI
+     CAN SEND
      ===================================================== */
 
-  function renderSendButton() {
+  function canSend() {
+
+    if (
+      state.generating
+    ) {
+
+      return true;
+    }
+
+
+    if (
+      state.attachmentsPending
+    ) {
+
+      return false;
+    }
+
+
+    if (
+      state.hasText
+    ) {
+
+      return true;
+    }
+
+
+    if (
+      state.readyAttachments >
+      0
+    ) {
+
+      return true;
+    }
+
+
+    return false;
+  }
+
+
+  /* =====================================================
+     RENDER
+     ===================================================== */
+
+  function render() {
+
+    const enabled =
+      canSend();
+
+
     sendBtn.classList.toggle(
       "is-generating",
-      isGenerating
+      state.generating
     );
 
-    /*
-    Permanently avoid browser-native tooltip.
-    NEYO custom tooltip can use data-tooltip.
-    */
 
-    sendBtn.removeAttribute("title");
+    sendBtn.classList.toggle(
+      "is-disabled",
+      !enabled
+    );
 
-    if (isGenerating) {
+
+    sendBtn.classList.toggle(
+      "attachments-pending",
+      state.attachmentsPending
+    );
+
+
+    sendBtn.disabled =
+      !enabled;
+
+
+    sendBtn.removeAttribute(
+      "title"
+    );
+
+
+    sendBtn.setAttribute(
+      "aria-disabled",
+      String(
+        !enabled
+      )
+    );
+
+
+    if (
+      state.generating
+    ) {
+
       sendBtn.setAttribute(
         "aria-label",
         "Stop generating"
       );
 
+
       sendBtn.dataset.tooltip =
         "Stop";
+
 
       sendBtn.innerHTML = `
         <span
@@ -82,16 +195,50 @@ Purpose:
         ></span>
       `;
 
+
       return;
     }
+
+
+    if (
+      state.attachmentsPending
+    ) {
+
+      sendBtn.setAttribute(
+        "aria-label",
+        "Attachments are processing"
+      );
+
+
+      sendBtn.dataset.tooltip =
+        "Processing files";
+
+
+      sendBtn.innerHTML = `
+        <i
+          data-lucide="loader-circle"
+          size="18"
+          aria-hidden="true"
+          class="send-loader-icon"
+        ></i>
+      `;
+
+
+      refreshIcons();
+
+      return;
+    }
+
 
     sendBtn.setAttribute(
       "aria-label",
       "Send message"
     );
 
+
     sendBtn.dataset.tooltip =
       "Send";
+
 
     sendBtn.innerHTML = `
       <i
@@ -101,129 +248,53 @@ Purpose:
       ></i>
     `;
 
+
     refreshIcons();
   }
 
 
   /* =====================================================
-     GENERATION STATE
+     SEND
      ===================================================== */
 
-  function startGenerating(
-    controller
-  ) {
-    activeController =
-      controller;
-
-    stopRequested = false;
-    isGenerating = true;
-
-    renderSendButton();
-  }
-
-
-  function finishGenerating(
-    controller
-  ) {
-    /*
-    Ignore stale request completion.
-    */
+  function requestSend() {
 
     if (
-      controller &&
-      activeController &&
-      controller !== activeController
+      !canSend() ||
+      state.generating
     ) {
+
       return;
     }
 
-    activeController = null;
-    stopRequested = false;
-    isGenerating = false;
 
-    renderSendButton();
-  }
-
-
-  /* =====================================================
-     ABORT ERROR CLEANUP
-
-     Legacy neo.js may render an AbortError
-     as an assistant error message.
-
-     This cleanup removes only obvious
-     abort-generated error bubbles.
-     ===================================================== */
-
-  function cleanupAbortMessage() {
-    const chatMessages =
-      document.getElementById(
-        "chatMessages"
-      );
-
-    if (!chatMessages) {
-      return;
-    }
-
-    const candidates =
-      Array.from(
-        chatMessages.querySelectorAll(
-          ".message, .message-wrapper, .assistant-message"
-        )
-      );
-
-    for (
-      let index =
-        candidates.length - 1;
-      index >= 0;
-      index -= 1
-    ) {
-      const node =
-        candidates[index];
-
-      const content =
-        node.querySelector(
-          ".message-content"
-        );
-
-      if (!content) {
-        continue;
-      }
-
-      const text =
-        content.textContent
-          ?.trim()
-          .toLowerCase() || "";
-
-      const looksLikeAbort =
-        text.includes("abort") ||
-        text.includes("aborted") ||
-        text.includes("signal is aborted") ||
-        text.includes(
-          "operation was aborted"
-        );
-
-      if (looksLikeAbort) {
-        node.remove();
-        break;
-      }
-    }
-  }
+    const text =
+      window
+        .NeyoComposer
+        ?.getTrimmedValue
+        ?.() ||
+      textarea
+        ?.value
+        ?.trim() ||
+      "";
 
 
-  function scheduleAbortCleanup() {
     /*
-    Legacy request catch may render
-    slightly after fetch rejects.
+    No need to manually attach files here.
+
+    chat.js automatically reads:
+    NeyoAttachments.getReady()
     */
 
-    [0, 50, 150, 350].forEach(
-      delay => {
-        window.setTimeout(
-          cleanupAbortMessage,
-          delay
-        );
-      }
+    window.dispatchEvent(
+      new CustomEvent(
+        "neyo:chat-send-request",
+        {
+          detail: {
+            text
+          }
+        }
+      )
     );
   }
 
@@ -232,206 +303,312 @@ Purpose:
      STOP
      ===================================================== */
 
-  function stopGeneration() {
+  function requestStop() {
+
     if (
-      !isGenerating ||
-      !activeController
+      !state.generating
     ) {
+
       return;
     }
 
-    stopRequested = true;
-
-    try {
-      activeController.abort();
-    } catch {
-      // Safe no-op.
-    }
-
-    scheduleAbortCleanup();
 
     /*
-    Restore button immediately.
-    Fetch.finally will also safely sync it.
+    chat.js owns its AbortController.
     */
 
-    isGenerating = false;
-    renderSendButton();
+    window.dispatchEvent(
+      new CustomEvent(
+        "neyo:chat-stop-request"
+      )
+    );
   }
 
 
   /* =====================================================
-     SEND BUTTON CAPTURE
-
-     Capture phase is important:
-     while generating, stop the click
-     before legacy neo.js receives it.
+     BUTTON
      ===================================================== */
 
   sendBtn.addEventListener(
     "click",
     event => {
-      if (!isGenerating) {
+
+      event.preventDefault();
+
+      event.stopPropagation();
+
+
+      if (
+        state.generating
+      ) {
+
+        requestStop();
+
         return;
       }
 
-      event.preventDefault();
-      event.stopPropagation();
-      event.stopImmediatePropagation();
 
-      stopGeneration();
-    },
-    true
+      requestSend();
+    }
   );
 
 
   /* =====================================================
-     FETCH INTERCEPTOR
+     ENTER TO SEND
 
-     Only touches /api/chat.
-     All other fetch calls remain unchanged.
+     Enter        → send
+     Shift+Enter  → newline
      ===================================================== */
 
-  window.fetch =
-    function neyoFetch(
-      input,
-      init = {}
-    ) {
-      let url = "";
+  textarea?.addEventListener(
+    "keydown",
+    event => {
 
       if (
-        typeof input === "string"
+        event.key !==
+        "Enter"
       ) {
-        url = input;
-      } else if (
-        input instanceof Request
-      ) {
-        url = input.url;
-      } else if (
-        input &&
-        typeof input.url === "string"
-      ) {
-        url = input.url;
+
+        return;
       }
-
-
-      const isChatRequest =
-        url === "/api/chat" ||
-        url.endsWith("/api/chat") ||
-        url.includes("/api/chat?");
-
-
-      if (!isChatRequest) {
-        return originalFetch(
-          input,
-          init
-        );
-      }
-
-
-      const controller =
-        new AbortController();
-
-      /*
-      Preserve an existing request signal
-      if another future module provides one.
-      */
-
-      const existingSignal =
-        init?.signal;
-
-      let combinedSignal =
-        controller.signal;
 
 
       if (
-        existingSignal &&
-        typeof AbortSignal.any ===
-          "function"
+        event.shiftKey ||
+        event.ctrlKey ||
+        event.metaKey ||
+        event.altKey
       ) {
-        combinedSignal =
-          AbortSignal.any([
-            existingSignal,
-            controller.signal
-          ]);
-      } else if (
-        existingSignal
-      ) {
-        if (
-          existingSignal.aborted
-        ) {
-          controller.abort();
-        } else {
-          existingSignal.addEventListener(
-            "abort",
-            () => {
-              controller.abort();
-            },
-            {
-              once: true
-            }
-          );
-        }
+
+        return;
       }
 
 
-      const nextInit = {
-        ...init,
-        signal:
-          combinedSignal
-      };
+      if (
+        event.isComposing
+      ) {
+
+        return;
+      }
 
 
-      startGenerating(
-        controller
-      );
+      event.preventDefault();
 
 
-      return originalFetch(
-        input,
-        nextInit
-      )
-        .catch(error => {
-          if (
-            controller.signal.aborted ||
-            stopRequested
-          ) {
-            scheduleAbortCleanup();
-          }
+      if (
+        state.generating
+      ) {
 
-          throw error;
-        })
-        .finally(() => {
-          finishGenerating(
-            controller
-          );
-        });
-    };
+        return;
+      }
+
+
+      requestSend();
+    }
+  );
 
 
   /* =====================================================
-     NATIVE TITLE PROTECTION
-     For send button only.
+     COMPOSER STATE
+     ===================================================== */
+
+  window.addEventListener(
+    "neyo:composer-change",
+    event => {
+
+      const detail =
+        event.detail ||
+        {};
+
+
+      state.hasText =
+        Boolean(
+          detail.hasText
+        );
+
+
+      state.hasAttachments =
+        Boolean(
+          detail.hasAttachments
+        );
+
+
+      state.readyAttachments =
+        Number(
+          detail.readyAttachments
+        ) ||
+        0;
+
+
+      state.attachmentsPending =
+        Boolean(
+          detail.attachmentsPending
+        );
+
+
+      state.attachmentErrors =
+        Number(
+          detail.attachmentErrors
+        ) ||
+        0;
+
+
+      if (
+        typeof detail.generating ===
+        "boolean"
+      ) {
+
+        state.generating =
+          detail.generating;
+      }
+
+
+      render();
+    }
+  );
+
+
+  /* =====================================================
+     ATTACHMENT FALLBACK STATE
+     ===================================================== */
+
+  window.addEventListener(
+    "neyo:chat-attachments-state",
+    event => {
+
+      const detail =
+        event.detail ||
+        {};
+
+
+      state.hasAttachments =
+        Number(
+          detail.count
+        ) >
+        0;
+
+
+      state.readyAttachments =
+        Number(
+          detail.ready
+        ) ||
+        0;
+
+
+      state.attachmentsPending =
+        Boolean(
+          detail.pending
+        );
+
+
+      state.attachmentErrors =
+        Number(
+          detail.errors
+        ) ||
+        0;
+
+
+      render();
+    }
+  );
+
+
+  /* =====================================================
+     GENERATION EVENTS
+     ===================================================== */
+
+  window.addEventListener(
+    "neyo:chat-send-start",
+    () => {
+
+      state.generating =
+        true;
+
+      render();
+    }
+  );
+
+
+  window.addEventListener(
+    "neyo:chat-send-end",
+    () => {
+
+      state.generating =
+        false;
+
+      render();
+    }
+  );
+
+
+  window.addEventListener(
+    "neyo:chat-aborted",
+    () => {
+
+      state.generating =
+        false;
+
+      render();
+    }
+  );
+
+
+  window.addEventListener(
+    "neyo:chat-error",
+    () => {
+
+      state.generating =
+        false;
+
+      render();
+    }
+  );
+
+
+  /* =====================================================
+     LIMIT
+     ===================================================== */
+
+  window.addEventListener(
+    "neyo:chat-limit-reached",
+    () => {
+
+      state.generating =
+        false;
+
+      render();
+    }
+  );
+
+
+  /* =====================================================
+     TITLE PROTECTION
      ===================================================== */
 
   const titleObserver =
-    new MutationObserver(() => {
-      if (
-        sendBtn.hasAttribute(
-          "title"
-        )
-      ) {
-        sendBtn.removeAttribute(
-          "title"
-        );
+    new MutationObserver(
+      () => {
+
+        if (
+          sendBtn.hasAttribute(
+            "title"
+          )
+        ) {
+
+          sendBtn.removeAttribute(
+            "title"
+          );
+        }
       }
-    });
+    );
 
 
   titleObserver.observe(
     sendBtn,
     {
-      attributes: true,
+      attributes:
+        true,
+
       attributeFilter: [
         "title"
       ]
@@ -443,5 +620,58 @@ Purpose:
      INITIAL STATE
      ===================================================== */
 
-  renderSendButton();
+  try {
+
+    const composerState =
+      window
+        .NeyoComposer
+        ?.getState
+        ?.();
+
+
+    if (
+      composerState
+    ) {
+
+      state.hasText =
+        Boolean(
+          composerState.hasText
+        );
+
+
+      state.hasAttachments =
+        Boolean(
+          composerState.hasAttachments
+        );
+
+
+      state.readyAttachments =
+        Number(
+          composerState.readyAttachments
+        ) ||
+        0;
+
+
+      state.attachmentsPending =
+        Boolean(
+          composerState.attachmentsPending
+        );
+
+
+      state.generating =
+        Boolean(
+          composerState.generating
+        );
+    }
+
+  } catch {}
+
+
+  render();
+
+
+  console.log(
+    "[NEYO Send State] Attachment-aware controller ready"
+  );
+
 })();

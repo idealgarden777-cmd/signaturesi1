@@ -9,7 +9,7 @@ Identity:
 - Clever
 - Exploratory
 - Slightly quirky
-- Bright female voice
+- Intelligent male voice
 - Organic premium geometry
 
 Purpose:
@@ -391,28 +391,28 @@ Does NOT own:
 
     voice: Object.freeze({
       gender:
-        "female",
+        "male",
 
       identity:
-        "bright-curious-female",
+        "curious-intelligent-male",
 
       tone:
-        "bright",
+        "intelligent",
 
       pace:
         "natural",
 
       energy:
-        "light",
+        "balanced",
 
       warmth:
         "medium",
 
       confidence:
-        "curious",
+        "calm",
 
       preferredVoice:
-        "Leda"
+        "Charon"
     }),
 
 
@@ -490,7 +490,14 @@ Does NOT own:
 
 
   console.log(
-    "[NEYO Character] Wizi profile loaded"
+    "[NEYO Character] Wizi profile loaded",
+    {
+      voice:
+        WIZI.voice.preferredVoice,
+
+      gender:
+        WIZI.voice.gender
+    }
   );
 
 })();

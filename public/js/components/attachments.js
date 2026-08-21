@@ -294,7 +294,6 @@ Supports:
       return;
     }
 
-
     console.log(
       "[NEYO Attachments]",
       ...args
@@ -327,7 +326,6 @@ Supports:
       return crypto.randomUUID();
     }
 
-
     return (
       `att_${Date.now()}_${Math.random()
         .toString(36)
@@ -345,10 +343,8 @@ Supports:
         name || ""
       );
 
-
     const index =
       value.lastIndexOf(".");
-
 
     if (
       index === -1 ||
@@ -358,7 +354,6 @@ Supports:
 
       return "";
     }
-
 
     return value
       .slice(
@@ -376,7 +371,6 @@ Supports:
       Number(bytes) ||
       0;
 
-
     if (
       value <
       1024
@@ -384,7 +378,6 @@ Supports:
 
       return `${value} B`;
     }
-
 
     if (
       value <
@@ -396,7 +389,6 @@ Supports:
         1024
       ).toFixed(1)} KB`;
     }
-
 
     if (
       value <
@@ -413,7 +405,6 @@ Supports:
         )
       ).toFixed(1)} MB`;
     }
-
 
     return `${(
       value /
@@ -470,12 +461,10 @@ Supports:
       )
         .toLowerCase();
 
-
     const ext =
       getExtension(
         file?.name
       );
-
 
     if (
       mime.startsWith(
@@ -488,7 +477,6 @@ Supports:
       return "image";
     }
 
-
     if (
       mime.startsWith(
         "audio/"
@@ -499,7 +487,6 @@ Supports:
     ) {
       return "audio";
     }
-
 
     if (
       mime.startsWith(
@@ -512,7 +499,6 @@ Supports:
       return "video";
     }
 
-
     if (
       mime ===
         "application/pdf" ||
@@ -523,7 +509,6 @@ Supports:
       return "document";
     }
 
-
     if (
       EXTENSIONS.spreadsheet.has(
         ext
@@ -531,7 +516,6 @@ Supports:
     ) {
       return "spreadsheet";
     }
-
 
     if (
       EXTENSIONS.presentation.has(
@@ -541,7 +525,6 @@ Supports:
       return "presentation";
     }
 
-
     if (
       EXTENSIONS.archive.has(
         ext
@@ -549,7 +532,6 @@ Supports:
     ) {
       return "archive";
     }
-
 
     if (
       EXTENSIONS.code.has(
@@ -559,7 +541,6 @@ Supports:
       return "code";
     }
 
-
     if (
       EXTENSIONS.data.has(
         ext
@@ -568,7 +549,6 @@ Supports:
       return "data";
     }
 
-
     if (
       mime.startsWith(
         "text/"
@@ -576,7 +556,6 @@ Supports:
     ) {
       return "text";
     }
-
 
     return "unknown";
   }
@@ -639,7 +618,6 @@ Supports:
     let total =
       0;
 
-
     for (
       const item
       of state.items.values()
@@ -649,7 +627,6 @@ Supports:
         item.size ||
         0;
     }
-
 
     return total;
   }
@@ -676,7 +653,6 @@ Supports:
       };
     }
 
-
     if (
       file.size <=
       0
@@ -690,7 +666,6 @@ Supports:
           `${file.name} is empty.`
       };
     }
-
 
     if (
       file.size >
@@ -708,7 +683,6 @@ Supports:
       };
     }
 
-
     if (
       state.items.size >=
       CONFIG.maxFiles
@@ -722,7 +696,6 @@ Supports:
           `You can attach up to ${CONFIG.maxFiles} files.`
       };
     }
-
 
     if (
       getTotalSize() +
@@ -740,7 +713,6 @@ Supports:
           )}.`
       };
     }
-
 
     return {
       valid:
@@ -776,7 +748,6 @@ Supports:
       }
     }
 
-
     return false;
   }
 
@@ -793,7 +764,6 @@ Supports:
       getCategory(
         file
       );
-
 
     return {
 
@@ -909,7 +879,6 @@ Supports:
       return null;
     }
 
-
     try {
 
       return URL.createObjectURL(
@@ -938,39 +907,31 @@ Supports:
       case "queued":
         return "Queued";
 
-
       case "authorizing":
         return "Preparing…";
-
 
       case "uploading":
         return `Uploading ${Math.round(
           item.progress
         )}%`;
 
-
       case "uploaded":
         return "Uploaded";
-
 
       case "processing":
         return "Reading file…";
 
-
       case "queued-processing":
         return "Processing…";
 
-
       case "ready":
         return "Ready";
-
 
       case "error":
         return (
           item.error ||
           "Couldn't process"
         );
-
 
       default:
         return item.status;
@@ -992,7 +953,6 @@ Supports:
           `[data-attachment-id="${item.id}"]`
         );
 
-
     if (!element) {
 
       element =
@@ -1000,20 +960,16 @@ Supports:
           "div"
         );
 
-
       element.className =
         "attachment-chip";
 
-
       element.dataset.attachmentId =
         item.id;
-
 
       attachmentList.appendChild(
         element
       );
     }
-
 
     const preview =
       item.previewUrl
@@ -1040,10 +996,8 @@ Supports:
           </div>
         `;
 
-
     element.dataset.status =
       item.status;
-
 
     element.innerHTML = `
       ${preview}
@@ -1142,7 +1096,6 @@ Supports:
       </button>
     `;
 
-
     try {
 
       window
@@ -1166,17 +1119,14 @@ Supports:
           id
         );
 
-
       if (item) {
         renderItem(item);
       }
     }
 
-
     attachmentList.hidden =
       state.items.size ===
       0;
-
 
     emitState();
   }
@@ -1267,7 +1217,6 @@ Supports:
           serializeItem
         );
 
-
     window.dispatchEvent(
       new CustomEvent(
         "neyo:attachments-change",
@@ -1289,7 +1238,6 @@ Supports:
       "[NEYO Attachments]",
       message
     );
-
 
     window.dispatchEvent(
       new CustomEvent(
@@ -1317,11 +1265,9 @@ Supports:
         files || []
       );
 
-
     if (!incoming.length) {
       return;
     }
-
 
     for (
       const file
@@ -1342,12 +1288,10 @@ Supports:
         continue;
       }
 
-
       const validation =
         validateFile(
           file
         );
-
 
       if (!validation.valid) {
 
@@ -1358,34 +1302,28 @@ Supports:
         continue;
       }
 
-
       const item =
         createItem(
           file
         );
-
 
       item.previewUrl =
         createPreviewUrl(
           item
         );
 
-
       state.items.set(
         item.id,
         item
       );
 
-
       state.order.push(
         item.id
       );
 
-
       renderItem(
         item
       );
-
 
       /*
       Fire pipeline asynchronously.
@@ -1395,7 +1333,6 @@ Supports:
         item.id
       );
     }
-
 
     renderAll();
   }
@@ -1408,6 +1345,17 @@ Supports:
   async function createUploadSession(
     item
   ) {
+
+    console.log(
+      "[NEYO Attachments] creating upload session",
+      {
+        name: item?.name,
+        size: item?.size,
+        mime: item?.mime,
+        category: item?.category,
+        id: item?.id
+      }
+    );
 
     const response =
       await fetch(
@@ -1432,31 +1380,35 @@ Supports:
             JSON.stringify({
 
               name:
-                item.name,
+                item?.name ||
+                "",
 
               size:
-                item.size,
+                Number(
+                  item?.size
+                ) ||
+                0,
 
               mime:
-                item.mime,
+                item?.mime ||
+                "application/octet-stream",
 
               category:
-                item.category,
+                item?.category ||
+                "unknown",
 
               clientAttachmentId:
-                item.id
+                item?.id ||
+                ""
             })
         }
       );
 
-
     const raw =
       await response.text();
 
-
     let data =
       null;
-
 
     try {
 
@@ -1467,6 +1419,13 @@ Supports:
 
     } catch {}
 
+    console.log(
+      "[NEYO Attachments] upload session response",
+      {
+        status: response.status,
+        data
+      }
+    );
 
     if (!response.ok) {
 
@@ -1476,7 +1435,6 @@ Supports:
         `Upload authorization failed (${response.status})`
       );
     }
-
 
     if (
       !data?.uploadId ||
@@ -1489,7 +1447,6 @@ Supports:
         "Invalid upload authorization response."
       );
     }
-
 
     return data;
   }
@@ -1524,10 +1481,8 @@ Supports:
           return;
         }
 
-
         const xhr =
           new XMLHttpRequest();
-
 
         xhr.open(
           "PUT",
@@ -1535,10 +1490,8 @@ Supports:
           true
         );
 
-
         xhr.timeout =
           CONFIG.uploadTimeoutMs;
-
 
         /*
         Supabase signed upload accepts the raw file.
@@ -1550,7 +1503,6 @@ Supports:
           "application/octet-stream"
         );
 
-
         xhr.upload.onprogress =
           event => {
 
@@ -1559,7 +1511,6 @@ Supports:
             ) {
               return;
             }
-
 
             item.progress =
               clamp(
@@ -1572,12 +1523,10 @@ Supports:
                 100
               );
 
-
             renderItem(
               item
             );
           };
-
 
         xhr.onload =
           () => {
@@ -1596,14 +1545,12 @@ Supports:
               return;
             }
 
-
             reject(
               new Error(
                 `Storage upload failed (${xhr.status}).`
               )
             );
           };
-
 
         xhr.onerror =
           () => {
@@ -1615,7 +1562,6 @@ Supports:
             );
           };
 
-
         xhr.ontimeout =
           () => {
 
@@ -1625,7 +1571,6 @@ Supports:
               )
             );
           };
-
 
         xhr.send(
           item.file
@@ -1646,7 +1591,6 @@ Supports:
     const controller =
       new AbortController();
 
-
     const timer =
       setTimeout(
         () => {
@@ -1656,7 +1600,6 @@ Supports:
         },
         CONFIG.processTimeoutMs
       );
-
 
     try {
 
@@ -1706,14 +1649,11 @@ Supports:
           }
         );
 
-
       const raw =
         await response.text();
 
-
       let data =
         null;
-
 
       try {
 
@@ -1723,7 +1663,6 @@ Supports:
           );
 
       } catch {}
-
 
       if (
         response.status ===
@@ -1739,7 +1678,6 @@ Supports:
         };
       }
 
-
       if (!response.ok) {
 
         throw new Error(
@@ -1749,7 +1687,6 @@ Supports:
         );
       }
 
-
       return {
         queued:
           false,
@@ -1757,7 +1694,6 @@ Supports:
         data:
           data || {}
       };
-
 
     } finally {
 
@@ -1781,11 +1717,9 @@ Supports:
         id
       );
 
-
     if (!item) {
       return false;
     }
-
 
     try {
 
@@ -1802,17 +1736,14 @@ Supports:
       item.progress =
         0;
 
-
       renderItem(
         item
       );
-
 
       const session =
         await createUploadSession(
           item
         );
-
 
       if (
         !state.items.has(
@@ -1821,7 +1752,6 @@ Supports:
       ) {
         return false;
       }
-
 
       item.uploadId =
         session.uploadId;
@@ -1835,7 +1765,6 @@ Supports:
       item.signedToken =
         session.token;
 
-
       /* -------------------------------------------------
          UPLOAD
          ------------------------------------------------- */
@@ -1843,17 +1772,14 @@ Supports:
       item.status =
         "uploading";
 
-
       renderItem(
         item
       );
-
 
       await uploadToSignedUrl(
         item,
         session
       );
-
 
       if (
         !state.items.has(
@@ -1863,18 +1789,15 @@ Supports:
         return false;
       }
 
-
       item.progress =
         100;
 
       item.status =
         "uploaded";
 
-
       renderItem(
         item
       );
-
 
       /* -------------------------------------------------
          PROCESS
@@ -1883,17 +1806,14 @@ Supports:
       item.status =
         "processing";
 
-
       renderItem(
         item
       );
-
 
       const processing =
         await requestProcessing(
           item
         );
-
 
       if (
         !state.items.has(
@@ -1903,20 +1823,16 @@ Supports:
         return false;
       }
 
-
       const data =
         processing.data;
-
 
       item.processId =
         data.processId ||
         null;
 
-
       item.documentId =
         data.documentId ||
         null;
-
 
       /*
       202 = large file queued.
@@ -1933,11 +1849,9 @@ Supports:
         item.ready =
           false;
 
-
         item.stats =
           data.stats ||
           null;
-
 
         item.warnings =
           Array.isArray(
@@ -1946,14 +1860,11 @@ Supports:
             ? data.warnings
             : [];
 
-
         renderItem(
           item
         );
 
-
         emitState();
-
 
         debug(
           "Attachment queued",
@@ -1966,10 +1877,8 @@ Supports:
           }
         );
 
-
         return true;
       }
-
 
       /* -------------------------------------------------
          NORMALIZED RESPONSE
@@ -1979,7 +1888,6 @@ Supports:
         data.document ||
         null;
 
-
       item.chunks =
         Array.isArray(
           data.chunks
@@ -1987,16 +1895,13 @@ Supports:
           ? data.chunks
           : [];
 
-
       item.stats =
         data.stats ||
         null;
 
-
       item.extraction =
         data.extraction ||
         null;
-
 
       item.warnings =
         Array.isArray(
@@ -2005,12 +1910,10 @@ Supports:
           ? data.warnings
           : [];
 
-
       item.ready =
         Boolean(
           data.ready
         );
-
 
       if (
         data.ready
@@ -2034,14 +1937,11 @@ Supports:
           true;
       }
 
-
       renderItem(
         item
       );
 
-
       emitState();
-
 
       debug(
         "Attachment ready",
@@ -2061,9 +1961,7 @@ Supports:
         }
       );
 
-
       return true;
-
 
     } catch (error) {
 
@@ -2075,14 +1973,11 @@ Supports:
         return false;
       }
 
-
       item.status =
         "error";
 
-
       item.ready =
         false;
-
 
       item.error =
         error?.name ===
@@ -2093,19 +1988,15 @@ Supports:
           : error?.message ||
             "Couldn't process this file.";
 
-
       renderItem(
         item
       );
 
-
       emitState();
-
 
       emitError(
         item.error
       );
-
 
       return false;
     }
@@ -2125,11 +2016,9 @@ Supports:
         id
       );
 
-
     if (!item) {
       return;
     }
-
 
     /*
     Start clean.
@@ -2175,7 +2064,6 @@ Supports:
     item.error =
       null;
 
-
     processPipeline(
       id
     );
@@ -2195,11 +2083,9 @@ Supports:
         id
       );
 
-
     if (!item) {
       return false;
     }
-
 
     if (
       item.previewUrl
@@ -2214,11 +2100,9 @@ Supports:
       } catch {}
     }
 
-
     state.items.delete(
       id
     );
-
 
     state.order =
       state.order.filter(
@@ -2226,16 +2110,13 @@ Supports:
           value !== id
       );
 
-
     attachmentList
       .querySelector(
         `[data-attachment-id="${id}"]`
       )
       ?.remove();
 
-
     renderAll();
-
 
     window.dispatchEvent(
       new CustomEvent(
@@ -2254,7 +2135,6 @@ Supports:
         }
       )
     );
-
 
     return true;
   }
@@ -2382,7 +2262,6 @@ Supports:
       }
     );
 
-
   fileInput.addEventListener(
     "change",
     async event => {
@@ -2390,7 +2269,6 @@ Supports:
       await addFiles(
         event.target.files
       );
-
 
       /*
       Allow selecting same file again
@@ -2423,7 +2301,6 @@ Supports:
       );
   }
 
-
   dropZone.addEventListener(
     "dragenter",
     event => {
@@ -2436,20 +2313,16 @@ Supports:
         return;
       }
 
-
       event.preventDefault();
-
 
       state.dragging =
         true;
-
 
       dropZone.classList.add(
         "is-file-dragging"
       );
     }
   );
-
 
   dropZone.addEventListener(
     "dragover",
@@ -2463,9 +2336,7 @@ Supports:
         return;
       }
 
-
       event.preventDefault();
-
 
       if (
         event.dataTransfer
@@ -2476,7 +2347,6 @@ Supports:
       }
     }
   );
-
 
   dropZone.addEventListener(
     "dragleave",
@@ -2491,17 +2361,14 @@ Supports:
         return;
       }
 
-
       state.dragging =
         false;
-
 
       dropZone.classList.remove(
         "is-file-dragging"
       );
     }
   );
-
 
   dropZone.addEventListener(
     "drop",
@@ -2515,18 +2382,14 @@ Supports:
         return;
       }
 
-
       event.preventDefault();
-
 
       state.dragging =
         false;
 
-
       dropZone.classList.remove(
         "is-file-dragging"
       );
-
 
       await addFiles(
         event.dataTransfer.files
@@ -2546,15 +2409,12 @@ Supports:
       const clipboard =
         event.clipboardData;
 
-
       if (!clipboard) {
         return;
       }
 
-
       const files =
         [];
-
 
       for (
         const clipboardItem
@@ -2568,10 +2428,8 @@ Supports:
           continue;
         }
 
-
         const file =
           clipboardItem.getAsFile();
-
 
         if (file) {
 
@@ -2581,13 +2439,11 @@ Supports:
         }
       }
 
-
       if (
         !files.length
       ) {
         return;
       }
-
 
       await addFiles(
         files
@@ -2609,27 +2465,22 @@ Supports:
           "[data-action]"
         );
 
-
       if (!button) {
         return;
       }
-
 
       const chip =
         button.closest(
           "[data-attachment-id]"
         );
 
-
       const id =
         chip?.dataset
           ?.attachmentId;
 
-
       if (!id) {
         return;
       }
-
 
       if (
         button.dataset.action ===
@@ -2640,7 +2491,6 @@ Supports:
           id
         );
       }
-
 
       if (
         button.dataset.action ===
@@ -2677,7 +2527,6 @@ Supports:
 
       getReady,
 
-
       hasPending:
         () =>
           getAll()
@@ -2695,7 +2544,6 @@ Supports:
                 )
             ),
 
-
       hasErrors:
         () =>
           getAll()
@@ -2704,7 +2552,6 @@ Supports:
                 item.status ===
                 "error"
             ),
-
 
       getState:
         () => ({
@@ -2725,6 +2572,19 @@ Supports:
 
 
   /* =====================================================
+     PUBLIC CLEAR REQUEST (from composer.js)
+     ===================================================== */
+
+  window.addEventListener(
+    "neyo:attachments-clear-request",
+    () => {
+
+      clearAttachments();
+    }
+  );
+
+
+  /* =====================================================
      INIT
      ===================================================== */
 
@@ -2733,14 +2593,11 @@ Supports:
     "*/*"
   );
 
-
   fileInput.multiple =
     true;
 
-
   attachmentList.hidden =
     true;
-
 
   debug(
     "Universal signed-upload attachment system ready",

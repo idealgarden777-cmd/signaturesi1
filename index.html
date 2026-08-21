@@ -373,10 +373,21 @@
             <i data-lucide="brain-circuit" size="16"></i><span>NEYO Personalities</span>
           </div>
         </div>
-        <input type="file" id="hiddenFileInput" multiple style="display: none;">
+
+        <!-- NEW: attachment input with updated ID -->
+        <input
+          type="file"
+          id="attachmentInput"
+          multiple
+          hidden
+        >
 
         <div class="glass-input-container" id="glassInputContainer">
-          <div class="attached-chips-wrapper" id="attachedChipsWrapper"></div>
+          <!-- NEW: attachment list container with updated ID -->
+          <div
+            class="attached-chips-wrapper"
+            id="attachmentList"
+          ></div>
 
           <!-- EXPAND BUTTON -->
           <button
@@ -393,9 +404,10 @@
           </button>
 
           <div class="composer-input-row">
+            <!-- NEW: attachment button with updated ID -->
             <button
               class="attach-btn"
-              id="attachBtn"
+              id="attachmentBtn"
               title="Add Attachments"
               type="button"
               data-tooltip="Attach files"
@@ -1564,10 +1576,10 @@
   <!-- END #neyoVoiceMode -->
 
   <!-- ========================================================= -->
-  <!-- SCRIPTS — FINAL LOCKED ORDER WITH WIZI                    -->
+  <!-- SCRIPTS — UPDATED WITH NEW ATTACHMENT/CHAT MODULES        -->
   <!-- ========================================================= -->
 
-  <!-- Main working app -->
+  <!-- Main working app (legacy, will be phased out) -->
   <script src="/neo.js?v=86"></script>
 
   <!-- Model menu (v5) -->
@@ -1598,7 +1610,7 @@
     src="/js/characters/zadi.js?v=1"
   ></script>
 
-  <!-- WIZI character (new) -->
+  <!-- WIZI character -->
   <script
     type="module"
     src="/js/characters/wizi.js?v=1"
@@ -1636,12 +1648,37 @@
     src="/js/components/character-picker.js?v=1"
   ></script>
 
+  <!-- ===================================================== -->
+  <!-- NEW CORE CHAT + ATTACHMENT MODULES                    -->
+  <!-- ===================================================== -->
+
+  <!-- Composer state -->
+  <script
+    type="module"
+    src="/js/components/composer.js?v=2"
+  ></script>
+
+  <!-- Universal attachments -->
+  <script
+    type="module"
+    src="/js/components/attachments.js?v=2"
+  ></script>
+
+  <!-- Chat core -->
+  <script
+    type="module"
+    src="/js/components/chat.js?v=3"
+  ></script>
+
+  <!-- Send / Stop controller -->
+  <script
+    type="module"
+    src="/js/components/send-state.js?v=3"
+  ></script>
+
   <!-- Native tooltips (restored) -->
   <script type="module" src="/js/components/native-tooltips.js?v=1"></script>
   <script type="module" src="/js/components/tooltip-registry.js?v=2"></script>
-
-  <!-- Send state (restored, v2) -->
-  <script type="module" src="/js/components/send-state.js?v=2"></script>
 
   <!-- Ads module (v3) — handles Monetag Vignette + Onclick for Free users only -->
   <script type="module" src="/js/components/ads.js?v=3"></script>

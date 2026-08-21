@@ -1746,3 +1746,265 @@ body.dark
       none !important;
   }
 }
+/* =====================================================
+   ZADI — CHARACTER #2
+   Confident / energetic / expressive
+   ===================================================== */
+
+#neyoMascot[data-character="zadi"] {
+  --neyo-surface-top:
+    rgba(255, 253, 249, 0.998);
+
+  --neyo-surface-bottom:
+    rgba(246, 242, 236, 0.992);
+
+  --neyo-border:
+    rgba(30, 24, 20, 0.07);
+
+  --neyo-shadow-main:
+    rgba(0, 0, 0, 0.078);
+
+  --neyo-shadow-soft:
+    rgba(0, 0, 0, 0.032);
+
+  --neyo-ink:
+    rgba(18, 15, 14, 0.975);
+}
+
+
+/* Soft diamond silhouette */
+
+#neyoMascot[data-character="zadi"]
+.neyo-mascot-face {
+  border-radius:
+    34% 24% 34% 24%;
+
+  transform:
+    scale(
+      var(--neyo-character-face-scale)
+    )
+    rotate(4deg);
+
+  box-shadow:
+    0 20px 50px
+    rgba(0, 0, 0, 0.078),
+
+    0 5px 16px
+    rgba(0, 0, 0, 0.03),
+
+    inset 0 1px 0
+    rgba(255, 255, 255, 0.95);
+}
+
+
+/* Counter-rotate features so face stays readable */
+
+#neyoMascot[data-character="zadi"]
+.neyo-mascot-features {
+  transform:
+    rotate(-4deg);
+}
+
+
+/* Zadi eyes slightly more expressive */
+
+#neyoMascot[data-character="zadi"]
+.neyo-eye {
+  top:
+    33%;
+}
+
+
+#neyoMascot[data-character="zadi"]
+.neyo-eye-left {
+  left:
+    20%;
+}
+
+
+#neyoMascot[data-character="zadi"]
+.neyo-eye-right {
+  right:
+    20%;
+}
+
+
+/* Friendly Zadi */
+
+#neyoMascot[data-character="zadi"][data-mood="friendly"]
+.neyo-eye-core {
+  transform:
+    scale(1.04);
+}
+
+
+/* Happy / excited */
+
+#neyoMascot[data-character="zadi"][data-mood="happy"]
+.neyo-eye,
+
+#neyoMascot[data-character="zadi"][data-mood="excited"]
+.neyo-eye {
+  scale:
+    1.06;
+}
+
+
+/* Curious asymmetry stronger */
+
+#neyoMascot[data-character="zadi"][data-mood="curious"]
+.neyo-eye-left {
+  transform:
+    translate(
+      var(--neyo-gaze-x),
+      calc(
+        var(--neyo-gaze-y)
+        + 2px
+      )
+    )
+    rotate(-6deg)
+    scale(1.04);
+}
+
+
+#neyoMascot[data-character="zadi"][data-mood="curious"]
+.neyo-eye-right {
+  transform:
+    translate(
+      var(--neyo-gaze-x),
+      calc(
+        var(--neyo-gaze-y)
+        - 2px
+      )
+    )
+    rotate(6deg)
+    scale(0.96);
+}
+
+
+/* Zadi mouth sits slightly higher */
+
+#neyoMascot[data-character="zadi"]
+.neyo-mouth {
+  top:
+    60.5%;
+
+  width:
+    39%;
+
+  gap:
+    4.6%;
+}
+
+
+/* Zadi speaking is slightly wider */
+
+#neyoMascot[data-character="zadi"][data-mouth="speak-medium"]
+.neyo-mouth {
+  width:
+    42%;
+}
+
+
+#neyoMascot[data-character="zadi"][data-mouth="speak-active"]
+.neyo-mouth {
+  width:
+    46%;
+}
+
+
+/* Playful smirk stronger */
+
+#neyoMascot[data-character="zadi"][data-mouth="smirk"]
+.neyo-mouth {
+  transform:
+    translateX(-50%)
+    rotate(-5deg)
+    translateY(-1px);
+}
+
+
+/* Thinking shape slightly sharper */
+
+#neyoMascot[data-character="zadi"][data-phase="thinking"]
+.neyo-mascot-face {
+  border-radius:
+    31% 22% 31% 22%;
+}
+
+
+/* Speaking adds tiny presence */
+
+#neyoMascot[data-character="zadi"][data-phase="speaking"]
+.neyo-mascot-face {
+  box-shadow:
+    0 22px 54px
+    rgba(0, 0, 0, 0.082),
+
+    0 0
+    calc(
+      4px +
+      (
+        var(--neyo-output-level)
+        * 11px
+      )
+    )
+    rgba(
+      30,
+      22,
+      18,
+      calc(
+        0.008 +
+        (
+          var(--neyo-output-level)
+          * 0.028
+        )
+      )
+    ),
+
+    inset 0 1px 0
+    rgba(255, 255, 255, 0.96);
+}
+
+
+/* =====================================================
+   ZADI — PICKER PREVIEW
+   ===================================================== */
+
+.character-picker-preview[data-character="zadi"]
+.character-picker-face {
+  border-radius:
+    34% 24% 34% 24%;
+
+  transform:
+    rotate(4deg);
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(255, 253, 249, 0.995),
+      rgba(246, 242, 236, 0.985)
+    );
+}
+
+
+.character-picker-preview[data-character="zadi"]
+.character-picker-eye-left {
+  transform:
+    rotate(-4deg);
+}
+
+
+.character-picker-preview[data-character="zadi"]
+.character-picker-eye-right {
+  transform:
+    rotate(4deg);
+}
+
+
+.character-picker-preview[data-character="zadi"]
+.character-picker-mouth {
+  transform:
+    translateX(-50%)
+    rotate(-2deg);
+}

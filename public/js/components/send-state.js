@@ -10,6 +10,12 @@ Purpose:
 - Reliable Enter-to-send
 - Chat.js owns actual request + abort
 - No fetch monkey patch
+
+Fixes applied:
+- getText() reads textarea directly (no NeyoComposer dependency)
+- canSend() uses live textarea value
+- Input event listener triggers re-render
+- Attachment ready state is checked via NeyoAttachments.getReady()
 =========================================================
 */
 
@@ -42,14 +48,11 @@ Purpose:
 
 
   /* =====================================================
-     TEXT
+     TEXT — direct read from textarea
      ===================================================== */
 
   function getText() {
     return (
-      window.NeyoComposer
-        ?.getTrimmedValue
-        ?.() ||
       textarea?.value?.trim() ||
       ""
     );
@@ -83,13 +86,15 @@ Purpose:
 
   function canSend() {
     if (isGenerating) {
+      return true; // stop button always enabled
+    }
+
+    const text = getText();
+    if (text.length > 0) {
       return true;
     }
 
-    return (
-      Boolean(getText()) ||
-      hasReadyAttachment()
-    );
+    return hasReadyAttachment();
   }
 
 
@@ -173,8 +178,7 @@ Purpose:
       return;
     }
 
-    const text =
-      getText();
+    const text = getText();
 
     window.dispatchEvent(
       new CustomEvent(
@@ -260,7 +264,7 @@ Purpose:
 
 
   /* =====================================================
-     COMPOSER CHANGE
+     COMPOSER CHANGE — kept for compatibility
      ===================================================== */
 
   window.addEventListener(
@@ -270,7 +274,7 @@ Purpose:
 
 
   /* =====================================================
-     ATTACHMENTS
+     ATTACHMENTS CHANGE
      ===================================================== */
 
   window.addEventListener(
@@ -280,7 +284,17 @@ Purpose:
 
 
   /* =====================================================
-     GENERATION
+     DIRECT INPUT EVENT — fixes immediate text update
+     ===================================================== */
+
+  textarea?.addEventListener(
+    "input",
+    render
+  );
+
+
+  /* =====================================================
+     GENERATION STATE EVENTS
      ===================================================== */
 
   window.addEventListener(
@@ -291,13 +305,11 @@ Purpose:
     }
   );
 
-
   const finish =
     () => {
       isGenerating = false;
       render();
     };
-
 
   window.addEventListener(
     "neyo:chat-send-end",

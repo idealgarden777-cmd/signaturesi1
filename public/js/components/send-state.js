@@ -1,7 +1,7 @@
 /*
 =========================================================
 NEYO — SEND / STOP STATE CONTROLLER
-FINAL v4 — CONFLICT FREE
+FINAL v5 — CHAT-FIRST + ATTACHMENT-SAFE
 
 FILE:
 public/js/components/send-state.js
@@ -12,9 +12,10 @@ OWNS
 ✅ Enter to send
 ✅ Shift+Enter newline
 ✅ Stop-generation button state
-✅ Attachment pending/error gating
-✅ Send button visual state
-✅ Queue send while attachment is processing
+✅ Attachment-aware send state
+✅ Text chat continues even if attachment fails
+✅ Ready attachments only are sent
+✅ Pending/error attachments never block normal text
 ✅ Dispatch neyo:chat-send-request
 ✅ Dispatch neyo:chat-stop-request
 
@@ -29,9 +30,23 @@ DOES NOT OWN
 ❌ Mascot
 ❌ neo.js
 
-IMPORTANT
+KEY BEHAVIOR
 ---------------------------------------------------------
-This module is the ONLY NEW MODULE that owns #sendBtn.
+TEXT + failed attachment:
+→ send text only
+
+TEXT + pending attachment:
+→ send text only immediately
+
+NO TEXT + ready attachment:
+→ send attachment
+
+NO TEXT + pending attachment:
+→ wait / disable
+
+NO TEXT + failed attachment:
+→ disable until retry/remove
+
 =========================================================
 */
 
@@ -44,7 +59,7 @@ This module is the ONLY NEW MODULE that owns #sendBtn.
      ===================================================== */
 
   const VERSION =
-    "neyo-send-state-final-v4";
+    "neyo-send-state-final-v5";
 
 
   if (
@@ -105,9 +120,6 @@ This module is the ONLY NEW MODULE that owns #sendBtn.
 
   const CONFIG =
     Object.freeze({
-      queuedSendTimeoutMs:
-        180_000,
-
       debug:
         true
     });
@@ -132,18 +144,6 @@ This module is the ONLY NEW MODULE that owns #sendBtn.
 
     readyAttachmentCount:
       0,
-
-    queuedSend:
-      false,
-
-    queuedText:
-      "",
-
-    queuedAt:
-      0,
-
-    queueTimer:
-      null,
 
     composing:
       false
@@ -208,8 +208,15 @@ This module is the ONLY NEW MODULE that owns #sendBtn.
   }
 
 
+  function hasText() {
+    return Boolean(
+      getInputText()
+    );
+  }
+
+
   /* =====================================================
-     ATTACHMENTS
+     ATTACHMENT CONTROLLER
      ===================================================== */
 
   function getAttachmentController() {
@@ -376,7 +383,7 @@ This module is the ONLY NEW MODULE that owns #sendBtn.
 
 
   /* =====================================================
-     BUTTON ICONS
+     ICONS
      ===================================================== */
 
   function renderSendIcon() {
@@ -391,7 +398,7 @@ This module is the ONLY NEW MODULE that owns #sendBtn.
 
     sendBtn.setAttribute(
       "title",
-      "Send Message"
+      "Send message"
     );
 
 
@@ -465,23 +472,16 @@ This module is the ONLY NEW MODULE that owns #sendBtn.
     }
 
 
-    if (
-      state.attachmentsPending
-    ) {
-      return false;
-    }
-
-
-    if (
-      state.attachmentsHaveErrors
-    ) {
-      return false;
-    }
-
-
     const text =
       getInputText();
 
+
+    /*
+    -------------------------------------------------------
+    Chat-first rule:
+    if user typed text, attachment state never blocks send.
+    -------------------------------------------------------
+    */
 
     if (
       text
@@ -490,10 +490,22 @@ This module is the ONLY NEW MODULE that owns #sendBtn.
     }
 
 
-    return (
+    /*
+    -------------------------------------------------------
+    No text:
+    only ready attachments can be sent.
+    -------------------------------------------------------
+    */
+
+    if (
       state.readyAttachmentCount >
       0
-    );
+    ) {
+      return true;
+    }
+
+
+    return false;
   }
 
 
@@ -534,9 +546,26 @@ This module is the ONLY NEW MODULE that owns #sendBtn.
     );
 
 
+    const text =
+      getInputText();
+
+
+    /*
+    -------------------------------------------------------
+    Waiting visual only when:
+    - there is no text
+    - attachments are pending
+    -------------------------------------------------------
+    */
+
+    const waitingForAttachment =
+      !text &&
+      state.attachmentsPending;
+
+
     sendBtn.classList.toggle(
       "is-waiting-attachments",
-      state.attachmentsPending
+      waitingForAttachment
     );
 
 
@@ -544,6 +573,63 @@ This module is the ONLY NEW MODULE that owns #sendBtn.
       !canSendNow();
 
 
+    /*
+    -------------------------------------------------------
+    Tooltip behavior
+    -------------------------------------------------------
+    */
+
+    if (
+      text
+    ) {
+      sendBtn.setAttribute(
+        "title",
+        "Send message"
+      );
+
+
+      sendBtn.setAttribute(
+        "data-tooltip",
+        "Send message"
+      );
+
+
+      sendBtn.setAttribute(
+        "aria-label",
+        "Send message"
+      );
+
+
+      return;
+    }
+
+
+    if (
+      state.readyAttachmentCount >
+      0
+    ) {
+      sendBtn.setAttribute(
+        "title",
+        "Send attachment"
+      );
+
+
+      sendBtn.setAttribute(
+        "data-tooltip",
+        "Send attachment"
+      );
+
+
+      sendBtn.setAttribute(
+        "aria-label",
+        "Send attachment"
+      );
+
+
+      return;
+    }
+
+
     if (
       state.attachmentsPending
     ) {
@@ -564,12 +650,17 @@ This module is the ONLY NEW MODULE that owns #sendBtn.
         "Preparing attachment"
       );
 
-    } else if (
+
+      return;
+    }
+
+
+    if (
       state.attachmentsHaveErrors
     ) {
       sendBtn.setAttribute(
         "title",
-        "Fix attachment error"
+        "Attachment failed"
       );
 
 
@@ -584,111 +675,6 @@ This module is the ONLY NEW MODULE that owns #sendBtn.
         "Retry or remove failed attachment"
       );
     }
-  }
-
-
-  /* =====================================================
-     CLEAR QUEUED SEND
-     ===================================================== */
-
-  function clearQueuedSend() {
-    state.queuedSend =
-      false;
-
-
-    state.queuedText =
-      "";
-
-
-    state.queuedAt =
-      0;
-
-
-    if (
-      state.queueTimer
-    ) {
-      window.clearTimeout(
-        state.queueTimer
-      );
-
-
-      state.queueTimer =
-        null;
-    }
-  }
-
-
-  /* =====================================================
-     QUEUE SEND
-     ===================================================== */
-
-  function queueSend(
-    text
-  ) {
-    state.queuedSend =
-      true;
-
-
-    state.queuedText =
-      text;
-
-
-    state.queuedAt =
-      Date.now();
-
-
-    if (
-      state.queueTimer
-    ) {
-      window.clearTimeout(
-        state.queueTimer
-      );
-    }
-
-
-    state.queueTimer =
-      window.setTimeout(
-        () => {
-          if (
-            !state.queuedSend
-          ) {
-            return;
-          }
-
-
-          clearQueuedSend();
-
-
-          emit(
-            "neyo:send-queue-expired",
-            {
-              message:
-                "Attachment preparation took too long."
-            }
-          );
-
-
-          updateButtonState();
-        },
-        CONFIG
-          .queuedSendTimeoutMs
-      );
-
-
-    emit(
-      "neyo:send-queued",
-      {
-        text,
-
-        attachmentCount:
-          state.attachmentCount
-      }
-    );
-
-
-    debug(
-      "Send queued while attachments are processing."
-    );
   }
 
 
@@ -699,16 +685,25 @@ This module is the ONLY NEW MODULE that owns #sendBtn.
   function dispatchSend(
     text
   ) {
-    const readyAttachments =
-      getReadyAttachments();
-
-
     const cleanText =
       String(
         text ||
         ""
       ).trim();
 
+
+    const readyAttachments =
+      getReadyAttachments();
+
+
+    /*
+    -------------------------------------------------------
+    Never send pending/error attachments.
+
+    getReadyAttachments() guarantees only usable attachments
+    are handed to chat.js.
+    -------------------------------------------------------
+    */
 
     if (
       !cleanText &&
@@ -719,11 +714,64 @@ This module is the ONLY NEW MODULE that owns #sendBtn.
     }
 
 
+    const allAttachments =
+      getAllAttachments();
+
+
+    const ignoredAttachments =
+      allAttachments.filter(
+        attachment =>
+          attachment?.ready !==
+            true ||
+          attachment?.status !==
+            "ready"
+      );
+
+
+    if (
+      ignoredAttachments.length >
+      0 &&
+      cleanText
+    ) {
+      debug(
+        "Sending text while non-ready attachments are ignored.",
+        {
+          ignored:
+            ignoredAttachments.map(
+              item => ({
+                name:
+                  item.name,
+
+                status:
+                  item.status,
+
+                error:
+                  item.error ||
+                  null
+              })
+            )
+        }
+      );
+
+
+      emit(
+        "neyo:attachments-ignored-for-send",
+        {
+          count:
+            ignoredAttachments.length,
+
+          attachments:
+            ignoredAttachments
+        }
+      );
+    }
+
+
     /*
-     * Important:
-     * clear composer text only when the request
-     * is actually being handed to chat.js.
-     */
+    -------------------------------------------------------
+    Clear composer only after valid send is ready.
+    -------------------------------------------------------
+    */
 
     chatInput.value =
       "";
@@ -740,9 +788,6 @@ This module is the ONLY NEW MODULE that owns #sendBtn.
     );
 
 
-    clearQueuedSend();
-
-
     emit(
       "neyo:chat-send-request",
       {
@@ -751,6 +796,21 @@ This module is the ONLY NEW MODULE that owns #sendBtn.
 
         attachments:
           readyAttachments
+      }
+    );
+
+
+    debug(
+      "SEND_REQUEST",
+      {
+        textLength:
+          cleanText.length,
+
+        readyAttachments:
+          readyAttachments.length,
+
+        totalAttachments:
+          allAttachments.length
       }
     );
 
@@ -766,6 +826,12 @@ This module is the ONLY NEW MODULE that owns #sendBtn.
   function requestSend() {
     syncAttachmentState();
 
+
+    /*
+    -------------------------------------------------------
+    Stop generation
+    -------------------------------------------------------
+    */
 
     if (
       state.generating
@@ -784,23 +850,61 @@ This module is the ONLY NEW MODULE that owns #sendBtn.
 
 
     /*
-     * If attachments are still processing,
-     * remember intent to send instead of
-     * making user press Send again.
-     */
+    -------------------------------------------------------
+    CRITICAL FIX:
+    Text messages always send immediately.
+
+    Pending or failed attachments do NOT block normal chat.
+    -------------------------------------------------------
+    */
+
+    if (
+      text
+    ) {
+      return dispatchSend(
+        text
+      );
+    }
+
+
+    /*
+    -------------------------------------------------------
+    No text.
+
+    If a ready attachment exists, send it.
+    -------------------------------------------------------
+    */
+
+    if (
+      state.readyAttachmentCount >
+      0
+    ) {
+      return dispatchSend(
+        ""
+      );
+    }
+
+
+    /*
+    -------------------------------------------------------
+    No text + pending attachments:
+    wait for them to finish.
+    -------------------------------------------------------
+    */
 
     if (
       state.attachmentsPending
     ) {
-      if (
-        text ||
-        state.attachmentCount >
-          0
-      ) {
-        queueSend(
-          text
-        );
-      }
+      emit(
+        "neyo:send-blocked",
+        {
+          reason:
+            "attachment-pending",
+
+          message:
+            "Attachment is still preparing."
+        }
+      );
 
 
       updateButtonState();
@@ -811,8 +915,12 @@ This module is the ONLY NEW MODULE that owns #sendBtn.
 
 
     /*
-     * Do not silently ignore failed files.
-     */
+    -------------------------------------------------------
+    No text + failed attachments:
+    user must retry/remove because there is nothing else
+    to send.
+    -------------------------------------------------------
+    */
 
     if (
       state.attachmentsHaveErrors
@@ -824,7 +932,7 @@ This module is the ONLY NEW MODULE that owns #sendBtn.
             "attachment-error",
 
           message:
-            "Retry or remove failed attachments before sending."
+            "Retry or remove the failed attachment."
         }
       );
 
@@ -836,74 +944,12 @@ This module is the ONLY NEW MODULE that owns #sendBtn.
     }
 
 
-    return dispatchSend(
-      text
-    );
-  }
-
-
-  /* =====================================================
-     AUTO-FLUSH QUEUED SEND
-     ===================================================== */
-
-  function flushQueuedSendIfReady() {
-    if (
-      !state.queuedSend
-    ) {
-      return false;
-    }
-
-
-    syncAttachmentState();
-
-
-    if (
-      state.generating ||
-      state.attachmentsPending
-    ) {
-      return false;
-    }
-
-
-    if (
-      state.attachmentsHaveErrors
-    ) {
-      clearQueuedSend();
-
-
-      emit(
-        "neyo:send-blocked",
-        {
-          reason:
-            "attachment-error",
-
-          message:
-            "An attachment failed. Retry or remove it before sending."
-        }
-      );
-
-
-      return false;
-    }
-
-
-    const queuedText =
-      state.queuedText;
-
-
-    return dispatchSend(
-      queuedText
-    );
+    return false;
   }
 
 
   /* =====================================================
      SEND BUTTON
-
-     Capture phase intentionally prevents legacy
-     send handlers from also firing.
-
-     This is the new single owner of #sendBtn.
      ===================================================== */
 
   sendBtn.addEventListener(
@@ -957,8 +1003,7 @@ This module is the ONLY NEW MODULE that owns #sendBtn.
 
 
       /*
-       * IME:
-       * Do not send while user is composing.
+       * Do not send while IME composition is active.
        */
 
       if (
@@ -981,11 +1026,6 @@ This module is the ONLY NEW MODULE that owns #sendBtn.
         return;
       }
 
-
-      /*
-       * Ctrl/Cmd + Enter also sends naturally.
-       * Plain Enter sends too.
-       */
 
       event.preventDefault();
 
@@ -1053,13 +1093,6 @@ This module is the ONLY NEW MODULE that owns #sendBtn.
 
 
       updateButtonState();
-
-
-      if (
-        state.queuedSend
-      ) {
-        flushQueuedSendIfReady();
-      }
     }
   );
 
@@ -1073,12 +1106,7 @@ This module is the ONLY NEW MODULE that owns #sendBtn.
     () => {
       syncAttachmentState();
 
-
-      if (
-        state.queuedSend
-      ) {
-        flushQueuedSendIfReady();
-      }
+      updateButtonState();
     }
   );
 
@@ -1089,16 +1117,30 @@ This module is the ONLY NEW MODULE that owns #sendBtn.
 
   window.addEventListener(
     "neyo:attachment-error",
-    () => {
+    event => {
       syncAttachmentState();
 
 
-      if (
-        state.queuedSend
-      ) {
-        clearQueuedSend();
-      }
+      debug(
+        "Attachment failed but normal text chat remains available.",
+        event.detail ||
+        {}
+      );
 
+
+      updateButtonState();
+    }
+  );
+
+
+  /* =====================================================
+     ATTACHMENT REMOVED
+     ===================================================== */
+
+  window.addEventListener(
+    "neyo:attachment-removed",
+    () => {
+      syncAttachmentState();
 
       updateButtonState();
     }
@@ -1134,7 +1176,6 @@ This module is the ONLY NEW MODULE that owns #sendBtn.
 
       syncAttachmentState();
 
-
       updateButtonState();
     }
   );
@@ -1167,13 +1208,7 @@ This module is the ONLY NEW MODULE that owns #sendBtn.
         false;
 
 
-      /*
-       * chat.js keeps attachments on error,
-       * so the user can retry.
-       */
-
       syncAttachmentState();
-
 
       updateButtonState();
     }
@@ -1193,7 +1228,6 @@ This module is the ONLY NEW MODULE that owns #sendBtn.
 
       syncAttachmentState();
 
-
       updateButtonState();
     }
   );
@@ -1212,7 +1246,6 @@ This module is the ONLY NEW MODULE that owns #sendBtn.
 
       syncAttachmentState();
 
-
       updateButtonState();
     }
   );
@@ -1225,33 +1258,13 @@ This module is the ONLY NEW MODULE that owns #sendBtn.
   window.addEventListener(
     "neyo:chat-new",
     () => {
-      clearQueuedSend();
-
-
       state.generating =
         false;
 
 
       syncAttachmentState();
 
-
       updateButtonState();
-    }
-  );
-
-
-  /* =====================================================
-     PAGE CLEANUP
-     ===================================================== */
-
-  window.addEventListener(
-    "pagehide",
-    () => {
-      clearQueuedSend();
-    },
-    {
-      once:
-        true
     }
   );
 
@@ -1277,9 +1290,6 @@ This module is the ONLY NEW MODULE that owns #sendBtn.
           updateButtonState();
         },
 
-      cancelQueuedSend:
-        clearQueuedSend,
-
       getState:
         () => ({
           version:
@@ -1299,9 +1309,6 @@ This module is the ONLY NEW MODULE that owns #sendBtn.
 
           readyAttachmentCount:
             state.readyAttachmentCount,
-
-          queuedSend:
-            state.queuedSend,
 
           canSend:
             canSendNow()
@@ -1339,13 +1346,22 @@ This module is the ONLY NEW MODULE that owns #sendBtn.
 
 
   debug(
-    "FINAL v4 READY",
+    "FINAL v5 READY",
     {
       version:
         VERSION,
 
       sendButtonOwned:
         true,
+
+      chatFirst:
+        true,
+
+      failedAttachmentsBlockText:
+        false,
+
+      pendingAttachmentsBlockText:
+        false,
 
       attachmentsController:
         Boolean(

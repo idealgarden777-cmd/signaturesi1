@@ -1,91 +1,40 @@
-/*
-=========================================================
-NEYO — VOICE MODE UI v4
-ERROR SAFE + HOT CHARACTER SWITCH AWARE
-
-Owns:
-- voice mode open / close
-- status transitions
-- mic control
-- speaker control
-- camera control
-- character switch status
-- connection error status
-- end button
-- keyboard escape
-- focus handling
-
-Does NOT own:
-- Gemini connection
-- character voice selection
-- VAD
-- mascot mood intelligence
-- mascot rendering
-
-Important:
-- Voice errors DO NOT auto-close screen
-- Character hot switch DOES NOT close screen
-=========================================================
-*/
-
 (() => {
   "use strict";
 
+  const VERSION = "neyo-voice-mode-clean-v4";
+  if (window.NeyoVoiceMode?.__controller) return;
 
-  /* =====================================================
-     DOM
-     ===================================================== */
+  const $ = id => document.getElementById(id);
 
-  const shell =
-    document.getElementById(
-      "neyoVoiceMode"
-    );
-
+  const shell = $("neyoVoiceMode");
   const stage =
-    shell?.querySelector(
-      ".voice-mode-stage"
-    );
+    shell?.querySelector(".voice-mode-stage");
 
-  const statusEl =
-    document.getElementById(
-      "neyoMascotStatus"
-    );
+  const mascotSlot =
+    shell?.querySelector(".voice-mode-mascot-slot");
 
-  const micBtn =
-    document.getElementById(
-      "voiceModeMicBtn"
-    );
+  const mascot = $("neyoMascot");
+  const status = $("neyoMascotStatus");
 
-  const cameraBtn =
-    document.getElementById(
-      "voiceModeCameraBtn"
-    );
-
-  const speakerBtn =
-    document.getElementById(
-      "voiceModeSpeakerBtn"
-    );
-
-  const endBtn =
-    document.getElementById(
-      "voiceModeEndBtn"
-    );
+  const micBtn = $("voiceModeMicBtn");
+  const cameraBtn = $("voiceModeCameraBtn");
+  const speakerBtn = $("voiceModeSpeakerBtn");
+  const characterBtn = $("characterPickerBtn");
+  const endBtn = $("voiceModeEndBtn");
 
   const cameraPreview =
-    document.getElementById(
-      "neyoCameraPreview"
-    );
+    $("neyoCameraPreview");
 
   const cameraVideo =
-    document.getElementById(
-      "neyoCameraVideo"
-    );
+    $("neyoCameraVideo");
+
+  const characterPicker =
+    $("characterPicker");
 
 
-  if (!shell) {
-
+  if (!shell || !stage) {
     console.warn(
-      "[NEYO Voice Mode] Shell missing."
+      "[NEYO Voice Mode] Required DOM is missing."
     );
 
     return;
@@ -96,126 +45,19 @@ Important:
      STATE
      ===================================================== */
 
-  const state = {
-
-    open:
-      false,
-
-    closing:
-      false,
-
-    phase:
+  const STATES =
+    new Set([
       "idle",
-
-    muted:
-      false,
-
-    speakerOn:
-      true,
-
-    cameraOn:
-      false,
-
-    cameraStream:
-      null,
-
-    switchingCharacter:
-      false,
-
-    character:
-      "neyo",
-
-    voice:
-      "Kore",
-
-    error:
-      null,
-
-    status:
-      "Ready",
-
-    lastFocusedElement:
-      null
-  };
+      "listening",
+      "thinking",
+      "speaking"
+    ]);
 
 
-  let statusTimer =
-    0;
-
-  let closeTimer =
-    0;
-
-
-  /* =====================================================
-     HELPERS
-     ===================================================== */
-
-  function dispatch(
-    name,
-    detail = {}
-  ) {
-
-    window.dispatchEvent(
-      new CustomEvent(
-        name,
-        {
-          detail
-        }
-      )
-    );
-  }
-
-
-  function safeFocus(
-    element
-  ) {
-
-    try {
-
-      element?.focus?.({
-        preventScroll:
-          true
-      });
-
-    } catch {}
-  }
-
-
-  function capitalize(
-    value
-  ) {
-
-    const text =
-      String(
-        value || ""
-      );
-
-
-    if (!text) {
-      return "";
-    }
-
-
-    return (
-      text.charAt(0)
-        .toUpperCase() +
-      text.slice(1)
-    );
-  }
-
-
-  /* =====================================================
-     STATUS MAP
-     ===================================================== */
-
-  const STATUS_MAP =
+  const LABELS =
     Object.freeze({
-
       idle:
         "Ready",
-
-      connecting:
-        "Connecting…",
 
       listening:
         "Listening…",
@@ -224,644 +66,515 @@ Important:
         "Thinking…",
 
       speaking:
-        "Speaking…",
-
-      interrupted:
-        "Listening…",
-
-      switching:
-        "Switching character…",
-
-      error:
-        "Couldn't connect"
+        "Speaking…"
     });
 
 
+  let phase =
+    "idle";
+
+  let micMuted =
+    false;
+
+  let speakerEnabled =
+    true;
+
+  let cameraEnabled =
+    false;
+
+  let cameraPending =
+    false;
+
+  let cameraStream =
+    null;
+
+  let energy =
+    0;
+
+  let waveRaf =
+    0;
+
+  let previousFocus =
+    null;
+
+
+  const emit =
+    (
+      name,
+      detail = {}
+    ) =>
+
+      window.dispatchEvent(
+        new CustomEvent(
+          name,
+          {
+            detail
+          }
+        )
+      );
+
+
   /* =====================================================
-     STATUS RENDER
+     WAVEFORM
      ===================================================== */
 
-  function setStatus(
-    text,
-    {
-      immediate = false
-    } = {}
-  ) {
+  function ensureWaveform() {
 
-    const value =
-      String(
-        text || ""
-      ).trim();
+    let root =
+      shell.querySelector(
+        ".voice-mode-waveform"
+      );
 
 
-    if (!value) {
-      return;
+    if (root) {
+      return root;
     }
 
 
-    state.status =
-      value;
+    root =
+      document.createElement(
+        "div"
+      );
 
 
-    if (!statusEl) {
-      return;
-    }
+    root.className =
+      "voice-mode-waveform";
 
 
-    clearTimeout(
-      statusTimer
+    root.setAttribute(
+      "aria-hidden",
+      "true"
     );
+
+
+    for (
+      let i = 0;
+      i < 9;
+      i += 1
+    ) {
+
+      root.appendChild(
+        document.createElement(
+          "span"
+        )
+      );
+    }
 
 
     if (
-      immediate ||
-      statusEl.textContent ===
-        value
+      status?.parentNode ===
+      stage
     ) {
 
-      statusEl.classList.remove(
-        "is-leaving",
-        "is-entering"
+      stage.insertBefore(
+        root,
+        status
       );
 
+    } else if (
+      mascotSlot
+    ) {
 
-      statusEl.textContent =
-        value;
+      mascotSlot.after(
+        root
+      );
 
+    } else {
 
-      return;
+      stage.prepend(
+        root
+      );
     }
 
 
-    statusEl.classList.add(
-      "is-leaving"
-    );
+    /*
+     * voice-mode.css already contains
+     * a fallback waveform.
+     *
+     * Once real audio-energy bars exist,
+     * hide only that fallback.
+     */
+
+    if (
+      !$(
+        "neyoVoiceLiveWaveCompat"
+      )
+    ) {
+
+      const style =
+        document.createElement(
+          "style"
+        );
 
 
-    statusTimer =
-      setTimeout(
-        () => {
-
-          statusEl.textContent =
-            value;
+      style.id =
+        "neyoVoiceLiveWaveCompat";
 
 
-          statusEl.classList.remove(
-            "is-leaving"
-          );
+      style.textContent =
+        ".voice-mode-shell[data-live-waveform='true'] .voice-mode-mascot-slot::after{display:none!important}";
 
 
-          statusEl.classList.add(
-            "is-entering"
-          );
-
-
-          requestAnimationFrame(
-            () => {
-
-              requestAnimationFrame(
-                () => {
-
-                  statusEl.classList.remove(
-                    "is-entering"
-                  );
-                }
-              );
-            }
-          );
-
-        },
-        90
+      document.head.appendChild(
+        style
       );
+    }
+
+
+    shell.dataset.liveWaveform =
+      "true";
+
+
+    return root;
   }
 
 
-  /* =====================================================
-     STATUS RESOLUTION
-     ===================================================== */
-
-  function syncStatus() {
-
-    if (state.error) {
-
-      setStatus(
-        state.error
-      );
-
-      return;
-    }
+  const waveform =
+    ensureWaveform();
 
 
-    if (
-      state.switchingCharacter
-    ) {
-
-      setStatus(
-        `Switching to ${capitalize(
-          state.character
-        )}…`
-      );
-
-      return;
-    }
-
-
-    if (state.muted) {
-
-      setStatus(
-        "Microphone muted"
-      );
-
-      return;
-    }
-
-
-    if (!state.speakerOn) {
-
-      setStatus(
-        "Audio off"
-      );
-
-      return;
-    }
-
-
-    if (
-      state.phase ===
-      "speaking"
-    ) {
-
-      setStatus(
-        `${
-          capitalize(
-            state.character
+  const waveBars =
+    () =>
+      Array.from(
+        waveform
+          ?.querySelectorAll(
+            "span"
           ) ||
-          "NEYO"
-        } is speaking`
+        []
       );
 
+
+  function resetWaveform() {
+
+    energy =
+      0;
+
+
+    for (
+      const bar
+      of waveBars()
+    ) {
+
+      bar.style.transform =
+        "scaleY(.45)";
+
+
+      bar.style.opacity =
+        ".2";
+    }
+  }
+
+
+  function paintWaveform() {
+
+    waveRaf =
+      0;
+
+
+    const bars =
+      waveBars();
+
+
+    if (!bars.length) {
       return;
     }
 
 
-    setStatus(
-      STATUS_MAP[
-        state.phase
-      ] ||
-      "Ready"
+    const active =
+      phase === "listening" ||
+      phase === "speaking";
+
+
+    const base =
+      phase === "thinking"
+        ? 0.08
+        : active
+          ? 0.14
+          : 0;
+
+
+    const level =
+      Math.max(
+        base,
+        Math.min(
+          1,
+          energy
+        )
+      );
+
+
+    const center =
+      (
+        bars.length -
+        1
+      ) / 2;
+
+
+    const now =
+      performance.now();
+
+
+    bars.forEach(
+      (
+        bar,
+        index
+      ) => {
+
+        const distance =
+          Math.abs(
+            index -
+            center
+          ) /
+          Math.max(
+            1,
+            center
+          );
+
+
+        const weight =
+          1 -
+          distance *
+          0.42;
+
+
+        const motion =
+          0.9 +
+          Math.sin(
+            now *
+              0.01 +
+            index *
+              0.82
+          ) *
+          0.1;
+
+
+        const currentEnergy =
+          Math.max(
+            0,
+            Math.min(
+              1,
+              level *
+              weight *
+              motion
+            )
+          );
+
+
+        const scale =
+          phase === "idle"
+            ? 0.45
+            : 0.45 +
+              currentEnergy *
+              2.4;
+
+
+        bar.style.transform =
+          `scaleY(${
+            scale.toFixed(3)
+          })`;
+
+
+        bar.style.opacity =
+          phase === "idle"
+            ? ".18"
+            : `${
+                (
+                  0.22 +
+                  currentEnergy *
+                  0.68
+                )
+                  .toFixed(3)
+              }`;
+      }
     );
   }
 
 
-  /* =====================================================
-     PHASE
-     ===================================================== */
-
-  function setPhase(
-    phase,
-    detail = {}
+  function setEnergy(
+    value
   ) {
 
-    state.phase =
+    const number =
+      Number(
+        value
+      );
+
+
+    if (
+      !Number.isFinite(
+        number
+      )
+    ) {
+      return;
+    }
+
+
+    const next =
+      Math.max(
+        0,
+        Math.min(
+          1,
+          number
+        )
+      );
+
+
+    energy +=
+      (
+        next -
+        energy
+      ) *
+      (
+        next >
+        energy
+          ? 0.48
+          : 0.2
+      );
+
+
+    if (!waveRaf) {
+
+      waveRaf =
+        requestAnimationFrame(
+          paintWaveform
+        );
+    }
+  }
+
+
+  /* =====================================================
+     PHASE / MASCOT
+     ===================================================== */
+
+  function setState(
+    value
+  ) {
+
+    phase =
+      STATES.has(
+        value
+      )
+        ? value
+        : "idle";
+
+
+    shell.dataset.voiceState =
       phase;
 
 
-    shell.dataset.phase =
-      phase;
+    if (mascot) {
+
+      mascot.dataset.phase =
+        phase;
 
 
-    if (
-      phase !==
-      "error"
-    ) {
+      const visual =
+        {
+          idle: [
+            "friendly",
+            "arc",
+            "smile"
+          ],
 
-      state.error =
-        null;
+          listening: [
+            "attentive",
+            "open",
+            "neutral"
+          ],
+
+          thinking: [
+            "thinking",
+            "half",
+            "neutral"
+          ],
+
+          speaking: [
+            "speaking",
+            "open",
+            "talk"
+          ]
+        }[
+          phase
+        ];
+
+
+      [
+        mascot.dataset.tone,
+        mascot.dataset.eye,
+        mascot.dataset.mouth
+      ] =
+        visual;
+    }
+
+
+    if (status) {
+
+      status.textContent =
+        LABELS[
+          phase
+        ];
     }
 
 
     if (
-      detail.character
+      phase ===
+      "idle"
     ) {
 
-      state.character =
-        detail.character;
+      resetWaveform();
+
+    } else {
+
+      setEnergy(
+        phase ===
+          "thinking"
+          ? 0.08
+          : 0.14
+      );
     }
 
 
-    if (
-      detail.voice
-    ) {
+    emit(
+      "neyo:voice-mode-state",
+      {
+        state:
+          phase
+      }
+    );
 
-      state.voice =
-        detail.voice;
-    }
 
-
-    syncStatus();
+    return phase;
   }
 
 
   /* =====================================================
-     ICONS
+     OPEN / CLOSE
      ===================================================== */
 
-  function renderMicIcon() {
+  const isOpen =
+    () =>
+      shell.getAttribute(
+        "aria-hidden"
+      ) ===
+      "false";
 
-    if (!micBtn) {
-      return;
-    }
-
-
-    micBtn.innerHTML =
-      state.muted
-
-        ? `
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            aria-hidden="true"
-          >
-            <path
-              d="M9 9v3a3 3 0 0 0 4.2 2.75"
-              stroke="currentColor"
-              stroke-width="1.8"
-              stroke-linecap="round"
-            />
-
-            <path
-              d="M15 9V5a3 3 0 0 0-6 0v1"
-              stroke="currentColor"
-              stroke-width="1.8"
-              stroke-linecap="round"
-            />
-
-            <path
-              d="M5 5l14 14"
-              stroke="currentColor"
-              stroke-width="1.8"
-              stroke-linecap="round"
-            />
-
-            <path
-              d="M5 11a7 7 0 0 0 11.2 5.6"
-              stroke="currentColor"
-              stroke-width="1.8"
-              stroke-linecap="round"
-            />
-
-            <path
-              d="M12 19v3"
-              stroke="currentColor"
-              stroke-width="1.8"
-              stroke-linecap="round"
-            />
-          </svg>
-        `
-
-        : `
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            aria-hidden="true"
-          >
-            <rect
-              x="9"
-              y="3"
-              width="6"
-              height="11"
-              rx="3"
-              stroke="currentColor"
-              stroke-width="1.8"
-            />
-
-            <path
-              d="M5 11a7 7 0 0 0 14 0"
-              stroke="currentColor"
-              stroke-width="1.8"
-              stroke-linecap="round"
-            />
-
-            <path
-              d="M12 18v4"
-              stroke="currentColor"
-              stroke-width="1.8"
-              stroke-linecap="round"
-            />
-          </svg>
-        `;
-  }
-
-
-  function renderSpeakerIcon() {
-
-    if (!speakerBtn) {
-      return;
-    }
-
-
-    speakerBtn.innerHTML =
-      state.speakerOn
-
-        ? `
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            aria-hidden="true"
-          >
-            <path
-              d="M5 10v4h4l5 4V6l-5 4H5Z"
-              stroke="currentColor"
-              stroke-width="1.8"
-              stroke-linejoin="round"
-            />
-
-            <path
-              d="M17 9a4 4 0 0 1 0 6"
-              stroke="currentColor"
-              stroke-width="1.8"
-              stroke-linecap="round"
-            />
-          </svg>
-        `
-
-        : `
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            aria-hidden="true"
-          >
-            <path
-              d="M5 10v4h4l5 4V6l-5 4H5Z"
-              stroke="currentColor"
-              stroke-width="1.8"
-              stroke-linejoin="round"
-            />
-
-            <path
-              d="M17 9l4 6"
-              stroke="currentColor"
-              stroke-width="1.8"
-              stroke-linecap="round"
-            />
-
-            <path
-              d="M21 9l-4 6"
-              stroke="currentColor"
-              stroke-width="1.8"
-              stroke-linecap="round"
-            />
-          </svg>
-        `;
-  }
-
-
-  function renderCameraIcon() {
-
-    if (!cameraBtn) {
-      return;
-    }
-
-
-    cameraBtn.innerHTML =
-      state.cameraOn
-
-        ? `
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            aria-hidden="true"
-          >
-            <rect
-              x="3"
-              y="6"
-              width="13"
-              height="12"
-              rx="3"
-              stroke="currentColor"
-              stroke-width="1.8"
-            />
-
-            <path
-              d="M16 10l5-3v10l-5-3"
-              stroke="currentColor"
-              stroke-width="1.8"
-              stroke-linejoin="round"
-            />
-          </svg>
-        `
-
-        : `
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            aria-hidden="true"
-          >
-            <rect
-              x="3"
-              y="6"
-              width="13"
-              height="12"
-              rx="3"
-              stroke="currentColor"
-              stroke-width="1.8"
-            />
-
-            <path
-              d="M16 10l5-3v10l-5-3"
-              stroke="currentColor"
-              stroke-width="1.8"
-              stroke-linejoin="round"
-            />
-
-            <path
-              d="M4 4l16 16"
-              stroke="currentColor"
-              stroke-width="1.8"
-              stroke-linecap="round"
-            />
-          </svg>
-        `;
-  }
-
-
-  function renderEndIcon() {
-
-    if (!endBtn) {
-      return;
-    }
-
-
-    endBtn.innerHTML = `
-      <svg
-        viewBox="0 0 24 24"
-        fill="none"
-        aria-hidden="true"
-      >
-        <path
-          d="M7 7l10 10"
-          stroke="currentColor"
-          stroke-width="1.9"
-          stroke-linecap="round"
-        />
-
-        <path
-          d="M17 7L7 17"
-          stroke="currentColor"
-          stroke-width="1.9"
-          stroke-linecap="round"
-        />
-      </svg>
-    `;
-  }
-
-
-  /* =====================================================
-     CONTROLS
-     ===================================================== */
-
-  function syncControls() {
-
-    if (micBtn) {
-
-      micBtn.classList.toggle(
-        "is-active",
-        !state.muted
-      );
-
-
-      micBtn.classList.toggle(
-        "is-muted",
-        state.muted
-      );
-
-
-      micBtn.setAttribute(
-        "aria-pressed",
-        String(
-          !state.muted
-        )
-      );
-
-
-      micBtn.setAttribute(
-        "aria-label",
-        state.muted
-          ? "Unmute microphone"
-          : "Mute microphone"
-      );
-    }
-
-
-    if (speakerBtn) {
-
-      speakerBtn.classList.toggle(
-        "is-active",
-        state.speakerOn
-      );
-
-
-      speakerBtn.classList.toggle(
-        "is-muted",
-        !state.speakerOn
-      );
-
-
-      speakerBtn.setAttribute(
-        "aria-pressed",
-        String(
-          state.speakerOn
-        )
-      );
-
-
-      speakerBtn.setAttribute(
-        "aria-label",
-        state.speakerOn
-          ? "Turn speaker off"
-          : "Turn speaker on"
-      );
-    }
-
-
-    if (cameraBtn) {
-
-      cameraBtn.classList.toggle(
-        "is-active",
-        state.cameraOn
-      );
-
-
-      cameraBtn.setAttribute(
-        "aria-pressed",
-        String(
-          state.cameraOn
-        )
-      );
-
-
-      cameraBtn.setAttribute(
-        "aria-label",
-        state.cameraOn
-          ? "Turn camera off"
-          : "Turn camera on"
-      );
-    }
-
-
-    renderMicIcon();
-
-    renderSpeakerIcon();
-
-    renderCameraIcon();
-
-    renderEndIcon();
-  }
-
-
-  /* =====================================================
-     OPEN
-     ===================================================== */
 
   function open() {
 
     if (
-      state.open ||
-      state.closing
+      isOpen()
     ) {
-      return;
+      return true;
     }
 
 
-    clearTimeout(
-      closeTimer
-    );
+    previousFocus =
+      document.activeElement
+        instanceof HTMLElement
 
+        ? document.activeElement
 
-    state.open =
-      true;
-
-
-    state.phase =
-      "connecting";
-
-
-    state.error =
-      null;
-
-
-    state.lastFocusedElement =
-      document.activeElement;
-
-
-    shell.classList.add(
-      "is-open"
-    );
-
-
-    shell.classList.remove(
-      "is-closing"
-    );
+        : null;
 
 
     shell.setAttribute(
@@ -870,49 +583,316 @@ Important:
     );
 
 
-    shell.dataset.phase =
-      "connecting";
+    shell.style.display =
+      "flex";
 
 
-    document
-      .documentElement
+    document.body
       .classList
       .add(
         "neyo-voice-mode-open"
       );
 
 
-    setStatus(
-      "Connecting…",
-      {
-        immediate:
-          true
-      }
-    );
-
-
-    syncControls();
-
-
-    dispatch(
-      "neyo:voice-mode-open"
-    );
-
-
     requestAnimationFrame(
       () => {
 
-        shell.classList.add(
-          "is-visible"
-        );
+        try {
 
+          micBtn?.focus({
+            preventScroll:
+              true
+          });
 
-        safeFocus(
-          endBtn ||
-          stage
-        );
+        } catch {}
       }
     );
+
+
+    emit(
+      "neyo:voice-mode-opened"
+    );
+
+
+    return true;
+  }
+
+
+  async function close({
+    stopVoice = false,
+    restoreFocus = true
+  } = {}) {
+
+    if (
+      stopVoice
+    ) {
+
+      try {
+
+        await window
+          .NeyoVoice
+          ?.stop
+          ?.();
+
+      } catch (
+        error
+      ) {
+
+        console.warn(
+          "[NEYO Voice Mode] Voice stop failed:",
+          error
+        );
+      }
+    }
+
+
+    stopCamera();
+
+    closeCharacterPickerVisual();
+
+
+    shell.setAttribute(
+      "aria-hidden",
+      "true"
+    );
+
+
+    shell.style.display =
+      "none";
+
+
+    document.body
+      .classList
+      .remove(
+        "neyo-voice-mode-open"
+      );
+
+
+    setState(
+      "idle"
+    );
+
+
+    if (
+      restoreFocus &&
+      previousFocus
+        ?.isConnected
+    ) {
+
+      try {
+
+        previousFocus
+          .focus({
+            preventScroll:
+              true
+          });
+
+      } catch {}
+    }
+
+
+    previousFocus =
+      null;
+
+
+    emit(
+      "neyo:voice-mode-closed"
+    );
+
+
+    return true;
+  }
+
+
+  /* =====================================================
+     MIC
+     ===================================================== */
+
+  function syncMic(
+    muted
+  ) {
+
+    micMuted =
+      Boolean(
+        muted
+      );
+
+
+    micBtn
+      ?.classList
+      .toggle(
+        "is-active",
+        !micMuted
+      );
+
+
+    micBtn?.setAttribute(
+      "aria-pressed",
+      String(
+        !micMuted
+      )
+    );
+
+
+    micBtn?.setAttribute(
+      "aria-label",
+      micMuted
+        ? "Unmute microphone"
+        : "Mute microphone"
+    );
+
+
+    if (mascot) {
+
+      mascot.dataset.muted =
+        String(
+          micMuted
+        );
+    }
+  }
+
+
+  function toggleMic() {
+
+    const muted =
+      !micMuted;
+
+
+    try {
+
+      window
+        .NeyoVoice
+        ?.setMuted
+        ?.(muted);
+
+
+      /*
+       * Engine also emits
+       * neyo:voice-muted.
+       *
+       * Immediate local sync keeps
+       * the control responsive.
+       */
+
+      syncMic(
+        muted
+      );
+
+
+      emit(
+        "neyo:voice-mic-toggle",
+        {
+          muted
+        }
+      );
+
+
+      return true;
+
+    } catch (
+      error
+    ) {
+
+      console.warn(
+        "[NEYO Voice Mode] Mic toggle failed:",
+        error
+      );
+
+
+      return false;
+    }
+  }
+
+
+  /* =====================================================
+     SPEAKER
+     ===================================================== */
+
+  function syncSpeaker(
+    enabled
+  ) {
+
+    speakerEnabled =
+      Boolean(
+        enabled
+      );
+
+
+    speakerBtn
+      ?.classList
+      .toggle(
+        "is-active",
+        speakerEnabled
+      );
+
+
+    speakerBtn?.setAttribute(
+      "aria-pressed",
+      String(
+        speakerEnabled
+      )
+    );
+
+
+    speakerBtn?.setAttribute(
+      "aria-label",
+      speakerEnabled
+        ? "Turn speaker off"
+        : "Turn speaker on"
+    );
+
+
+    if (mascot) {
+
+      mascot.dataset.speaker =
+        speakerEnabled
+          ? "on"
+          : "off";
+    }
+  }
+
+
+  function toggleSpeaker() {
+
+    const enabled =
+      !speakerEnabled;
+
+
+    try {
+
+      window
+        .NeyoVoice
+        ?.setSpeakerEnabled
+        ?.(enabled);
+
+
+      syncSpeaker(
+        enabled
+      );
+
+
+      emit(
+        "neyo:voice-speaker-toggle",
+        {
+          enabled
+        }
+      );
+
+
+      return true;
+
+    } catch (
+      error
+    ) {
+
+      console.warn(
+        "[NEYO Voice Mode] Speaker toggle failed:",
+        error
+      );
+
+
+      return false;
+    }
   }
 
 
@@ -920,163 +900,85 @@ Important:
      CAMERA
      ===================================================== */
 
-  async function startCamera() {
+  function syncCamera(
+    enabled
+  ) {
+
+    cameraEnabled =
+      Boolean(
+        enabled
+      );
+
+
+    cameraBtn
+      ?.classList
+      .toggle(
+        "is-active",
+        cameraEnabled
+      );
+
+
+    cameraBtn?.setAttribute(
+      "aria-pressed",
+      String(
+        cameraEnabled
+      )
+    );
+
+
+    cameraBtn?.setAttribute(
+      "aria-label",
+      cameraEnabled
+        ? "Turn camera off"
+        : "Turn camera on"
+    );
+
+
+    cameraPreview
+      ?.setAttribute(
+        "aria-hidden",
+        String(
+          !cameraEnabled
+        )
+      );
+
 
     if (
-      state.cameraOn &&
-      state.cameraStream
+      cameraPreview
     ) {
-      return true;
+
+      cameraPreview
+        .style
+        .display =
+          cameraEnabled
+            ? "block"
+            : "none";
     }
 
 
-    if (
-      !navigator
-        .mediaDevices
-        ?.getUserMedia
-    ) {
+    if (mascot) {
 
-      setStatus(
-        "Camera unavailable"
-      );
-
-      return false;
-    }
-
-
-    try {
-
-      const stream =
-        await navigator
-          .mediaDevices
-          .getUserMedia({
-
-            video: {
-              facingMode:
-                "user"
-            },
-
-            audio:
-              false
-          });
-
-
-      state.cameraStream =
-        stream;
-
-
-      state.cameraOn =
-        true;
-
-
-      if (cameraVideo) {
-
-        cameraVideo.srcObject =
-          stream;
-
-
-        try {
-
-          await cameraVideo.play();
-
-        } catch {}
-      }
-
-
-      cameraPreview
-        ?.classList
-        .add(
-          "is-visible"
-        );
-
-
-      cameraPreview
-        ?.setAttribute(
-          "aria-hidden",
-          "false"
-        );
-
-
-      dispatch(
-        "neyo:voice-camera",
-        {
-          enabled:
-            true
-        }
-      );
-
-
-      syncControls();
-
-
-      syncStatus();
-
-
-      return true;
-
-
-    } catch (error) {
-
-      console.warn(
-        "[NEYO Voice Mode] Camera failed:",
-        error
-      );
-
-
-      state.cameraStream =
-        null;
-
-
-      state.cameraOn =
-        false;
-
-
-      cameraPreview
-        ?.classList
-        .remove(
-          "is-visible"
-        );
-
-
-      cameraPreview
-        ?.setAttribute(
-          "aria-hidden",
-          "true"
-        );
-
-
-      dispatch(
-        "neyo:voice-camera",
-        {
-          enabled:
-            false
-        }
-      );
-
-
-      setStatus(
-        "Camera unavailable"
-      );
-
-
-      syncControls();
-
-
-      return false;
+      mascot.dataset.camera =
+        cameraEnabled
+          ? "on"
+          : "off";
     }
   }
 
 
   function stopCamera() {
 
+    cameraPending =
+      false;
+
+
     if (
-      state.cameraStream
+      cameraStream
     ) {
 
       for (
         const track
-        of state
-          .cameraStream
+        of cameraStream
           .getTracks()
       ) {
 
@@ -1087,37 +989,31 @@ Important:
     }
 
 
-    state.cameraStream =
+    cameraStream =
       null;
 
 
-    state.cameraOn =
-      false;
+    if (
+      cameraVideo
+    ) {
 
+      try {
+        cameraVideo.pause();
+      } catch {}
 
-    if (cameraVideo) {
 
       cameraVideo.srcObject =
         null;
     }
 
 
-    cameraPreview
-      ?.classList
-      .remove(
-        "is-visible"
-      );
+    syncCamera(
+      false
+    );
 
 
-    cameraPreview
-      ?.setAttribute(
-        "aria-hidden",
-        "true"
-      );
-
-
-    dispatch(
-      "neyo:voice-camera",
+    emit(
+      "neyo:voice-camera-change",
       {
         enabled:
           false
@@ -1125,824 +1021,888 @@ Important:
     );
 
 
-    syncControls();
+    return true;
+  }
+
+
+  async function startCamera() {
+
+    if (
+      cameraEnabled ||
+      cameraPending
+    ) {
+
+      return cameraEnabled;
+    }
+
+
+    if (
+      !navigator
+        .mediaDevices
+        ?.getUserMedia
+    ) {
+
+      emit(
+        "neyo:voice-camera-error",
+        {
+          error:
+            "Camera is not available on this device."
+        }
+      );
+
+
+      return false;
+    }
+
+
+    cameraPending =
+      true;
+
+
+    cameraBtn?.setAttribute(
+      "aria-busy",
+      "true"
+    );
+
+
+    try {
+
+      const stream =
+        await navigator
+          .mediaDevices
+          .getUserMedia({
+            audio:
+              false,
+
+            video: {
+              facingMode:
+                "user",
+
+              width: {
+                ideal:
+                  1280
+              },
+
+              height: {
+                ideal:
+                  720
+              }
+            }
+          });
+
+
+      /*
+       * User may close voice mode
+       * while permission dialog is open.
+       */
+
+      if (
+        !isOpen()
+      ) {
+
+        stream
+          .getTracks()
+          .forEach(
+            track =>
+              track.stop()
+          );
+
+
+        return false;
+      }
+
+
+      cameraStream =
+        stream;
+
+
+      stream
+        .getVideoTracks()[0]
+        ?.addEventListener(
+          "ended",
+          stopCamera,
+          {
+            once:
+              true
+          }
+        );
+
+
+      if (
+        cameraVideo
+      ) {
+
+        cameraVideo.srcObject =
+          stream;
+
+
+        cameraVideo.muted =
+          true;
+
+
+        cameraVideo.playsInline =
+          true;
+
+
+        try {
+
+          await cameraVideo
+            .play();
+
+        } catch {}
+      }
+
+
+      syncCamera(
+        true
+      );
+
+
+      emit(
+        "neyo:voice-camera-change",
+        {
+          enabled:
+            true
+        }
+      );
+
+
+      return true;
+
+    } catch (
+      error
+    ) {
+
+      console.warn(
+        "[NEYO Voice Mode] Camera unavailable:",
+        error
+      );
+
+
+      stopCamera();
+
+
+      emit(
+        "neyo:voice-camera-error",
+        {
+          error:
+            error?.message ||
+            "Camera access failed."
+        }
+      );
+
+
+      return false;
+
+    } finally {
+
+      cameraPending =
+        false;
+
+
+      cameraBtn
+        ?.removeAttribute(
+          "aria-busy"
+        );
+    }
   }
 
 
   async function toggleCamera() {
 
-    if (state.cameraOn) {
+    if (
+      cameraEnabled ||
+      cameraPending
+    ) {
 
       stopCamera();
 
-      return;
+      return false;
     }
 
 
-    await startCamera();
+    return startCamera();
   }
 
 
   /* =====================================================
-     MIC
+     CHARACTER PICKER
+
+     IMPORTANT:
+     character-picker.js remains the
+     sole click/open/selection owner.
+
+     This file only synchronizes UI state.
      ===================================================== */
 
-  function toggleMic() {
+  const pickerOpen =
+    () =>
+      characterPicker
+        ?.getAttribute(
+          "aria-hidden"
+        ) ===
+      "false";
 
-    state.muted =
-      !state.muted;
 
+  function syncCharacterPickerButton() {
 
-    try {
-
-      window
-        .NeyoVoice
-        ?.setMuted
-        ?.(
-          state.muted
-        );
-
-    } catch (error) {
-
-      console.warn(
-        "[NEYO Voice Mode] Mic control failed:",
-        error
+    characterBtn
+      ?.setAttribute(
+        "aria-expanded",
+        String(
+          pickerOpen()
+        )
       );
-    }
-
-
-    syncControls();
-
-    syncStatus();
   }
 
 
-  /* =====================================================
-     SPEAKER
-     ===================================================== */
-
-  function toggleSpeaker() {
-
-    state.speakerOn =
-      !state.speakerOn;
-
-
-    try {
-
-      window
-        .NeyoVoice
-        ?.setSpeakerEnabled
-        ?.(
-          state.speakerOn
-        );
-
-    } catch (error) {
-
-      console.warn(
-        "[NEYO Voice Mode] Speaker control failed:",
-        error
-      );
-    }
-
-
-    syncControls();
-
-    syncStatus();
-  }
-
-
-  /* =====================================================
-     CLOSE
-
-     Only USER ending conversation should
-     normally call this.
-
-     Errors and character switches do NOT.
-     ===================================================== */
-
-  async function close({
-    stopVoice = true,
-    emitClose = true
-  } = {}) {
+  function closeCharacterPickerVisual() {
 
     if (
-      !state.open ||
-      state.closing
+      !characterPicker
     ) {
-      return;
+      return false;
     }
-
-
-    state.closing =
-      true;
 
 
     /*
-    Full voice-mode exit:
-    camera should stop.
-    */
+     * Prefer picker owner's public API
+     * if it exists.
+     */
 
-    stopCamera();
-
-
-    if (emitClose) {
-
-      dispatch(
-        "neyo:voice-close"
-      );
-    }
-
-
-    if (stopVoice) {
+    if (
+      typeof window
+        .NeyoCharacterPicker
+        ?.close ===
+      "function"
+    ) {
 
       try {
 
-        await window
-          .NeyoVoice
-          ?.stop
-          ?.({
-            closeUi:
-              false
-          });
+        window
+          .NeyoCharacterPicker
+          .close();
 
-      } catch (error) {
+        syncCharacterPickerButton();
 
-        console.warn(
-          "[NEYO Voice Mode] Voice stop failed:",
-          error
-        );
-      }
+        return true;
+
+      } catch {}
     }
 
 
-    shell.classList.add(
-      "is-closing"
-    );
+    /*
+     * Safe cleanup fallback.
+     */
 
-
-    shell.classList.remove(
-      "is-visible"
-    );
-
-
-    clearTimeout(
-      closeTimer
-    );
-
-
-    closeTimer =
-      setTimeout(
-        () => {
-
-          shell.classList.remove(
-            "is-open",
-            "is-closing"
-          );
-
-
-          shell.setAttribute(
-            "aria-hidden",
-            "true"
-          );
-
-
-          shell.dataset.phase =
-            "idle";
-
-
-          document
-            .documentElement
-            .classList
-            .remove(
-              "neyo-voice-mode-open"
-            );
-
-
-          state.open =
-            false;
-
-
-          state.closing =
-            false;
-
-
-          state.phase =
-            "idle";
-
-
-          state.error =
-            null;
-
-
-          state.switchingCharacter =
-            false;
-
-
-          state.muted =
-            false;
-
-
-          state.speakerOn =
-            true;
-
-
-          setStatus(
-            "Ready",
-            {
-              immediate:
-                true
-            }
-          );
-
-
-          syncControls();
-
-
-          safeFocus(
-            state.lastFocusedElement
-          );
-
-
-          state.lastFocusedElement =
-            null;
-
-        },
-        240
+    characterPicker
+      .setAttribute(
+        "aria-hidden",
+        "true"
       );
+
+
+    syncCharacterPickerButton();
+
+
+    return true;
   }
 
+
+  if (
+    characterPicker
+  ) {
+
+    new MutationObserver(
+      syncCharacterPickerButton
+    )
+      .observe(
+        characterPicker,
+        {
+          attributes:
+            true,
+
+          attributeFilter: [
+            "aria-hidden",
+            "class"
+          ]
+        }
+      );
+
+
+    syncCharacterPickerButton();
+  }
+
+
+  /* =====================================================
+     END SESSION
+     ===================================================== */
 
   async function endSession() {
 
-    await close({
-      stopVoice:
-        true,
+    if (
+      endBtn
+    ) {
 
-      emitClose:
-        true
-    });
+      endBtn.disabled =
+        true;
+
+
+      endBtn.setAttribute(
+        "aria-busy",
+        "true"
+      );
+    }
+
+
+    try {
+
+      stopCamera();
+
+
+      await window
+        .NeyoVoice
+        ?.stop
+        ?.();
+
+    } catch (
+      error
+    ) {
+
+      console.warn(
+        "[NEYO Voice Mode] End failed:",
+        error
+      );
+
+    } finally {
+
+      await close({
+        stopVoice:
+          false
+      });
+
+
+      if (
+        endBtn
+      ) {
+
+        endBtn.disabled =
+          false;
+
+
+        endBtn.removeAttribute(
+          "aria-busy"
+        );
+      }
+    }
   }
 
 
   /* =====================================================
-     VOICE STATE EVENTS
+     BUTTON OWNERSHIP
      ===================================================== */
 
-  window.addEventListener(
-    "neyo:voice-idle",
-    event => {
+  micBtn
+    ?.addEventListener(
+      "click",
+      event => {
 
-      state.switchingCharacter =
-        false;
+        event.preventDefault();
 
-
-      setPhase(
-        "idle",
-        event.detail
-      );
-    }
-  );
-
-
-  window.addEventListener(
-    "neyo:voice-listening",
-    event => {
-
-      state.switchingCharacter =
-        false;
-
-
-      setPhase(
-        "listening",
-        event.detail
-      );
-    }
-  );
-
-
-  window.addEventListener(
-    "neyo:voice-thinking",
-    event => {
-
-      if (
-        event
-          ?.detail
-          ?.switching
-      ) {
-
-        state.switchingCharacter =
-          true;
+        toggleMic();
       }
+    );
 
 
-      setPhase(
-        "thinking",
-        event.detail
-      );
-    }
-  );
+  cameraBtn
+    ?.addEventListener(
+      "click",
+      event => {
 
+        event.preventDefault();
 
-  window.addEventListener(
-    "neyo:voice-speaking",
-    event => {
-
-      state.switchingCharacter =
-        false;
-
-
-      setPhase(
-        "speaking",
-        event.detail
-      );
-    }
-  );
-
-
-  window.addEventListener(
-    "neyo:voice-interrupted",
-    event => {
-
-      setPhase(
-        "interrupted",
-        event.detail
-      );
-    }
-  );
-
-
-  /* =====================================================
-     CONNECTION ERROR
-
-     IMPORTANT:
-     NEVER close voice mode here.
-     ===================================================== */
-
-  window.addEventListener(
-    "neyo:voice-error",
-    event => {
-
-      state.phase =
-        "error";
-
-
-      state.switchingCharacter =
-        false;
-
-
-      state.error =
-        String(
-          event
-            ?.detail
-            ?.message ||
-          "Couldn't connect"
-        );
-
-
-      shell.dataset.phase =
-        "error";
-
-
-      setStatus(
-        state.error
-      );
-
-
-      syncControls();
-    }
-  );
-
-
-  window.addEventListener(
-    "neyo:voice-start-error",
-    event => {
-
-      state.phase =
-        "error";
-
-
-      state.error =
-        String(
-          event
-            ?.detail
-            ?.message ||
-          "Couldn't connect"
-        );
-
-
-      shell.dataset.phase =
-        "error";
-
-
-      setStatus(
-        state.error
-      );
-    }
-  );
-
-
-  /* =====================================================
-     HOT CHARACTER SWITCH
-     ===================================================== */
-
-  window.addEventListener(
-    "neyo:voice-character-switching",
-    event => {
-
-      state.switchingCharacter =
-        true;
-
-
-      state.error =
-        null;
-
-
-      if (
-        event
-          ?.detail
-          ?.character
-      ) {
-
-        state.character =
-          event.detail.character;
+        void toggleCamera();
       }
+    );
 
 
-      if (
-        event
-          ?.detail
-          ?.voice
-      ) {
+  speakerBtn
+    ?.addEventListener(
+      "click",
+      event => {
 
-        state.voice =
-          event.detail.voice;
+        event.preventDefault();
+
+        toggleSpeaker();
       }
+    );
 
 
-      shell.dataset.phase =
-        "switching";
+  endBtn
+    ?.addEventListener(
+      "click",
+      event => {
 
+        event.preventDefault();
 
-      shell.dataset.character =
-        state.character;
-
-
-      setStatus(
-        `Switching to ${
-          capitalize(
-            state.character
-          )
-        }…`
-      );
-    }
-  );
-
-
-  window.addEventListener(
-    "neyo:voice-character-ready",
-    event => {
-
-      state.switchingCharacter =
-        false;
-
-
-      state.error =
-        null;
-
-
-      if (
-        event
-          ?.detail
-          ?.character
-      ) {
-
-        state.character =
-          event.detail.character;
+        void endSession();
       }
+    );
 
 
-      if (
-        event
-          ?.detail
-          ?.voice
-      ) {
-
-        state.voice =
-          event.detail.voice;
-      }
-
-
-      shell.dataset.character =
-        state.character;
-
-
-      if (
-        event
-          ?.detail
-          ?.live
-      ) {
-
-        setPhase(
-          "listening",
-          event.detail
-        );
-
-      } else {
-
-        syncStatus();
-      }
-    }
-  );
-
-
-  window.addEventListener(
-    "neyo:voice-character-error",
-    event => {
-
-      state.switchingCharacter =
-        false;
-
-
-      state.phase =
-        "error";
-
-
-      state.error =
-        String(
-          event
-            ?.detail
-            ?.message ||
-          "Couldn't switch character"
-        );
-
-
-      shell.dataset.phase =
-        "error";
-
-
-      setStatus(
-        state.error
-      );
-    }
-  );
-
-
-  /* =====================================================
-     GENERAL CHARACTER CHANGE
-
-     Instantly update visible identity.
-     Actual audio switching remains voice.js job.
-     ===================================================== */
-
-  window.addEventListener(
-    "neyo:character-change",
-    event => {
-
-      const id =
-        event
-          ?.detail
-          ?.id;
-
-
-      if (!id) {
-        return;
-      }
-
-
-      state.character =
-        id;
-
-
-      shell.dataset.character =
-        id;
-    }
-  );
-
-
-  /* =====================================================
-     CONTROL EVENTS
-     ===================================================== */
-
-  micBtn?.addEventListener(
-    "click",
-    event => {
-
-      event.preventDefault();
-
-      event.stopPropagation();
-
-
-      toggleMic();
-    }
-  );
-
-
-  speakerBtn?.addEventListener(
-    "click",
-    event => {
-
-      event.preventDefault();
-
-      event.stopPropagation();
-
-
-      toggleSpeaker();
-    }
-  );
-
-
-  cameraBtn?.addEventListener(
-    "click",
-    event => {
-
-      event.preventDefault();
-
-      event.stopPropagation();
-
-
-      toggleCamera();
-    }
-  );
-
-
-  endBtn?.addEventListener(
-    "click",
-    event => {
-
-      event.preventDefault();
-
-      event.stopPropagation();
-
-
-      endSession();
-    }
-  );
+  /*
+   * Character button intentionally
+   * has NO listener here.
+   *
+   * character-picker.js owns it.
+   */
 
 
   /* =====================================================
      ESCAPE
-
-     Let voice-mode own UI exit.
-     voice.js also hears Escape, so stopping
-     functions must remain idempotent.
      ===================================================== */
 
   document.addEventListener(
     "keydown",
     event => {
 
-      if (!state.open) {
+      if (
+        event.key !==
+          "Escape" ||
+        !isOpen() ||
+        pickerOpen()
+      ) {
         return;
       }
 
 
+      event.preventDefault();
+
+
+      void endSession();
+    }
+  );
+
+
+  /* =====================================================
+     CURRENT VOICE ENGINE EVENTS
+     ===================================================== */
+
+  [
+    "idle",
+    "listening",
+    "thinking",
+    "speaking"
+  ]
+    .forEach(
+      state => {
+
+        window.addEventListener(
+          `neyo:voice-${state}`,
+          () => {
+
+            setState(
+              state
+            );
+
+
+            if (
+              state !== "idle" &&
+              !isOpen()
+            ) {
+
+              open();
+            }
+
+
+            /*
+             * Voice mode can open before
+             * Gemini setup / mic track /
+             * output gain are ready.
+             *
+             * Re-applying preferences when
+             * listening begins guarantees
+             * mute/speaker state survives
+             * connection setup.
+             */
+
+            if (
+              state ===
+              "listening"
+            ) {
+
+              window
+                .NeyoVoice
+                ?.setMuted
+                ?.(micMuted);
+
+
+              window
+                .NeyoVoice
+                ?.setSpeakerEnabled
+                ?.(speakerEnabled);
+
+            } else if (
+              state ===
+              "speaking"
+            ) {
+
+              window
+                .NeyoVoice
+                ?.setSpeakerEnabled
+                ?.(speakerEnabled);
+            }
+          }
+        );
+      }
+    );
+
+
+  /*
+   * Gemini interruption:
+   * immediately return visual state
+   * to listening.
+   */
+
+  window.addEventListener(
+    "neyo:voice-interrupted",
+    () => {
+
+      setState(
+        "listening"
+      );
+
+
+      setEnergy(
+        0.12
+      );
+    }
+  );
+
+
+  window.addEventListener(
+    "neyo:voice-muted",
+    event => {
+
+      syncMic(
+        Boolean(
+          event.detail
+            ?.muted
+        )
+      );
+    }
+  );
+
+
+  window.addEventListener(
+    "neyo:voice-speaker",
+    event => {
+
+      syncSpeaker(
+        event.detail
+          ?.enabled !==
+        false
+      );
+    }
+  );
+
+
+  /*
+   * Actual microphone energy.
+   */
+
+  window.addEventListener(
+    "neyo:voice-mic-level",
+    event => {
+
       if (
-        event.key ===
-        "Escape"
+        phase ===
+        "listening"
       ) {
 
-        event.preventDefault();
+        setEnergy(
+          event.detail
+            ?.level
+        );
+      }
+    }
+  );
 
 
-        endSession();
+  /*
+   * Actual assistant audio energy.
+   */
+
+  window.addEventListener(
+    "neyo:voice-output-level",
+    event => {
+
+      if (
+        phase ===
+        "speaking"
+      ) {
+
+        setEnergy(
+          event.detail
+            ?.level
+        );
       }
     }
   );
 
 
   /* =====================================================
-     PAGE CLEANUP
+     OLDER VOICE ENGINE COMPATIBILITY
      ===================================================== */
 
-  window.addEventListener(
-    "pagehide",
-    () => {
+  document.addEventListener(
+    "voice:state-change",
+    event => {
 
-      stopCamera();
+      const state =
+        event.detail
+          ?.state;
 
-    },
-    {
-      once:
-        true
+
+      if (
+        !STATES.has(
+          state
+        )
+      ) {
+        return;
+      }
+
+
+      setState(
+        state
+      );
+
+
+      if (
+        state !==
+          "idle" &&
+        !isOpen()
+      ) {
+
+        open();
+      }
     }
   );
+
+
+  document.addEventListener(
+    "voice:energy",
+    event => {
+
+      const rms =
+        Number(
+          event.detail
+            ?.rms
+        );
+
+
+      if (
+        !Number.isFinite(
+          rms
+        )
+      ) {
+        return;
+      }
+
+
+      setEnergy(
+        Math.max(
+          0,
+          Math.min(
+            1,
+            (
+              rms -
+              0.01
+            ) /
+            0.12
+          )
+        )
+      );
+    }
+  );
+
+
+  /* =====================================================
+     INITIAL STATE
+     ===================================================== */
+
+  if (
+    shell.getAttribute(
+      "aria-hidden"
+    ) !==
+    "false"
+  ) {
+
+    shell.setAttribute(
+      "aria-hidden",
+      "true"
+    );
+
+
+    shell.style.display =
+      "none";
+  }
+
+
+  syncMic(
+    false
+  );
+
+
+  syncSpeaker(
+    true
+  );
+
+
+  syncCamera(
+    false
+  );
+
+
+  setState(
+    "idle"
+  );
+
+
+  resetWaveform();
 
 
   /* =====================================================
      PUBLIC API
      ===================================================== */
 
-  window.NeyoVoiceMode =
+  const api =
     Object.freeze({
 
-      open,
+      __controller:
+        true,
 
+      version:
+        VERSION,
+
+      open,
       close,
+      isOpen,
+
+      setState,
+      setEnergy,
+
+
+      setMuted(
+        muted
+      ) {
+
+        const value =
+          Boolean(
+            muted
+          );
+
+
+        window
+          .NeyoVoice
+          ?.setMuted
+          ?.(value);
+
+
+        syncMic(
+          value
+        );
+
+
+        return value;
+      },
+
+
+      setSpeakerEnabled(
+        enabled
+      ) {
+
+        const value =
+          Boolean(
+            enabled
+          );
+
+
+        window
+          .NeyoVoice
+          ?.setSpeakerEnabled
+          ?.(value);
+
+
+        syncSpeaker(
+          value
+        );
+
+
+        return value;
+      },
+
+
+      startCamera,
+      stopCamera,
+      toggleCamera,
 
       end:
         endSession,
-
-      toggleMic,
-
-      toggleSpeaker,
-
-      toggleCamera,
-
-      setStatus,
-
-      setPhase,
-
-
-      isOpen:
-        () =>
-          state.open,
 
 
       getState:
         () => ({
 
+          version:
+            VERSION,
+
           open:
-            state.open,
+            isOpen(),
 
-          closing:
-            state.closing,
+          phase,
 
-          phase:
-            state.phase,
+          micMuted,
 
-          character:
-            state.character,
+          speakerEnabled,
 
-          voice:
-            state.voice,
+          cameraEnabled,
 
-          switchingCharacter:
-            state.switchingCharacter,
+          cameraPending,
 
-          muted:
-            state.muted,
+          energy,
 
-          speakerOn:
-            state.speakerOn,
-
-          cameraOn:
-            state.cameraOn,
-
-          error:
-            state.error,
-
-          status:
-            state.status
+          characterPickerOpen:
+            pickerOpen()
         })
     });
 
 
-  /* =====================================================
-     INIT
-     ===================================================== */
-
-  shell.setAttribute(
-    "aria-hidden",
-    "true"
-  );
-
-
-  shell.dataset.phase =
-    "idle";
-
-
-  shell.dataset.character =
-    window
-      .NeyoCharacters
-      ?.active ||
-    "neyo";
-
-
-  state.character =
-    shell.dataset.character;
-
-
-  cameraPreview
-    ?.setAttribute(
-      "aria-hidden",
-      "true"
-    );
-
-
-  syncControls();
-
-
-  setStatus(
-    "Ready",
+  Object.defineProperty(
+    window,
+    "NeyoVoiceMode",
     {
-      immediate:
+      value:
+        api,
+
+      writable:
+        false,
+
+      configurable:
+        true,
+
+      enumerable:
         true
     }
   );
 
 
-  console.log(
-    "[NEYO Voice Mode] Error-safe hot-switch UI v4 ready"
+  emit(
+    "neyo:voice-mode-ready",
+    {
+      version:
+        VERSION
+    }
   );
 
 })();

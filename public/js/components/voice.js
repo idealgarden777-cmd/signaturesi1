@@ -1,75 +1,100 @@
 /*
 =========================================================
 NEYO — GEMINI LIVE VOICE ENGINE
-NEYO-ONLY DEBUG LOCK
+PRODUCTION FULLSCREEN VOICE
 
-Temporary validation build
+Flow:
+Composer #micBtn
+→ Fullscreen NeyoVoiceMode immediately
+→ /api/voice-token
+→ Gemini Live
+→ microphone PCM 16 kHz
+→ native audio playback
 
-Hard lock:
-- Character: neyo
-- Voice: Kore
-
-Goal:
-- Prove Neyo always starts with Kore
-- Remove stale character state
-- Remove hot-switch complexity temporarily
-- Keep voice mode open on errors
-- No page refresh required
-
-After Neyo is verified repeatedly,
-we will re-enable Zadi, then Wizi.
+Ownership:
+- voice.js owns Gemini Live transport/audio only
+- voice-mode.js owns fullscreen UI controls/camera/waveform
+- mascot.js owns face animation
+- character-picker.js owns picker UI
 =========================================================
 */
 
 (() => {
   "use strict";
 
+  const VERSION =
+    "neyo-live-voice-production-v1";
+
+  if (
+    window.NeyoVoice
+      ?.__controller
+  ) {
+    return;
+  }
+
 
   /* =====================================================
-     DOM
+     BUTTON ISOLATION
+
+     Removes legacy neo.js voice listeners
+     without touching neo.js itself.
      ===================================================== */
 
+  function isolateButton(
+    element
+  ) {
+    if (!element) {
+      return null;
+    }
+
+    const clone =
+      element.cloneNode(
+        true
+      );
+
+    element.replaceWith(
+      clone
+    );
+
+    return clone;
+  }
+
+
   const micBtn =
-    document.getElementById("micBtn");
+    isolateButton(
+      document.getElementById(
+        "micBtn"
+      )
+    );
+
 
   const stopRecBtn =
-    document.getElementById("stopRecBtn");
+    isolateButton(
+      document.getElementById(
+        "stopRecBtn"
+      )
+    );
+
 
   const composerInputRow =
     document.querySelector(
       ".composer-input-row"
     );
 
-  const waveform =
+
+  const legacyWaveform =
     document.getElementById(
       "waveDotsBar"
     );
 
 
-  if (
-    !micBtn ||
-    !composerInputRow
-  ) {
+  if (!micBtn) {
     console.warn(
-      "[NEYO Voice] Required DOM missing."
+      "[NEYO Voice] Composer voice button is missing."
     );
 
     return;
   }
-
-
-  /* =====================================================
-     HARD LOCK
-     ===================================================== */
-
-  const FORCE_NEYO_ONLY =
-    true;
-
-  const LOCKED_CHARACTER =
-    "neyo";
-
-  const LOCKED_VOICE =
-    "Kore";
 
 
   /* =====================================================
@@ -118,8 +143,11 @@ we will re-enable Zadi, then Wizi.
       vadEndSensitivity:
         "END_SENSITIVITY_LOW",
 
-      debug:
-        true
+      defaultCharacter:
+        "neyo",
+
+      defaultVoice:
+        "Kore"
     });
 
 
@@ -152,11 +180,20 @@ we will re-enable Zadi, then Wizi.
     0;
 
 
+  let selectedCharacterId =
+    getInitialCharacter();
+
+
   let sessionCharacterId =
-    LOCKED_CHARACTER;
+    selectedCharacterId;
+
 
   let sessionVoiceName =
-    LOCKED_VOICE;
+    CONFIG.defaultVoice;
+
+
+  let restartAfterCharacterChange =
+    false;
 
 
   /* =====================================================
@@ -185,7 +222,7 @@ we will re-enable Zadi, then Wizi.
 
 
   /* =====================================================
-     MICROPHONE
+     MICROPHONE STATE
      ===================================================== */
 
   let micStream =
@@ -218,9 +255,15 @@ we will re-enable Zadi, then Wizi.
   let muted =
     false;
 
+  let micRaf =
+    0;
+
+  let smoothMicLevel =
+    0;
+
 
   /* =====================================================
-     OUTPUT
+     OUTPUT STATE
      ===================================================== */
 
   let outputContext =
@@ -238,47 +281,20 @@ we will re-enable Zadi, then Wizi.
   let speakerEnabled =
     true;
 
+
   const playingSources =
     new Set();
-
-
-  /* =====================================================
-     WAVEFORM
-     ===================================================== */
-
-  let waveRaf =
-    0;
-
-  let smoothMicLevel =
-    0;
 
 
   /* =====================================================
      HELPERS
      ===================================================== */
 
-  function debug(
-    ...args
-  ) {
-
-    if (!CONFIG.debug) {
-      return;
-    }
-
-
-    console.log(
-      "[NEYO Voice]",
-      ...args
-    );
-  }
-
-
   function clamp(
     value,
     min,
     max
   ) {
-
     return Math.max(
       min,
       Math.min(
@@ -293,7 +309,6 @@ we will re-enable Zadi, then Wizi.
     name,
     detail = {}
   ) {
-
     window.dispatchEvent(
       new CustomEvent(
         name,
@@ -305,6 +320,164 @@ we will re-enable Zadi, then Wizi.
   }
 
 
+  function cleanId(
+    value
+  ) {
+    const id =
+      String(
+        value ||
+        ""
+      )
+        .trim()
+        .toLowerCase()
+        .replace(
+          /[^a-z0-9_-]/g,
+          ""
+        )
+        .slice(
+          0,
+          40
+        );
+
+
+    return (
+      id ||
+      CONFIG.defaultCharacter
+    );
+  }
+
+
+  function getInitialCharacter() {
+    const fromRegistry =
+      window
+        .NeyoCharacters
+        ?.active;
+
+
+    if (
+      typeof fromRegistry ===
+        "string" &&
+      fromRegistry.trim()
+    ) {
+      return cleanId(
+        fromRegistry
+      );
+    }
+
+
+    return CONFIG
+      .defaultCharacter;
+  }
+
+
+  function setSelectedCharacter(
+    id,
+    {
+      updateMascot = true
+    } = {}
+  ) {
+
+    const next =
+      cleanId(
+        id
+      );
+
+
+    selectedCharacterId =
+      next;
+
+
+    if (
+      window.NeyoCharacters &&
+      typeof window
+        .NeyoCharacters ===
+        "object"
+    ) {
+
+      try {
+        window
+          .NeyoCharacters
+          .active =
+          next;
+
+      } catch {}
+    }
+
+
+    if (updateMascot) {
+
+      try {
+
+        window
+          .NeyoMascot
+          ?.setCharacter
+          ?.(
+            next,
+            {
+              resetMood:
+                false
+            }
+          );
+
+      } catch {}
+    }
+
+
+    return next;
+  }
+
+
+  /* =====================================================
+     FULLSCREEN VOICE UI
+     ===================================================== */
+
+  function openVoiceMode() {
+
+    const mode =
+      window.NeyoVoiceMode;
+
+
+    if (
+      typeof mode
+        ?.open ===
+      "function"
+    ) {
+
+      mode.open();
+
+      return true;
+    }
+
+
+    /*
+     * Fallback only.
+     */
+
+    const shell =
+      document.getElementById(
+        "neyoVoiceMode"
+      );
+
+
+    if (!shell) {
+      return false;
+    }
+
+
+    shell.setAttribute(
+      "aria-hidden",
+      "false"
+    );
+
+
+    shell.style.display =
+      "flex";
+
+
+    return true;
+  }
+
+
   function setPhase(
     phase,
     detail = {}
@@ -312,7 +485,8 @@ we will re-enable Zadi, then Wizi.
 
     if (
       phase ===
-      lastPhase
+        lastPhase &&
+      !detail.force
     ) {
       return;
     }
@@ -322,63 +496,87 @@ we will re-enable Zadi, then Wizi.
       phase;
 
 
+    const eventDetail = {
+
+      character:
+        sessionCharacterId ||
+        selectedCharacterId,
+
+      voice:
+        sessionVoiceName,
+
+      ...detail
+    };
+
+
+    if (
+      [
+        "idle",
+        "listening",
+        "thinking",
+        "speaking"
+      ].includes(
+        phase
+      )
+    ) {
+
+      try {
+
+        window
+          .NeyoVoiceMode
+          ?.setState
+          ?.(phase);
+
+      } catch {}
+    }
+
+
     emit(
       `neyo:voice-${phase}`,
-      {
-        character:
-          LOCKED_CHARACTER,
-
-        voice:
-          LOCKED_VOICE,
-
-        ...detail
-      }
+      eventDetail
     );
   }
 
 
-  /* =====================================================
-     HARD CHARACTER ENFORCEMENT
-     ===================================================== */
+  function showVoiceError(
+    message
+  ) {
 
-  function forceNeyoIdentity() {
-
-    if (
-      window.NeyoCharacters
-    ) {
-
-      window.NeyoCharacters.active =
-        LOCKED_CHARACTER;
-    }
-
-
-    sessionCharacterId =
-      LOCKED_CHARACTER;
-
-
-    sessionVoiceName =
-      LOCKED_VOICE;
+    const value =
+      String(
+        message ||
+        "Voice connection failed."
+      );
 
 
     try {
 
       window
-        .NeyoMascot
-        ?.setCharacter
-        ?.(
-          LOCKED_CHARACTER,
-          {
-            resetMood:
-              false
-          }
-        );
+        .NeyoVoiceMode
+        ?.setState
+        ?.("idle");
 
     } catch {}
 
 
-    debug(
-      "Identity forced",
+    const status =
+      document.getElementById(
+        "neyoMascotStatus"
+      );
+
+
+    if (status) {
+      status.textContent =
+        value;
+    }
+
+
+    emit(
+      "neyo:voice-error",
       {
+        message:
+          value,
+
         character:
           sessionCharacterId,
 
@@ -390,33 +588,74 @@ we will re-enable Zadi, then Wizi.
 
 
   /* =====================================================
-     UI
+     REMOVE OLD COMPOSER VOICE UI
      ===================================================== */
 
-  function syncUi() {
+  function disableLegacyComposerVoiceUi() {
 
     composerInputRow
-      .classList
-      .toggle(
+      ?.classList
+      .remove(
         "is-transcribing",
-        active ||
-        connecting
+        "is-processing-transcription"
       );
 
 
-    composerInputRow
-      .classList
-      .toggle(
-        "is-processing-transcription",
-        connecting
-      );
+    if (
+      legacyWaveform
+    ) {
+
+      legacyWaveform
+        .setAttribute(
+          "aria-hidden",
+          "true"
+        );
+
+
+      legacyWaveform
+        .style
+        .display =
+        "none";
+    }
+
+
+    if (
+      stopRecBtn
+    ) {
+
+      stopRecBtn.hidden =
+        true;
+
+
+      stopRecBtn
+        .style
+        .display =
+        "none";
+
+
+      stopRecBtn
+        .setAttribute(
+          "aria-hidden",
+          "true"
+        );
+    }
+  }
+
+
+  function syncComposerButton() {
+
+    disableLegacyComposerVoiceUi();
+
+
+    const busy =
+      connecting ||
+      active;
 
 
     micBtn.setAttribute(
       "aria-pressed",
       String(
-        active ||
-        connecting
+        busy
       )
     );
 
@@ -426,19 +665,32 @@ we will re-enable Zadi, then Wizi.
       micBtn.dataset.tooltip =
         "Connecting";
 
+
       micBtn.setAttribute(
         "aria-label",
-        "Connecting Neyo voice"
+        "Connecting voice conversation"
+      );
+
+
+      micBtn.setAttribute(
+        "aria-busy",
+        "true"
       );
 
     } else if (active) {
 
       micBtn.dataset.tooltip =
-        "End voice conversation";
+        "Voice conversation active";
+
 
       micBtn.setAttribute(
         "aria-label",
-        "End voice conversation"
+        "Open voice conversation"
+      );
+
+
+      micBtn.removeAttribute(
+        "aria-busy"
       );
 
     } else {
@@ -446,76 +698,23 @@ we will re-enable Zadi, then Wizi.
       micBtn.dataset.tooltip =
         "Voice conversation";
 
+
       micBtn.setAttribute(
         "aria-label",
         "Start voice conversation"
       );
-    }
 
 
-    if (stopRecBtn) {
-
-      stopRecBtn.disabled =
-        connecting;
-
-
-      stopRecBtn.setAttribute(
-        "aria-busy",
-        String(
-          connecting
-        )
+      micBtn.removeAttribute(
+        "aria-busy"
       );
     }
   }
 
 
   /* =====================================================
-     WAVEFORM
+     MIC LEVEL
      ===================================================== */
-
-  function getWaveBars() {
-
-    if (!waveform) {
-      return [];
-    }
-
-
-    return Array.from(
-      waveform.querySelectorAll(
-        "span"
-      )
-    );
-  }
-
-
-  function resetWaveform() {
-
-    smoothMicLevel =
-      0;
-
-
-    for (
-      const bar
-      of getWaveBars()
-    ) {
-
-      bar.style.height =
-        "3px";
-
-      bar.style.opacity =
-        "0.32";
-    }
-
-
-    emit(
-      "neyo:voice-mic-level",
-      {
-        level:
-          0
-      }
-    );
-  }
-
 
   function calculateMicRms() {
 
@@ -565,17 +764,29 @@ we will re-enable Zadi, then Wizi.
   }
 
 
-  function animateWave(
-    timestamp
-  ) {
+  function animateMicLevel() {
 
     if (
       !active &&
       !connecting
     ) {
 
-      waveRaf =
+      micRaf =
         0;
+
+
+      smoothMicLevel =
+        0;
+
+
+      emit(
+        "neyo:voice-mic-level",
+        {
+          level:
+            0
+        }
+      );
+
 
       return;
     }
@@ -623,103 +834,57 @@ we will re-enable Zadi, then Wizi.
     );
 
 
-    const bars =
-      getWaveBars();
-
-
-    const center =
-      Math.max(
-        1,
-        (
-          bars.length -
-          1
-        ) /
-        2
-      );
-
-
-    bars.forEach(
-      (
-        bar,
-        index
-      ) => {
-
-        const distance =
-          Math.abs(
-            index -
-            center
-          ) /
-          center;
-
-
-        const weight =
-          1 -
-          distance *
-          0.45;
-
-
-        const movement =
-          0.84 +
-          Math.sin(
-            timestamp *
-            0.005 +
-            index *
-            0.85
-          ) *
-          0.16;
-
-
-        const energy =
-          clamp(
-            smoothMicLevel *
-            weight *
-            movement,
-            0,
-            1
-          );
-
-
-        bar.style.height =
-          `${(
-            3 +
-            energy *
-            21
-          ).toFixed(2)}px`;
-
-
-        bar.style.opacity =
-          `${(
-            0.32 +
-            energy *
-            0.63
-          ).toFixed(3)}`;
-      }
-    );
-
-
-    waveRaf =
+    micRaf =
       requestAnimationFrame(
-        animateWave
+        animateMicLevel
       );
   }
 
 
-  function ensureWaveLoop() {
+  function ensureMicLevelLoop() {
 
-    if (waveRaf) {
+    if (micRaf) {
       return;
     }
 
 
-    waveRaf =
+    micRaf =
       requestAnimationFrame(
-        animateWave
+        animateMicLevel
       );
   }
 
 
+  function stopMicLevelLoop() {
+
+    if (micRaf) {
+
+      cancelAnimationFrame(
+        micRaf
+      );
+
+
+      micRaf =
+        0;
+    }
+
+
+    smoothMicLevel =
+      0;
+
+
+    emit(
+      "neyo:voice-mic-level",
+      {
+        level:
+          0
+      }
+    );
+  }
+
+
   /* =====================================================
-     RESAMPLING
+     PCM RESAMPLING
      ===================================================== */
 
   function resampleFloat32(
@@ -818,10 +983,6 @@ we will re-enable Zadi, then Wizi.
     return output;
   }
 
-
-  /* =====================================================
-     PCM
-     ===================================================== */
 
   function float32ToPcm16(
     samples
@@ -980,7 +1141,9 @@ we will re-enable Zadi, then Wizi.
   ) {
 
     const binary =
-      atob(value);
+      atob(
+        value
+      );
 
 
     const output =
@@ -997,7 +1160,9 @@ we will re-enable Zadi, then Wizi.
     ) {
 
       output[i] =
-        binary.charCodeAt(i);
+        binary.charCodeAt(
+          i
+        );
     }
 
 
@@ -1006,7 +1171,7 @@ we will re-enable Zadi, then Wizi.
 
 
   /* =====================================================
-     AUDIO OUTPUT
+     OUTPUT AUDIO
      ===================================================== */
 
   async function ensureOutputContext() {
@@ -1086,7 +1251,8 @@ we will re-enable Zadi, then Wizi.
 
     const match =
       String(
-        mimeType || ""
+        mimeType ||
+        ""
       ).match(
         /rate=(\d+)/i
       );
@@ -1099,7 +1265,9 @@ we will re-enable Zadi, then Wizi.
 
 
     return (
-      Number.isFinite(rate) &&
+      Number.isFinite(
+        rate
+      ) &&
       rate > 0
     )
       ? rate
@@ -1237,6 +1405,7 @@ we will re-enable Zadi, then Wizi.
       assistantSpeaking =
         true;
 
+
       responsePending =
         false;
 
@@ -1324,8 +1493,10 @@ we will re-enable Zadi, then Wizi.
     playbackStarted =
       false;
 
+
     assistantSpeaking =
       false;
+
 
     responsePending =
       false;
@@ -1349,7 +1520,7 @@ we will re-enable Zadi, then Wizi.
 
 
   /* =====================================================
-     CONTROLS
+     MIC / SPEAKER
      ===================================================== */
 
   function setMuted(
@@ -1357,7 +1528,9 @@ we will re-enable Zadi, then Wizi.
   ) {
 
     muted =
-      Boolean(value);
+      Boolean(
+        value
+      );
 
 
     if (micTrack) {
@@ -1373,6 +1546,9 @@ we will re-enable Zadi, then Wizi.
         muted
       }
     );
+
+
+    return muted;
   }
 
 
@@ -1381,7 +1557,9 @@ we will re-enable Zadi, then Wizi.
   ) {
 
     speakerEnabled =
-      Boolean(value);
+      Boolean(
+        value
+      );
 
 
     if (masterGain) {
@@ -1400,31 +1578,27 @@ we will re-enable Zadi, then Wizi.
           speakerEnabled
       }
     );
+
+
+    return speakerEnabled;
   }
 
 
   /* =====================================================
      TOKEN
 
-     ALWAYS request NEYO.
+     Server remains source of truth
+     for character voice mapping.
      ===================================================== */
 
-  async function fetchVoiceToken() {
+  async function fetchVoiceToken(
+    character
+  ) {
 
-    const character =
-      FORCE_NEYO_ONLY
-        ? LOCKED_CHARACTER
-        : LOCKED_CHARACTER;
-
-
-    debug(
-      "Requesting token",
-      {
-        character,
-        expectedVoice:
-          LOCKED_VOICE
-      }
-    );
+    const requestedCharacter =
+      cleanId(
+        character
+      );
 
 
     const response =
@@ -1437,6 +1611,9 @@ we will re-enable Zadi, then Wizi.
           credentials:
             "same-origin",
 
+          cache:
+            "no-store",
+
           headers: {
 
             "Content-Type":
@@ -1448,7 +1625,8 @@ we will re-enable Zadi, then Wizi.
 
           body:
             JSON.stringify({
-              character
+              character:
+                requestedCharacter
             })
         }
       );
@@ -1465,15 +1643,11 @@ we will re-enable Zadi, then Wizi.
     try {
 
       data =
-        JSON.parse(raw);
+        JSON.parse(
+          raw
+        );
 
     } catch {}
-
-
-    debug(
-      "Token response",
-      data
-    );
 
 
     if (!response.ok) {
@@ -1497,30 +1671,19 @@ we will re-enable Zadi, then Wizi.
     }
 
 
-    /*
-    HARD VERIFICATION.
-    */
-
-    if (
-      data.character !==
-      LOCKED_CHARACTER
-    ) {
-
-      throw new Error(
-        `Expected character neyo, received ${data.character}.`
+    data.character =
+      cleanId(
+        data.character ||
+        requestedCharacter
       );
-    }
 
 
-    if (
-      data.voice !==
-      LOCKED_VOICE
-    ) {
-
-      throw new Error(
-        `Expected Kore voice, received ${data.voice}.`
-      );
-    }
+    data.voice =
+      String(
+        data.voice ||
+        CONFIG.defaultVoice
+      ).trim() ||
+      CONFIG.defaultVoice;
 
 
     return data;
@@ -1539,6 +1702,31 @@ we will re-enable Zadi, then Wizi.
       processorNode
     ) {
       return;
+    }
+
+
+    if (
+      !navigator
+        .mediaDevices
+        ?.getUserMedia
+    ) {
+
+      throw new Error(
+        "Microphone unavailable."
+      );
+    }
+
+
+    const AudioContextClass =
+      window.AudioContext ||
+      window.webkitAudioContext;
+
+
+    if (!AudioContextClass) {
+
+      throw new Error(
+        "Web Audio API unavailable."
+      );
     }
 
 
@@ -1578,11 +1766,6 @@ we will re-enable Zadi, then Wizi.
       micTrack.enabled =
         !muted;
     }
-
-
-    const AudioContextClass =
-      window.AudioContext ||
-      window.webkitAudioContext;
 
 
     inputContext =
@@ -1724,6 +1907,9 @@ we will re-enable Zadi, then Wizi.
 
         } catch {}
       };
+
+
+    ensureMicLevelLoop();
   }
 
 
@@ -1734,9 +1920,11 @@ we will re-enable Zadi, then Wizi.
       processorNode.onaudioprocess =
         null;
 
+
       try {
         processorNode.disconnect();
       } catch {}
+
 
       processorNode =
         null;
@@ -1749,6 +1937,7 @@ we will re-enable Zadi, then Wizi.
         micSource.disconnect();
       } catch {}
 
+
       micSource =
         null;
     }
@@ -1760,9 +1949,14 @@ we will re-enable Zadi, then Wizi.
         analyser.disconnect();
       } catch {}
 
+
       analyser =
         null;
     }
+
+
+    analyserData =
+      null;
 
 
     if (silentGain) {
@@ -1770,6 +1964,7 @@ we will re-enable Zadi, then Wizi.
       try {
         silentGain.disconnect();
       } catch {}
+
 
       silentGain =
         null;
@@ -1780,7 +1975,8 @@ we will re-enable Zadi, then Wizi.
 
       for (
         const track
-        of micStream.getTracks()
+        of micStream
+          .getTracks()
       ) {
 
         try {
@@ -1792,6 +1988,7 @@ we will re-enable Zadi, then Wizi.
 
     micStream =
       null;
+
 
     micTrack =
       null;
@@ -1813,18 +2010,7 @@ we will re-enable Zadi, then Wizi.
       null;
 
 
-    if (waveRaf) {
-
-      cancelAnimationFrame(
-        waveRaf
-      );
-
-      waveRaf =
-        0;
-    }
-
-
-    resetWaveform();
+    stopMicLevelLoop();
   }
 
 
@@ -1840,6 +2026,7 @@ we will re-enable Zadi, then Wizi.
       typeof data ===
       "string"
     ) {
+
       return data;
     }
 
@@ -1847,6 +2034,7 @@ we will re-enable Zadi, then Wizi.
     if (
       data instanceof Blob
     ) {
+
       return data.text();
     }
 
@@ -1872,7 +2060,7 @@ we will re-enable Zadi, then Wizi.
 
 
   /* =====================================================
-     TRANSCRIPT
+     TRANSCRIPTS
      ===================================================== */
 
   function appendTranscript(
@@ -1882,7 +2070,8 @@ we will re-enable Zadi, then Wizi.
 
     const value =
       String(
-        chunk || ""
+        chunk ||
+        ""
       ).trim();
 
 
@@ -1949,11 +2138,17 @@ we will re-enable Zadi, then Wizi.
       );
 
 
+      setupTimer =
+        0;
+
+
       setupComplete =
         true;
 
+
       connecting =
         false;
+
 
       active =
         true;
@@ -1963,24 +2158,25 @@ we will re-enable Zadi, then Wizi.
         "";
 
 
+      syncComposerButton();
+
+
+      ensureMicLevelLoop();
+
+
       setPhase(
         "listening"
       );
 
 
-      syncUi();
-
-      ensureWaveLoop();
-
-
-      debug(
-        "NEYO SESSION CONFIRMED",
+      emit(
+        "neyo:voice-session-ready",
         {
           character:
-            LOCKED_CHARACTER,
+            sessionCharacterId,
 
           voice:
-            LOCKED_VOICE
+            sessionVoiceName
         }
       );
 
@@ -1990,7 +2186,8 @@ we will re-enable Zadi, then Wizi.
 
 
     const content =
-      message?.serverContent;
+      message
+        ?.serverContent;
 
 
     if (!content) {
@@ -2020,7 +2217,7 @@ we will re-enable Zadi, then Wizi.
             userTranscriptBuffer,
 
           character:
-            LOCKED_CHARACTER
+            sessionCharacterId
         }
       );
     }
@@ -2048,7 +2245,7 @@ we will re-enable Zadi, then Wizi.
             assistantTranscriptBuffer,
 
           character:
-            LOCKED_CHARACTER
+            sessionCharacterId
         }
       );
     }
@@ -2066,7 +2263,20 @@ we will re-enable Zadi, then Wizi.
 
 
       setPhase(
-        "interrupted"
+        "listening",
+        {
+          interrupted:
+            true
+        }
+      );
+
+
+      emit(
+        "neyo:voice-interrupted",
+        {
+          character:
+            sessionCharacterId
+        }
       );
 
 
@@ -2111,7 +2321,8 @@ we will re-enable Zadi, then Wizi.
         if (
           !inline?.data ||
           !String(
-            inline.mimeType || ""
+            inline.mimeType ||
+            ""
           ).startsWith(
             "audio/"
           )
@@ -2137,6 +2348,14 @@ we will re-enable Zadi, then Wizi.
         () => {
 
           if (
+            generation !==
+            socketGeneration
+          ) {
+            return;
+          }
+
+
+          if (
             playingSources.size >
             0
           ) {
@@ -2146,6 +2365,7 @@ we will re-enable Zadi, then Wizi.
               25
             );
 
+
             return;
           }
 
@@ -2153,12 +2373,14 @@ we will re-enable Zadi, then Wizi.
           assistantSpeaking =
             false;
 
+
           responsePending =
             false;
 
 
           userTranscriptBuffer =
             "";
+
 
           assistantTranscriptBuffer =
             "";
@@ -2188,9 +2410,54 @@ we will re-enable Zadi, then Wizi.
 
 
   /* =====================================================
-     SETUP
+     SYSTEM INSTRUCTION
+     ===================================================== */
 
-     VOICE HARD LOCKED HERE TOO.
+  function buildSystemInstruction(
+    credentials
+  ) {
+
+    const provided =
+      credentials
+        ?.systemInstruction ||
+      credentials
+        ?.system_instruction ||
+      credentials
+        ?.instructions;
+
+
+    if (
+      typeof provided ===
+        "string" &&
+      provided.trim()
+    ) {
+
+      return provided.trim();
+    }
+
+
+    const name =
+      String(
+        credentials
+          ?.characterName ||
+        credentials
+          ?.character ||
+        sessionCharacterId ||
+        "Neyo"
+      )
+        .trim();
+
+
+    return (
+      `You are ${name}, a natural, intelligent and friendly conversational AI assistant. ` +
+      "Respond naturally in the user's language. Keep spoken replies concise unless more detail is useful. " +
+      "Do not mention internal voice configuration."
+    );
+  }
+
+
+  /* =====================================================
+     GEMINI LIVE SETUP
      ===================================================== */
 
   function buildSetupMessage(
@@ -2202,7 +2469,9 @@ we will re-enable Zadi, then Wizi.
       setup: {
 
         model:
-          `models/${credentials.model}`,
+          `models/${
+            credentials.model
+          }`,
 
 
         generationConfig: {
@@ -2219,7 +2488,7 @@ we will re-enable Zadi, then Wizi.
               prebuiltVoiceConfig: {
 
                 voiceName:
-                  LOCKED_VOICE
+                  sessionVoiceName
               }
             }
           }
@@ -2231,7 +2500,9 @@ we will re-enable Zadi, then Wizi.
           parts: [
             {
               text:
-                "You are Neyo, a natural, intelligent and friendly conversational AI assistant. Respond naturally in the user's language. Keep spoken replies concise unless more detail is useful. Do not mention internal voice configuration."
+                buildSystemInstruction(
+                  credentials
+                )
             }
           ]
         },
@@ -2282,34 +2553,83 @@ we will re-enable Zadi, then Wizi.
      START
      ===================================================== */
 
-  async function startConversation() {
+  async function startConversation({
+    character
+  } = {}) {
+
+    /*
+     * Already live:
+     * composer button just reopens fullscreen.
+     */
 
     if (
       active ||
-      connecting ||
-      stopping
+      connecting
     ) {
-      return;
+
+      openVoiceMode();
+
+      return true;
     }
 
 
-    forceNeyoIdentity();
+    if (stopping) {
+      return false;
+    }
+
+
+    const requestedCharacter =
+      setSelectedCharacter(
+        character ||
+        selectedCharacterId ||
+        getInitialCharacter()
+      );
+
+
+    sessionCharacterId =
+      requestedCharacter;
+
+
+    sessionVoiceName =
+      CONFIG.defaultVoice;
 
 
     connecting =
       true;
 
+
     setupComplete =
       false;
 
 
-    syncUi();
+    userTranscriptBuffer =
+      "";
 
 
-    window
-      .NeyoVoiceMode
-      ?.open
-      ?.();
+    assistantTranscriptBuffer =
+      "";
+
+
+    syncComposerButton();
+
+
+    /*
+     * IMPORTANT:
+     * Open fullscreen immediately,
+     * before token/mic/network awaits.
+     */
+
+    openVoiceMode();
+
+
+    try {
+
+      window
+        .NeyoVoiceMode
+        ?.setState
+        ?.("thinking");
+
+    } catch {}
 
 
     lastPhase =
@@ -2329,38 +2649,43 @@ we will re-enable Zadi, then Wizi.
 
       await ensureOutputContext();
 
+
       await ensureMicrophone();
 
 
-      ensureWaveLoop();
-
-
       const credentials =
-        await fetchVoiceToken();
+        await fetchVoiceToken(
+          requestedCharacter
+        );
 
-
-      /*
-      HARD CHECK AGAIN.
-      */
 
       if (
-        credentials.character !==
-          LOCKED_CHARACTER ||
-        credentials.voice !==
-          LOCKED_VOICE
+        !connecting ||
+        stopping
       ) {
-
-        throw new Error(
-          "Neyo voice identity mismatch."
-        );
+        return false;
       }
 
 
       sessionCharacterId =
-        LOCKED_CHARACTER;
+        cleanId(
+          credentials.character ||
+          requestedCharacter
+        );
+
 
       sessionVoiceName =
-        LOCKED_VOICE;
+        String(
+          credentials.voice ||
+          CONFIG.defaultVoice
+        )
+          .trim() ||
+        CONFIG.defaultVoice;
+
+
+      setSelectedCharacter(
+        sessionCharacterId
+      );
 
 
       const generation =
@@ -2388,6 +2713,14 @@ we will re-enable Zadi, then Wizi.
       socket.onopen =
         () => {
 
+          if (
+            generation !==
+            socketGeneration
+          ) {
+            return;
+          }
+
+
           socket.send(
             JSON.stringify(
               buildSetupMessage(
@@ -2397,33 +2730,25 @@ we will re-enable Zadi, then Wizi.
           );
 
 
-          debug(
-            "SETUP SENT",
-            {
-              character:
-                LOCKED_CHARACTER,
-
-              voice:
-                LOCKED_VOICE
-            }
-          );
-
-
           setupTimer =
             setTimeout(
               () => {
 
                 if (
-                  !setupComplete
+                  !setupComplete &&
+                  generation ===
+                    socketGeneration
                 ) {
 
-                  setPhase(
-                    "error",
-                    {
-                      message:
-                        "Voice setup timed out."
-                    }
+                  showVoiceError(
+                    "Voice setup timed out."
                   );
+
+
+                  void stopConversation({
+                    closeUi:
+                      false
+                  });
                 }
 
               },
@@ -2444,7 +2769,9 @@ we will re-enable Zadi, then Wizi.
 
 
             const message =
-              JSON.parse(raw);
+              JSON.parse(
+                raw
+              );
 
 
             await handleServerMessage(
@@ -2452,7 +2779,9 @@ we will re-enable Zadi, then Wizi.
               generation
             );
 
-          } catch (error) {
+          } catch (
+            error
+          ) {
 
             console.error(
               "[NEYO Voice] Message error:",
@@ -2465,24 +2794,29 @@ we will re-enable Zadi, then Wizi.
       socket.onerror =
         () => {
 
-          setPhase(
-            "error",
-            {
-              message:
-                "Voice connection error."
-            }
+          if (
+            generation !==
+            socketGeneration
+          ) {
+            return;
+          }
+
+
+          showVoiceError(
+            "Voice connection error."
           );
         };
 
 
       socket.onclose =
-        event => {
+        () => {
 
-          debug(
-            "Socket closed",
-            event.code,
-            event.reason
-          );
+          if (
+            generation !==
+            socketGeneration
+          ) {
+            return;
+          }
 
 
           socket =
@@ -2491,42 +2825,55 @@ we will re-enable Zadi, then Wizi.
 
           if (
             !stopping &&
-            active
+            (
+              active ||
+              connecting
+            )
           ) {
 
             active =
               false;
 
+
+            connecting =
+              false;
+
+
             setupComplete =
               false;
 
 
-            syncUi();
+            syncComposerButton();
 
 
-            setPhase(
-              "error",
-              {
-                message:
-                  "Voice connection lost."
-              }
+            showVoiceError(
+              "Voice connection lost."
             );
           }
         };
+
+
+      clearTimeout(
+        sessionTimer
+      );
 
 
       sessionTimer =
         setTimeout(
           () => {
 
-            stopConversation();
+            void stopConversation();
 
           },
           CONFIG.maxSessionMs
         );
 
 
-    } catch (error) {
+      return true;
+
+    } catch (
+      error
+    ) {
 
       console.error(
         "[NEYO Voice] Start failed:",
@@ -2537,32 +2884,56 @@ we will re-enable Zadi, then Wizi.
       connecting =
         false;
 
+
       active =
         false;
+
 
       setupComplete =
         false;
 
 
-      syncUi();
+      ++socketGeneration;
+
+
+      if (socket) {
+
+        try {
+
+          socket.onclose =
+            null;
+
+
+          socket.close();
+
+        } catch {}
+
+
+        socket =
+          null;
+      }
+
+
+      stopPlayback();
+
+
+      await destroyMicrophone();
+
+
+      syncComposerButton();
+
+
+      showVoiceError(
+        error?.message ||
+        "Couldn't connect voice."
+      );
 
 
       /*
-      DO NOT CLOSE UI.
-      */
+       * Keep fullscreen screen open.
+       */
 
-      lastPhase =
-        "";
-
-
-      setPhase(
-        "error",
-        {
-          message:
-            error?.message ||
-            "Couldn't connect Neyo voice."
-        }
-      );
+      return false;
     }
   }
 
@@ -2576,7 +2947,7 @@ we will re-enable Zadi, then Wizi.
   } = {}) {
 
     if (stopping) {
-      return;
+      return false;
     }
 
 
@@ -2594,11 +2965,21 @@ we will re-enable Zadi, then Wizi.
     );
 
 
+    setupTimer =
+      0;
+
+
+    sessionTimer =
+      0;
+
+
     active =
       false;
 
+
     connecting =
       false;
+
 
     setupComplete =
       false;
@@ -2617,6 +2998,7 @@ we will re-enable Zadi, then Wizi.
         socket.onclose =
           null;
 
+
         socket.close(
           1000,
           "Voice ended"
@@ -2633,11 +3015,47 @@ we will re-enable Zadi, then Wizi.
     await destroyMicrophone();
 
 
+    if (
+      outputContext &&
+      outputContext.state !==
+        "closed"
+    ) {
+
+      try {
+        await outputContext.close();
+      } catch {}
+    }
+
+
+    outputContext =
+      null;
+
+
+    masterGain =
+      null;
+
+
+    nextPlaybackTime =
+      0;
+
+
+    playbackStarted =
+      false;
+
+
+    userTranscriptBuffer =
+      "";
+
+
+    assistantTranscriptBuffer =
+      "";
+
+
     stopping =
       false;
 
 
-    syncUi();
+    syncComposerButton();
 
 
     lastPhase =
@@ -2651,25 +3069,49 @@ we will re-enable Zadi, then Wizi.
 
     if (closeUi) {
 
-      window
-        .NeyoVoiceMode
-        ?.close
-        ?.({
-          stopVoice:
-            false,
+      try {
 
-          emitClose:
-            true
-        });
+        await window
+          .NeyoVoiceMode
+          ?.close
+          ?.({
+            stopVoice:
+              false
+          });
+
+      } catch {}
     }
+
+
+    /*
+     * Character switched while live:
+     * restart with same fullscreen screen.
+     */
+
+    if (
+      restartAfterCharacterChange
+    ) {
+
+      restartAfterCharacterChange =
+        false;
+
+
+      openVoiceMode();
+
+
+      return startConversation({
+        character:
+          selectedCharacterId
+      });
+    }
+
+
+    return true;
   }
 
 
   /* =====================================================
      CHARACTER CHANGE
-
-     TEMPORARY DEBUG:
-     Ignore Zadi/Wizi and restore Neyo.
      ===================================================== */
 
   window.addEventListener(
@@ -2677,32 +3119,62 @@ we will re-enable Zadi, then Wizi.
     event => {
 
       const requested =
-        event
-          ?.detail
-          ?.id;
+        cleanId(
+          event
+            ?.detail
+            ?.id ||
+          event
+            ?.detail
+            ?.character
+        );
 
 
       if (
         requested ===
-        LOCKED_CHARACTER
+        selectedCharacterId
       ) {
         return;
       }
 
 
-      debug(
-        "Ignoring character during Neyo-only test:",
+      setSelectedCharacter(
         requested
       );
 
 
-      forceNeyoIdentity();
+      /*
+       * Gemini voice config belongs
+       * to a session.
+       *
+       * Restart cleanly instead of
+       * hot-mutating active socket.
+       */
+
+      if (
+        active ||
+        connecting
+      ) {
+
+        restartAfterCharacterChange =
+          true;
+
+
+        void stopConversation({
+          closeUi:
+            false
+        });
+
+      } else {
+
+        sessionCharacterId =
+          requested;
+      }
     }
   );
 
 
   /* =====================================================
-     BUTTONS
+     COMPOSER VOICE BUTTON
      ===================================================== */
 
   micBtn.addEventListener(
@@ -2711,21 +3183,38 @@ we will re-enable Zadi, then Wizi.
 
       event.preventDefault();
 
+      event.stopPropagation();
+
+      event.stopImmediatePropagation();
+
+
+      /*
+       * Active session:
+       * reopen fullscreen instead of stopping.
+       */
 
       if (
         active ||
         connecting
       ) {
 
-        stopConversation();
+        openVoiceMode();
 
-      } else {
-
-        startConversation();
+        return;
       }
-    }
+
+
+      void startConversation();
+
+    },
+    true
   );
 
+
+  /*
+   * Legacy inline stop is hidden.
+   * Compatibility only.
+   */
 
   stopRecBtn
     ?.addEventListener(
@@ -2734,8 +3223,15 @@ we will re-enable Zadi, then Wizi.
 
         event.preventDefault();
 
-        stopConversation();
-      }
+        event.stopPropagation();
+
+        event.stopImmediatePropagation();
+
+
+        void stopConversation();
+
+      },
+      true
     );
 
 
@@ -2743,23 +3239,68 @@ we will re-enable Zadi, then Wizi.
      PUBLIC API
      ===================================================== */
 
-  window.NeyoVoice =
+  const api =
     Object.freeze({
+
+      __controller:
+        true,
+
+      version:
+        VERSION,
+
 
       start:
         startConversation,
 
+
       stop:
         stopConversation,
 
+
       setMuted,
+
 
       setSpeakerEnabled,
 
 
+      setCharacter(
+        id
+      ) {
+
+        const next =
+          setSelectedCharacter(
+            id
+          );
+
+
+        if (
+          active ||
+          connecting
+        ) {
+
+          restartAfterCharacterChange =
+            true;
+
+
+          void stopConversation({
+            closeUi:
+              false
+          });
+        }
+
+
+        return next;
+      },
+
+
+      getCharacter:
+        () =>
+          selectedCharacterId,
+
+
       getActiveVoiceName:
         () =>
-          LOCKED_VOICE,
+          sessionVoiceName,
 
 
       isActive:
@@ -2775,51 +3316,85 @@ we will re-enable Zadi, then Wizi.
       getSessionInfo:
         () => ({
 
-          forceNeyoOnly:
-            FORCE_NEYO_ONLY,
-
           active,
 
           connecting,
 
+          stopping,
+
           setupComplete,
 
+
           character:
-            LOCKED_CHARACTER,
+            sessionCharacterId,
+
+
+          selectedCharacter:
+            selectedCharacterId,
+
 
           voice:
-            LOCKED_VOICE,
+            sessionVoiceName,
+
 
           muted,
 
-          speakerEnabled
+
+          speakerEnabled,
+
+
+          engine:
+            VERSION
         }),
 
 
       engine:
-        "gemini-live-neyo-only-debug"
+        "gemini-live-fullscreen"
     });
+
+
+  Object.defineProperty(
+    window,
+    "NeyoVoice",
+    {
+      value:
+        api,
+
+      writable:
+        false,
+
+      configurable:
+        true,
+
+      enumerable:
+        true
+    }
+  );
 
 
   /* =====================================================
      INIT
      ===================================================== */
 
-  forceNeyoIdentity();
-
-  resetWaveform();
-
-  syncUi();
+  setSelectedCharacter(
+    selectedCharacterId
+  );
 
 
-  console.log(
-    "[NEYO Voice] NEYO-ONLY LOCK ACTIVE",
+  disableLegacyComposerVoiceUi();
+
+
+  syncComposerButton();
+
+
+  emit(
+    "neyo:voice-ready",
     {
-      character:
-        LOCKED_CHARACTER,
+      version:
+        VERSION,
 
-      voice:
-        LOCKED_VOICE
+      character:
+        selectedCharacterId
     }
   );
 

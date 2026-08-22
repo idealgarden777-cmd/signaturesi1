@@ -1,1251 +1,2125 @@
 /*
 =========================================================
-NEYO — PROFILE COMPONENT
-STABLE REPAIR VERSION
+NEYO — PROFILE CONTROLLER
+FULL MODULAR RUNTIME
 
-Owns:
-- Load current profile
-- Update sidebar profile UI
-- Free / Pro badge
-- Billing plan UI
-- Avatar prepare/upload/save
-- Avatar removal
-- Profile state
-- Public profile events / API
+FILE:
+public/js/components/profile.js
 
-Does NOT own:
-- Authentication/session creation
-- Logout
-- Checkout
-- Webhooks
-- Model menu UI
-- Settings modal layout
-- Supabase client creation
+OWNS
+---------------------------------------------------------
+✅ Profile settings UI
+✅ Display name
+✅ Sidebar display-name sync
+✅ Avatar choose / preview / remove
+✅ Safe avatar processing
+✅ Profile Save / Reset
+✅ Local profile persistence
+✅ Bean ID display bridge
+✅ Plan badge display bridge
+✅ Profile dirty / saving state
+✅ Profile settings open sync
+✅ Public profile API
+
+DOES NOT OWN
+---------------------------------------------------------
+❌ Authentication
+❌ Bean ID creation/change
+❌ Session lifecycle
+❌ Logout
+❌ Subscription/billing
+❌ Settings modal navigation
+❌ Remote user database
+
+INTEGRATION
+---------------------------------------------------------
+auth.js
+   ↓
+neyo:auth-profile
+
+profile.js
+   ↓
+sidebar profile UI
+
+settings.js
+   ↓
+neyo:profile-settings-open-request
+   ↓
+profile.js
 =========================================================
 */
 
 (() => {
-    "use strict";
+  "use strict";
 
 
-    /* =====================================================
-       CONSTANTS
-       ===================================================== */
+  /* =====================================================
+     VERSION / GUARD
+     ===================================================== */
 
-    const PROFILE_ENDPOINT =
-        "/api/profile";
-
-    const AVATAR_ENDPOINT =
-        "/api/profile/avatar";
-
-    const MAX_AVATAR_SIZE =
-        5 * 1024 * 1024;
-
-    const ALLOWED_AVATAR_TYPES =
-        new Set([
-            "image/jpeg",
-            "image/png",
-            "image/webp"
-        ]);
+  const VERSION =
+    "neyo-profile-modular-v1";
 
 
-    /* =====================================================
-       ELEMENTS
-       ===================================================== */
-
-    const userAvatar =
-        document.getElementById(
-            "userAvatar"
-        );
-
-    const userNameDisplay =
-        document.getElementById(
-            "userNameDisplay"
-        );
-
-    const userPlanBadge =
-        document.getElementById(
-            "userPlanBadge"
-        );
-
-    const billingPlanText =
-        document.getElementById(
-            "billingPlanText"
-        );
-
-    const settingsUpgradeBtn =
-        document.getElementById(
-            "settingsUpgradeBtn"
-        );
+  if (
+    window.NeyoProfile
+      ?.__controller === true
+  ) {
+    return;
+  }
 
 
-    /* =====================================================
-       STATE
-       ===================================================== */
+  /* =====================================================
+     DOM
+     ===================================================== */
 
-    let profileState = {
-        user: null,
-        profile: null
-    };
-
-    let supabaseClient =
-        null;
-
-    let loading =
-        false;
-
-    let avatarUploading =
-        false;
+  const settingsAvatarPreview =
+    document.getElementById(
+      "settingsAvatarPreview"
+    );
 
 
-    /* =====================================================
-       HELPERS
-       ===================================================== */
+  const chooseAvatarBtn =
+    document.getElementById(
+      "chooseAvatarBtn"
+    );
 
-    const emit = (
+
+  const removeAvatarBtn =
+    document.getElementById(
+      "removeAvatarBtn"
+    );
+
+
+  const settingsAvatarFileInput =
+    document.getElementById(
+      "settingsAvatarFileInput"
+    );
+
+
+  const settingsDisplayNameInput =
+    document.getElementById(
+      "settingsDisplayNameInput"
+    );
+
+
+  const settingsUsernameInput =
+    document.getElementById(
+      "settingsUsernameInput"
+    );
+
+
+  const saveProfileSettingsBtn =
+    document.getElementById(
+      "saveProfileSettingsBtn"
+    );
+
+
+  const resetProfileSettingsBtn =
+    document.getElementById(
+      "resetProfileSettingsBtn"
+    );
+
+
+  const userAvatar =
+    document.getElementById(
+      "userAvatar"
+    );
+
+
+  const userNameDisplay =
+    document.getElementById(
+      "userNameDisplay"
+    );
+
+
+  const userPlanBadge =
+    document.getElementById(
+      "userPlanBadge"
+    );
+
+
+  const profilePanel =
+    document.getElementById(
+      "settingsPanelProfile"
+    );
+
+
+  if (
+    !settingsDisplayNameInput ||
+    !settingsAvatarPreview
+  ) {
+
+    console.warn(
+      "[NEYO Profile] Required profile DOM missing."
+    );
+
+
+    return;
+  }
+
+
+  /* =====================================================
+     LEGACY OWNERSHIP
+     ===================================================== */
+
+  const legacyOwnerActive =
+    Array
+      .from(
+        document.scripts || []
+      )
+      .some(
+        script =>
+          /(?:^|\/)neo\.js(?:\?|$)/
+            .test(
+              script.src || ""
+            )
+      );
+
+
+  const active =
+    !legacyOwnerActive;
+
+
+  /* =====================================================
+     CONFIG
+     ===================================================== */
+
+  const CONFIG =
+    Object.freeze({
+
+      storageKey:
+        "neyo_profile_v1",
+
+      legacyNameKey:
+        "neyo_profile_name",
+
+      legacyAvatarKey:
+        "neyo_profile_avatar",
+
+      maxSourceBytes:
+        5 * 1024 * 1024,
+
+      maxAvatarDimension:
+        512,
+
+      avatarQuality:
+        0.86,
+
+      maxDisplayNameLength:
+        60,
+
+      allowedImageTypes:
+        [
+          "image/jpeg",
+          "image/png",
+          "image/webp"
+        ],
+
+      defaultName:
+        "User",
+
+      defaultUsername:
+        "@user",
+
+      defaultPlan:
+        "Free Plan"
+    });
+
+
+  /* =====================================================
+     STATE
+     ===================================================== */
+
+  const state = {
+
+    profile: {
+      displayName:
+        CONFIG.defaultName,
+
+      username:
+        CONFIG.defaultUsername,
+
+      avatar:
+        null,
+
+      plan:
+        CONFIG.defaultPlan
+    },
+
+
+    draft: {
+      displayName:
+        CONFIG.defaultName,
+
+      avatar:
+        null
+    },
+
+
+    dirty:
+      false,
+
+    saving:
+      false,
+
+    processingAvatar:
+      false,
+
+    initialized:
+      false
+  };
+
+
+  /* =====================================================
+     EVENT
+     ===================================================== */
+
+  function emit(
+    name,
+    detail = {}
+  ) {
+
+    window.dispatchEvent(
+      new CustomEvent(
         name,
-        detail = {}
-    ) => {
-
-        window.dispatchEvent(
-            new CustomEvent(
-                name,
-                {
-                    detail
-                }
-            )
-        );
-
-    };
-
-
-    const readJson =
-        async response => {
-
-            const data =
-                await response
-                    .json()
-                    .catch(
-                        () => ({})
-                    );
-
-
-            if (!response.ok) {
-
-                const error =
-                    new Error(
-                        data?.error ||
-                        `Request failed (${response.status})`
-                    );
-
-
-                error.status =
-                    response.status;
-
-                error.data =
-                    data;
-
-
-                throw error;
-
-            }
-
-
-            return data;
-
-        };
-
-
-    const getInitial =
-        value => {
-
-            const text =
-                String(
-                    value || "U"
-                )
-                    .trim();
-
-
-            return (
-                text
-                    .charAt(0)
-                    .toUpperCase() ||
-                "U"
-            );
-
-        };
-
-
-    const normalizePlan =
-        value => {
-
-            const plan =
-                String(
-                    value || "free"
-                )
-                    .trim()
-                    .toLowerCase();
-
-
-            return plan === "pro"
-                ? "pro"
-                : "free";
-
-        };
-
-
-    /* =====================================================
-       SUPABASE CLIENT
-       ===================================================== */
-
-    const setSupabaseClient =
-        client => {
-
-            if (
-                !client ||
-                typeof client !==
-                    "object"
-            ) {
-                return false;
-            }
-
-
-            supabaseClient =
-                client;
-
-
-            emit(
-                "neyo:profile-client-ready"
-            );
-
-
-            return true;
-
-        };
-
-
-    /* =====================================================
-       AVATAR UI
-       ===================================================== */
-
-    const renderAvatar =
-        (
-            avatarUrl,
-            fallbackName
-        ) => {
-
-            if (!userAvatar) {
-                return;
-            }
-
-
-            userAvatar
-                .replaceChildren();
-
-
-            if (avatarUrl) {
-
-                const image =
-                    document.createElement(
-                        "img"
-                    );
-
-
-                image.src =
-                    avatarUrl;
-
-
-                image.alt =
-                    fallbackName
-                        ? `${fallbackName} profile photo`
-                        : "Profile photo";
-
-
-                image.loading =
-                    "lazy";
-
-
-                image.decoding =
-                    "async";
-
-
-                image.addEventListener(
-                    "error",
-                    () => {
-
-                        userAvatar
-                            .replaceChildren();
-
-
-                        userAvatar
-                            .classList
-                            .remove(
-                                "has-avatar"
-                            );
-
-
-                        userAvatar.textContent =
-                            getInitial(
-                                fallbackName
-                            );
-
-                    },
-                    {
-                        once: true
-                    }
-                );
-
-
-                userAvatar
-                    .appendChild(
-                        image
-                    );
-
-
-                userAvatar
-                    .classList
-                    .add(
-                        "has-avatar"
-                    );
-
-
-                return;
-
-            }
-
-
-            userAvatar
-                .classList
-                .remove(
-                    "has-avatar"
-                );
-
-
-            userAvatar.textContent =
-                getInitial(
-                    fallbackName
-                );
-
-        };
-
-
-    /* =====================================================
-       PLAN UI
-       ===================================================== */
-
-    const renderPlan =
-        planValue => {
-
-            const plan =
-                normalizePlan(
-                    planValue
-                );
-
-
-            if (userPlanBadge) {
-
-                userPlanBadge.textContent =
-                    plan === "pro"
-                        ? "Pro Plan"
-                        : "Free Plan";
-
-
-                userPlanBadge.dataset.plan =
-                    plan;
-
-            }
-
-
-            if (billingPlanText) {
-
-                billingPlanText.textContent =
-                    plan === "pro"
-                        ? "NEYO Pro"
-                        : "Free Plan";
-
-            }
-
-
-            if (settingsUpgradeBtn) {
-
-                if (
-                    plan === "pro"
-                ) {
-
-                    settingsUpgradeBtn.textContent =
-                        "Pro Active";
-
-                    settingsUpgradeBtn.disabled =
-                        true;
-
-                    settingsUpgradeBtn.setAttribute(
-                        "aria-disabled",
-                        "true"
-                    );
-
-                } else {
-
-                    settingsUpgradeBtn.textContent =
-                        "Upgrade";
-
-                    settingsUpgradeBtn.disabled =
-                        false;
-
-                    settingsUpgradeBtn.removeAttribute(
-                        "aria-disabled"
-                    );
-
-                }
-
-            }
-
-
-            document.documentElement
-                .dataset.plan =
-                plan;
-
-        };
-
-
-    /* =====================================================
-       RENDER PROFILE
-       ===================================================== */
-
-    const renderProfile =
-        () => {
-
-            const user =
-                profileState.user ||
-                {};
-
-            const profile =
-                profileState.profile ||
-                {};
-
-
-            const displayName =
-                profile.displayName ||
-                user.displayName ||
-                user.username ||
-                "User";
-
-
-            if (userNameDisplay) {
-
-                userNameDisplay.textContent =
-                    user.username
-                        ? `@${user.username}`
-                        : displayName;
-
-            }
-
-
-            renderPlan(
-                user.planType
-            );
-
-
-            renderAvatar(
-                profile.avatarUrl,
-                displayName
-            );
-
-
-            emit(
-                "neyo:profile-rendered",
-                {
-                    user:
-                        profileState.user,
-
-                    profile:
-                        profileState.profile
-                }
-            );
-
-        };
-
-
-    /* =====================================================
-       LOAD PROFILE
-       ===================================================== */
-
-    const loadProfile =
-        async () => {
-
-            if (loading) {
-                return profileState;
-            }
-
-
-            loading =
-                true;
-
-
-            emit(
-                "neyo:profile-load-start"
-            );
-
-
-            try {
-
-                const response =
-                    await fetch(
-                        PROFILE_ENDPOINT,
-                        {
-                            method:
-                                "GET",
-
-                            credentials:
-                                "include",
-
-                            cache:
-                                "no-store",
-
-                            headers: {
-                                Accept:
-                                    "application/json"
-                            }
-                        }
-                    );
-
-
-                const data =
-                    await readJson(
-                        response
-                    );
-
-
-                profileState = {
-
-                    user:
-                        data?.user ||
-                        null,
-
-                    profile:
-                        data?.profile ||
-                        null
-
-                };
-
-
-                renderProfile();
-
-
-                /*
-                Send real account plan to
-                model/access components.
-                */
-
-                if (
-                    profileState
-                        .user
-                        ?.planType
-                ) {
-
-                    emit(
-                        "neyo:model-plan-set",
-                        {
-                            plan:
-                                normalizePlan(
-                                    profileState
-                                        .user
-                                        .planType
-                                )
-                        }
-                    );
-
-                }
-
-
-                emit(
-                    "neyo:profile-loaded",
-                    {
-                        user:
-                            profileState.user,
-
-                        profile:
-                            profileState.profile
-                    }
-                );
-
-
-                return {
-                    ...profileState
-                };
-
-            } catch (error) {
-
-                emit(
-                    "neyo:profile-error",
-                    {
-                        error
-                    }
-                );
-
-
-                console.error(
-                    "[NEYO Profile] Load failed:",
-                    error
-                );
-
-
-                return null;
-
-            } finally {
-
-                loading =
-                    false;
-
-            }
-
-        };
-
-
-    /* =====================================================
-       VALIDATE AVATAR
-       ===================================================== */
-
-    const validateAvatar =
-        file => {
-
-            if (
-                !(file instanceof File)
-            ) {
-
-                throw new Error(
-                    "Invalid profile photo."
-                );
-
-            }
-
-
-            if (
-                !ALLOWED_AVATAR_TYPES
-                    .has(
-                        file.type
-                    )
-            ) {
-
-                throw new Error(
-                    "Only JPG, PNG or WebP images are allowed."
-                );
-
-            }
-
-
-            if (
-                file.size <= 0 ||
-                file.size >
-                    MAX_AVATAR_SIZE
-            ) {
-
-                throw new Error(
-                    "Profile photo must be under 5 MB."
-                );
-
-            }
-
-
-            return true;
-
-        };
-
-
-    /* =====================================================
-       PREPARE AVATAR UPLOAD
-       ===================================================== */
-
-    const prepareAvatarUpload =
-        async file => {
-
-            validateAvatar(
-                file
-            );
-
-
-            const response =
-                await fetch(
-                    AVATAR_ENDPOINT,
-                    {
-                        method:
-                            "POST",
-
-                        credentials:
-                            "include",
-
-                        cache:
-                            "no-store",
-
-                        headers: {
-                            "Content-Type":
-                                "application/json",
-
-                            Accept:
-                                "application/json"
-                        },
-
-                        body:
-                            JSON.stringify({
-                                action:
-                                    "prepare",
-
-                                filename:
-                                    file.name,
-
-                                mimeType:
-                                    file.type,
-
-                                size:
-                                    file.size
-                            })
-                    }
-                );
-
-
-            const data =
-                await readJson(
-                    response
-                );
-
-
-            if (
-                !data?.upload?.bucket ||
-                !data?.upload?.path ||
-                !data?.upload?.token
-            ) {
-
-                throw new Error(
-                    "Avatar upload information was not returned."
-                );
-
-            }
-
-
-            return data.upload;
-
-        };
-
-
-    /* =====================================================
-       SAVE AVATAR
-       ===================================================== */
-
-    const saveAvatar =
-        async path => {
-
-            const response =
-                await fetch(
-                    AVATAR_ENDPOINT,
-                    {
-                        method:
-                            "POST",
-
-                        credentials:
-                            "include",
-
-                        cache:
-                            "no-store",
-
-                        headers: {
-                            "Content-Type":
-                                "application/json",
-
-                            Accept:
-                                "application/json"
-                        },
-
-                        body:
-                            JSON.stringify({
-                                action:
-                                    "save",
-
-                                path
-                            })
-                    }
-                );
-
-
-            return readJson(
-                response
-            );
-
-        };
-
-
-    /* =====================================================
-       UPLOAD AVATAR
-       ===================================================== */
-
-    const uploadAvatar =
-        async file => {
-
-            if (avatarUploading) {
-                return null;
-            }
-
-
-            validateAvatar(
-                file
-            );
-
-
-            if (!supabaseClient) {
-
-                throw new Error(
-                    "Profile upload service is not ready."
-                );
-
-            }
-
-
-            avatarUploading =
-                true;
-
-
-            emit(
-                "neyo:avatar-upload-start",
-                {
-                    file
-                }
-            );
-
-
-            try {
-
-                const upload =
-                    await prepareAvatarUpload(
-                        file
-                    );
-
-
-                const {
-                    error
-                } =
-                    await supabaseClient
-                        .storage
-                        .from(
-                            upload.bucket
-                        )
-                        .uploadToSignedUrl(
-                            upload.path,
-                            upload.token,
-                            file,
-                            {
-                                contentType:
-                                    file.type
-                            }
-                        );
-
-
-                if (error) {
-
-                    throw new Error(
-                        error.message ||
-                        "Profile photo upload failed."
-                    );
-
-                }
-
-
-                const saved =
-                    await saveAvatar(
-                        upload.path
-                    );
-
-
-                const avatarUrl =
-                    saved?.avatarUrl ||
-                    null;
-
-
-                profileState = {
-                    ...profileState,
-
-                    profile: {
-                        ...(
-                            profileState
-                                .profile ||
-                            {}
-                        ),
-
-                        avatarUrl
-                    }
-                };
-
-
-                renderProfile();
-
-
-                emit(
-                    "neyo:avatar-upload-success",
-                    {
-                        avatarUrl
-                    }
-                );
-
-
-                return avatarUrl;
-
-            } catch (error) {
-
-                emit(
-                    "neyo:avatar-upload-error",
-                    {
-                        error
-                    }
-                );
-
-
-                window
-                    .NeyoNotifications
-                    ?.error?.(
-                        error?.message ||
-                        "Profile photo could not be updated."
-                    );
-
-
-                throw error;
-
-            } finally {
-
-                avatarUploading =
-                    false;
-
-
-                emit(
-                    "neyo:avatar-upload-end"
-                );
-
-            }
-
-        };
-
-
-    /* =====================================================
-       REMOVE AVATAR
-       ===================================================== */
-
-    const removeAvatar =
-        async () => {
-
-            const response =
-                await fetch(
-                    AVATAR_ENDPOINT,
-                    {
-                        method:
-                            "DELETE",
-
-                        credentials:
-                            "include",
-
-                        cache:
-                            "no-store",
-
-                        headers: {
-                            Accept:
-                                "application/json"
-                        }
-                    }
-                );
-
-
-            const data =
-                await readJson(
-                    response
-                );
-
-
-            profileState = {
-                ...profileState,
-
-                profile: {
-                    ...(
-                        profileState
-                            .profile ||
-                        {}
-                    ),
-
-                    avatarUrl:
-                        null
-                }
-            };
-
-
-            renderProfile();
-
-
-            emit(
-                "neyo:avatar-removed"
-            );
-
-
-            return data;
-
-        };
-
-
-    /* =====================================================
-       LOCAL PROFILE UPDATE
-       ===================================================== */
-
-    const setProfileState =
-        data => {
-
-            if (
-                !data ||
-                typeof data !==
-                    "object"
-            ) {
-                return;
-            }
-
-
-            profileState = {
-
-                user:
-                    data.user ??
-                    profileState.user,
-
-                profile:
-                    data.profile ??
-                    profileState.profile
-
-            };
-
-
-            renderProfile();
-
-
-            if (
-                profileState
-                    .user
-                    ?.planType
-            ) {
-
-                emit(
-                    "neyo:model-plan-set",
-                    {
-                        plan:
-                            normalizePlan(
-                                profileState
-                                    .user
-                                    .planType
-                            )
-                    }
-                );
-
-            }
-
-        };
-
-
-    /* =====================================================
-       PUBLIC EVENTS
-       ===================================================== */
-
-    window.addEventListener(
-        "neyo:profile-client-set",
-        event => {
-
-            setSupabaseClient(
-                event.detail?.client
-            );
-
+        {
+          detail
         }
+      )
     );
+  }
 
 
-    window.addEventListener(
-        "neyo:profile-load-request",
-        () => {
+  /* =====================================================
+     UTIL
+     ===================================================== */
 
-            loadProfile();
+  function cleanDisplayName(
+    value
+  ) {
 
-        }
-    );
-
-
-    window.addEventListener(
-        "neyo:profile-refresh",
-        () => {
-
-            loadProfile();
-
-        }
-    );
-
-
-    window.addEventListener(
-        "neyo:avatar-upload-request",
-        event => {
-
-            uploadAvatar(
-                event.detail?.file
-            )
-                .catch(
-                    error => {
-
-                        console.error(
-                            "Avatar upload failed:",
-                            error
-                        );
-
-                    }
-                );
-
-        }
-    );
+    return String(
+      value || ""
+    )
+      .replace(
+        /\s+/g,
+        " "
+      )
+      .replace(
+        /[\u0000-\u001F\u007F]/g,
+        ""
+      )
+      .trim()
+      .slice(
+        0,
+        CONFIG.maxDisplayNameLength
+      );
+  }
 
 
-    window.addEventListener(
-        "neyo:avatar-remove-request",
-        () => {
+  function normalizeUsername(
+    value
+  ) {
 
-            removeAvatar()
-                .catch(
-                    error => {
-
-                        window
-                            .NeyoNotifications
-                            ?.error?.(
-                                error?.message ||
-                                "Profile photo could not be removed."
-                            );
-
-                    }
-                );
-
-        }
-    );
+    let username =
+      String(
+        value || ""
+      )
+        .trim();
 
 
-    /* =====================================================
-       PUBLIC API
-       ===================================================== */
+    if (!username) {
 
-    window.NeyoProfile =
-        Object.freeze({
-
-            load:
-                loadProfile,
-
-            refresh:
-                loadProfile,
-
-            render:
-                renderProfile,
-
-            uploadAvatar,
-
-            removeAvatar,
-
-            setSupabaseClient,
-
-            setState:
-                setProfileState,
-
-            getUser:
-                () => {
-
-                    return profileState.user
-                        ? {
-                            ...profileState.user
-                        }
-                        : null;
-
-                },
-
-            getProfile:
-                () => {
-
-                    return profileState.profile
-                        ? {
-                            ...profileState.profile
-                        }
-                        : null;
-
-                },
-
-            getState:
-                () => ({
-
-                    user:
-                        profileState.user
-                            ? {
-                                ...profileState.user
-                            }
-                            : null,
-
-                    profile:
-                        profileState.profile
-                            ? {
-                                ...profileState.profile
-                            }
-                            : null
-
-                }),
-
-            getPlan:
-                () =>
-                    normalizePlan(
-                        profileState
-                            ?.user
-                            ?.planType
-                    ),
-
-            isLoading:
-                () =>
-                    loading,
-
-            isAvatarUploading:
-                () =>
-                    avatarUploading
-
-        });
-
-
-    /* =====================================================
-       INITIAL LOAD
-
-       Original component did not reliably load itself.
-       Now profile is fetched once when app boots.
-       ===================================================== */
-
-    const bootProfile =
-        () => {
-
-            loadProfile()
-                .catch(
-                    error => {
-
-                        console.error(
-                            "Initial profile load failed:",
-                            error
-                        );
-
-                    }
-                );
-
-        };
+      return CONFIG.defaultUsername;
+    }
 
 
     if (
-        document.readyState ===
-        "loading"
+      !username.startsWith(
+        "@"
+      )
     ) {
 
-        document.addEventListener(
-            "DOMContentLoaded",
-            bootProfile,
-            {
-                once: true
-            }
+      username =
+        `@${username}`;
+    }
+
+
+    return username
+      .slice(
+        0,
+        100
+      );
+  }
+
+
+  function normalizePlan(
+    value
+  ) {
+
+    const plan =
+      String(
+        value || ""
+      )
+        .trim();
+
+
+    return (
+      plan ||
+      CONFIG.defaultPlan
+    );
+  }
+
+
+  function escapeInitialsSource(
+    value
+  ) {
+
+    return cleanDisplayName(
+      value
+    ) ||
+    CONFIG.defaultName;
+  }
+
+
+  function getInitials(
+    value
+  ) {
+
+    const parts =
+      escapeInitialsSource(
+        value
+      )
+        .split(/\s+/)
+        .filter(Boolean);
+
+
+    if (!parts.length) {
+      return "U";
+    }
+
+
+    if (
+      parts.length === 1
+    ) {
+
+      return parts[0]
+        .slice(0, 2)
+        .toUpperCase();
+    }
+
+
+    return (
+      parts[0][0] +
+      parts[
+        parts.length - 1
+      ][0]
+    ).toUpperCase();
+  }
+
+
+  /* =====================================================
+     STORAGE
+     ===================================================== */
+
+  function safeRead(
+    key
+  ) {
+
+    try {
+
+      return localStorage.getItem(
+        key
+      );
+
+    } catch {
+
+      return null;
+    }
+  }
+
+
+  function safeWrite(
+    key,
+    value
+  ) {
+
+    try {
+
+      localStorage.setItem(
+        key,
+        value
+      );
+
+
+      return true;
+
+    } catch (
+      error
+    ) {
+
+      console.warn(
+        "[NEYO Profile] Could not persist profile:",
+        error
+      );
+
+
+      return false;
+    }
+  }
+
+
+  function safeRemove(
+    key
+  ) {
+
+    try {
+
+      localStorage.removeItem(
+        key
+      );
+
+    } catch {}
+  }
+
+
+  function loadStoredProfile() {
+
+    let stored =
+      null;
+
+
+    try {
+
+      const raw =
+        safeRead(
+          CONFIG.storageKey
         );
 
-    } else {
 
-        bootProfile();
+      if (raw) {
 
+        stored =
+          JSON.parse(
+            raw
+          );
+      }
+
+    } catch {}
+
+
+    /*
+     * Compatibility with older local profile fields.
+     */
+
+    const legacyName =
+      safeRead(
+        CONFIG.legacyNameKey
+      );
+
+
+    const legacyAvatar =
+      safeRead(
+        CONFIG.legacyAvatarKey
+      );
+
+
+    return {
+
+      displayName:
+        cleanDisplayName(
+          stored?.displayName ||
+          legacyName ||
+          CONFIG.defaultName
+        ) ||
+        CONFIG.defaultName,
+
+
+      username:
+        normalizeUsername(
+          stored?.username ||
+          CONFIG.defaultUsername
+        ),
+
+
+      avatar:
+        typeof stored?.avatar ===
+          "string"
+          ? stored.avatar
+          : (
+              typeof legacyAvatar ===
+              "string"
+                ? legacyAvatar
+                : null
+            ),
+
+
+      plan:
+        normalizePlan(
+          stored?.plan ||
+          CONFIG.defaultPlan
+        )
+    };
+  }
+
+
+  function persistProfile() {
+
+    const payload = {
+
+      displayName:
+        state.profile
+          .displayName,
+
+      username:
+        state.profile
+          .username,
+
+      avatar:
+        state.profile
+          .avatar,
+
+      plan:
+        state.profile
+          .plan
+    };
+
+
+    const success =
+      safeWrite(
+        CONFIG.storageKey,
+        JSON.stringify(
+          payload
+        )
+      );
+
+
+    /*
+     * Keep old keys synchronized
+     * while migration is in progress.
+     */
+
+    if (success) {
+
+      safeWrite(
+        CONFIG.legacyNameKey,
+        payload.displayName
+      );
+
+
+      if (
+        payload.avatar
+      ) {
+
+        safeWrite(
+          CONFIG.legacyAvatarKey,
+          payload.avatar
+        );
+
+      } else {
+
+        safeRemove(
+          CONFIG.legacyAvatarKey
+        );
+      }
     }
+
+
+    return success;
+  }
+
+
+  /* =====================================================
+     AVATAR RENDER
+     ===================================================== */
+
+  function renderAvatarElement(
+    element,
+    avatar,
+    displayName
+  ) {
+
+    if (!element) {
+      return;
+    }
+
+
+    /*
+     * Remove previous image safely.
+     */
+
+    element
+      .querySelectorAll(
+        "img[data-neyo-profile-avatar]"
+      )
+      .forEach(
+        image =>
+          image.remove()
+      );
+
+
+    if (
+      avatar &&
+      typeof avatar ===
+        "string"
+    ) {
+
+      const image =
+        document.createElement(
+          "img"
+        );
+
+
+      image.setAttribute(
+        "data-neyo-profile-avatar",
+        "true"
+      );
+
+
+      image.alt =
+        "";
+
+
+      image.src =
+        avatar;
+
+
+      image.draggable =
+        false;
+
+
+      image.style.width =
+        "100%";
+
+
+      image.style.height =
+        "100%";
+
+
+      image.style.objectFit =
+        "cover";
+
+
+      image.style.borderRadius =
+        "inherit";
+
+
+      element.textContent =
+        "";
+
+
+      element.appendChild(
+        image
+      );
+
+
+      element.classList.add(
+        "has-avatar"
+      );
+
+
+      return;
+    }
+
+
+    element.classList.remove(
+      "has-avatar"
+    );
+
+
+    element.textContent =
+      getInitials(
+        displayName
+      );
+  }
+
+
+  /* =====================================================
+     SIDEBAR PROFILE
+     ===================================================== */
+
+  function renderSidebarProfile() {
+
+    const profile =
+      state.profile;
+
+
+    if (
+      userNameDisplay
+    ) {
+
+      userNameDisplay.textContent =
+        profile.displayName;
+    }
+
+
+    if (
+      userPlanBadge
+    ) {
+
+      userPlanBadge.textContent =
+        profile.plan;
+    }
+
+
+    renderAvatarElement(
+      userAvatar,
+      profile.avatar,
+      profile.displayName
+    );
+  }
+
+
+  /* =====================================================
+     SETTINGS PREVIEW
+     ===================================================== */
+
+  function renderDraft() {
+
+    if (
+      settingsDisplayNameInput
+    ) {
+
+      settingsDisplayNameInput.value =
+        state.draft
+          .displayName;
+    }
+
+
+    if (
+      settingsUsernameInput
+    ) {
+
+      settingsUsernameInput.value =
+        state.profile
+          .username;
+    }
+
+
+    renderAvatarElement(
+      settingsAvatarPreview,
+      state.draft.avatar,
+      state.draft.displayName
+    );
+
+
+    syncDirtyState();
+  }
+
+
+  /* =====================================================
+     DIRTY STATE
+     ===================================================== */
+
+  function computeDirty() {
+
+    return (
+      state.draft.displayName !==
+        state.profile.displayName ||
+
+      state.draft.avatar !==
+        state.profile.avatar
+    );
+  }
+
+
+  function syncDirtyState() {
+
+    state.dirty =
+      computeDirty();
+
+
+    profilePanel
+      ?.classList
+      .toggle(
+        "is-dirty",
+        state.dirty
+      );
+
+
+    if (
+      saveProfileSettingsBtn
+    ) {
+
+      saveProfileSettingsBtn.disabled =
+        !state.dirty ||
+        state.saving ||
+        state.processingAvatar;
+    }
+
+
+    if (
+      resetProfileSettingsBtn
+    ) {
+
+      resetProfileSettingsBtn.disabled =
+        !state.dirty ||
+        state.saving;
+    }
+
+
+    return state.dirty;
+  }
+
+
+  /* =====================================================
+     BUSY
+     ===================================================== */
+
+  function setSaving(
+    saving
+  ) {
+
+    state.saving =
+      Boolean(
+        saving
+      );
+
+
+    if (
+      saveProfileSettingsBtn
+    ) {
+
+      saveProfileSettingsBtn
+        .setAttribute(
+          "aria-busy",
+          String(
+            state.saving
+          )
+        );
+
+
+      saveProfileSettingsBtn.textContent =
+        state.saving
+          ? "Saving…"
+          : "Save";
+    }
+
+
+    syncDirtyState();
+  }
+
+
+  function setAvatarProcessing(
+    processing
+  ) {
+
+    state.processingAvatar =
+      Boolean(
+        processing
+      );
+
+
+    chooseAvatarBtn
+      ?.toggleAttribute(
+        "disabled",
+        state.processingAvatar
+      );
+
+
+    syncDirtyState();
+  }
+
+
+  /* =====================================================
+     IMAGE LOADING
+     ===================================================== */
+
+  function readFileAsDataURL(
+    file
+  ) {
+
+    return new Promise(
+      (
+        resolve,
+        reject
+      ) => {
+
+        const reader =
+          new FileReader();
+
+
+        reader.onload =
+          () =>
+            resolve(
+              String(
+                reader.result ||
+                ""
+              )
+            );
+
+
+        reader.onerror =
+          () =>
+            reject(
+              new Error(
+                "Could not read image."
+              )
+            );
+
+
+        reader.readAsDataURL(
+          file
+        );
+      }
+    );
+  }
+
+
+  function loadImage(
+    source
+  ) {
+
+    return new Promise(
+      (
+        resolve,
+        reject
+      ) => {
+
+        const image =
+          new Image();
+
+
+        image.onload =
+          () =>
+            resolve(
+              image
+            );
+
+
+        image.onerror =
+          () =>
+            reject(
+              new Error(
+                "Invalid image."
+              )
+            );
+
+
+        image.src =
+          source;
+      }
+    );
+  }
+
+
+  /* =====================================================
+     AVATAR PROCESSING
+
+     Source can be up to 5 MB.
+     We resize before storing so localStorage
+     is not filled with a huge raw photo.
+     ===================================================== */
+
+  async function processAvatarFile(
+    file
+  ) {
+
+    if (
+      !(file instanceof File)
+    ) {
+
+      throw new Error(
+        "Invalid image file."
+      );
+    }
+
+
+    if (
+      !CONFIG.allowedImageTypes
+        .includes(
+          file.type
+        )
+    ) {
+
+      throw new Error(
+        "Use PNG, JPG or WebP."
+      );
+    }
+
+
+    if (
+      file.size >
+      CONFIG.maxSourceBytes
+    ) {
+
+      throw new Error(
+        "Profile photo must be 5 MB or smaller."
+      );
+    }
+
+
+    const source =
+      await readFileAsDataURL(
+        file
+      );
+
+
+    const image =
+      await loadImage(
+        source
+      );
+
+
+    const longest =
+      Math.max(
+        image.naturalWidth,
+        image.naturalHeight
+      );
+
+
+    const scale =
+      longest >
+      CONFIG.maxAvatarDimension
+        ? CONFIG.maxAvatarDimension /
+          longest
+        : 1;
+
+
+    const width =
+      Math.max(
+        1,
+        Math.round(
+          image.naturalWidth *
+          scale
+        )
+      );
+
+
+    const height =
+      Math.max(
+        1,
+        Math.round(
+          image.naturalHeight *
+          scale
+        )
+      );
+
+
+    const canvas =
+      document.createElement(
+        "canvas"
+      );
+
+
+    canvas.width =
+      width;
+
+
+    canvas.height =
+      height;
+
+
+    const context =
+      canvas.getContext(
+        "2d",
+        {
+          alpha:
+            true
+        }
+      );
+
+
+    if (!context) {
+
+      throw new Error(
+        "Image processing unavailable."
+      );
+    }
+
+
+    context.drawImage(
+      image,
+      0,
+      0,
+      width,
+      height
+    );
+
+
+    /*
+     * WebP keeps storage significantly smaller.
+     * Browser fallback below if WebP encoding fails.
+     */
+
+    let output =
+      canvas.toDataURL(
+        "image/webp",
+        CONFIG.avatarQuality
+      );
+
+
+    if (
+      !output ||
+      output ===
+        "data:,"
+    ) {
+
+      output =
+        canvas.toDataURL(
+          "image/jpeg",
+          CONFIG.avatarQuality
+        );
+    }
+
+
+    return output;
+  }
+
+
+  /* =====================================================
+     AVATAR SELECT
+     ===================================================== */
+
+  async function handleAvatarFile(
+    file
+  ) {
+
+    if (!active) {
+      return false;
+    }
+
+
+    setAvatarProcessing(
+      true
+    );
+
+
+    try {
+
+      const avatar =
+        await processAvatarFile(
+          file
+        );
+
+
+      state.draft.avatar =
+        avatar;
+
+
+      renderDraft();
+
+
+      emit(
+        "neyo:profile-avatar-preview",
+        {
+          hasAvatar:
+            true
+        }
+      );
+
+
+      return true;
+
+    } catch (
+      error
+    ) {
+
+      console.warn(
+        "[NEYO Profile] Avatar rejected:",
+        error
+      );
+
+
+      emit(
+        "neyo:profile-error",
+        {
+          code:
+            "avatar",
+
+          message:
+            error?.message ||
+            "Could not use profile photo."
+        }
+      );
+
+
+      return false;
+
+    } finally {
+
+      setAvatarProcessing(
+        false
+      );
+
+
+      if (
+        settingsAvatarFileInput
+      ) {
+
+        settingsAvatarFileInput.value =
+          "";
+      }
+    }
+  }
+
+
+  /* =====================================================
+     REMOVE AVATAR
+     ===================================================== */
+
+  function removeAvatar() {
+
+    if (!active) {
+      return false;
+    }
+
+
+    state.draft.avatar =
+      null;
+
+
+    renderDraft();
+
+
+    emit(
+      "neyo:profile-avatar-preview",
+      {
+        hasAvatar:
+          false
+      }
+    );
+
+
+    return true;
+  }
+
+
+  /* =====================================================
+     VALIDATE
+     ===================================================== */
+
+  function validateDraft() {
+
+    const displayName =
+      cleanDisplayName(
+        settingsDisplayNameInput
+          ?.value ||
+        state.draft.displayName
+      );
+
+
+    if (!displayName) {
+
+      return {
+        valid:
+          false,
+
+        message:
+          "Display name is required."
+      };
+    }
+
+
+    if (
+      displayName.length >
+      CONFIG.maxDisplayNameLength
+    ) {
+
+      return {
+        valid:
+          false,
+
+        message:
+          `Display name must be ${CONFIG.maxDisplayNameLength} characters or less.`
+      };
+    }
+
+
+    return {
+      valid:
+        true,
+
+      displayName
+    };
+  }
+
+
+  /* =====================================================
+     SAVE
+     ===================================================== */
+
+  async function save() {
+
+    if (
+      !active ||
+      state.saving ||
+      state.processingAvatar
+    ) {
+      return false;
+    }
+
+
+    state.draft.displayName =
+      cleanDisplayName(
+        settingsDisplayNameInput
+          ?.value ||
+        state.draft.displayName
+      );
+
+
+    const validation =
+      validateDraft();
+
+
+    if (
+      !validation.valid
+    ) {
+
+      emit(
+        "neyo:profile-error",
+        {
+          code:
+            "validation",
+
+          message:
+            validation.message
+        }
+      );
+
+
+      settingsDisplayNameInput
+        ?.focus
+        ?.();
+
+
+      return false;
+    }
+
+
+    setSaving(
+      true
+    );
+
+
+    try {
+
+      state.profile = {
+
+        ...state.profile,
+
+        displayName:
+          validation.displayName,
+
+        avatar:
+          state.draft.avatar
+      };
+
+
+      const persisted =
+        persistProfile();
+
+
+      renderSidebarProfile();
+
+
+      state.draft = {
+
+        displayName:
+          state.profile
+            .displayName,
+
+        avatar:
+          state.profile
+            .avatar
+      };
+
+
+      renderDraft();
+
+
+      /*
+       * Remote/profile backend modules may listen
+       * and sync this data separately.
+       */
+
+      emit(
+        "neyo:profile-save-request",
+        {
+          profile: {
+            ...state.profile
+          }
+        }
+      );
+
+
+      emit(
+        "neyo:profile-change",
+        {
+          profile: {
+            ...state.profile
+          },
+
+          persistedLocally:
+            persisted
+        }
+      );
+
+
+      return true;
+
+    } finally {
+
+      setSaving(
+        false
+      );
+    }
+  }
+
+
+  /* =====================================================
+     RESET UNSAVED CHANGES
+     ===================================================== */
+
+  function resetDraft() {
+
+    if (
+      !active ||
+      state.saving
+    ) {
+      return false;
+    }
+
+
+    state.draft = {
+
+      displayName:
+        state.profile
+          .displayName,
+
+      avatar:
+        state.profile
+          .avatar
+    };
+
+
+    renderDraft();
+
+
+    emit(
+      "neyo:profile-reset"
+    );
+
+
+    return true;
+  }
+
+
+  /* =====================================================
+     EXTERNAL AUTH PROFILE
+
+     auth.js can provide authoritative identity.
+     Bean ID and plan come from auth/account state.
+     ===================================================== */
+
+  function applyAuthProfile(
+    profile = {}
+  ) {
+
+    if (
+      !profile ||
+      typeof profile !==
+        "object"
+    ) {
+      return false;
+    }
+
+
+    const next = {
+      ...state.profile
+    };
+
+
+    if (
+      typeof profile.displayName ===
+        "string" ||
+      typeof profile.name ===
+        "string"
+    ) {
+
+      next.displayName =
+        cleanDisplayName(
+          profile.displayName ||
+          profile.name
+        ) ||
+        next.displayName;
+    }
+
+
+    const identity =
+      profile.beanId ??
+      profile.beanID ??
+      profile.username;
+
+
+    if (
+      typeof identity ===
+        "string" &&
+      identity.trim()
+    ) {
+
+      next.username =
+        normalizeUsername(
+          identity
+        );
+    }
+
+
+    if (
+      typeof profile.avatar ===
+        "string" ||
+      profile.avatar ===
+        null
+    ) {
+
+      next.avatar =
+        profile.avatar;
+    }
+
+
+    if (
+      typeof profile.plan ===
+        "string"
+    ) {
+
+      next.plan =
+        normalizePlan(
+          profile.plan
+        );
+    }
+
+
+    state.profile =
+      next;
+
+
+    state.draft = {
+
+      displayName:
+        next.displayName,
+
+      avatar:
+        next.avatar
+    };
+
+
+    persistProfile();
+
+    renderSidebarProfile();
+
+    renderDraft();
+
+
+    emit(
+      "neyo:profile-change",
+      {
+        profile: {
+          ...state.profile
+        },
+
+        source:
+          "auth"
+      }
+    );
+
+
+    return true;
+  }
+
+
+  /* =====================================================
+     PLAN UPDATE
+     ===================================================== */
+
+  function setPlan(
+    plan
+  ) {
+
+    state.profile.plan =
+      normalizePlan(
+        plan
+      );
+
+
+    persistProfile();
+
+    renderSidebarProfile();
+
+
+    return state.profile.plan;
+  }
+
+
+  /* =====================================================
+     IDENTITY UPDATE
+     ===================================================== */
+
+  function setIdentity(
+    username
+  ) {
+
+    state.profile.username =
+      normalizeUsername(
+        username
+      );
+
+
+    persistProfile();
+
+    renderDraft();
+
+
+    return state.profile
+      .username;
+  }
+
+
+  /* =====================================================
+     PROFILE PANEL OPEN
+     ===================================================== */
+
+  function syncEditorFromProfile() {
+
+    state.draft = {
+
+      displayName:
+        state.profile
+          .displayName,
+
+      avatar:
+        state.profile
+          .avatar
+    };
+
+
+    renderDraft();
+
+
+    return true;
+  }
+
+
+  /* =====================================================
+     INPUT
+     ===================================================== */
+
+  function handleNameInput() {
+
+    state.draft.displayName =
+      cleanDisplayName(
+        settingsDisplayNameInput
+          ?.value
+      );
+
+
+    renderAvatarElement(
+      settingsAvatarPreview,
+      state.draft.avatar,
+      state.draft.displayName
+    );
+
+
+    syncDirtyState();
+  }
+
+
+  /* =====================================================
+     KEYBOARD SAVE
+     ===================================================== */
+
+  function handleInputKeydown(
+    event
+  ) {
+
+    if (
+      event.key !==
+        "Enter" ||
+      event.shiftKey ||
+      event.altKey
+    ) {
+      return;
+    }
+
+
+    if (
+      !event.ctrlKey &&
+      !event.metaKey
+    ) {
+      return;
+    }
+
+
+    event.preventDefault();
+
+
+    void save();
+  }
+
+
+  /* =====================================================
+     BIND
+     ===================================================== */
+
+  function bind() {
+
+    if (!active) {
+      return false;
+    }
+
+
+    chooseAvatarBtn
+      ?.addEventListener(
+        "click",
+        event => {
+
+          event.preventDefault();
+
+
+          settingsAvatarFileInput
+            ?.click
+            ?.();
+        }
+      );
+
+
+    settingsAvatarFileInput
+      ?.addEventListener(
+        "change",
+        event => {
+
+          const file =
+            event.target
+              ?.files?.[0];
+
+
+          if (file) {
+
+            void handleAvatarFile(
+              file
+            );
+          }
+        }
+      );
+
+
+    removeAvatarBtn
+      ?.addEventListener(
+        "click",
+        event => {
+
+          event.preventDefault();
+
+
+          removeAvatar();
+        }
+      );
+
+
+    settingsDisplayNameInput
+      ?.addEventListener(
+        "input",
+        handleNameInput
+      );
+
+
+    settingsDisplayNameInput
+      ?.addEventListener(
+        "keydown",
+        handleInputKeydown
+      );
+
+
+    saveProfileSettingsBtn
+      ?.addEventListener(
+        "click",
+        event => {
+
+          event.preventDefault();
+
+
+          void save();
+        }
+      );
+
+
+    resetProfileSettingsBtn
+      ?.addEventListener(
+        "click",
+        event => {
+
+          event.preventDefault();
+
+
+          resetDraft();
+        }
+      );
+
+
+    /*
+     * settings.js emits this when Profile tab opens.
+     */
+
+    window.addEventListener(
+      "neyo:profile-settings-open-request",
+      syncEditorFromProfile
+    );
+
+
+    /*
+     * auth.js can send authoritative identity/profile.
+     */
+
+    window.addEventListener(
+      "neyo:auth-profile",
+      event => {
+
+        applyAuthProfile(
+          event.detail
+            ?.profile ||
+          event.detail ||
+          {}
+        );
+      }
+    );
+
+
+    window.addEventListener(
+      "neyo:account-plan-change",
+      event => {
+
+        const plan =
+          event.detail
+            ?.plan;
+
+
+        if (plan) {
+
+          setPlan(
+            plan
+          );
+        }
+      }
+    );
+
+
+    return true;
+  }
+
+
+  /* =====================================================
+     INIT
+     ===================================================== */
+
+  state.profile =
+    loadStoredProfile();
+
+
+  state.draft = {
+
+    displayName:
+      state.profile
+        .displayName,
+
+    avatar:
+      state.profile
+        .avatar
+  };
+
+
+  if (active) {
+
+    bind();
+
+    renderSidebarProfile();
+
+    renderDraft();
+
+    state.initialized =
+      true;
+  }
+
+
+  /* =====================================================
+     PUBLIC API
+     ===================================================== */
+
+  const api =
+    Object.freeze({
+
+      __controller:
+        true,
+
+
+      version:
+        VERSION,
+
+
+      active,
+
+
+      legacyOwnerActive,
+
+
+      save,
+
+
+      reset:
+        resetDraft,
+
+
+      refresh:
+        syncEditorFromProfile,
+
+
+      setAuthProfile:
+        applyAuthProfile,
+
+
+      setPlan,
+
+
+      setIdentity,
+
+
+      removeAvatar,
+
+
+      chooseAvatar() {
+
+        if (!active) {
+          return false;
+        }
+
+
+        settingsAvatarFileInput
+          ?.click
+          ?.();
+
+
+        return true;
+      },
+
+
+      setDisplayName(
+        value,
+        {
+          saveImmediately =
+            false
+        } = {}
+      ) {
+
+        state.draft.displayName =
+          cleanDisplayName(
+            value
+          );
+
+
+        renderDraft();
+
+
+        if (
+          saveImmediately
+        ) {
+
+          return save();
+        }
+
+
+        return state.draft
+          .displayName;
+      },
+
+
+      getProfile() {
+
+        return {
+          ...state.profile
+        };
+      },
+
+
+      getDraft() {
+
+        return {
+          ...state.draft
+        };
+      },
+
+
+      isDirty:
+        () =>
+          computeDirty(),
+
+
+      getState() {
+
+        return {
+
+          version:
+            VERSION,
+
+          active,
+
+          legacyOwnerActive,
+
+          initialized:
+            state.initialized,
+
+          dirty:
+            computeDirty(),
+
+          saving:
+            state.saving,
+
+          processingAvatar:
+            state.processingAvatar,
+
+          profile: {
+            ...state.profile
+          },
+
+          draft: {
+            ...state.draft
+          }
+        };
+      }
+    });
+
+
+  Object.defineProperty(
+    window,
+    "NeyoProfile",
+    {
+      value:
+        api,
+
+      writable:
+        false,
+
+      configurable:
+        true,
+
+      enumerable:
+        true
+    }
+  );
+
+
+  emit(
+    "neyo:profile-ready",
+    {
+      version:
+        VERSION,
+
+      active,
+
+      legacyOwnerActive,
+
+      profile: {
+        ...state.profile
+      }
+    }
+  );
 
 })();

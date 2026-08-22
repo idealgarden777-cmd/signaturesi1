@@ -1,45 +1,55 @@
 /*
 =========================================================
 NEYO — MESSAGES CORE
-CHATGPT-STANDARD v7
+FINAL CLEAN v1
 
 FILE:
 public/js/components/messages.js
 
 OWNS
 ---------------------------------------------------------
-✅ Message DOM access
-✅ User / assistant message shells
-✅ Thinking state
-✅ Message updates
-✅ Message deduplication
-✅ Auto-scroll
-✅ Clear messages
-✅ Live chat events
-✅ Safe text rendering
-✅ Optional sanitized HTML
-✅ Compatibility with chat.js
-✅ Compatibility with untouched neo.js
+- Message DOM
+- User / assistant message shells
+- Thinking indicator
+- Message updates
+- Message removal
+- Clear / replace conversation UI
+- Auto-scroll
+- Chat event rendering bridge
 
 DOES NOT OWN
 ---------------------------------------------------------
-❌ /api/chat
-❌ Send button
-❌ Enter key
-❌ Attachment upload
-❌ History API
-❌ Regenerate API
-❌ Message edit logic
-❌ Share logic
+- /api/chat
+- Conversation state
+- Markdown parsing
+- Send button
+- Enter key
+- Attachment upload
+- History API
+- Copy / regenerate / share actions
 
-IMPORTANT
+EVENTS LISTENED
 ---------------------------------------------------------
-This module NEVER sends chat requests.
+- neyo:chat-message-added
+- neyo:chat-send-start
+- neyo:chat-response
+- neyo:chat-error
+- neyo:chat-aborted
+- neyo:chat-send-end
+- neyo:chat-state-loaded
+- neyo:chat-new
 
-chat.js owns conversation/API state.
-
-messages.js only owns message presentation.
-
+PUBLIC API
+---------------------------------------------------------
+window.NeyoMessages.create(...)
+window.NeyoMessages.update(...)
+window.NeyoMessages.remove(...)
+window.NeyoMessages.clear()
+window.NeyoMessages.replace(...)
+window.NeyoMessages.showThinking()
+window.NeyoMessages.hideThinking()
+window.NeyoMessages.getById(...)
+window.NeyoMessages.scrollToBottom()
 =========================================================
 */
 
@@ -48,16 +58,16 @@ messages.js only owns message presentation.
 
 
   /* =====================================================
-     VERSION / DUPLICATE GUARD
+     VERSION / GUARD
      ===================================================== */
 
   const VERSION =
-    "neyo-messages-v7-chatgpt-standard";
+    "neyo-messages-final-clean-v1";
 
 
   if (
-    window.NeyoMessages
-      ?.__controller === true
+    window.NeyoMessages?.__controller ===
+    true
   ) {
     console.warn(
       "[NEYO Messages] Already initialized."
@@ -89,7 +99,9 @@ messages.js only owns message presentation.
     );
 
 
-  if (!chatMessages) {
+  if (
+    !chatMessages
+  ) {
     console.warn(
       "[NEYO Messages] #chatMessages not found."
     );
@@ -102,21 +114,28 @@ messages.js only owns message presentation.
      STATE
      ===================================================== */
 
-  const state = {
-    thinkingElement:
-      null,
-
-    thinkingId:
-      null,
-
-    autoScroll:
-      true
-  };
+  let thinkingElement =
+    null;
 
 
   /* =====================================================
      HELPERS
      ===================================================== */
+
+  function emit(
+    name,
+    detail = {}
+  ) {
+    window.dispatchEvent(
+      new CustomEvent(
+        name,
+        {
+          detail
+        }
+      )
+    );
+  }
+
 
   function createId() {
     if (
@@ -129,7 +148,7 @@ messages.js only owns message presentation.
 
 
     return (
-      `message_${Date.now()}_` +
+      `msg_${Date.now()}_` +
       Math.random()
         .toString(36)
         .slice(2)
@@ -137,48 +156,30 @@ messages.js only owns message presentation.
   }
 
 
-  function refreshIcons() {
-    try {
-      window.lucide
-        ?.createIcons
-        ?.();
-
-    } catch {}
-  }
-
-
-  function hideHero() {
+  function cleanText(
+    value
+  ) {
     if (
-      heroSection
+      typeof value !==
+      "string"
     ) {
-      heroSection.style.display =
-        "none";
-    }
-  }
-
-
-  function showHero() {
-    if (
-      !heroSection
-    ) {
-      return;
+      return "";
     }
 
 
-    if (
-      chatMessages.children.length === 0
-    ) {
-      heroSection.style.display =
-        "";
-    }
+    return value
+      .replace(
+        /\r\n?/g,
+        "\n"
+      )
+      .replace(
+        /\u0000/g,
+        ""
+      );
   }
 
 
-  /* =====================================================
-     SAFE SELECTOR
-     ===================================================== */
-
-  function escapeSelector(
+  function safeSelector(
     value
   ) {
     const string =
@@ -197,10 +198,57 @@ messages.js only owns message presentation.
     }
 
 
-    return string.replace(
-      /["\\]/g,
-      "\\$&"
-    );
+    return string
+      .replace(
+        /["\\]/g,
+        "\\$&"
+      );
+  }
+
+
+  function refreshIcons() {
+    try {
+      window.lucide
+        ?.createIcons
+        ?.();
+
+    } catch {}
+  }
+
+
+  function hideHero() {
+    if (
+      heroSection
+    ) {
+      heroSection.hidden =
+        true;
+
+      heroSection.style.display =
+        "none";
+    }
+  }
+
+
+  function showHeroIfEmpty() {
+    if (
+      !heroSection
+    ) {
+      return;
+    }
+
+
+    if (
+      chatMessages
+        .children
+        .length ===
+      0
+    ) {
+      heroSection.hidden =
+        false;
+
+      heroSection.style.display =
+        "";
+    }
   }
 
 
@@ -209,15 +257,9 @@ messages.js only owns message presentation.
      ===================================================== */
 
   function scrollToBottom(
-    behavior = "auto"
+    behavior =
+      "auto"
   ) {
-    if (
-      !state.autoScroll
-    ) {
-      return;
-    }
-
-
     window.requestAnimationFrame(
       () => {
         if (
@@ -226,7 +268,8 @@ messages.js only owns message presentation.
           try {
             scrollArea.scrollTo({
               top:
-                scrollArea.scrollHeight,
+                scrollArea
+                  .scrollHeight,
 
               behavior
             });
@@ -256,126 +299,37 @@ messages.js only owns message presentation.
 
 
   /* =====================================================
-     MESSAGE LOOKUP
+     LOOKUP
      ===================================================== */
 
-  function getMessageById(
+  function getById(
     id
   ) {
-    if (!id) {
+    if (
+      !id
+    ) {
       return null;
     }
 
 
-    const safeId =
-      escapeSelector(
-        id
-      );
-
-
-    /*
-    -------------------------------------------------------
-    First check our own attribute.
-    -------------------------------------------------------
-    */
-
-    const own =
-      chatMessages
-        .querySelector(
-          `[data-neyo-message-id="${safeId}"]`
-        );
-
-
-    if (own) {
-      return own;
-    }
-
-
-    /*
-    -------------------------------------------------------
-    Compatibility with chat.js v7.
-    -------------------------------------------------------
-    */
-
     return chatMessages
       .querySelector(
-        `[data-message-id="${safeId}"]`
+        `[data-message-id="${safeSelector(
+          id
+        )}"]`
       );
   }
 
 
   /* =====================================================
-     NORMALIZE MESSAGE
-     ===================================================== */
-
-  function normalizeMessage(
-    input =
-      {}
-  ) {
-    const role =
-      input.role ===
-        "user"
-        ? "user"
-        : "assistant";
-
-
-    return {
-      id:
-        input.id ||
-        createId(),
-
-      role,
-
-      content:
-        typeof input.content ===
-          "string"
-          ? input.content
-          : "",
-
-      attachments:
-        Array.isArray(
-          input.attachments
-        )
-          ? input.attachments
-          : [],
-
-      sources:
-        Array.isArray(
-          input.sources
-        )
-          ? input.sources
-          : [],
-
-      thinking:
-        Boolean(
-          input.thinking
-        ),
-
-      error:
-        Boolean(
-          input.error
-        ),
-
-      index:
-        Number.isInteger(
-          input.index
-        )
-          ? input.index
-          : null
-    };
-  }
-
-
-  /* =====================================================
-     ATTACHMENT ICON
+     ATTACHMENT PRESENTATION
      ===================================================== */
 
   function getAttachmentIcon(
-    attachment
+    category
   ) {
     switch (
-      attachment
-        ?.category
+      category
     ) {
       case "image":
         return "image";
@@ -407,30 +361,27 @@ messages.js only owns message presentation.
   }
 
 
-  /* =====================================================
-     ATTACHMENT LIST
-     ===================================================== */
-
-  function createAttachments(
+  function createAttachmentList(
     attachments
   ) {
     if (
       !Array.isArray(
         attachments
       ) ||
-      attachments.length === 0
+      attachments.length ===
+        0
     ) {
       return null;
     }
 
 
-    const container =
+    const wrapper =
       document.createElement(
         "div"
       );
 
 
-    container.className =
+    wrapper.className =
       "message-attachments";
 
 
@@ -455,7 +406,7 @@ messages.js only owns message presentation.
         icon.setAttribute(
           "data-lucide",
           getAttachmentIcon(
-            attachment
+            attachment?.category
           )
         );
 
@@ -466,85 +417,31 @@ messages.js only owns message presentation.
         );
 
 
-        const label =
+        const name =
           document.createElement(
             "span"
           );
 
 
-        label.textContent =
+        name.className =
+          "message-attachment-name";
+
+
+        name.textContent =
           attachment?.name ||
           "Attachment";
 
 
         chip.append(
           icon,
-          label
+          name
         );
 
 
-        container.appendChild(
+        wrapper.appendChild(
           chip
         );
       }
-    );
-
-
-    return container;
-  }
-
-
-  /* =====================================================
-     THINKING CONTENT
-     ===================================================== */
-
-  function createThinkingContent() {
-    const wrapper =
-      document.createElement(
-        "div"
-      );
-
-
-    wrapper.className =
-      "neyo-thinking";
-
-
-    wrapper.setAttribute(
-      "aria-label",
-      "NEYO is thinking"
-    );
-
-
-    const dot1 =
-      document.createElement(
-        "span"
-      );
-
-    const dot2 =
-      document.createElement(
-        "span"
-      );
-
-    const dot3 =
-      document.createElement(
-        "span"
-      );
-
-
-    dot1.className =
-      "thinking-dot";
-
-    dot2.className =
-      "thinking-dot";
-
-    dot3.className =
-      "thinking-dot";
-
-
-    wrapper.append(
-      dot1,
-      dot2,
-      dot3
     );
 
 
@@ -553,32 +450,69 @@ messages.js only owns message presentation.
 
 
   /* =====================================================
+     NORMALIZE INPUT
+     ===================================================== */
+
+  function normalizeMessage(
+    input = {}
+  ) {
+    const role =
+      input.role ===
+        "user"
+        ? "user"
+        : "assistant";
+
+
+    return {
+      id:
+        input.id ||
+        createId(),
+
+      role,
+
+      content:
+        cleanText(
+          input.content
+        ),
+
+      attachments:
+        Array.isArray(
+          input.attachments
+        )
+          ? input.attachments
+          : [],
+
+      sources:
+        Array.isArray(
+          input.sources
+        )
+          ? input.sources
+          : [],
+
+      error:
+        Boolean(
+          input.error
+        )
+    };
+  }
+
+
+  /* =====================================================
      CREATE MESSAGE
      ===================================================== */
 
-  function createMessage(
-    input =
-      {}
+  function create(
+    input = {}
   ) {
-    const message =
+    const data =
       normalizeMessage(
         input
       );
 
 
-    /*
-    -------------------------------------------------------
-    DEDUPLICATION
-
-    Critical because chat.js may already render a message.
-
-    If same ID exists, do not create another bubble.
-    -------------------------------------------------------
-    */
-
     const existing =
-      getMessageById(
-        message.id
+      getById(
+        data.id
       );
 
 
@@ -592,57 +526,33 @@ messages.js only owns message presentation.
     hideHero();
 
 
-    const article =
+    const message =
       document.createElement(
         "article"
       );
 
 
-    article.className =
-      [
-        "message",
-        message.role,
-
-        message.thinking
-          ? "is-thinking"
-          : "",
-
-        message.error
-          ? "message-error"
-          : ""
-      ]
-        .filter(
-          Boolean
-        )
-        .join(
-          " "
-        );
+    message.className =
+      `message ${data.role}`;
 
 
-    article.dataset
-      .neyoMessageId =
-      message.id;
+    message.dataset
+      .messageId =
+      data.id;
 
 
-    article.dataset.role =
-      message.role;
+    message.dataset.role =
+      data.role;
 
 
     if (
-      message.index !==
-      null
+      data.error
     ) {
-      article.dataset
-        .msgIndex =
-        String(
-          message.index
-        );
+      message.classList.add(
+        "message-error"
+      );
     }
 
-
-    /* ===================================================
-       CONTENT
-       =================================================== */
 
     const content =
       document.createElement(
@@ -654,35 +564,22 @@ messages.js only owns message presentation.
       "message-content";
 
 
-    if (
-      message.thinking
-    ) {
-      content.appendChild(
-        createThinkingContent()
-      );
+    /*
+    -------------------------------------------------------
+    Important:
+    Plain text only.
 
-    } else {
-      /*
-      -----------------------------------------------------
-      Safe default.
+    message-renderer.js will later upgrade assistant content
+    to Markdown safely.
+    -------------------------------------------------------
+    */
 
-      Markdown belongs to message-renderer.js/chat.js.
+    content.textContent =
+      data.content;
 
-      Never put unsanitized server HTML here.
-      -----------------------------------------------------
-      */
-
-      content.textContent =
-        message.content;
-    }
-
-
-    /* ===================================================
-       USER
-       =================================================== */
 
     if (
-      message.role ===
+      data.role ===
       "user"
     ) {
       const wrapper =
@@ -695,17 +592,17 @@ messages.js only owns message presentation.
         "message-wrapper";
 
 
-      const attachments =
-        createAttachments(
-          message.attachments
+      const attachmentList =
+        createAttachmentList(
+          data.attachments
         );
 
 
       if (
-        attachments
+        attachmentList
       ) {
         wrapper.appendChild(
-          attachments
+          attachmentList
         );
       }
 
@@ -715,36 +612,20 @@ messages.js only owns message presentation.
       );
 
 
-      article.appendChild(
+      message.appendChild(
         wrapper
       );
 
     } else {
-      /* =================================================
-         ASSISTANT
-         ================================================= */
-
-      article.appendChild(
+      message.appendChild(
         content
       );
     }
 
 
     chatMessages.appendChild(
-      article
+      message
     );
-
-
-    if (
-      message.thinking
-    ) {
-      state.thinkingElement =
-        article;
-
-
-      state.thinkingId =
-        message.id;
-    }
 
 
     refreshIcons();
@@ -753,23 +634,19 @@ messages.js only owns message presentation.
     scrollToBottom();
 
 
-    window.dispatchEvent(
-      new CustomEvent(
-        "neyo:message-created",
-        {
-          detail: {
-            message:
-              article,
+    emit(
+      "neyo:message-created",
+      {
+        element:
+          message,
 
-            data:
-              message
-          }
-        }
-      )
+        message:
+          data
+      }
     );
 
 
-    return article;
+    return message;
   }
 
 
@@ -777,40 +654,35 @@ messages.js only owns message presentation.
      UPDATE MESSAGE
      ===================================================== */
 
-  function updateMessage(
+  function update(
     target,
-    content =
-      "",
-    options =
-      {}
+    content = "",
+    options = {}
   ) {
-    let message =
-      target;
-
-
-    if (
+    const message =
       typeof target ===
-      "string"
-    ) {
-      message =
-        getMessageById(
-          target
-        );
-    }
+        "string"
+        ? getById(
+            target
+          )
+        : target;
 
 
     if (
-      !(message instanceof
-        HTMLElement)
+      !(
+        message instanceof
+        HTMLElement
+      )
     ) {
       return false;
     }
 
 
     const contentElement =
-      message.querySelector(
-        ".message-content"
-      );
+      message
+        .querySelector(
+          ".message-content"
+        );
 
 
     if (
@@ -833,7 +705,10 @@ messages.js only owns message presentation.
         "message-error"
       );
 
-    } else {
+    } else if (
+      options.error ===
+      false
+    ) {
       message.classList.remove(
         "message-error"
       );
@@ -842,13 +717,10 @@ messages.js only owns message presentation.
 
     /*
     -------------------------------------------------------
-    HTML is allowed ONLY when explicitly marked sanitized.
+    messages.js stays safe by default.
 
-    options:
-    {
-      html: true,
-      sanitized: true
-    }
+    HTML is accepted only when another trusted renderer
+    explicitly marks it sanitized.
     -------------------------------------------------------
     */
 
@@ -871,33 +743,17 @@ messages.js only owns message presentation.
     }
 
 
-    if (
-      state.thinkingElement ===
-      message
-    ) {
-      state.thinkingElement =
-        null;
-
-
-      state.thinkingId =
-        null;
-    }
-
-
     scrollToBottom();
 
 
-    window.dispatchEvent(
-      new CustomEvent(
-        "neyo:message-updated",
-        {
-          detail: {
-            message,
+    emit(
+      "neyo:message-updated",
+      {
+        element:
+          message,
 
-            content
-          }
-        }
-      )
+        content
+      }
     );
 
 
@@ -906,44 +762,36 @@ messages.js only owns message presentation.
 
 
   /* =====================================================
-     REMOVE
+     REMOVE MESSAGE
      ===================================================== */
 
-  function removeMessage(
+  function remove(
     target
   ) {
-    let message =
-      target;
-
-
-    if (
+    const message =
       typeof target ===
-      "string"
-    ) {
-      message =
-        getMessageById(
-          target
-        );
-    }
+        "string"
+        ? getById(
+            target
+          )
+        : target;
 
 
     if (
-      !(message instanceof
-        HTMLElement)
+      !(
+        message instanceof
+        HTMLElement
+      )
     ) {
       return false;
     }
 
 
     if (
-      state.thinkingElement ===
-      message
+      message ===
+      thinkingElement
     ) {
-      state.thinkingElement =
-        null;
-
-
-      state.thinkingId =
+      thinkingElement =
         null;
     }
 
@@ -951,13 +799,11 @@ messages.js only owns message presentation.
     message.remove();
 
 
-    showHero();
+    showHeroIfEmpty();
 
 
-    window.dispatchEvent(
-      new CustomEvent(
-        "neyo:message-removed"
-      )
+    emit(
+      "neyo:message-removed"
     );
 
 
@@ -970,124 +816,168 @@ messages.js only owns message presentation.
      ===================================================== */
 
   function showThinking() {
-    /*
-    -------------------------------------------------------
-    Never create two thinking states.
-    -------------------------------------------------------
-    */
-
     if (
-      state.thinkingElement
+      thinkingElement
         ?.isConnected
     ) {
-      return state
-        .thinkingElement;
+      return thinkingElement;
     }
 
 
-    /*
-    -------------------------------------------------------
-    Compatibility check if chat.js already created one.
-    -------------------------------------------------------
-    */
-
-    const existing =
-      document
-        .getElementById(
-          "neyoThinkingIndicator"
-        ) ||
-      chatMessages
-        .querySelector(
-          ".message.is-thinking"
-        );
+    hideHero();
 
 
-    if (
-      existing
-    ) {
-      state.thinkingElement =
-        existing;
+    const message =
+      document.createElement(
+        "article"
+      );
 
 
-      state.thinkingId =
-        existing.dataset
-          ?.neyoMessageId ||
-        existing.dataset
-          ?.messageId ||
-        null;
+    message.className =
+      "message assistant is-thinking";
 
 
-      return existing;
-    }
+    message.dataset
+      .messageId =
+      "neyo-thinking";
 
 
-    const id =
-      `thinking_${createId()}`;
+    const content =
+      document.createElement(
+        "div"
+      );
 
 
-    return createMessage({
-      id,
+    content.className =
+      "message-content";
 
-      role:
-        "assistant",
 
-      content:
-        "",
+    const thinking =
+      document.createElement(
+        "div"
+      );
 
-      thinking:
-        true
-    });
+
+    thinking.className =
+      "message-thinking";
+
+
+    thinking.setAttribute(
+      "role",
+      "status"
+    );
+
+
+    thinking.setAttribute(
+      "aria-live",
+      "polite"
+    );
+
+
+    thinking.setAttribute(
+      "aria-label",
+      "NEYO is thinking"
+    );
+
+
+    const dot1 =
+      document.createElement(
+        "span"
+      );
+
+
+    const dot2 =
+      document.createElement(
+        "span"
+      );
+
+
+    const dot3 =
+      document.createElement(
+        "span"
+      );
+
+
+    dot1.className =
+      "message-thinking-dot";
+
+
+    dot2.className =
+      "message-thinking-dot";
+
+
+    dot3.className =
+      "message-thinking-dot";
+
+
+    thinking.append(
+      dot1,
+      dot2,
+      dot3
+    );
+
+
+    content.appendChild(
+      thinking
+    );
+
+
+    message.appendChild(
+      content
+    );
+
+
+    chatMessages.appendChild(
+      message
+    );
+
+
+    thinkingElement =
+      message;
+
+
+    scrollToBottom();
+
+
+    emit(
+      "neyo:message-thinking-start"
+    );
+
+
+    return message;
   }
 
 
   function hideThinking() {
-    /*
-    -------------------------------------------------------
-    Remove our tracked thinking element.
-    -------------------------------------------------------
-    */
-
     if (
-      state.thinkingElement
+      thinkingElement
         ?.isConnected
     ) {
-      state.thinkingElement
-        .remove();
+      thinkingElement.remove();
     }
 
 
-    state.thinkingElement =
+    thinkingElement =
       null;
 
 
-    state.thinkingId =
-      null;
+    const stale =
+      chatMessages
+        .querySelector(
+          '[data-message-id="neyo-thinking"]'
+        );
 
 
-    /*
-    -------------------------------------------------------
-    Compatibility cleanup.
-
-    chat.js may create its own thinking indicator.
-    -------------------------------------------------------
-    */
-
-    document
-      .getElementById(
-        "neyoThinkingIndicator"
-      )
-      ?.remove();
+    if (
+      stale
+    ) {
+      stale.remove();
+    }
 
 
-    chatMessages
-      .querySelectorAll(
-        ".message.is-thinking"
-      )
-      .forEach(
-        element => {
-          element.remove();
-        }
-      );
+    emit(
+      "neyo:message-thinking-end"
+    );
   }
 
 
@@ -1095,20 +985,19 @@ messages.js only owns message presentation.
      CLEAR
      ===================================================== */
 
-  function clearMessages() {
-    hideThinking();
+  function clear() {
+    thinkingElement =
+      null;
 
 
     chatMessages.replaceChildren();
 
 
-    showHero();
+    showHeroIfEmpty();
 
 
-    window.dispatchEvent(
-      new CustomEvent(
-        "neyo:messages-cleared"
-      )
+    emit(
+      "neyo:messages-cleared"
     );
 
 
@@ -1117,7 +1006,166 @@ messages.js only owns message presentation.
 
 
   /* =====================================================
-     CHAT.JS MESSAGE EVENT
+     REPLACE CONVERSATION
+     ===================================================== */
+
+  function replace(
+    messages = []
+  ) {
+    clear();
+
+
+    if (
+      !Array.isArray(
+        messages
+      ) ||
+      messages.length ===
+        0
+    ) {
+      return true;
+    }
+
+
+    hideHero();
+
+
+    /*
+    -------------------------------------------------------
+    Use document fragment so history loading does not cause
+    repeated layout/reflow for every message.
+    -------------------------------------------------------
+    */
+
+    const fragment =
+      document.createDocumentFragment();
+
+
+    messages.forEach(
+      input => {
+        const data =
+          normalizeMessage(
+            input
+          );
+
+
+        const message =
+          document.createElement(
+            "article"
+          );
+
+
+        message.className =
+          `message ${data.role}`;
+
+
+        message.dataset
+          .messageId =
+          data.id;
+
+
+        message.dataset.role =
+          data.role;
+
+
+        const content =
+          document.createElement(
+            "div"
+          );
+
+
+        content.className =
+          "message-content";
+
+
+        content.textContent =
+          data.content;
+
+
+        if (
+          data.role ===
+          "user"
+        ) {
+          const wrapper =
+            document.createElement(
+              "div"
+            );
+
+
+          wrapper.className =
+            "message-wrapper";
+
+
+          const attachmentList =
+            createAttachmentList(
+              data.attachments
+            );
+
+
+          if (
+            attachmentList
+          ) {
+            wrapper.appendChild(
+              attachmentList
+            );
+          }
+
+
+          wrapper.appendChild(
+            content
+          );
+
+
+          message.appendChild(
+            wrapper
+          );
+
+        } else {
+          message.appendChild(
+            content
+          );
+        }
+
+
+        fragment.appendChild(
+          message
+        );
+      }
+    );
+
+
+    chatMessages.appendChild(
+      fragment
+    );
+
+
+    refreshIcons();
+
+
+    /*
+    -------------------------------------------------------
+    Tell renderer that a full conversation was replaced.
+
+    message-renderer.js may upgrade assistant text afterwards.
+    -------------------------------------------------------
+    */
+
+    emit(
+      "neyo:messages-replaced",
+      {
+        messages
+      }
+    );
+
+
+    scrollToBottom();
+
+
+    return true;
+  }
+
+
+  /* =====================================================
+     CHAT MESSAGE EVENT
      ===================================================== */
 
   window.addEventListener(
@@ -1128,42 +1176,36 @@ messages.js only owns message presentation.
           ?.message;
 
 
-      if (!message) {
+      if (
+        !message
+      ) {
         return;
       }
 
 
       /*
-      -----------------------------------------------------
-      If chat.js has already rendered the message,
-      createMessage() simply returns the existing element.
-
-      No duplicate bubble.
-      -----------------------------------------------------
+      -------------------------------------------------------
+      Assistant response replaces thinking indicator.
+      -------------------------------------------------------
       */
 
-      createMessage({
-        id:
-          message.id,
+      if (
+        message.role ===
+        "assistant"
+      ) {
+        hideThinking();
+      }
 
-        role:
-          message.role,
 
-        content:
-          message.content,
-
-        attachments:
-          message.attachments,
-
-        sources:
-          message.sources
-      });
+      create(
+        message
+      );
     }
   );
 
 
   /* =====================================================
-     CHAT START
+     GENERATION START
      ===================================================== */
 
   window.addEventListener(
@@ -1187,18 +1229,6 @@ messages.js only owns message presentation.
 
 
   /* =====================================================
-     ERROR
-     ===================================================== */
-
-  window.addEventListener(
-    "neyo:chat-error",
-    () => {
-      hideThinking();
-    }
-  );
-
-
-  /* =====================================================
      ABORT
      ===================================================== */
 
@@ -1211,13 +1241,121 @@ messages.js only owns message presentation.
 
 
   /* =====================================================
+     LIMIT
+     ===================================================== */
+
+  window.addEventListener(
+    "neyo:chat-limit-reached",
+    () => {
+      hideThinking();
+    }
+  );
+
+
+  /* =====================================================
+     ERROR
+     ===================================================== */
+
+  window.addEventListener(
+    "neyo:chat-error",
+    event => {
+      hideThinking();
+
+
+      const error =
+        event.detail
+          ?.error;
+
+
+      let message =
+        "Something went wrong. Please try again.";
+
+
+      if (
+        error?.status ===
+        401
+      ) {
+        message =
+          "Your session has expired. Please sign in again.";
+
+      } else if (
+        error?.status ===
+        413
+      ) {
+        message =
+          "This request is too large.";
+
+      } else if (
+        Number(
+          error?.status
+        ) >=
+        500
+      ) {
+        message =
+          "NEYO is temporarily unavailable. Please try again.";
+
+      } else if (
+        typeof error?.message ===
+          "string" &&
+        error.message.trim()
+      ) {
+        message =
+          error.message.trim();
+      }
+
+
+      create({
+        role:
+          "assistant",
+
+        content:
+          `⚠️ ${message}`,
+
+        error:
+          true
+      });
+    }
+  );
+
+
+  /* =====================================================
      SEND END
      ===================================================== */
 
   window.addEventListener(
     "neyo:chat-send-end",
     () => {
+      /*
+       * Safety cleanup.
+       *
+       * Normally thinking is already removed by response/error/
+       * abort, but send-end guarantees no stale indicator.
+       */
+
       hideThinking();
+    }
+  );
+
+
+  /* =====================================================
+     STATE LOAD
+     ===================================================== */
+
+  window.addEventListener(
+    "neyo:chat-state-loaded",
+    event => {
+      const messages =
+        event.detail
+          ?.messages;
+
+
+      replace(
+        Array.isArray(
+          messages
+        )
+          ? messages
+          : []
+      );
     }
   );
 
@@ -1229,66 +1367,19 @@ messages.js only owns message presentation.
   window.addEventListener(
     "neyo:chat-new",
     () => {
-      clearMessages();
+      clear();
     }
   );
 
 
   /* =====================================================
-     STATE LOADED
-     ===================================================== */
-
-  window.addEventListener(
-    "neyo:chat-state-loaded",
-    event => {
-      const messages =
-        event.detail
-          ?.messages;
-
-
-      if (
-        !Array.isArray(
-          messages
-        )
-      ) {
-        return;
-      }
-
-
-      /*
-      -----------------------------------------------------
-      chat.js v7 may already render loaded history.
-
-      Therefore DO NOT automatically clear/re-render here.
-
-      Only ensure hero / scroll state.
-      -----------------------------------------------------
-      */
-
-      if (
-        messages.length >
-        0
-      ) {
-        hideHero();
-
-
-        scrollToBottom();
-
-      } else {
-        showHero();
-      }
-    }
-  );
-
-
-  /* =====================================================
-     OLD PUBLIC EVENT API
+     OPTIONAL LEGACY EVENTS
      ===================================================== */
 
   window.addEventListener(
     "neyo:message-create",
     event => {
-      createMessage(
+      create(
         event.detail ||
         {}
       );
@@ -1299,7 +1390,7 @@ messages.js only owns message presentation.
   window.addEventListener(
     "neyo:messages-clear",
     () => {
-      clearMessages();
+      clear();
     }
   );
 
@@ -1315,53 +1406,35 @@ messages.js only owns message presentation.
 
 
   /* =====================================================
-     AUTO-SCROLL CONTROL
-     ===================================================== */
-
-  function setAutoScroll(
-    enabled
-  ) {
-    state.autoScroll =
-      Boolean(
-        enabled
-      );
-  }
-
-
-  /* =====================================================
      PUBLIC API
      ===================================================== */
 
   const publicApi =
     Object.freeze({
+
       __controller:
         true,
 
       version:
         VERSION,
 
-      create:
-        createMessage,
+      create,
 
-      update:
-        updateMessage,
+      update,
 
-      remove:
-        removeMessage,
+      remove,
 
-      clear:
-        clearMessages,
+      clear,
+
+      replace,
 
       showThinking,
 
       hideThinking,
 
+      getById,
+
       scrollToBottom,
-
-      setAutoScroll,
-
-      getById:
-        getMessageById,
 
       getContainer:
         () =>
@@ -1369,6 +1442,7 @@ messages.js only owns message presentation.
 
       getState:
         () => ({
+
           version:
             VERSION,
 
@@ -1379,13 +1453,9 @@ messages.js only owns message presentation.
 
           thinking:
             Boolean(
-              state
-                .thinkingElement
+              thinkingElement
                 ?.isConnected
-            ),
-
-          autoScroll:
-            state.autoScroll
+            )
         })
     });
 
@@ -1394,6 +1464,7 @@ messages.js only owns message presentation.
     window,
     "NeyoMessages",
     {
+
       value:
         publicApi,
 
@@ -1410,46 +1481,15 @@ messages.js only owns message presentation.
 
 
   /* =====================================================
-     INIT
+     READY
      ===================================================== */
 
-  console.log(
-    "[NEYO Messages] ChatGPT-standard v7 ready.",
+  emit(
+    "neyo:messages-ready",
     {
-      chatMessages:
-        Boolean(
-          chatMessages
-        ),
-
-      scrollArea:
-        Boolean(
-          scrollArea
-        ),
-
-      hero:
-        Boolean(
-          heroSection
-        ),
-
-      duplicateProtection:
-        true,
-
-      neoJsTouched:
-        false
+      version:
+        VERSION
     }
-  );
-
-
-  window.dispatchEvent(
-    new CustomEvent(
-      "neyo:messages-ready",
-      {
-        detail: {
-          version:
-            VERSION
-        }
-      }
-    )
   );
 
 })();

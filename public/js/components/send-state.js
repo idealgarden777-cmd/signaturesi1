@@ -1,43 +1,51 @@
 /*
 =========================================================
-NEYO — SEND STATE CONTROLLER
-CHATGPT-STANDARD v6
+NEYO — SEND STATE
+FINAL CLEAN v1
 
 FILE:
 public/js/components/send-state.js
 
-BEHAVIOR
+OWNS
 ---------------------------------------------------------
-Empty composer:
-→ send disabled
+- #sendBtn
+- Enter to send
+- Shift+Enter newline
+- IME composition protection
+- Send / Stop visual state
+- Composer send availability
+- Ready attachment collection
 
-Text typed:
-→ send enabled
+DOES NOT OWN
+---------------------------------------------------------
+- /api/chat
+- Conversation state
+- Message rendering
+- Markdown
+- Attachment upload / retry / remove
+- History
+- Voice
+- Sidebar
 
-Ready attachment:
-→ send enabled
-
-Text + pending attachment:
-→ text sends immediately
-
-Text + failed attachment:
-→ text sends immediately
-
-Only pending attachment:
+RULES
+---------------------------------------------------------
+Empty:
 → disabled
 
-Only failed attachment:
+Text:
+→ enabled
+
+Ready attachment:
+→ enabled
+
+Text + pending/error attachment:
+→ text sends normally
+
+Only pending/error attachment:
 → disabled
 
 Generating:
-→ same button becomes STOP
-
-IMPORTANT
----------------------------------------------------------
-✅ send-state owns only send/stop UI
-✅ attachments.js owns attachment lifecycle
-✅ chat.js owns API/message generation
-✅ no attachment error can block normal text chat
+→ same button becomes Stop
 =========================================================
 */
 
@@ -50,12 +58,11 @@ IMPORTANT
      ===================================================== */
 
   const VERSION =
-    "neyo-send-state-v6-chatgpt-standard";
+    "neyo-send-state-final-clean-v1";
 
 
   if (
-    window.NeyoSendState
-      ?.__controller ===
+    window.NeyoSendState?.__controller ===
     true
   ) {
     console.warn(
@@ -87,7 +94,7 @@ IMPORTANT
     !chatInput
   ) {
     console.warn(
-      "[NEYO Send] Composer DOM missing."
+      "[NEYO Send] Required composer elements are missing."
     );
 
     return;
@@ -98,20 +105,37 @@ IMPORTANT
      STATE
      ===================================================== */
 
-  const state = {
-    generating:
-      false,
+  const state =
+    {
+      generating:
+        false,
 
-    composing:
-      false,
-
-    readyAttachments:
-      0
-  };
+      composing:
+        false
+    };
 
 
   /* =====================================================
-     HELPERS
+     EVENTS
+     ===================================================== */
+
+  function emit(
+    name,
+    detail = {}
+  ) {
+    window.dispatchEvent(
+      new CustomEvent(
+        name,
+        {
+          detail
+        }
+      )
+    );
+  }
+
+
+  /* =====================================================
+     INPUT
      ===================================================== */
 
   function getText() {
@@ -135,28 +159,14 @@ IMPORTANT
   }
 
 
-  function getAttachmentController() {
-    const controller =
-      window.NeyoAttachments;
-
-
-    if (
-      controller &&
-      typeof controller ===
-        "object"
-    ) {
-      return controller;
-    }
-
-
-    return null;
-  }
-
+  /* =====================================================
+     ATTACHMENTS
+     ===================================================== */
 
   function getReadyAttachments() {
     try {
       const controller =
-        getAttachmentController();
+        window.NeyoAttachments;
 
 
       if (
@@ -182,7 +192,7 @@ IMPORTANT
       error
     ) {
       console.warn(
-        "[NEYO Send] Could not read attachments:",
+        "[NEYO Send] Could not read ready attachments:",
         error
       );
 
@@ -192,29 +202,23 @@ IMPORTANT
   }
 
 
-  function syncAttachments() {
-    state.readyAttachments =
-      getReadyAttachments()
-        .length;
-  }
-
-
   /* =====================================================
-     EVENTS
+     AVAILABILITY
      ===================================================== */
 
-  function emit(
-    name,
-    detail =
-      {}
-  ) {
-    window.dispatchEvent(
-      new CustomEvent(
-        name,
-        {
-          detail
-        }
-      )
+  function canSend() {
+    if (
+      state.generating
+    ) {
+      return true;
+    }
+
+
+    return (
+      hasText() ||
+      getReadyAttachments()
+        .length >
+        0
     );
   }
 
@@ -233,7 +237,7 @@ IMPORTANT
   }
 
 
-  function showSendIcon() {
+  function renderSendButton() {
     sendBtn.innerHTML = `
       <i
         data-lucide="arrow-up"
@@ -255,11 +259,17 @@ IMPORTANT
     );
 
 
+    sendBtn.setAttribute(
+      "data-tooltip",
+      "Send message"
+    );
+
+
     refreshIcons();
   }
 
 
-  function showStopIcon() {
+  function renderStopButton() {
     sendBtn.innerHTML = `
       <i
         data-lucide="square"
@@ -281,49 +291,21 @@ IMPORTANT
     );
 
 
+    sendBtn.setAttribute(
+      "data-tooltip",
+      "Stop generating"
+    );
+
+
     refreshIcons();
   }
 
 
   /* =====================================================
-     SEND AVAILABILITY
+     BUTTON STATE
      ===================================================== */
 
-  function canSend() {
-    if (
-      state.generating
-    ) {
-      return true;
-    }
-
-
-    if (
-      hasText()
-    ) {
-      return true;
-    }
-
-
-    if (
-      state.readyAttachments >
-      0
-    ) {
-      return true;
-    }
-
-
-    return false;
-  }
-
-
-  /* =====================================================
-     BUTTON UI
-     ===================================================== */
-
-  function updateButton() {
-    syncAttachments();
-
-
+  function update() {
     if (
       state.generating
     ) {
@@ -337,23 +319,16 @@ IMPORTANT
 
 
       sendBtn.classList.remove(
+        "is-ready",
         "is-disabled"
       );
 
 
-      showStopIcon();
+      renderStopButton();
 
 
       return;
     }
-
-
-    showSendIcon();
-
-
-    sendBtn.classList.remove(
-      "is-generating"
-    );
 
 
     const enabled =
@@ -364,9 +339,8 @@ IMPORTANT
       !enabled;
 
 
-    sendBtn.classList.toggle(
-      "is-disabled",
-      !enabled
+    sendBtn.classList.remove(
+      "is-generating"
     );
 
 
@@ -374,20 +348,26 @@ IMPORTANT
       "is-ready",
       enabled
     );
+
+
+    sendBtn.classList.toggle(
+      "is-disabled",
+      !enabled
+    );
+
+
+    renderSendButton();
   }
 
 
   /* =====================================================
-     SEND
+     SEND / STOP
      ===================================================== */
 
-  function sendMessage() {
-    syncAttachments();
-
-
+  function requestAction() {
     /*
     -------------------------------------------------------
-    GENERATING → STOP
+    Generating → Stop
     -------------------------------------------------------
     */
 
@@ -407,22 +387,23 @@ IMPORTANT
       getText();
 
 
-    const readyAttachments =
+    const attachments =
       getReadyAttachments();
 
 
     /*
     -------------------------------------------------------
-    Nothing usable to send.
+    Nothing usable.
     -------------------------------------------------------
     */
 
     if (
       !text &&
-      readyAttachments.length ===
+      attachments.length ===
         0
     ) {
-      updateButton();
+      update();
+
 
       return false;
     }
@@ -430,12 +411,9 @@ IMPORTANT
 
     /*
     -------------------------------------------------------
-    CHATGPT-STANDARD RULE
+    Only ready files are sent.
 
-    Only READY attachments are included.
-
-    Pending/error attachments are ignored and never block
-    normal text sending.
+    Pending / failed files never block normal text.
     -------------------------------------------------------
     */
 
@@ -444,15 +422,14 @@ IMPORTANT
       {
         text,
 
-        attachments:
-          readyAttachments
+        attachments
       }
     );
 
 
     /*
     -------------------------------------------------------
-    Clear text after dispatch.
+    Clear composer only after valid dispatch.
     -------------------------------------------------------
     */
 
@@ -471,7 +448,7 @@ IMPORTANT
     );
 
 
-    updateButton();
+    update();
 
 
     return true;
@@ -479,7 +456,7 @@ IMPORTANT
 
 
   /* =====================================================
-     BUTTON CLICK
+     BUTTON
      ===================================================== */
 
   sendBtn.addEventListener(
@@ -487,19 +464,14 @@ IMPORTANT
     event => {
       event.preventDefault();
 
-      event.stopPropagation();
 
-      event.stopImmediatePropagation();
-
-
-      sendMessage();
-    },
-    true
+      requestAction();
+    }
   );
 
 
   /* =====================================================
-     KEYBOARD
+     IME
      ===================================================== */
 
   chatInput.addEventListener(
@@ -520,6 +492,10 @@ IMPORTANT
   );
 
 
+  /* =====================================================
+     KEYBOARD
+     ===================================================== */
+
   chatInput.addEventListener(
     "keydown",
     event => {
@@ -533,7 +509,7 @@ IMPORTANT
 
       /*
       -----------------------------------------------------
-      IME input protection
+      IME composition must never trigger send.
       -----------------------------------------------------
       */
 
@@ -562,74 +538,51 @@ IMPORTANT
 
       event.preventDefault();
 
-      event.stopPropagation();
-
-      event.stopImmediatePropagation();
-
 
       if (
         canSend()
       ) {
-        sendMessage();
+        requestAction();
       }
-    },
-    true
+    }
   );
 
 
   /* =====================================================
-     INPUT
+     INPUT STATE
      ===================================================== */
 
   chatInput.addEventListener(
     "input",
-    () => {
-      updateButton();
-    }
+    update
   );
 
 
   /* =====================================================
-     ATTACHMENTS
+     ATTACHMENT STATE
      ===================================================== */
 
-  window.addEventListener(
-    "neyo:attachments-change",
-    () => {
-      updateButton();
-    }
-  );
+  const attachmentEvents =
+    [
+      "neyo:attachments-change",
+      "neyo:attachment-ready",
+      "neyo:attachment-error",
+      "neyo:attachment-removed"
+    ];
 
 
-  window.addEventListener(
-    "neyo:attachment-ready",
-    () => {
-      updateButton();
-    }
-  );
-
-
-  window.addEventListener(
-    "neyo:attachment-error",
-    () => {
-      /*
-       * Error attachment must NOT block text.
-       */
-      updateButton();
-    }
-  );
-
-
-  window.addEventListener(
-    "neyo:attachment-removed",
-    () => {
-      updateButton();
+  attachmentEvents.forEach(
+    eventName => {
+      window.addEventListener(
+        eventName,
+        update
+      );
     }
   );
 
 
   /* =====================================================
-     CHAT GENERATION START
+     GENERATION STATE
      ===================================================== */
 
   window.addEventListener(
@@ -639,57 +592,77 @@ IMPORTANT
         true;
 
 
-      updateButton();
+      update();
     }
   );
 
 
-  /* =====================================================
-     CHAT FINISHED
-     ===================================================== */
+  function generationEnded() {
+    if (
+      state.generating ===
+      false
+    ) {
+      return;
+    }
 
-  function generationFinished() {
+
     state.generating =
       false;
 
 
-    updateButton();
+    update();
   }
 
 
-  window.addEventListener(
+  /*
+  ---------------------------------------------------------
+  chat.js always emits send-end in finally.
+
+  These extra events are only defensive fallbacks in case
+  another compatible chat controller is used.
+  ---------------------------------------------------------
+  */
+
+  [
     "neyo:chat-send-end",
-    generationFinished
-  );
-
-
-  window.addEventListener(
-    "neyo:chat-response",
-    generationFinished
-  );
-
-
-  window.addEventListener(
-    "neyo:chat-error",
-    generationFinished
-  );
-
-
-  window.addEventListener(
     "neyo:chat-aborted",
-    generationFinished
-  );
-
-
-  window.addEventListener(
+    "neyo:chat-error",
     "neyo:chat-limit-reached",
-    generationFinished
-  );
+    "neyo:chat-new"
+  ]
+    .forEach(
+      eventName => {
+        window.addEventListener(
+          eventName,
+          generationEnded
+        );
+      }
+    );
 
+
+  /* =====================================================
+     STATE SYNC
+     ===================================================== */
 
   window.addEventListener(
-    "neyo:chat-new",
-    generationFinished
+    "neyo:chat-state",
+    event => {
+      const generating =
+        event.detail
+          ?.generating;
+
+
+      if (
+        typeof generating ===
+        "boolean"
+      ) {
+        state.generating =
+          generating;
+
+
+        update();
+      }
+    }
   );
 
 
@@ -697,8 +670,9 @@ IMPORTANT
      PUBLIC API
      ===================================================== */
 
-  const api =
+  const publicApi =
     Object.freeze({
+
       __controller:
         true,
 
@@ -706,10 +680,11 @@ IMPORTANT
         VERSION,
 
       send:
-        sendMessage,
+        requestAction,
 
-      update:
-        updateButton,
+      update,
+
+      canSend,
 
       setGenerating(
         value
@@ -720,30 +695,30 @@ IMPORTANT
           );
 
 
-        updateButton();
+        update();
       },
 
-      getState() {
-        syncAttachments();
-
-
-        return {
+      getState:
+        () => ({
           version:
             VERSION,
 
           generating:
             state.generating,
 
+          composing:
+            state.composing,
+
           hasText:
             hasText(),
 
           readyAttachments:
-            state.readyAttachments,
+            getReadyAttachments()
+              .length,
 
           canSend:
             canSend()
-        };
-      }
+        })
     });
 
 
@@ -752,7 +727,7 @@ IMPORTANT
     "NeyoSendState",
     {
       value:
-        api,
+        publicApi,
 
       writable:
         false,
@@ -770,20 +745,26 @@ IMPORTANT
      INIT
      ===================================================== */
 
-  updateButton();
+  update();
 
 
-  console.log(
-    "[NEYO Send] ChatGPT-standard v6 ready.",
+  /*
+  ---------------------------------------------------------
+  Ask chat.js for authoritative generation state if it is
+  already active.
+  ---------------------------------------------------------
+  */
+
+  emit(
+    "neyo:chat-state-sync-request"
+  );
+
+
+  emit(
+    "neyo:send-state-ready",
     {
-      textChatBlockedByAttachmentError:
-        false,
-
-      textChatBlockedByPendingAttachment:
-        false,
-
-      buttonOwns:
-        "send-stop-only"
+      version:
+        VERSION
     }
   );
 

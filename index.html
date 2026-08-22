@@ -55,7 +55,7 @@
     rel="stylesheet"
   >
 
-  <!-- Styles — Final Order (legacy temporarily disabled) -->
+  <!-- Styles — Fully Modular Runtime -->
   <link rel="stylesheet" href="/neo.css?v=82">
   <link rel="stylesheet" href="/neo-ui-v2.css?v=2">
 
@@ -106,40 +106,6 @@
     rel="stylesheet"
     href="/css/components/character-picker.css?v=1"
   >
-
-  <!-- ===== ZADI VISUAL OVERRIDES (temporary until mascot.css v4) ===== -->
-  <style>
-    /* Zadi: soft-diamond light geometry */
-    .neyo-mascot-face[data-character="zadi"] {
-      --face-shape: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
-      --face-bg: #f5efe8;
-      --face-border: #d4c9bc;
-      --face-radius: 0;
-      --eye-color: #2c2a28;
-      --mouth-color: #4a3f38;
-      transform: scale(0.99);
-    }
-    .neyo-mascot-face[data-character="zadi"] .neyo-mascot-features {
-      filter: drop-shadow(0 2px 6px rgba(0,0,0,0.06));
-    }
-    .neyo-mascot-face[data-character="zadi"] .neyo-eye-core {
-      background: #2c2a28;
-    }
-    .neyo-mascot-face[data-character="zadi"] .neyo-mouth-bar {
-      background: #4a3f38;
-    }
-    /* slight diamond glow */
-    .neyo-mascot-face[data-character="zadi"]::after {
-      content: '';
-      position: absolute;
-      inset: -2px;
-      background: radial-gradient(circle at 30% 30%, rgba(255,235,215,0.3), transparent 70%);
-      pointer-events: none;
-      border-radius: inherit;
-      clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
-    }
-  </style>
-
   <!-- ========================================================= -->
   <!-- COMPOSER STABILITY OVERRIDES                              -->
   <!-- ========================================================= -->
@@ -771,29 +737,6 @@
       cursor: default;
     }
 
-
-    /* =======================================================
-       VOICE TRANSCRIBE
-
-       Prevent voice state from pushing send button.
-       ======================================================= */
-
-    #voiceTranscribeContainer {
-      flex:
-        0
-        0
-        auto;
-
-      max-width:
-        min(
-          240px,
-          38vw
-        );
-
-      overflow: hidden;
-    }
-
-
     /* =======================================================
        EXPAND BUTTON
 
@@ -978,15 +921,7 @@
         flex-basis:
           30px;
       }
-
-
-      #voiceTranscribeContainer {
-        max-width:
-          34vw;
-      }
-
-
-      #chatInput {
+#chatInput {
         font-size:
           16px !important;
       }
@@ -1002,15 +937,7 @@
     (
       max-width: 390px
     ) {
-
-      #voiceTranscribeContainer:not(.active) {
-        max-width: 0;
-
-        overflow: hidden;
-      }
-
-
-      #attachmentList
+#attachmentList
       .attachment-chip {
         min-width:
           145px;
@@ -1293,9 +1220,9 @@
           + BUTTON POPUP
 
           Ownership:
-          neo.js owns opening/closing this popup.
+          composer.js owns opening/closing this popup.
 
-          attachments.js owns ONLY #addFilesMenuBtn.
+          attachments.js owns file selection/upload lifecycle.
         -->
         <div
           class="attachment-popup-menu"
@@ -1448,64 +1375,7 @@
             ></textarea>
 
 
-            <!-- Existing voice transcription UI -->
-            <div
-              class="voice-transcribe-container"
-              id="voiceTranscribeContainer"
-            >
-
-              <div
-                class="wave-dots-bar"
-                id="waveDotsBar"
-              >
-                <span></span>
-                <span></span>
-                <span></span>
-                <span></span>
-                <span></span>
-                <span></span>
-
-                <span></span>
-                <span></span>
-                <span></span>
-                <span></span>
-                <span></span>
-                <span></span>
-
-                <span></span>
-                <span></span>
-                <span></span>
-                <span></span>
-                <span></span>
-                <span></span>
-
-                <span></span>
-                <span></span>
-                <span></span>
-                <span></span>
-                <span></span>
-                <span></span>
-              </div>
-
-
-              <button
-                class="stop-recording-btn"
-                id="stopRecBtn"
-                title="Stop Listening"
-                type="button"
-                aria-label="Stop listening"
-                data-tooltip="Stop listening"
-                data-tooltip-position="top"
-              >
-                <i
-                  data-lucide="square"
-                  size="14"
-                ></i>
-              </button>
-
-            </div>
-
-
+            <!-- Fullscreen Gemini Live voice is owned by voice.js / voice-mode.js -->
             <!-- Existing voice input -->
             <button
               class="icon-btn mic-btn"
@@ -2670,29 +2540,20 @@
   <!-- END #neyoVoiceMode -->
 
   <!-- ========================================================= -->
-  <!-- NEYO — STABLE MIGRATION LOADER                            -->
-  <!-- Phase 2                                                  -->
-  <!--                                                         -->
-  <!-- RULES                                                   -->
-  <!-- - neo.js remains untouched                              -->
-  <!-- - V2 chat modules are now active                        -->
-  <!-- - chat-runtime.js bridges legacy & V2                   -->
-  <!-- - order: attachments → chat → messages → renderer       -->
-  <!--          → history → send-state → chat-runtime LAST      -->
-  <!-- - voice.js bumped to v104 to bust cache                 -->
+  <!-- NEYO — FULLY MODULAR APPLICATION LOADER                  -->
+  <!--                                                          -->
+  <!-- Single-owner runtime. No legacy application runtime.     -->
   <!-- ========================================================= -->
 
 
   <!-- ========================================================= -->
-  <!-- 1. LEGACY STABLE APPLICATION                              -->
+  <!-- 1. FOUNDATION / ACCOUNT                                   -->
   <!-- ========================================================= -->
 
-  <script src="/neo.js?v=86"></script>
-
-
-  <!-- ========================================================= -->
-  <!-- 2. SAFE UI MODULES                                        -->
-  <!-- ========================================================= -->
+  <script
+    type="module"
+    src="/js/components/theme.js?v=1"
+  ></script>
 
   <script
     type="module"
@@ -2701,7 +2562,12 @@
 
   <script
     type="module"
-    src="/js/components/profile.js?v=3"
+    src="/js/components/profile.js?v=4"
+  ></script>
+
+  <script
+    type="module"
+    src="/js/components/auth.js?v=1"
   ></script>
 
   <script
@@ -2711,8 +2577,28 @@
 
 
   <!-- ========================================================= -->
-  <!-- 3. COMPOSER VISUAL HELPERS                                -->
+  <!-- 2. APP SHELL / SETTINGS                                   -->
   <!-- ========================================================= -->
+
+  <script
+    type="module"
+    src="/js/components/sidebar.js?v=1"
+  ></script>
+
+  <script
+    type="module"
+    src="/js/components/settings.js?v=1"
+  ></script>
+
+
+  <!-- ========================================================= -->
+  <!-- 3. COMPOSER                                               -->
+  <!-- ========================================================= -->
+
+  <script
+    type="module"
+    src="/js/components/composer.js?v=1"
+  ></script>
 
   <script
     type="module"
@@ -2746,13 +2632,8 @@
 
 
   <!-- ========================================================= -->
-  <!-- 5. VOICE / MASCOT  (VERSIONS BUMPED TO BUST CACHE)        -->
+  <!-- 5. MASCOT / FULLSCREEN GEMINI LIVE VOICE                  -->
   <!-- ========================================================= -->
-
-  <script
-    type="module"
-    src="/js/components/voice.js?v=104"
-  ></script>
 
   <script
     type="module"
@@ -2774,12 +2655,18 @@
     src="/js/components/character-picker.js?v=1"
   ></script>
 
+  <script
+    type="module"
+    src="/js/components/voice.js?v=104"
+  ></script>
+
 
   <!-- ========================================================= -->
-  <!-- 6. CHAT V2 RUNTIME                                        -->
-  <!-- ========================================================= -->
-  <!-- ORDER: attachments → chat → messages → renderer           -->
-  <!--        → history → send-state → chat-runtime LAST         -->
+  <!-- 6. CHAT                                                   -->
+  <!--                                                          -->
+  <!-- Required order:                                          -->
+  <!-- attachments → chat → messages → renderer → history       -->
+  <!-- → send-state                                             -->
   <!-- ========================================================= -->
 
   <script
@@ -2809,12 +2696,7 @@
 
   <script
     type="module"
-    src="/js/components/send-state.js?v=2"
-  ></script>
-
-  <script
-    type="module"
-    src="/js/components/chat-runtime.js?v=1"
+    src="/js/components/send-state.js?v=7"
   ></script>
 
 
@@ -2854,7 +2736,7 @@
 
 
   <!-- ========================================================= -->
-  <!-- 9. FINAL BOOT SAFETY                                      -->
+  <!-- 9. FINAL BOOT                                             -->
   <!-- ========================================================= -->
 
   <script>
@@ -2881,29 +2763,29 @@
             {
               detail: {
                 architecture:
-                  "v2-runtime-active",
+                  "fully-modular",
+
+                legacyRuntime:
+                  false,
 
                 legacyChat:
-                  true,
+                  false,
 
                 modularChat:
                   true,
 
-                runtime:
-                  "chat-runtime.js",
-
-                voiceCache:
-                  "bumped-v104"
+                voiceEngine:
+                  window.NeyoVoice?.engine ||
+                  "gemini-live-fullscreen"
               }
             }
           )
         );
 
         console.log(
-          "[NEYO] V2 runtime active. Voice cache busted (v104)."
+          "[NEYO] Fully modular runtime ready."
         );
       };
-
 
       if (
         document.readyState ===
@@ -2913,8 +2795,7 @@
           "DOMContentLoaded",
           boot,
           {
-            once:
-              true
+            once: true
           }
         );
       } else {

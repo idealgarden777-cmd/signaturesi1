@@ -1,92 +1,15 @@
-/*
-=========================================================
-NEYO — HISTORY
-FINAL CLEAN v1
-
-FILE:
-public/js/components/history.js
-
-OWNS
----------------------------------------------------------
-- Load conversation list
-- Render history list
-- Fetch conversation messages
-- Open conversation
-- Rename conversation
-- Delete conversation
-- Pin / unpin conversation
-- Active history-row state
-- History loading/error events
-
-DOES NOT OWN
----------------------------------------------------------
-- Chat API
-- Conversation message state
-- Message rendering
-- New-chat implementation
-- Rename modal UI
-- Delete confirmation UI
-- History menu positioning
-- Share UI
-
-FLOW
----------------------------------------------------------
-GET /api/history
-→ render conversation list
-
-Open conversation
-→ POST /api/history { action: "get" }
-→ emit neyo:conversation-loaded
-→ chat.js loads canonical state
-
-Rename / Delete / Pin
-→ POST /api/history
-→ refresh history list
-=========================================================
-*/
-
 (() => {
   "use strict";
 
-
-  /* =====================================================
-     VERSION / GUARD
-     ===================================================== */
-
   const VERSION =
-    "neyo-history-final-clean-v1";
-
+    "neyo-history-recovery-v1";
 
   if (
-    window.NeyoHistory?.__controller ===
-    true
+    window.NeyoHistory
+      ?.__controller
   ) {
-    console.warn(
-      "[NEYO History] Already initialized."
-    );
-
     return;
   }
-
-
-  /* =====================================================
-     CONFIG
-     ===================================================== */
-
-  const CONFIG =
-    Object.freeze({
-      endpoint:
-        "/api/history",
-
-      titleMaxLength:
-        100,
-
-      requestTimeoutMs:
-        30_000,
-
-      debug:
-        false
-    });
 
 
   /* =====================================================
@@ -99,15 +22,36 @@ Rename / Delete / Pin
     );
 
 
-  if (
-    !historyList
-  ) {
-    console.warn(
-      "[NEYO History] #historyList not found."
-    );
+  /* =====================================================
+     RUNTIME OWNERSHIP
 
-    return;
-  }
+     neo.js present:
+     legacy history remains sole owner.
+
+     neo.js removed:
+     this controller becomes active.
+     ===================================================== */
+
+  const legacy =
+    Array.from(
+      document.scripts ||
+      []
+    )
+      .some(
+        script =>
+          /(?:^|\/)neo\.js(?:\?|$)/
+            .test(
+              script.src ||
+              ""
+            )
+      );
+
+
+  const active =
+    Boolean(
+      historyList
+    ) &&
+    !legacy;
 
 
   /* =====================================================
@@ -117,133 +61,121 @@ Rename / Delete / Pin
   let conversations =
     [];
 
-
   let activeConversationId =
     null;
-
 
   let loadingPromise =
     null;
 
-
-  let openRequestId =
+  let openSerial =
     0;
-
-
-  let activeOpenController =
-    null;
 
 
   /* =====================================================
      HELPERS
      ===================================================== */
 
-  function debug(
-    ...args
-  ) {
-    if (
-      CONFIG.debug
-    ) {
-      console.log(
-        "[NEYO History]",
-        ...args
+  const emit =
+    (
+      name,
+      detail = {}
+    ) => {
+
+      window.dispatchEvent(
+        new CustomEvent(
+          name,
+          {
+            detail
+          }
+        )
       );
-    }
-  }
+    };
 
 
-  function emit(
-    name,
-    detail = {}
-  ) {
-    window.dispatchEvent(
-      new CustomEvent(
-        name,
-        {
-          detail
-        }
+  const clean =
+    (
+      value,
+      max = 220
+    ) =>
+
+      String(
+        value ??
+        ""
       )
-    );
-  }
+        .replace(
+          /\u0000/g,
+          ""
+        )
+        .trim()
+        .slice(
+          0,
+          max
+        );
 
 
-  function cleanString(
-    value
+  const refreshIcons =
+    () => {
+
+      try {
+
+        window.lucide
+          ?.createIcons
+          ?.();
+
+      } catch {}
+    };
+
+
+  /* =====================================================
+     NORMALIZE CONVERSATION
+     ===================================================== */
+
+  function normalizeConversation(
+    item
   ) {
-    return String(
-      value ??
-      ""
-    ).trim();
-  }
 
-
-  function cloneConversation(
-    conversation
-  ) {
     if (
-      !conversation ||
-      typeof conversation !==
+      !item ||
+      typeof item !==
         "object"
     ) {
       return null;
     }
 
 
-    return {
-      ...conversation
-    };
-  }
-
-
-  function cloneConversations() {
-    return conversations.map(
-      cloneConversation
-    );
-  }
-
-
-  function refreshIcons() {
-    try {
-      window.lucide
-        ?.createIcons
-        ?.();
-
-    } catch {}
-  }
-
-
-  /* =====================================================
-     TIMEOUT
-     ===================================================== */
-
-  function createTimedController(
-    timeoutMs =
-      CONFIG.requestTimeoutMs
-  ) {
-    const controller =
-      new AbortController();
-
-
-    const timeoutId =
-      window.setTimeout(
-        () => {
-          try {
-            controller.abort();
-
-          } catch {}
-        },
-        timeoutMs
+    const id =
+      clean(
+        item.id ||
+        item.conversationId ||
+        item.conversation_id,
+        128
       );
 
 
-    return {
-      controller,
+    if (!id) {
+      return null;
+    }
 
-      clear() {
-        window.clearTimeout(
-          timeoutId
-        );
-      }
+
+    return {
+      ...item,
+
+      id,
+
+      title:
+        clean(
+          item.title ||
+          "New conversation",
+          100
+        ) ||
+        "New conversation",
+
+      is_pinned:
+        Boolean(
+          item.is_pinned ??
+          item.isPinned ??
+          item.pinned
+        )
     };
   }
 
@@ -252,9 +184,10 @@ Rename / Delete / Pin
      RESPONSE
      ===================================================== */
 
-  async function readResponse(
+  async function readJson(
     response
   ) {
+
     const raw =
       await response.text();
 
@@ -263,39 +196,38 @@ Rename / Delete / Pin
       {};
 
 
-    if (
-      raw
-    ) {
+    if (raw) {
+
       try {
+
         data =
           JSON.parse(
             raw
           );
 
-      } catch {
-        data =
-          {};
-      }
+      } catch {}
     }
 
 
     if (
       !response.ok
     ) {
+
       const error =
         new Error(
-          cleanString(
-            data?.message ||
+          clean(
             data?.error ||
-            raw
+            data?.message ||
+            raw,
+            1500
           ) ||
-          `History request failed (${response.status}).`
+
+          `Request failed (${response.status}).`
         );
 
 
       error.status =
         response.status;
-
 
       error.data =
         data;
@@ -310,85 +242,37 @@ Rename / Delete / Pin
 
 
   /* =====================================================
-     NORMALIZE HISTORY ITEM
-     ===================================================== */
-
-  function normalizeConversation(
-    item
-  ) {
-    if (
-      !item ||
-      typeof item !==
-        "object"
-    ) {
-      return null;
-    }
-
-
-    const id =
-      cleanString(
-        item.id ||
-        item.conversation_id
-      );
-
-
-    if (
-      !id
-    ) {
-      return null;
-    }
-
-
-    return {
-      ...item,
-
-      id,
-
-      title:
-        cleanString(
-          item.title
-        ) ||
-        "New conversation",
-
-      is_pinned:
-        Boolean(
-          item.is_pinned ??
-          item.pinned
-        )
-    };
-  }
-
-
-  /* =====================================================
-     LOADING UI
+     LOADING
      ===================================================== */
 
   function renderLoading() {
-    historyList
-      .replaceChildren();
+
+    if (!active) {
+      return false;
+    }
 
 
-    const wrapper =
+    const root =
       document.createElement(
         "div"
       );
 
 
-    wrapper.className =
+    root.className =
       "history-loading";
 
-
-    wrapper.setAttribute(
+    root.setAttribute(
       "aria-hidden",
       "true"
     );
 
 
     for (
-      let index = 0;
-      index < 3;
-      index += 1
+      let i = 0;
+      i < 3;
+      i += 1
     ) {
+
       const row =
         document.createElement(
           "div"
@@ -413,100 +297,38 @@ Rename / Delete / Pin
         line
       );
 
-
-      wrapper.appendChild(
+      root.appendChild(
         row
       );
     }
 
 
-    historyList.appendChild(
-      wrapper
-    );
-  }
-
-
-  /* =====================================================
-     EMPTY UI
-     ===================================================== */
-
-  function renderEmpty() {
     historyList
-      .replaceChildren();
-  }
-
-
-  /* =====================================================
-     ICON
-     ===================================================== */
-
-  function createIcon(
-    name,
-    size = 16
-  ) {
-    const icon =
-      document.createElement(
-        "i"
+      .replaceChildren(
+        root
       );
 
 
-    icon.setAttribute(
-      "data-lucide",
-      name
-    );
-
-
-    icon.setAttribute(
-      "width",
-      String(
-        size
-      )
-    );
-
-
-    icon.setAttribute(
-      "height",
-      String(
-        size
-      )
-    );
-
-
-    icon.setAttribute(
-      "aria-hidden",
-      "true"
-    );
-
-
-    return icon;
+    return true;
   }
 
 
   /* =====================================================
-     MENU REQUEST
+     EMPTY
      ===================================================== */
 
-  function requestMenu(
-    item,
-    source = {}
-  ) {
-    emit(
-      "neyo:history-menu-request",
-      {
-        conversationId:
-          item.id,
+  function renderEmpty() {
 
-        title:
-          item.title,
+    if (!active) {
+      return false;
+    }
 
-        isPinned:
-          Boolean(
-            item.is_pinned
-          ),
 
-        ...source
-      }
-    );
+    historyList
+      .replaceChildren();
+
+
+    return true;
   }
 
 
@@ -517,6 +339,7 @@ Rename / Delete / Pin
   function createHistoryRow(
     item
   ) {
+
     const row =
       document.createElement(
         "div"
@@ -526,14 +349,13 @@ Rename / Delete / Pin
     row.className =
       "history-item-wrapper";
 
-
     row.dataset.id =
       item.id;
 
 
-    /* ===================================================
-       MAIN BUTTON
-       =================================================== */
+    /* -------------------------------------------------
+       OPEN BUTTON
+       ------------------------------------------------- */
 
     const button =
       document.createElement(
@@ -544,41 +366,24 @@ Rename / Delete / Pin
     button.type =
       "button";
 
-
     button.className =
       "history-item";
-
 
     button.dataset
       .conversationId =
       item.id;
 
-
     button.title =
       item.title;
 
 
-    button.classList.toggle(
-      "active",
-      item.id ===
+    button.classList
+      .toggle(
+        "active",
+        item.id ===
         activeConversationId
-    );
-
-
-    if (
-      item.id ===
-      activeConversationId
-    ) {
-      button.setAttribute(
-        "aria-current",
-        "true"
       );
-    }
 
-
-    /* ===================================================
-       TITLE
-       =================================================== */
 
     const title =
       document.createElement(
@@ -589,7 +394,6 @@ Rename / Delete / Pin
     title.className =
       "history-item-title";
 
-
     title.textContent =
       item.title;
 
@@ -599,13 +403,14 @@ Rename / Delete / Pin
     );
 
 
-    /* ===================================================
-       PIN
-       =================================================== */
+    /* -------------------------------------------------
+       PIN ICON
+       ------------------------------------------------- */
 
     if (
       item.is_pinned
     ) {
+
       const pin =
         document.createElement(
           "span"
@@ -615,13 +420,20 @@ Rename / Delete / Pin
       pin.className =
         "history-pin-icon";
 
-
-      pin.appendChild(
-        createIcon(
-          "pin",
-          12
-        )
+      pin.setAttribute(
+        "aria-label",
+        "Pinned"
       );
+
+
+      pin.innerHTML = `
+        <i
+          data-lucide="pin"
+          width="12"
+          height="12"
+          aria-hidden="true"
+        ></i>
+      `;
 
 
       button.appendChild(
@@ -633,6 +445,7 @@ Rename / Delete / Pin
     button.addEventListener(
       "click",
       () => {
+
         void openConversation(
           item.id
         );
@@ -640,9 +453,9 @@ Rename / Delete / Pin
     );
 
 
-    /* ===================================================
+    /* -------------------------------------------------
        THREE-DOT MENU
-       =================================================== */
+       ------------------------------------------------- */
 
     const menuButton =
       document.createElement(
@@ -652,7 +465,6 @@ Rename / Delete / Pin
 
     menuButton.type =
       "button";
-
 
     menuButton.className =
       "history-three-dot";
@@ -664,25 +476,36 @@ Rename / Delete / Pin
     );
 
 
-    menuButton.appendChild(
-      createIcon(
-        "more-vertical",
-        16
-      )
-    );
+    menuButton.innerHTML = `
+      <i
+        data-lucide="more-vertical"
+        width="16"
+        height="16"
+        aria-hidden="true"
+      ></i>
+    `;
 
 
     menuButton.addEventListener(
       "click",
       event => {
-        event.preventDefault();
 
+        event.preventDefault();
         event.stopPropagation();
 
 
-        requestMenu(
-          item,
+        emit(
+          "neyo:history-menu-request",
           {
+            conversationId:
+              item.id,
+
+            title:
+              item.title,
+
+            isPinned:
+              item.is_pinned,
+
             anchorElement:
               menuButton
           }
@@ -691,19 +514,30 @@ Rename / Delete / Pin
     );
 
 
-    /* ===================================================
-       CONTEXT MENU
-       =================================================== */
+    /* -------------------------------------------------
+       RIGHT CLICK
+       ------------------------------------------------- */
 
     row.addEventListener(
       "contextmenu",
       event => {
+
         event.preventDefault();
+        event.stopPropagation();
 
 
-        requestMenu(
-          item,
+        emit(
+          "neyo:history-menu-request",
           {
+            conversationId:
+              item.id,
+
+            title:
+              item.title,
+
+            isPinned:
+              item.is_pinned,
+
             clientX:
               event.clientX,
 
@@ -730,16 +564,19 @@ Rename / Delete / Pin
      ===================================================== */
 
   function renderHistory() {
+
+    if (!active) {
+      return false;
+    }
+
+
     historyList
       .replaceChildren();
 
 
     if (
-      conversations.length ===
-      0
+      !conversations.length
     ) {
-      renderEmpty();
-
 
       emit(
         "neyo:history-rendered",
@@ -753,7 +590,7 @@ Rename / Delete / Pin
       );
 
 
-      return;
+      return true;
     }
 
 
@@ -763,6 +600,7 @@ Rename / Delete / Pin
 
     conversations.forEach(
       item => {
+
         fragment.appendChild(
           createHistoryRow(
             item
@@ -784,12 +622,19 @@ Rename / Delete / Pin
       "neyo:history-rendered",
       {
         conversations:
-          cloneConversations(),
+          conversations.map(
+            item => ({
+              ...item
+            })
+          ),
 
         count:
           conversations.length
       }
     );
+
+
+    return true;
   }
 
 
@@ -798,17 +643,15 @@ Rename / Delete / Pin
      ===================================================== */
 
   async function performLoadHistory() {
+
     renderLoading();
 
 
-    const timed =
-      createTimedController();
-
-
     try {
+
       const response =
         await fetch(
-          CONFIG.endpoint,
+          "/api/history",
           {
             method:
               "GET",
@@ -819,20 +662,16 @@ Rename / Delete / Pin
             cache:
               "no-store",
 
-            headers:
-              {
-                Accept:
-                  "application/json"
-              },
-
-            signal:
-              timed.controller.signal
+            headers: {
+              Accept:
+                "application/json"
+            }
           }
         );
 
 
       const data =
-        await readResponse(
+        await readJson(
           response
         );
 
@@ -858,51 +697,52 @@ Rename / Delete / Pin
         "neyo:history-loaded",
         {
           conversations:
-            cloneConversations()
+            conversations.map(
+              item => ({
+                ...item
+              })
+            )
         }
       );
 
 
-      return cloneConversations();
+      return conversations.map(
+        item => ({
+          ...item
+        })
+      );
 
     } catch (
       error
     ) {
+
       renderEmpty();
-
-
-      const normalizedError =
-        error?.name ===
-          "AbortError"
-          ? new Error(
-              "History request timed out."
-            )
-          : error;
 
 
       emit(
         "neyo:history-error",
         {
-          error:
-            normalizedError
+          error
         }
       );
 
 
-      throw normalizedError;
-
-    } finally {
-      timed.clear();
+      throw error;
     }
   }
 
 
   async function loadHistory() {
+
+    if (!active) {
+      return [];
+    }
+
+
     /*
-    -------------------------------------------------------
-    Deduplicate simultaneous history refreshes.
-    -------------------------------------------------------
-    */
+     * Prevent duplicate simultaneous
+     * GET /api/history requests.
+     */
 
     if (
       loadingPromise
@@ -916,9 +756,11 @@ Rename / Delete / Pin
 
 
     try {
+
       return await loadingPromise;
 
     } finally {
+
       loadingPromise =
         null;
     }
@@ -926,30 +768,33 @@ Rename / Delete / Pin
 
 
   /* =====================================================
-     FETCH CONVERSATION
+     FETCH ONE CONVERSATION
      ===================================================== */
 
   async function fetchConversation(
-    conversationId,
-    signal =
-      undefined
+    conversationId
   ) {
+
+    if (!active) {
+      return null;
+    }
+
+
     const id =
-      cleanString(
-        conversationId
+      clean(
+        conversationId,
+        128
       );
 
 
-    if (
-      !id
-    ) {
+    if (!id) {
       return null;
     }
 
 
     const response =
       await fetch(
-        CONFIG.endpoint,
+        "/api/history",
         {
           method:
             "POST",
@@ -960,14 +805,13 @@ Rename / Delete / Pin
           cache:
             "no-store",
 
-          headers:
-            {
-              "Content-Type":
-                "application/json",
+          headers: {
+            "Content-Type":
+              "application/json",
 
-              Accept:
-                "application/json"
-            },
+            Accept:
+              "application/json"
+          },
 
           body:
             JSON.stringify({
@@ -976,21 +820,25 @@ Rename / Delete / Pin
 
               conversationId:
                 id
-            }),
-
-          signal
+            })
         }
       );
 
 
     const data =
-      await readResponse(
+      await readJson(
         response
       );
 
 
     return {
       id,
+
+      /*
+       * IMPORTANT:
+       * Do not strip attachments,
+       * sources or future message fields.
+       */
 
       messages:
         Array.isArray(
@@ -1009,44 +857,34 @@ Rename / Delete / Pin
   async function openConversation(
     conversationId
   ) {
+
+    if (!active) {
+      return null;
+    }
+
+
     const id =
-      cleanString(
-        conversationId
+      clean(
+        conversationId,
+        128
       );
 
 
-    if (
-      !id
-    ) {
+    if (!id) {
       return null;
     }
 
 
     /*
-    -------------------------------------------------------
-    Every open request gets an ID.
+     * Prevent stale history click:
+     *
+     * A clicked
+     * then B clicked quickly
+     * → slow A response cannot replace B.
+     */
 
-    If A is slow and user opens B, A can no longer replace B.
-    -------------------------------------------------------
-    */
-
-    const requestId =
-      ++openRequestId;
-
-
-    try {
-      activeOpenController
-        ?.abort();
-
-    } catch {}
-
-
-    const timed =
-      createTimedController();
-
-
-    activeOpenController =
-      timed.controller;
+    const serial =
+      ++openSerial;
 
 
     emit(
@@ -1059,22 +897,17 @@ Rename / Delete / Pin
 
 
     try {
+
       const conversation =
         await fetchConversation(
-          id,
-          timed.controller.signal
+          id
         );
 
 
-      /*
-      -------------------------------------------------------
-      Stale response protection.
-      -------------------------------------------------------
-      */
-
       if (
-        requestId !==
-        openRequestId
+        serial !==
+          openSerial ||
+        !conversation
       ) {
         return null;
       }
@@ -1086,6 +919,11 @@ Rename / Delete / Pin
 
       renderHistory();
 
+
+      /*
+       * chat.js receives this event.
+       * messages.js remains the DOM owner.
+       */
 
       emit(
         "neyo:conversation-loaded",
@@ -1099,76 +937,36 @@ Rename / Delete / Pin
       );
 
 
-      emit(
-        "neyo:history-opened",
-        {
-          conversationId:
-            id
-        }
-      );
-
-
       return conversation;
 
     } catch (
       error
     ) {
-      /*
-      -------------------------------------------------------
-      Abort caused by opening a newer conversation is normal.
-      -------------------------------------------------------
-      */
 
       if (
-        error?.name ===
-          "AbortError" &&
-        requestId !==
-          openRequestId
+        serial ===
+        openSerial
       ) {
-        return null;
+
+        emit(
+          "neyo:history-error",
+          {
+            error,
+
+            conversationId:
+              id
+          }
+        );
       }
 
 
-      const normalizedError =
-        error?.name ===
-          "AbortError"
-          ? new Error(
-              "Conversation request timed out."
-            )
-          : error;
-
-
-      emit(
-        "neyo:history-error",
-        {
-          error:
-            normalizedError,
-
-          conversationId:
-            id
-        }
-      );
-
-
-      throw normalizedError;
-
-    } finally {
-      timed.clear();
-
-
-      if (
-        activeOpenController ===
-        timed.controller
-      ) {
-        activeOpenController =
-          null;
-      }
+      throw error;
     }
   }
 
 
   /* =====================================================
-     GENERIC ACTION
+     ACTION REQUEST
      ===================================================== */
 
   async function performAction(
@@ -1176,86 +974,61 @@ Rename / Delete / Pin
     conversationId,
     payload = {}
   ) {
+
+    if (!active) {
+      return null;
+    }
+
+
     const id =
-      cleanString(
-        conversationId
+      clean(
+        conversationId,
+        128
       );
 
 
-    if (
-      !id
-    ) {
-      throw new Error(
-        "Conversation ID is required."
-      );
+    if (!id) {
+      return null;
     }
 
 
-    const timed =
-      createTimedController();
+    const response =
+      await fetch(
+        "/api/history",
+        {
+          method:
+            "POST",
 
+          credentials:
+            "include",
 
-    try {
-      const response =
-        await fetch(
-          CONFIG.endpoint,
-          {
-            method:
-              "POST",
+          cache:
+            "no-store",
 
-            credentials:
-              "include",
+          headers: {
+            "Content-Type":
+              "application/json",
 
-            cache:
-              "no-store",
+            Accept:
+              "application/json"
+          },
 
-            headers:
-              {
-                "Content-Type":
-                  "application/json",
+          body:
+            JSON.stringify({
+              action,
 
-                Accept:
-                  "application/json"
-              },
+              conversationId:
+                id,
 
-            body:
-              JSON.stringify({
-                action,
-
-                conversationId:
-                  id,
-
-                ...payload
-              }),
-
-            signal:
-              timed.controller.signal
-          }
-        );
-
-
-      return await readResponse(
-        response
+              ...payload
+            })
+        }
       );
 
-    } catch (
-      error
-    ) {
-      if (
-        error?.name ===
-          "AbortError"
-      ) {
-        throw new Error(
-          "History action timed out."
-        );
-      }
 
-
-      throw error;
-
-    } finally {
-      timed.clear();
-    }
+    return readJson(
+      response
+    );
   }
 
 
@@ -1267,20 +1040,24 @@ Rename / Delete / Pin
     conversationId,
     title
   ) {
+
+    if (!active) {
+      return false;
+    }
+
+
     const id =
-      cleanString(
-        conversationId
+      clean(
+        conversationId,
+        128
       );
 
 
     const cleanTitle =
-      cleanString(
-        title
-      )
-        .slice(
-          0,
-          CONFIG.titleMaxLength
-        );
+      clean(
+        title,
+        100
+      );
 
 
     if (
@@ -1301,32 +1078,7 @@ Rename / Delete / Pin
     );
 
 
-    /*
-    -------------------------------------------------------
-    Update local row immediately.
-
-    No need to wait for an entire GET request just to change
-    one title.
-    -------------------------------------------------------
-    */
-
-    const item =
-      conversations.find(
-        conversation =>
-          conversation.id ===
-          id
-      );
-
-
-    if (
-      item
-    ) {
-      item.title =
-        cleanTitle;
-
-
-      renderHistory();
-    }
+    await loadHistory();
 
 
     emit(
@@ -1352,15 +1104,20 @@ Rename / Delete / Pin
   async function deleteConversation(
     conversationId
   ) {
+
+    if (!active) {
+      return false;
+    }
+
+
     const id =
-      cleanString(
-        conversationId
+      clean(
+        conversationId,
+        128
       );
 
 
-    if (
-      !id
-    ) {
+    if (!id) {
       return false;
     }
 
@@ -1371,41 +1128,23 @@ Rename / Delete / Pin
     );
 
 
-    conversations =
-      conversations.filter(
-        conversation =>
-          conversation.id !==
-          id
-      );
-
-
-    const wasActive =
-      activeConversationId ===
-      id;
-
-
     if (
-      wasActive
+      activeConversationId ===
+      id
     ) {
+
       activeConversationId =
         null;
-    }
 
 
-    renderHistory();
-
-
-    if (
-      wasActive
-    ) {
       /*
-      -------------------------------------------------------
-      History does NOT directly manipulate chat.js.
+       * Invalidate any conversation
+       * currently being opened.
+       */
 
-      Another integration layer may decide whether deletion
-      opens New Chat.
-      -------------------------------------------------------
-      */
+      openSerial +=
+        1;
+
 
       emit(
         "neyo:active-conversation-deleted",
@@ -1415,6 +1154,9 @@ Rename / Delete / Pin
         }
       );
     }
+
+
+    await loadHistory();
 
 
     emit(
@@ -1438,59 +1180,39 @@ Rename / Delete / Pin
     conversationId,
     pinned
   ) {
-    const id =
-      cleanString(
-        conversationId
-      );
 
-
-    if (
-      !id
-    ) {
+    if (!active) {
       return false;
     }
 
 
-    const nextPinned =
+    const id =
+      clean(
+        conversationId,
+        128
+      );
+
+
+    if (!id) {
+      return false;
+    }
+
+
+    const value =
       Boolean(
         pinned
       );
 
 
     await performAction(
-      nextPinned
+      value
         ? "pin"
         : "unpin",
       id
     );
 
 
-    const item =
-      conversations.find(
-        conversation =>
-          conversation.id ===
-          id
-      );
-
-
-    if (
-      item
-    ) {
-      item.is_pinned =
-        nextPinned;
-
-
-      /*
-      -------------------------------------------------------
-      Preserve server list order for now.
-
-      We do NOT invent a client-side pin ordering rule that
-      may differ from backend behavior.
-      -------------------------------------------------------
-      */
-
-      renderHistory();
-    }
+    await loadHistory();
 
 
     emit(
@@ -1500,27 +1222,9 @@ Rename / Delete / Pin
           id,
 
         pinned:
-          nextPinned
+          value
       }
     );
-
-
-    /*
-    -------------------------------------------------------
-    Refresh afterward because backend may reorder pinned
-    conversations.
-    -------------------------------------------------------
-    */
-
-    void loadHistory()
-      .catch(
-        error => {
-          debug(
-            "Background pin refresh failed:",
-            error
-          );
-        }
-      );
 
 
     return true;
@@ -1528,15 +1232,22 @@ Rename / Delete / Pin
 
 
   /* =====================================================
-     ACTIVE STATE
+     ACTIVE CONVERSATION
      ===================================================== */
 
   function setActiveConversation(
     conversationId
   ) {
+
+    if (!active) {
+      return false;
+    }
+
+
     activeConversationId =
-      cleanString(
-        conversationId
+      clean(
+        conversationId,
+        128
       ) ||
       null;
 
@@ -1549,236 +1260,160 @@ Rename / Delete / Pin
 
 
   /* =====================================================
-     REQUEST WRAPPER
+     ERROR BRIDGE
      ===================================================== */
 
-  function handleAsyncAction(
-    task,
-    context = {}
+  function handleError(
+    error,
+    detail = {}
   ) {
-    Promise.resolve(
-      task
-    )
-      .catch(
-        error => {
-          emit(
-            "neyo:history-error",
-            {
-              error,
-              ...context
-            }
-          );
-        }
-      );
+
+    emit(
+      "neyo:history-error",
+      {
+        error,
+        ...detail
+      }
+    );
   }
 
 
   /* =====================================================
-     RENAME EVENT
+     EVENTS
+
+     Critical:
+     No history listeners are registered
+     while neo.js is the active owner.
      ===================================================== */
 
-  window.addEventListener(
-    "neyo:history-rename-request",
-    event => {
-      const conversationId =
-        event.detail
-          ?.conversationId;
+  if (active) {
 
+    window.addEventListener(
+      "neyo:history-rename-request",
+      event => {
 
-      handleAsyncAction(
-        renameConversation(
-          conversationId,
+        void renameConversation(
+          event.detail
+            ?.conversationId,
+
           event.detail
             ?.title
-        ),
-        {
-          conversationId
-        }
-      );
-    }
-  );
+        )
+          .catch(
+            error =>
+              handleError(
+                error
+              )
+          );
+      }
+    );
 
 
-  /* =====================================================
-     DELETE EVENT
-     ===================================================== */
+    window.addEventListener(
+      "neyo:history-delete-request",
+      event => {
 
-  window.addEventListener(
-    "neyo:history-delete-request",
-    event => {
-      const conversationId =
-        event.detail
-          ?.conversationId;
-
-
-      handleAsyncAction(
-        deleteConversation(
-          conversationId
-        ),
-        {
-          conversationId
-        }
-      );
-    }
-  );
+        void deleteConversation(
+          event.detail
+            ?.conversationId
+        )
+          .catch(
+            error =>
+              handleError(
+                error
+              )
+          );
+      }
+    );
 
 
-  /* =====================================================
-     PIN EVENT
-     ===================================================== */
+    window.addEventListener(
+      "neyo:history-pin-request",
+      event => {
 
-  window.addEventListener(
-    "neyo:history-pin-request",
-    event => {
-      const conversationId =
-        event.detail
-          ?.conversationId;
+        void setPinned(
+          event.detail
+            ?.conversationId,
 
-
-      handleAsyncAction(
-        setPinned(
-          conversationId,
           event.detail
             ?.pinned
-        ),
-        {
-          conversationId
-        }
-      );
-    }
-  );
-
-
-  /* =====================================================
-     HISTORY LOAD EVENT
-     ===================================================== */
-
-  window.addEventListener(
-    "neyo:history-load-request",
-    () => {
-      handleAsyncAction(
-        loadHistory()
-      );
-    }
-  );
-
-
-  /* =====================================================
-     OPEN EVENT
-     ===================================================== */
-
-  window.addEventListener(
-    "neyo:conversation-open-request",
-    event => {
-      const conversationId =
-        event.detail
-          ?.conversationId;
-
-
-      handleAsyncAction(
-        openConversation(
-          conversationId
-        ),
-        {
-          conversationId
-        }
-      );
-    }
-  );
-
-
-  /* =====================================================
-     ACTIVE EVENT
-     ===================================================== */
-
-  window.addEventListener(
-    "neyo:history-active-set",
-    event => {
-      setActiveConversation(
-        event.detail
-          ?.conversationId
-      );
-    }
-  );
-
-
-  /* =====================================================
-     CHAT NEW SYNC
-     ===================================================== */
-
-  window.addEventListener(
-    "neyo:chat-new",
-    () => {
-      if (
-        activeConversationId ===
-        null
-      ) {
-        return;
+        )
+          .catch(
+            error =>
+              handleError(
+                error
+              )
+          );
       }
+    );
 
 
-      activeConversationId =
-        null;
+    window.addEventListener(
+      "neyo:history-load-request",
+      () => {
+
+        void loadHistory()
+          .catch(
+            error => {
+
+              console.warn(
+                "[NEYO History] Load failed:",
+                error
+              );
+            }
+          );
+      }
+    );
 
 
-      renderHistory();
-    }
-  );
+    window.addEventListener(
+      "neyo:conversation-open-request",
+      event => {
+
+        void openConversation(
+          event.detail
+            ?.conversationId
+        )
+          .catch(
+            error =>
+              handleError(
+                error
+              )
+          );
+      }
+    );
 
 
-  /* =====================================================
-     CHAT RESPONSE SYNC
-     ===================================================== */
+    window.addEventListener(
+      "neyo:history-active-set",
+      event => {
 
-  window.addEventListener(
-    "neyo:chat-response",
-    event => {
-      const conversationId =
-        cleanString(
+        setActiveConversation(
           event.detail
             ?.conversationId
         );
-
-
-      if (
-        conversationId
-      ) {
-        activeConversationId =
-          conversationId;
       }
-
-
-      /*
-      -------------------------------------------------------
-      New conversation/title may now exist on backend.
-      Refresh sidebar after successful response.
-      -------------------------------------------------------
-      */
-
-      void loadHistory()
-        .catch(
-          error => {
-            debug(
-              "Post-chat history refresh failed:",
-              error
-            );
-          }
-        );
-    }
-  );
+    );
+  }
 
 
   /* =====================================================
      PUBLIC API
      ===================================================== */
 
-  const publicApi =
+  const api =
     Object.freeze({
+
       __controller:
         true,
 
       version:
         VERSION,
+
+      active,
+
+      legacyOwnerActive:
+        legacy,
 
       load:
         loadHistory,
@@ -1807,30 +1442,49 @@ Rename / Delete / Pin
           activeConversationId,
 
       getConversations:
-        cloneConversations,
+        () =>
+          conversations.map(
+            item => ({
+              ...item
+            })
+          ),
 
       getById(
         id
       ) {
-        const conversation =
-          conversations.find(
-            item =>
-              item.id ===
-              id
+
+        const value =
+          clean(
+            id,
+            128
           );
 
 
-        return conversation
-          ? cloneConversation(
-              conversation
-            )
+        const item =
+          conversations.find(
+            conversation =>
+              conversation.id ===
+              value
+          );
+
+
+        return item
+          ? {
+              ...item
+            }
           : null;
       },
 
       getState:
         () => ({
+
           version:
             VERSION,
+
+          active,
+
+          legacyOwnerActive:
+            legacy,
 
           activeConversationId,
 
@@ -1850,7 +1504,7 @@ Rename / Delete / Pin
     "NeyoHistory",
     {
       value:
-        publicApi,
+        api,
 
       writable:
         false,
@@ -1864,15 +1518,16 @@ Rename / Delete / Pin
   );
 
 
-  /* =====================================================
-     READY
-     ===================================================== */
-
   emit(
     "neyo:history-ready",
     {
       version:
-        VERSION
+        VERSION,
+
+      active,
+
+      legacyOwnerActive:
+        legacy
     }
   );
 

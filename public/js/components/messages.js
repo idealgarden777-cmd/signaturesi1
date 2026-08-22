@@ -1,78 +1,36 @@
 /*
 =========================================================
 NEYO — MESSAGES CORE
-FINAL CLEAN v1
 
-FILE:
-public/js/components/messages.js
-
-OWNS
----------------------------------------------------------
-- Message DOM
-- User / assistant message shells
-- Thinking indicator
-- Message updates
-- Message removal
-- Clear / replace conversation UI
+Owns:
+- Message DOM shells
+- User attachment display
+- Source pills
+- Thinking state
+- Message updates/removal
 - Auto-scroll
-- Chat event rendering bridge
+- Clear messages
 
-DOES NOT OWN
----------------------------------------------------------
+Does NOT own:
 - /api/chat
-- Conversation state
-- Markdown parsing
-- Send button
-- Enter key
-- Attachment upload
-- History API
-- Copy / regenerate / share actions
-
-EVENTS LISTENED
----------------------------------------------------------
-- neyo:chat-message-added
-- neyo:chat-send-start
-- neyo:chat-response
-- neyo:chat-error
-- neyo:chat-aborted
-- neyo:chat-send-end
-- neyo:chat-state-loaded
-- neyo:chat-new
-
-PUBLIC API
----------------------------------------------------------
-window.NeyoMessages.create(...)
-window.NeyoMessages.update(...)
-window.NeyoMessages.remove(...)
-window.NeyoMessages.clear()
-window.NeyoMessages.replace(...)
-window.NeyoMessages.showThinking()
-window.NeyoMessages.hideThinking()
-window.NeyoMessages.getById(...)
-window.NeyoMessages.scrollToBottom()
+- Markdown parser
+- Copy/edit/regenerate/share
+- Attachments upload
+- History
+- Send / Enter
 =========================================================
 */
 
 (() => {
   "use strict";
 
-
-  /* =====================================================
-     VERSION / GUARD
-     ===================================================== */
-
   const VERSION =
-    "neyo-messages-final-clean-v1";
-
+    "neyo-messages-recovery-v1";
 
   if (
-    window.NeyoMessages?.__controller ===
-    true
+    window.NeyoMessages
+      ?.__controller
   ) {
-    console.warn(
-      "[NEYO Messages] Already initialized."
-    );
-
     return;
   }
 
@@ -86,12 +44,10 @@ window.NeyoMessages.scrollToBottom()
       "chatMessages"
     );
 
-
   const scrollArea =
     document.getElementById(
       "scrollArea"
     );
-
 
   const heroSection =
     document.getElementById(
@@ -99,20 +55,42 @@ window.NeyoMessages.scrollToBottom()
     );
 
 
-  if (
-    !chatMessages
-  ) {
-    console.warn(
-      "[NEYO Messages] #chatMessages not found."
-    );
+  /* =====================================================
+     RUNTIME OWNERSHIP
+     ===================================================== */
 
-    return;
-  }
+  const legacy =
+    Array.from(
+      document.scripts ||
+      []
+    )
+      .some(
+        script =>
+          /(?:^|\/)neo\.js(?:\?|$)/
+            .test(
+              script.src ||
+              ""
+            )
+      );
+
+  /*
+   * While neo.js exists it remains
+   * the sole message-DOM owner.
+   */
+
+  const active =
+    Boolean(
+      chatMessages
+    ) &&
+    !legacy;
 
 
   /* =====================================================
      STATE
      ===================================================== */
+
+  let nearBottom =
+    true;
 
   let thinkingElement =
     null;
@@ -122,133 +100,138 @@ window.NeyoMessages.scrollToBottom()
      HELPERS
      ===================================================== */
 
-  function emit(
-    name,
-    detail = {}
-  ) {
-    window.dispatchEvent(
-      new CustomEvent(
-        name,
-        {
-          detail
-        }
+  const emit =
+    (
+      name,
+      detail = {}
+    ) => {
+
+      window.dispatchEvent(
+        new CustomEvent(
+          name,
+          {
+            detail
+          }
+        )
+      );
+    };
+
+
+  const clean =
+    (
+      value,
+      max = 50_000
+    ) =>
+
+      String(
+        value ??
+        ""
       )
-    );
-  }
+        .replace(
+          /\u0000/g,
+          ""
+        )
+        .replace(
+          /\r\n?/g,
+          "\n"
+        )
+        .slice(
+          0,
+          max
+        );
 
 
-  function createId() {
-    if (
+  const makeId =
+    () =>
+
       globalThis.crypto
         ?.randomUUID
-    ) {
-      return globalThis.crypto
-        .randomUUID();
-    }
+        ?.() ||
+
+      (
+        `msg_${Date.now()}_` +
+        Math.random()
+          .toString(36)
+          .slice(2)
+      );
 
 
-    return (
-      `msg_${Date.now()}_` +
-      Math.random()
-        .toString(36)
-        .slice(2)
-    );
-  }
+  const refreshIcons =
+    () => {
+
+      try {
+        window.lucide
+          ?.createIcons
+          ?.();
+
+      } catch {}
+    };
 
 
-  function cleanText(
-    value
+  /* =====================================================
+     MESSAGE LOOKUP
+     ===================================================== */
+
+  function findMessage(
+    id
   ) {
+
     if (
-      typeof value !==
-      "string"
+      !chatMessages ||
+      !id
     ) {
-      return "";
+      return null;
     }
 
-
-    return value
-      .replace(
-        /\r\n?/g,
-        "\n"
+    return Array
+      .from(
+        chatMessages
+          .querySelectorAll(
+            "[data-neyo-message-id]"
+          )
       )
-      .replace(
-        /\u0000/g,
-        ""
-      );
+      .find(
+        node =>
+          node.dataset
+            .neyoMessageId ===
+          String(id)
+      ) ||
+      null;
   }
 
 
-  function safeSelector(
-    value
-  ) {
-    const string =
-      String(
-        value ?? ""
-      );
+  /* =====================================================
+     HERO
+     ===================================================== */
 
+  function updateHero() {
 
     if (
-      globalThis.CSS
-        ?.escape
-    ) {
-      return CSS.escape(
-        string
-      );
-    }
-
-
-    return string
-      .replace(
-        /["\\]/g,
-        "\\$&"
-      );
-  }
-
-
-  function refreshIcons() {
-    try {
-      window.lucide
-        ?.createIcons
-        ?.();
-
-    } catch {}
-  }
-
-
-  function hideHero() {
-    if (
-      heroSection
-    ) {
-      heroSection.hidden =
-        true;
-
-      heroSection.style.display =
-        "none";
-    }
-  }
-
-
-  function showHeroIfEmpty() {
-    if (
+      !active ||
       !heroSection
     ) {
       return;
     }
 
+    const hasMessages =
+      Boolean(
+        chatMessages
+          .querySelector(
+            "[data-neyo-message-id]"
+          )
+      );
 
-    if (
-      chatMessages
-        .children
-        .length ===
-      0
-    ) {
-      heroSection.hidden =
-        false;
+    heroSection.style.display =
+      hasMessages
+        ? "none"
+        : "";
 
-      heroSection.style.display =
-        "";
-    }
+    heroSection.setAttribute(
+      "aria-hidden",
+      String(
+        hasMessages
+      )
+    );
   }
 
 
@@ -256,244 +239,506 @@ window.NeyoMessages.scrollToBottom()
      SCROLL
      ===================================================== */
 
+  function atBottom() {
+
+    if (!scrollArea) {
+      return true;
+    }
+
+    return (
+      scrollArea.scrollHeight -
+      scrollArea.scrollTop -
+      scrollArea.clientHeight
+    ) <= 120;
+  }
+
+
   function scrollToBottom(
-    behavior =
-      "auto"
+    behavior = "auto",
+    force = false
   ) {
-    window.requestAnimationFrame(
-      () => {
-        if (
-          scrollArea
-        ) {
-          try {
-            scrollArea.scrollTo({
-              top:
-                scrollArea
-                  .scrollHeight,
 
-              behavior
-            });
-
-          } catch {
-            scrollArea.scrollTop =
-              scrollArea.scrollHeight;
-          }
-
-
-          return;
-        }
-
-
-        chatMessages
-          .lastElementChild
-          ?.scrollIntoView
-          ?.({
-            block:
-              "end",
-
-            behavior
-          });
-      }
-    );
-  }
-
-
-  /* =====================================================
-     LOOKUP
-     ===================================================== */
-
-  function getById(
-    id
-  ) {
     if (
-      !id
+      !active ||
+      !scrollArea ||
+      (
+        !force &&
+        !nearBottom
+      )
     ) {
-      return null;
+      return false;
     }
 
+    try {
 
-    return chatMessages
-      .querySelector(
-        `[data-message-id="${safeSelector(
-          id
-        )}"]`
-      );
+      scrollArea.scrollTo({
+        top:
+          scrollArea
+            .scrollHeight,
+
+        behavior
+      });
+
+    } catch {
+
+      scrollArea.scrollTop =
+        scrollArea
+          .scrollHeight;
+    }
+
+    nearBottom =
+      true;
+
+    return true;
   }
 
 
   /* =====================================================
-     ATTACHMENT PRESENTATION
+     ATTACHMENT PREVIEW URL
      ===================================================== */
 
-  function getAttachmentIcon(
-    category
+  function safePreview(
+    value
   ) {
-    switch (
-      category
+
+    const raw =
+      clean(
+        value,
+        5000
+      )
+        .trim();
+
+    if (!raw) {
+      return "";
+    }
+
+    if (
+      /^(blob:|data:image\/)/i
+        .test(
+          raw
+        )
     ) {
-      case "image":
-        return "image";
+      return raw;
+    }
 
-      case "audio":
-        return "audio-lines";
+    try {
 
-      case "video":
-        return "video";
+      const url =
+        new URL(
+          raw,
+          location.origin
+        );
 
-      case "code":
-        return "file-code-2";
+      return [
+        "http:",
+        "https:"
+      ].includes(
+        url.protocol
+      )
+        ? url.href
+        : "";
 
-      case "spreadsheet":
-        return "table-2";
+    } catch {
 
-      case "presentation":
-        return "presentation";
-
-      case "archive":
-        return "archive";
-
-      case "data":
-        return "database";
-
-      default:
-        return "file";
+      return "";
     }
   }
 
 
-  function createAttachmentList(
-    attachments
+  /* =====================================================
+     ATTACHMENTS
+     ===================================================== */
+
+  function renderAttachments(
+    wrapper,
+    files
   ) {
+
     if (
       !Array.isArray(
-        attachments
+        files
       ) ||
-      attachments.length ===
-        0
+      !files.length
     ) {
-      return null;
+      return;
     }
 
-
-    const wrapper =
+    const grid =
       document.createElement(
         "div"
       );
 
+    grid.className =
+      "message-media-grid";
 
-    wrapper.className =
-      "message-attachments";
+    grid.setAttribute(
+      "aria-label",
+      "Message attachments"
+    );
 
 
-    attachments.forEach(
-      attachment => {
-        const chip =
-          document.createElement(
-            "div"
+    files
+      .slice(
+        0,
+        5
+      )
+      .forEach(
+        file => {
+
+          const name =
+            clean(
+              file?.name ||
+              "Attached file",
+              220
+            );
+
+          const mime =
+            clean(
+              file?.mime ||
+              file?.mimeType ||
+              file?.type ||
+              "",
+              180
+            )
+              .toLowerCase();
+
+          const category =
+            clean(
+              file?.category ||
+              "unknown",
+              32
+            )
+              .toLowerCase();
+
+          const preview =
+            safePreview(
+              file?.previewUrl ||
+              file?.url ||
+              ""
+            );
+
+
+          if (
+            (
+              category ===
+                "image" ||
+              mime.startsWith(
+                "image/"
+              )
+            ) &&
+            preview
+          ) {
+
+            const image =
+              document.createElement(
+                "img"
+              );
+
+            image.src =
+              preview;
+
+            image.alt =
+              name ||
+              "Uploaded image";
+
+            image.loading =
+              "lazy";
+
+            image.decoding =
+              "async";
+
+            grid.appendChild(
+              image
+            );
+
+            return;
+          }
+
+
+          const pill =
+            document.createElement(
+              "div"
+            );
+
+          pill.className =
+            "message-file-pill";
+
+          pill.textContent =
+            name;
+
+          pill.title =
+            name;
+
+          grid.appendChild(
+            pill
           );
+        }
+      );
 
 
-        chip.className =
-          "message-attachment";
+    wrapper.appendChild(
+      grid
+    );
+  }
 
 
-        const icon =
-          document.createElement(
-            "i"
-          );
+  /* =====================================================
+     SOURCES
+     ===================================================== */
 
+  function getSource(
+    source
+  ) {
 
-        icon.setAttribute(
-          "data-lucide",
-          getAttachmentIcon(
-            attachment?.category
+    const value =
+      source?.url ||
+      source?.uri ||
+      source?.link ||
+      source?.web?.uri ||
+      "";
+
+    try {
+
+      const url =
+        new URL(
+          value
+        );
+
+      if (
+        ![
+          "http:",
+          "https:"
+        ].includes(
+          url.protocol
+        )
+      ) {
+        return null;
+      }
+
+      return {
+        url:
+          url.href,
+
+        label:
+          clean(
+            source?.title ||
+            source?.name ||
+            source?.web?.title ||
+            url.hostname
+              .replace(
+                /^www\./,
+                ""
+              ),
+            160
           )
+      };
+
+    } catch {
+
+      return null;
+    }
+  }
+
+
+  function renderSources(
+    messageElement,
+    sources
+  ) {
+
+    if (
+      !Array.isArray(
+        sources
+      ) ||
+      !sources.length
+    ) {
+      return;
+    }
+
+    const valid =
+      sources
+        .slice(
+          0,
+          10
+        )
+        .map(
+          getSource
+        )
+        .filter(
+          Boolean
         );
 
-
-        icon.setAttribute(
-          "size",
-          "14"
-        );
+    if (!valid.length) {
+      return;
+    }
 
 
-        const name =
+    const root =
+      document.createElement(
+        "div"
+      );
+
+    root.className =
+      "neo-source-pills";
+
+    root.setAttribute(
+      "aria-label",
+      "Sources"
+    );
+
+
+    const title =
+      document.createElement(
+        "span"
+      );
+
+    title.className =
+      "neo-source-label";
+
+    title.textContent =
+      "Sources";
+
+    root.appendChild(
+      title
+    );
+
+
+    valid.forEach(
+      source => {
+
+        const link =
           document.createElement(
-            "span"
+            "a"
           );
 
+        link.className =
+          "neo-source-pill";
 
-        name.className =
-          "message-attachment-name";
+        link.href =
+          source.url;
 
+        link.target =
+          "_blank";
 
-        name.textContent =
-          attachment?.name ||
-          "Attachment";
+        link.rel =
+          "noopener noreferrer";
 
+        link.textContent =
+          source.label ||
+          "Source";
 
-        chip.append(
-          icon,
-          name
-        );
+        link.title =
+          link.textContent;
 
-
-        wrapper.appendChild(
-          chip
+        root.appendChild(
+          link
         );
       }
     );
 
 
-    return wrapper;
+    messageElement
+      .appendChild(
+        root
+      );
   }
 
 
   /* =====================================================
-     NORMALIZE INPUT
+     CONTENT
      ===================================================== */
 
-  function normalizeMessage(
-    input = {}
+  function renderContent(
+    element,
+    message,
+    markdown = true
   ) {
-    const role =
-      input.role ===
-        "user"
-        ? "user"
-        : "assistant";
+
+    const content =
+      element
+        .querySelector(
+          ".message-content"
+        );
+
+    if (!content) {
+      return false;
+    }
+
+    const text =
+      clean(
+        message?.content
+      );
 
 
-    return {
-      id:
-        input.id ||
-        createId(),
+    /*
+     * User content is always plain text.
+     */
 
-      role,
+    if (
+      message.role !==
+      "assistant"
+    ) {
 
-      content:
-        cleanText(
-          input.content
-        ),
+      content.textContent =
+        text;
 
-      attachments:
-        Array.isArray(
-          input.attachments
-        )
-          ? input.attachments
-          : [],
+      return true;
+    }
 
-      sources:
-        Array.isArray(
-          input.sources
-        )
-          ? input.sources
-          : [],
 
-      error:
-        Boolean(
-          input.error
-        )
-    };
+    /*
+     * Safe fallback.
+     *
+     * If renderer exists it upgrades
+     * this content to Markdown.
+     */
+
+    content.textContent =
+      text;
+
+
+    if (
+      typeof window
+        .NeyoMessageRenderer
+        ?.render ===
+      "function"
+    ) {
+
+      window
+        .NeyoMessageRenderer
+        .render(
+          element,
+          text,
+          {
+            role:
+              "assistant",
+
+            markdown
+          }
+        );
+
+    } else {
+
+      emit(
+        "neyo:message-render-request",
+        {
+          message:
+            element,
+
+          content:
+            text,
+
+          options: {
+            role:
+              "assistant",
+
+            markdown
+          }
+        }
+      );
+    }
+
+
+    return true;
   }
 
 
@@ -502,151 +747,221 @@ window.NeyoMessages.scrollToBottom()
      ===================================================== */
 
   function create(
-    input = {}
+    message,
+    options = {}
   ) {
-    const data =
-      normalizeMessage(
-        input
-      );
-
-
-    const existing =
-      getById(
-        data.id
-      );
-
 
     if (
-      existing
+      !active ||
+      !message ||
+      ![
+        "user",
+        "assistant"
+      ].includes(
+        message.role
+      )
     ) {
+      return null;
+    }
+
+
+    const id =
+      clean(
+        message.id,
+        128
+      ) ||
+      makeId();
+
+
+    /*
+     * Duplicate-event protection.
+     */
+
+    const existing =
+      findMessage(
+        id
+      );
+
+    if (existing) {
       return existing;
     }
 
 
-    hideHero();
-
-
-    const message =
-      document.createElement(
-        "article"
-      );
-
-
-    message.className =
-      `message ${data.role}`;
-
-
-    message.dataset
-      .messageId =
-      data.id;
-
-
-    message.dataset.role =
-      data.role;
-
-
     if (
-      data.error
+      message.role ===
+      "assistant"
     ) {
-      message.classList.add(
-        "message-error"
-      );
+      removeThinking();
     }
 
 
-    const content =
+    const element =
       document.createElement(
         "div"
       );
 
+    element.className =
+      `message ${message.role}`;
 
-    content.className =
-      "message-content";
+    element.dataset
+      .neyoMessageId =
+      id;
 
+    element.dataset
+      .messageId =
+      id;
 
-    /*
-    -------------------------------------------------------
-    Important:
-    Plain text only.
-
-    message-renderer.js will later upgrade assistant content
-    to Markdown safely.
-    -------------------------------------------------------
-    */
-
-    content.textContent =
-      data.content;
+    element.dataset
+      .role =
+      message.role;
 
 
     if (
-      data.role ===
+      message.error ===
+      true
+    ) {
+
+      element.classList
+        .add(
+          "is-error"
+        );
+
+      element.dataset
+        .error =
+        "true";
+    }
+
+
+    if (
+      options.historyLoad
+    ) {
+
+      element.dataset
+        .historyLoad =
+        "true";
+    }
+
+
+    /* -------------------------------------------------
+       USER
+       ------------------------------------------------- */
+
+    if (
+      message.role ===
       "user"
     ) {
+
       const wrapper =
         document.createElement(
           "div"
         );
 
-
       wrapper.className =
         "message-wrapper";
 
 
-      const attachmentList =
-        createAttachmentList(
-          data.attachments
+      const content =
+        document.createElement(
+          "div"
         );
 
-
-      if (
-        attachmentList
-      ) {
-        wrapper.appendChild(
-          attachmentList
-        );
-      }
-
+      content.className =
+        "message-content";
 
       wrapper.appendChild(
         content
       );
 
 
-      message.appendChild(
+      renderAttachments(
+        wrapper,
+        message.attachments
+      );
+
+
+      element.appendChild(
         wrapper
       );
 
-    } else {
-      message.appendChild(
+    }
+
+    /* -------------------------------------------------
+       ASSISTANT
+       ------------------------------------------------- */
+
+    else {
+
+      const content =
+        document.createElement(
+          "div"
+        );
+
+      content.className =
+        "message-content";
+
+      element.appendChild(
         content
       );
     }
 
 
     chatMessages.appendChild(
-      message
+      element
     );
 
 
+    renderContent(
+      element,
+      message,
+      true
+    );
+
+
+    if (
+      message.role ===
+      "assistant"
+    ) {
+
+      renderSources(
+        element,
+        message.sources
+      );
+    }
+
+
+    updateHero();
     refreshIcons();
 
 
-    scrollToBottom();
-
-
     emit(
-      "neyo:message-created",
+      "neyo:message-shell-created",
       {
-        element:
-          message,
+        id,
 
-        message:
-          data
+        element,
+
+        message: {
+          ...message,
+          id
+        }
       }
     );
 
 
-    return message;
+    requestAnimationFrame(
+      () =>
+        scrollToBottom(
+          "auto",
+          message.role ===
+            "user" ||
+          Boolean(
+            options.forceScroll
+          )
+        )
+    );
+
+
+    return element;
   }
 
 
@@ -655,105 +970,81 @@ window.NeyoMessages.scrollToBottom()
      ===================================================== */
 
   function update(
-    target,
-    content = "",
+    id,
+    content,
     options = {}
   ) {
-    const message =
-      typeof target ===
-        "string"
-        ? getById(
-            target
-          )
-        : target;
 
-
-    if (
-      !(
-        message instanceof
-        HTMLElement
-      )
-    ) {
+    if (!active) {
       return false;
     }
 
 
-    const contentElement =
-      message
-        .querySelector(
-          ".message-content"
-        );
+    const element =
+      findMessage(
+        id
+      );
 
-
-    if (
-      !contentElement
-    ) {
+    if (!element) {
       return false;
     }
 
 
-    message.classList.remove(
-      "is-thinking"
+    const role =
+      element.dataset.role ||
+      "assistant";
+
+
+    const text =
+      clean(
+        content
+      );
+
+
+    renderContent(
+      element,
+      {
+        role,
+        content:
+          text
+      },
+      options.markdown ??
+      true
     );
 
 
-    if (
-      options.error ===
-      true
-    ) {
-      message.classList.add(
-        "message-error"
+    element.classList
+      .toggle(
+        "is-error",
+        options.error ===
+          true
       );
 
-    } else if (
+
+    element.dataset.error =
       options.error ===
-      false
-    ) {
-      message.classList.remove(
-        "message-error"
-      );
-    }
-
-
-    /*
-    -------------------------------------------------------
-    messages.js stays safe by default.
-
-    HTML is accepted only when another trusted renderer
-    explicitly marks it sanitized.
-    -------------------------------------------------------
-    */
-
-    if (
-      options.html ===
-        true &&
-      options.sanitized ===
         true
-    ) {
-      contentElement.innerHTML =
-        String(
-          content ?? ""
-        );
-
-    } else {
-      contentElement.textContent =
-        String(
-          content ?? ""
-        );
-    }
-
-
-    scrollToBottom();
+        ? "true"
+        : "false";
 
 
     emit(
       "neyo:message-updated",
       {
-        element:
-          message,
-
-        content
+        id,
+        element,
+        content:
+          text
       }
+    );
+
+
+    requestAnimationFrame(
+      () =>
+        scrollToBottom(
+          "auto",
+          false
+        )
     );
 
 
@@ -766,44 +1057,34 @@ window.NeyoMessages.scrollToBottom()
      ===================================================== */
 
   function remove(
-    target
+    id
   ) {
-    const message =
-      typeof target ===
-        "string"
-        ? getById(
-            target
-          )
-        : target;
 
-
-    if (
-      !(
-        message instanceof
-        HTMLElement
-      )
-    ) {
+    if (!active) {
       return false;
     }
 
 
-    if (
-      message ===
-      thinkingElement
-    ) {
-      thinkingElement =
-        null;
+    const element =
+      findMessage(
+        id
+      );
+
+    if (!element) {
+      return false;
     }
 
 
-    message.remove();
+    element.remove();
 
-
-    showHeroIfEmpty();
+    updateHero();
 
 
     emit(
-      "neyo:message-removed"
+      "neyo:message-removed",
+      {
+        id
+      }
     );
 
 
@@ -816,30 +1097,42 @@ window.NeyoMessages.scrollToBottom()
      ===================================================== */
 
   function showThinking() {
-    if (
-      thinkingElement
-        ?.isConnected
-    ) {
-      return thinkingElement;
+
+    if (!active) {
+      return null;
     }
 
 
-    hideHero();
+    removeThinking();
 
 
-    const message =
+    const element =
       document.createElement(
-        "article"
+        "div"
       );
 
+    element.id =
+      "neyoThinkingIndicator";
 
-    message.className =
+    element.className =
       "message assistant is-thinking";
 
+    element.dataset
+      .neyoMessageId =
+      "neyo-thinking";
 
-    message.dataset
+    element.dataset
       .messageId =
       "neyo-thinking";
+
+    element.dataset
+      .role =
+      "assistant";
+
+    element.setAttribute(
+      "aria-live",
+      "polite"
+    );
 
 
     const content =
@@ -847,137 +1140,102 @@ window.NeyoMessages.scrollToBottom()
         "div"
       );
 
-
     content.className =
       "message-content";
 
 
-    const thinking =
-      document.createElement(
-        "div"
-      );
-
-
-    thinking.className =
-      "message-thinking";
-
-
-    thinking.setAttribute(
-      "role",
-      "status"
-    );
-
-
-    thinking.setAttribute(
-      "aria-live",
-      "polite"
-    );
-
-
-    thinking.setAttribute(
-      "aria-label",
-      "NEYO is thinking"
-    );
-
-
-    const dot1 =
+    const shimmer =
       document.createElement(
         "span"
       );
 
+    shimmer.className =
+      "thinking-shimmer";
 
-    const dot2 =
-      document.createElement(
-        "span"
-      );
-
-
-    const dot3 =
-      document.createElement(
-        "span"
-      );
-
-
-    dot1.className =
-      "message-thinking-dot";
-
-
-    dot2.className =
-      "message-thinking-dot";
-
-
-    dot3.className =
-      "message-thinking-dot";
-
-
-    thinking.append(
-      dot1,
-      dot2,
-      dot3
-    );
+    shimmer.textContent =
+      "Thinking.";
 
 
     content.appendChild(
-      thinking
+      shimmer
     );
 
-
-    message.appendChild(
+    element.appendChild(
       content
     );
 
-
     chatMessages.appendChild(
-      message
+      element
     );
 
 
     thinkingElement =
-      message;
+      element;
 
 
-    scrollToBottom();
+    updateHero();
 
 
-    emit(
-      "neyo:message-thinking-start"
+    requestAnimationFrame(
+      () =>
+        scrollToBottom(
+          "auto",
+          true
+        )
     );
 
 
-    return message;
+    emit(
+      "neyo:thinking-shown",
+      {
+        element
+      }
+    );
+
+
+    return element;
   }
 
 
-  function hideThinking() {
-    if (
-      thinkingElement
-        ?.isConnected
-    ) {
-      thinkingElement.remove();
+  function removeThinking() {
+
+    if (!active) {
+      return false;
     }
+
+
+    const element =
+      thinkingElement ||
+
+      document.getElementById(
+        "neyoThinkingIndicator"
+      ) ||
+
+      findMessage(
+        "neyo-thinking"
+      );
 
 
     thinkingElement =
       null;
 
 
-    const stale =
-      chatMessages
-        .querySelector(
-          '[data-message-id="neyo-thinking"]'
-        );
-
-
-    if (
-      stale
-    ) {
-      stale.remove();
+    if (!element) {
+      return false;
     }
 
 
+    element.remove();
+
+    updateHero();
+
+
     emit(
-      "neyo:message-thinking-end"
+      "neyo:thinking-hidden"
     );
+
+
+    return true;
   }
 
 
@@ -986,14 +1244,27 @@ window.NeyoMessages.scrollToBottom()
      ===================================================== */
 
   function clear() {
+
+    if (
+      !active ||
+      !chatMessages
+    ) {
+      return false;
+    }
+
+
     thinkingElement =
       null;
 
+    chatMessages
+      .replaceChildren();
 
-    chatMessages.replaceChildren();
+
+    nearBottom =
+      true;
 
 
-    showHeroIfEmpty();
+    updateHero();
 
 
     emit(
@@ -1006,410 +1277,155 @@ window.NeyoMessages.scrollToBottom()
 
 
   /* =====================================================
-     REPLACE CONVERSATION
+     EVENT OWNERSHIP
      ===================================================== */
 
-  function replace(
-    messages = []
-  ) {
-    clear();
+  if (active) {
 
+    scrollArea
+      ?.addEventListener(
+        "scroll",
+        () => {
 
-    if (
-      !Array.isArray(
-        messages
-      ) ||
-      messages.length ===
-        0
-    ) {
-      return true;
-    }
-
-
-    hideHero();
+          nearBottom =
+            atBottom();
+        },
+        {
+          passive:
+            true
+        }
+      );
 
 
     /*
-    -------------------------------------------------------
-    Use document fragment so history loading does not cause
-    repeated layout/reflow for every message.
-    -------------------------------------------------------
-    */
+     * Chat adds a message to state.
+     */
 
-    const fragment =
-      document.createDocumentFragment();
-
-
-    messages.forEach(
-      input => {
-        const data =
-          normalizeMessage(
-            input
-          );
-
+    window.addEventListener(
+      "neyo:chat-message-added",
+      event => {
 
         const message =
-          document.createElement(
-            "article"
-          );
+          event.detail
+            ?.message;
 
-
-        message.className =
-          `message ${data.role}`;
-
-
-        message.dataset
-          .messageId =
-          data.id;
-
-
-        message.dataset.role =
-          data.role;
-
-
-        const content =
-          document.createElement(
-            "div"
-          );
-
-
-        content.className =
-          "message-content";
-
-
-        content.textContent =
-          data.content;
-
-
-        if (
-          data.role ===
-          "user"
-        ) {
-          const wrapper =
-            document.createElement(
-              "div"
-            );
-
-
-          wrapper.className =
-            "message-wrapper";
-
-
-          const attachmentList =
-            createAttachmentList(
-              data.attachments
-            );
-
-
-          if (
-            attachmentList
-          ) {
-            wrapper.appendChild(
-              attachmentList
-            );
-          }
-
-
-          wrapper.appendChild(
-            content
-          );
-
-
-          message.appendChild(
-            wrapper
-          );
-
-        } else {
-          message.appendChild(
-            content
-          );
+        if (!message) {
+          return;
         }
 
 
-        fragment.appendChild(
-          message
+        create(
+          message,
+          {
+            historyLoad:
+              Boolean(
+                event.detail
+                  ?.historyLoad
+              )
+          }
         );
       }
     );
 
 
-    chatMessages.appendChild(
-      fragment
+    /*
+     * Chat removes message from state.
+     */
+
+    window.addEventListener(
+      "neyo:chat-message-removed",
+      event => {
+
+        const id =
+          event.detail
+            ?.message
+            ?.id ||
+
+          event.detail
+            ?.id;
+
+
+        if (id) {
+          remove(
+            id
+          );
+        }
+      }
     );
-
-
-    refreshIcons();
 
 
     /*
-    -------------------------------------------------------
-    Tell renderer that a full conversation was replaced.
+     * Generation lifecycle.
+     */
 
-    message-renderer.js may upgrade assistant text afterwards.
-    -------------------------------------------------------
-    */
+    window.addEventListener(
+      "neyo:chat-send-start",
+      showThinking
+    );
 
-    emit(
-      "neyo:messages-replaced",
-      {
-        messages
+    window.addEventListener(
+      "neyo:chat-response",
+      removeThinking
+    );
+
+    window.addEventListener(
+      "neyo:chat-send-end",
+      removeThinking
+    );
+
+    window.addEventListener(
+      "neyo:chat-aborted",
+      removeThinking
+    );
+
+    window.addEventListener(
+      "neyo:chat-error",
+      removeThinking
+    );
+
+
+    /*
+     * New chat / history reload.
+     */
+
+    window.addEventListener(
+      "neyo:messages-clear",
+      clear
+    );
+
+
+    /*
+     * Streaming/edit/regenerate compatible update hook.
+     */
+
+    window.addEventListener(
+      "neyo:message-update-request",
+      event => {
+
+        update(
+          event.detail
+            ?.id,
+
+          event.detail
+            ?.content,
+
+          event.detail
+            ?.options ||
+          {}
+        );
       }
     );
 
 
-    scrollToBottom();
-
-
-    return true;
+    updateHero();
   }
-
-
-  /* =====================================================
-     CHAT MESSAGE EVENT
-     ===================================================== */
-
-  window.addEventListener(
-    "neyo:chat-message-added",
-    event => {
-      const message =
-        event.detail
-          ?.message;
-
-
-      if (
-        !message
-      ) {
-        return;
-      }
-
-
-      /*
-      -------------------------------------------------------
-      Assistant response replaces thinking indicator.
-      -------------------------------------------------------
-      */
-
-      if (
-        message.role ===
-        "assistant"
-      ) {
-        hideThinking();
-      }
-
-
-      create(
-        message
-      );
-    }
-  );
-
-
-  /* =====================================================
-     GENERATION START
-     ===================================================== */
-
-  window.addEventListener(
-    "neyo:chat-send-start",
-    () => {
-      showThinking();
-    }
-  );
-
-
-  /* =====================================================
-     RESPONSE
-     ===================================================== */
-
-  window.addEventListener(
-    "neyo:chat-response",
-    () => {
-      hideThinking();
-    }
-  );
-
-
-  /* =====================================================
-     ABORT
-     ===================================================== */
-
-  window.addEventListener(
-    "neyo:chat-aborted",
-    () => {
-      hideThinking();
-    }
-  );
-
-
-  /* =====================================================
-     LIMIT
-     ===================================================== */
-
-  window.addEventListener(
-    "neyo:chat-limit-reached",
-    () => {
-      hideThinking();
-    }
-  );
-
-
-  /* =====================================================
-     ERROR
-     ===================================================== */
-
-  window.addEventListener(
-    "neyo:chat-error",
-    event => {
-      hideThinking();
-
-
-      const error =
-        event.detail
-          ?.error;
-
-
-      let message =
-        "Something went wrong. Please try again.";
-
-
-      if (
-        error?.status ===
-        401
-      ) {
-        message =
-          "Your session has expired. Please sign in again.";
-
-      } else if (
-        error?.status ===
-        413
-      ) {
-        message =
-          "This request is too large.";
-
-      } else if (
-        Number(
-          error?.status
-        ) >=
-        500
-      ) {
-        message =
-          "NEYO is temporarily unavailable. Please try again.";
-
-      } else if (
-        typeof error?.message ===
-          "string" &&
-        error.message.trim()
-      ) {
-        message =
-          error.message.trim();
-      }
-
-
-      create({
-        role:
-          "assistant",
-
-        content:
-          `⚠️ ${message}`,
-
-        error:
-          true
-      });
-    }
-  );
-
-
-  /* =====================================================
-     SEND END
-     ===================================================== */
-
-  window.addEventListener(
-    "neyo:chat-send-end",
-    () => {
-      /*
-       * Safety cleanup.
-       *
-       * Normally thinking is already removed by response/error/
-       * abort, but send-end guarantees no stale indicator.
-       */
-
-      hideThinking();
-    }
-  );
-
-
-  /* =====================================================
-     STATE LOAD
-     ===================================================== */
-
-  window.addEventListener(
-    "neyo:chat-state-loaded",
-    event => {
-      const messages =
-        event.detail
-          ?.messages;
-
-
-      replace(
-        Array.isArray(
-          messages
-        )
-          ? messages
-          : []
-      );
-    }
-  );
-
-
-  /* =====================================================
-     NEW CHAT
-     ===================================================== */
-
-  window.addEventListener(
-    "neyo:chat-new",
-    () => {
-      clear();
-    }
-  );
-
-
-  /* =====================================================
-     OPTIONAL LEGACY EVENTS
-     ===================================================== */
-
-  window.addEventListener(
-    "neyo:message-create",
-    event => {
-      create(
-        event.detail ||
-        {}
-      );
-    }
-  );
-
-
-  window.addEventListener(
-    "neyo:messages-clear",
-    () => {
-      clear();
-    }
-  );
-
-
-  window.addEventListener(
-    "neyo:messages-scroll-bottom",
-    () => {
-      scrollToBottom(
-        "smooth"
-      );
-    }
-  );
 
 
   /* =====================================================
      PUBLIC API
      ===================================================== */
 
-  const publicApi =
+  const api =
     Object.freeze({
 
       __controller:
@@ -1418,23 +1434,23 @@ window.NeyoMessages.scrollToBottom()
       version:
         VERSION,
 
+      active,
+
+      legacyOwnerActive:
+        legacy,
+
       create,
-
       update,
-
       remove,
-
       clear,
 
-      replace,
-
       showThinking,
-
-      hideThinking,
-
-      getById,
+      removeThinking,
 
       scrollToBottom,
+
+      getElement:
+        findMessage,
 
       getContainer:
         () =>
@@ -1446,16 +1462,28 @@ window.NeyoMessages.scrollToBottom()
           version:
             VERSION,
 
-          count:
-            chatMessages
-              .children
-              .length,
+          active,
+
+          legacyOwnerActive:
+            legacy,
+
+          nearBottom,
 
           thinking:
             Boolean(
               thinkingElement
-                ?.isConnected
-            )
+            ),
+
+          messageCount:
+            active
+
+              ? chatMessages
+                  .querySelectorAll(
+                    '[data-neyo-message-id]:not([data-neyo-message-id="neyo-thinking"])'
+                  )
+                  .length
+
+              : 0
         })
     });
 
@@ -1464,9 +1492,8 @@ window.NeyoMessages.scrollToBottom()
     window,
     "NeyoMessages",
     {
-
       value:
-        publicApi,
+        api,
 
       writable:
         false,
@@ -1480,15 +1507,16 @@ window.NeyoMessages.scrollToBottom()
   );
 
 
-  /* =====================================================
-     READY
-     ===================================================== */
-
   emit(
     "neyo:messages-ready",
     {
       version:
-        VERSION
+        VERSION,
+
+      active,
+
+      legacyOwnerActive:
+        legacy
     }
   );
 

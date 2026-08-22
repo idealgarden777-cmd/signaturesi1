@@ -1,7 +1,7 @@
 /*
 =========================================================
 NEYO — ATTACHMENTS CONTROLLER
-FINAL v5 — SIGNED UPLOAD + PROCESSING
+FINAL v6 — DIRECT SIGNED UPLOAD
 
 FILE:
 public/js/components/attachments.js
@@ -11,18 +11,20 @@ FLOW
 1. User selects / drops / pastes file
 2. Validate locally
 3. POST metadata -> /api/attachments/upload
-4. Receive uploadId + bucket + path + token
-5. Upload directly to Supabase with uploadToSignedUrl()
+4. Receive uploadId + bucket + path + token + signedUrl
+5. Upload directly to backend-generated Supabase signedUrl
 6. POST metadata -> /api/attachments/process
 7. Receive document / chunks / stats
 8. Mark attachment READY
 
 IMPORTANT
 ---------------------------------------------------------
-✅ Uses authenticated backend session
-✅ Does NOT trust user ID from browser
-✅ Uses Supabase uploadToSignedUrl(path, token, file)
-✅ Never sends raw file bytes through Vercel
+✅ No browser Supabase client required
+✅ Backend owns Supabase project selection
+✅ Uses signed upload URL directly
+✅ Never sends file bytes through Vercel API
+✅ Explicit cacheControl avoids signed-upload bug
+✅ Existing NEYO attachment events preserved
 ✅ #attachBtn remains owned by neo.js
 =========================================================
 */
@@ -31,81 +33,123 @@ IMPORTANT
     "use strict";
 
     /* =====================================================
-       VERSION / DUPLICATE GUARD
+       VERSION
        ===================================================== */
 
-    const VERSION = "neyo-attachments-final-v5";
+    const VERSION =
+        "neyo-attachments-v6-direct-signed-upload";
 
-    if (window.NeyoAttachments?.__controller === true) {
+    if (
+        window.NeyoAttachments?.__controller ===
+        true
+    ) {
         console.warn(
             "[NEYO Attachments] Controller already initialized."
         );
+
         return;
     }
+
 
     /* =====================================================
        CONFIG
        ===================================================== */
 
-    const CONFIG = Object.freeze({
-        uploadSessionEndpoint:
-            "/api/attachments/upload",
+    const CONFIG =
+        Object.freeze({
 
-        processEndpoint:
-            "/api/attachments/process",
+            uploadSessionEndpoint:
+                "/api/attachments/upload",
 
-        maxFiles:
-            10,
+            processEndpoint:
+                "/api/attachments/process",
 
-        maxFileSize:
-            100 * 1024 * 1024,
+            maxFiles:
+                10,
 
-        maxTotalSize:
-            300 * 1024 * 1024,
+            maxFileSize:
+                100 * 1024 * 1024,
 
-        uploadTimeoutMs:
-            120_000,
+            maxTotalSize:
+                300 * 1024 * 1024,
 
-        processTimeoutMs:
-            180_000,
+            uploadTimeoutMs:
+                120_000,
 
-        debug:
-            true
-    });
+            processTimeoutMs:
+                180_000,
+
+            cacheControl:
+                "3600",
+
+            debug:
+                true
+        });
+
 
     /* =====================================================
        DOM
        ===================================================== */
 
     const attachBtn =
-        document.getElementById("attachBtn");
+        document.getElementById(
+            "attachBtn"
+        );
 
     const addFilesMenuBtn =
-        document.getElementById("addFilesMenuBtn");
+        document.getElementById(
+            "addFilesMenuBtn"
+        );
 
     const attachPopupMenu =
-        document.getElementById("attachPopupMenu");
+        document.getElementById(
+            "attachPopupMenu"
+        );
 
     const composerWrapper =
-        document.getElementById("composerWrapper") ||
-        document.getElementById("glassInputContainer") ||
-        document.querySelector(".composer-wrapper") ||
+        document.getElementById(
+            "composerWrapper"
+        ) ||
+        document.getElementById(
+            "glassInputContainer"
+        ) ||
+        document.querySelector(
+            ".composer-wrapper"
+        ) ||
         document.body;
 
     const glassInputContainer =
-        document.getElementById("glassInputContainer") ||
+        document.getElementById(
+            "glassInputContainer"
+        ) ||
         composerWrapper;
 
     const dragDropOverlay =
-        document.getElementById("dragDropOverlay");
+        document.getElementById(
+            "dragDropOverlay"
+        );
 
     let attachmentList =
-        document.getElementById("attachmentList") ||
-        document.getElementById("attachedChipsWrapper");
+        document.getElementById(
+            "attachmentList"
+        ) ||
+        document.getElementById(
+            "attachedChipsWrapper"
+        );
+
+
+    /*
+    ---------------------------------------------------------
+    Create attachment list if legacy HTML does not contain one.
+    ---------------------------------------------------------
+    */
 
     if (!attachmentList) {
+
         attachmentList =
-            document.createElement("div");
+            document.createElement(
+                "div"
+            );
 
         attachmentList.id =
             "attachmentList";
@@ -121,16 +165,22 @@ IMPORTANT
         );
     }
 
+
     /* =====================================================
-       PRIVATE FILE INPUT
+       FILE INPUT
        ===================================================== */
 
     let fileInput =
-        document.getElementById("neyoAttachmentInput");
+        document.getElementById(
+            "neyoAttachmentInput"
+        );
 
     if (!fileInput) {
+
         fileInput =
-            document.createElement("input");
+            document.createElement(
+                "input"
+            );
 
         fileInput.type =
             "file";
@@ -160,11 +210,13 @@ IMPORTANT
         );
     }
 
+
     /* =====================================================
        STATE
        ===================================================== */
 
     const state = {
+
         items:
             new Map(),
 
@@ -175,232 +227,153 @@ IMPORTANT
             false
     };
 
-    /* =====================================================
-       SHARED SUPABASE CLIENT
-       ===================================================== */
-
-    let supabaseClient =
-        null;
-
-    function setSupabaseClient(client) {
-        if (
-            !client ||
-            typeof client !== "object" ||
-            !client.storage
-        ) {
-            return false;
-        }
-
-        supabaseClient =
-            client;
-
-        debug(
-            "Supabase client ready."
-        );
-
-        return true;
-    }
-
-    function discoverSupabaseClient() {
-        const candidates = [
-            window.supabaseClient,
-            window.neyoSupabase,
-            window.NeyoSupabase,
-            window.appSupabase
-        ];
-
-        for (const client of candidates) {
-            if (
-                client &&
-                typeof client === "object" &&
-                client.storage
-            ) {
-                supabaseClient =
-                    client;
-
-                return client;
-            }
-        }
-
-        return supabaseClient;
-    }
-
-    discoverSupabaseClient();
-
-    window.addEventListener(
-        "neyo:supabase-client-wired",
-        event => {
-            const client =
-                event.detail?.client;
-
-            setSupabaseClient(
-                client
-            );
-        }
-    );
 
     /* =====================================================
        EXTENSIONS
        ===================================================== */
 
-    const EXTENSIONS = Object.freeze({
-        document:
-            new Set([
-                "pdf",
-                "doc",
-                "docx",
-                "odt",
-                "rtf",
-                "txt",
-                "md",
-                "markdown",
-                "tex",
-                "pages"
-            ]),
+    const EXTENSIONS =
+        Object.freeze({
 
-        spreadsheet:
-            new Set([
-                "csv",
-                "tsv",
-                "xls",
-                "xlsx",
-                "xlsm",
-                "xlsb",
-                "ods",
-                "numbers"
-            ]),
+            document:
+                new Set([
+                    "pdf",
+                    "doc",
+                    "docx",
+                    "odt",
+                    "rtf",
+                    "txt",
+                    "md",
+                    "markdown",
+                    "tex"
+                ]),
 
-        presentation:
-            new Set([
-                "ppt",
-                "pptx",
-                "odp",
-                "key"
-            ]),
+            spreadsheet:
+                new Set([
+                    "csv",
+                    "tsv",
+                    "xls",
+                    "xlsx",
+                    "xlsm",
+                    "xlsb",
+                    "ods"
+                ]),
 
-        image:
-            new Set([
-                "png",
-                "jpg",
-                "jpeg",
-                "webp",
-                "gif",
-                "bmp",
-                "tif",
-                "tiff",
-                "svg",
-                "heic",
-                "heif",
-                "avif"
-            ]),
+            presentation:
+                new Set([
+                    "ppt",
+                    "pptx",
+                    "odp"
+                ]),
 
-        audio:
-            new Set([
-                "mp3",
-                "wav",
-                "m4a",
-                "aac",
-                "ogg",
-                "oga",
-                "opus",
-                "flac",
-                "aiff",
-                "wma"
-            ]),
+            image:
+                new Set([
+                    "png",
+                    "jpg",
+                    "jpeg",
+                    "webp",
+                    "gif",
+                    "bmp",
+                    "tif",
+                    "tiff",
+                    "svg",
+                    "heic",
+                    "heif",
+                    "avif"
+                ]),
 
-        video:
-            new Set([
-                "mp4",
-                "mov",
-                "m4v",
-                "webm",
-                "avi",
-                "mkv",
-                "mpeg",
-                "mpg",
-                "wmv"
-            ]),
+            audio:
+                new Set([
+                    "mp3",
+                    "wav",
+                    "m4a",
+                    "aac",
+                    "ogg",
+                    "oga",
+                    "opus",
+                    "flac",
+                    "aiff"
+                ]),
 
-        archive:
-            new Set([
-                "zip",
-                "rar",
-                "7z",
-                "tar",
-                "gz",
-                "tgz",
-                "bz2",
-                "xz"
-            ]),
+            video:
+                new Set([
+                    "mp4",
+                    "mov",
+                    "m4v",
+                    "webm",
+                    "avi",
+                    "mkv",
+                    "mpeg",
+                    "mpg"
+                ]),
 
-        data:
-            new Set([
-                "json",
-                "jsonl",
-                "ndjson",
-                "xml",
-                "yaml",
-                "yml",
-                "toml",
-                "ini",
-                "sql",
-                "db",
-                "sqlite",
-                "sqlite3",
-                "parquet",
-                "feather",
-                "arrow"
-            ]),
+            archive:
+                new Set([
+                    "zip",
+                    "rar",
+                    "7z",
+                    "tar",
+                    "gz",
+                    "tgz",
+                    "bz2",
+                    "xz"
+                ]),
 
-        code:
-            new Set([
-                "js",
-                "mjs",
-                "cjs",
-                "jsx",
-                "ts",
-                "tsx",
-                "py",
-                "pyw",
-                "java",
-                "kt",
-                "kts",
-                "c",
-                "h",
-                "cc",
-                "cpp",
-                "cxx",
-                "hpp",
-                "cs",
-                "go",
-                "rs",
-                "php",
-                "rb",
-                "swift",
-                "dart",
-                "scala",
-                "sh",
-                "bash",
-                "zsh",
-                "fish",
-                "ps1",
-                "html",
-                "htm",
-                "css",
-                "scss",
-                "sass",
-                "less",
-                "vue",
-                "svelte",
-                "graphql",
-                "gql",
-                "proto",
-                "dockerfile",
-                "makefile",
-                "env",
-                "gitignore"
-            ])
-    });
+            data:
+                new Set([
+                    "json",
+                    "jsonl",
+                    "ndjson",
+                    "xml",
+                    "yaml",
+                    "yml",
+                    "toml",
+                    "ini",
+                    "sql",
+                    "db",
+                    "sqlite",
+                    "sqlite3",
+                    "parquet"
+                ]),
+
+            code:
+                new Set([
+                    "js",
+                    "mjs",
+                    "cjs",
+                    "jsx",
+                    "ts",
+                    "tsx",
+                    "py",
+                    "java",
+                    "kt",
+                    "c",
+                    "h",
+                    "cpp",
+                    "hpp",
+                    "cs",
+                    "go",
+                    "rs",
+                    "php",
+                    "rb",
+                    "swift",
+                    "dart",
+                    "sh",
+                    "bash",
+                    "zsh",
+                    "html",
+                    "htm",
+                    "css",
+                    "scss",
+                    "sass",
+                    "less",
+                    "vue",
+                    "svelte",
+                    "graphql",
+                    "gql"
+                ])
+        });
+
 
     const BLOCKED_EXTENSIONS =
         new Set([
@@ -415,7 +388,6 @@ IMPORTANT
             "vbe",
             "wsf",
             "wsh",
-            "ps1xml",
             "apk",
             "app",
             "dmg",
@@ -425,11 +397,15 @@ IMPORTANT
             "iso"
         ]);
 
+
     /* =====================================================
        DEBUG
        ===================================================== */
 
-    function debug(...args) {
+    function debug(
+        ...args
+    ) {
+
         if (!CONFIG.debug) {
             return;
         }
@@ -440,6 +416,7 @@ IMPORTANT
         );
     }
 
+
     /* =====================================================
        EVENTS
        ===================================================== */
@@ -448,6 +425,7 @@ IMPORTANT
         name,
         detail = {}
     ) {
+
         window.dispatchEvent(
             new CustomEvent(
                 name,
@@ -458,10 +436,12 @@ IMPORTANT
         );
     }
 
+
     function emitError(
         message,
         item = null
     ) {
+
         console.error(
             "[NEYO Attachments]",
             message
@@ -474,35 +454,27 @@ IMPORTANT
 
                 attachment:
                     item
-                        ? serializeItem(item)
+                        ? serializeItem(
+                            item
+                        )
                         : null
             }
         );
     }
 
+
     /* =====================================================
        HELPERS
        ===================================================== */
 
-    function clamp(
-        value,
-        min,
-        max
-    ) {
-        return Math.max(
-            min,
-            Math.min(
-                max,
-                value
-            )
-        );
-    }
-
     function createId() {
+
         if (
-            globalThis.crypto?.randomUUID
+            globalThis.crypto
+                ?.randomUUID
         ) {
-            return globalThis.crypto.randomUUID();
+            return globalThis.crypto
+                .randomUUID();
         }
 
         return (
@@ -513,32 +485,63 @@ IMPORTANT
         );
     }
 
-    function getExtension(name) {
+
+    function clamp(
+        value,
+        min,
+        max
+    ) {
+
+        return Math.max(
+            min,
+            Math.min(
+                max,
+                value
+            )
+        );
+    }
+
+
+    function getExtension(
+        name
+    ) {
+
         const value =
             String(
                 name || ""
             );
 
         const index =
-            value.lastIndexOf(".");
+            value.lastIndexOf(
+                "."
+            );
 
         if (
             index < 0 ||
-            index === value.length - 1
+            index ===
+                value.length - 1
         ) {
             return "";
         }
 
         return value
-            .slice(index + 1)
-            .toLowerCase();
+            .slice(
+                index + 1
+            )
+            .toLowerCase()
+            .trim();
     }
 
-    function getCategory(extension) {
+
+    function getCategory(
+        extension
+    ) {
+
         const ext =
             String(
                 extension || ""
-            ).toLowerCase();
+            )
+                .toLowerCase();
 
         for (
             const [
@@ -549,8 +552,11 @@ IMPORTANT
                 EXTENSIONS
             )
         ) {
+
             if (
-                extensions.has(ext)
+                extensions.has(
+                    ext
+                )
             ) {
                 return category;
             }
@@ -559,15 +565,27 @@ IMPORTANT
         return "unknown";
     }
 
-    function formatBytes(bytes) {
-        const value =
-            Number(bytes) || 0;
 
-        if (value < 1024) {
+    function formatBytes(
+        bytes
+    ) {
+
+        const value =
+            Number(
+                bytes
+            ) || 0;
+
+        if (
+            value < 1024
+        ) {
             return `${value} B`;
         }
 
-        if (value < 1024 * 1024) {
+        if (
+            value <
+            1024 * 1024
+        ) {
+
             return `${(
                 value / 1024
             ).toFixed(1)} KB`;
@@ -575,31 +593,130 @@ IMPORTANT
 
         if (
             value <
-            1024 * 1024 * 1024
+            1024 *
+            1024 *
+            1024
         ) {
+
             return `${(
                 value /
-                (1024 * 1024)
+                (
+                    1024 *
+                    1024
+                )
             ).toFixed(1)} MB`;
         }
 
         return `${(
             value /
-            (1024 * 1024 * 1024)
+            (
+                1024 *
+                1024 *
+                1024
+            )
         ).toFixed(2)} GB`;
     }
 
-    function escapeHtml(value) {
-        return String(value ?? "")
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;")
-            .replace(/"/g, "&quot;")
-            .replace(/'/g, "&#039;");
+
+    function escapeHtml(
+        value
+    ) {
+
+        return String(
+            value ?? ""
+        )
+            .replace(
+                /&/g,
+                "&amp;"
+            )
+            .replace(
+                /</g,
+                "&lt;"
+            )
+            .replace(
+                />/g,
+                "&gt;"
+            )
+            .replace(
+                /"/g,
+                "&quot;"
+            )
+            .replace(
+                /'/g,
+                "&#039;"
+            );
     }
 
-    function getIcon(category) {
-        switch (category) {
+
+    function normalizeMime(
+        file
+    ) {
+
+        const mime =
+            String(
+                file?.type ||
+                ""
+            )
+                .trim()
+                .toLowerCase();
+
+        /*
+        -----------------------------------------------------
+        Backend currently accepts a controlled MIME list.
+
+        For extensions whose browser MIME is outside that list,
+        use application/octet-stream.
+
+        Processing still receives the real extension/category.
+        -----------------------------------------------------
+        */
+
+        const accepted =
+            new Set([
+                "image/jpeg",
+                "image/png",
+                "image/webp",
+
+                "application/pdf",
+
+                "text/plain",
+                "text/html",
+                "text/css",
+
+                "application/javascript",
+                "text/javascript",
+
+                "application/json",
+
+                "audio/mpeg",
+                "audio/wav",
+
+                "video/mp4",
+                "video/webm",
+
+                "application/octet-stream"
+            ]);
+
+        if (
+            accepted.has(
+                mime
+            )
+        ) {
+            return mime;
+        }
+
+        return "application/octet-stream";
+    }
+
+
+    function getIcon(
+        category
+    ) {
+
+        switch (
+            category
+        ) {
+
             case "document":
                 return "file-text";
 
@@ -632,60 +749,93 @@ IMPORTANT
         }
     }
 
-    function getStatusLabel(item) {
-        switch (item.status) {
+
+    function getStatusLabel(
+        item
+    ) {
+
+        switch (
+            item.status
+        ) {
+
             case "queued":
+
             case "authorizing":
+
                 return "Preparing";
 
             case "uploading":
+
                 return `Uploading ${Math.round(
                     item.progress || 0
                 )}%`;
 
             case "uploaded":
+
             case "processing":
+
                 return "Reading";
 
             case "queued-processing":
+
                 return "Processing";
 
             case "ready":
+
                 return "Ready";
 
             case "error":
-                return item.error || "Failed";
+
+                return (
+                    item.error ||
+                    "Failed"
+                );
 
             default:
+
                 return "Preparing";
         }
     }
 
+
     function getTotalSize() {
-        let total = 0;
+
+        let total =
+            0;
 
         for (
             const item
             of state.items.values()
         ) {
+
             total +=
-                Number(item.size) || 0;
+                Number(
+                    item.size
+                ) || 0;
         }
 
         return total;
     }
 
-    function isDuplicate(file) {
+
+    function isDuplicate(
+        file
+    ) {
+
         for (
             const item
             of state.items.values()
         ) {
+
             if (
-                item.name === file.name &&
-                item.size === file.size &&
+                item.name ===
+                    file.name &&
+                item.size ===
+                    file.size &&
                 item.lastModified ===
                     file.lastModified
             ) {
+
                 return true;
             }
         }
@@ -693,39 +843,64 @@ IMPORTANT
         return false;
     }
 
+
     /* =====================================================
-       VALIDATION
+       VALIDATE FILE
        ===================================================== */
 
-    function validateFile(file) {
-        if (!(file instanceof File)) {
+    function validateFile(
+        file
+    ) {
+
+        if (
+            !(file instanceof File)
+        ) {
+
             return {
-                valid: false,
-                message: "Invalid file."
+                valid:
+                    false,
+
+                message:
+                    "Invalid file."
             };
         }
+
 
         if (!file.name) {
+
             return {
-                valid: false,
-                message: "File name is missing."
+                valid:
+                    false,
+
+                message:
+                    "File name is missing."
             };
         }
 
-        if (file.size <= 0) {
+
+        if (
+            file.size <= 0
+        ) {
+
             return {
-                valid: false,
+                valid:
+                    false,
+
                 message:
                     `"${file.name}" is empty.`
             };
         }
 
+
         if (
             file.size >
             CONFIG.maxFileSize
         ) {
+
             return {
-                valid: false,
+                valid:
+                    false,
+
                 message:
                     `"${file.name}" exceeds the ${formatBytes(
                         CONFIG.maxFileSize
@@ -733,41 +908,54 @@ IMPORTANT
             };
         }
 
+
         const extension =
             getExtension(
                 file.name
             );
+
 
         if (
             BLOCKED_EXTENSIONS.has(
                 extension
             )
         ) {
+
             return {
-                valid: false,
+                valid:
+                    false,
+
                 message:
                     `"${file.name}" is not an allowed attachment type.`
             };
         }
 
+
         if (
             state.items.size >=
             CONFIG.maxFiles
         ) {
+
             return {
-                valid: false,
+                valid:
+                    false,
+
                 message:
                     `Maximum ${CONFIG.maxFiles} attachments are allowed.`
             };
         }
 
+
         if (
             getTotalSize() +
-                file.size >
+            file.size >
             CONFIG.maxTotalSize
         ) {
+
             return {
-                valid: false,
+                valid:
+                    false,
+
                 message:
                     `Total attachments cannot exceed ${formatBytes(
                         CONFIG.maxTotalSize
@@ -775,9 +963,13 @@ IMPORTANT
             };
         }
 
+
         return {
-            valid: true,
+            valid:
+                true,
+
             extension,
+
             category:
                 getCategory(
                     extension
@@ -785,17 +977,22 @@ IMPORTANT
         };
     }
 
+
     /* =====================================================
-       ITEM
+       CREATE ITEM
        ===================================================== */
 
-    function createItem(file) {
+    function createItem(
+        file
+    ) {
+
         const extension =
             getExtension(
                 file.name
             );
 
         return {
+
             id:
                 createId(),
 
@@ -808,8 +1005,9 @@ IMPORTANT
                 file.size,
 
             mime:
-                file.type ||
-                "application/octet-stream",
+                normalizeMime(
+                    file
+                ),
 
             extension,
 
@@ -845,6 +1043,12 @@ IMPORTANT
             path:
                 null,
 
+            token:
+                null,
+
+            signedUrl:
+                null,
+
             processId:
                 null,
 
@@ -866,37 +1070,48 @@ IMPORTANT
             warnings:
                 [],
 
-            uploadOperation:
-                null,
-
             processController:
                 null
         };
     }
 
-    function createPreviewUrl(item) {
+
+    function createPreviewUrl(
+        item
+    ) {
+
         if (
             item.category !==
             "image"
         ) {
+
             return null;
         }
 
         try {
-            return URL.createObjectURL(
-                item.file
-            );
+
+            return URL
+                .createObjectURL(
+                    item.file
+                );
+
         } catch {
+
             return null;
         }
     }
+
 
     /* =====================================================
        SERIALIZE
        ===================================================== */
 
-    function serializeItem(item) {
+    function serializeItem(
+        item
+    ) {
+
         return {
+
             id:
                 item.id,
 
@@ -974,34 +1189,53 @@ IMPORTANT
         };
     }
 
+
     function getAll() {
+
         return state.order
-            .map(id =>
-                state.items.get(id)
+            .map(
+                id =>
+                    state.items.get(
+                        id
+                    )
             )
-            .filter(Boolean)
-            .map(serializeItem);
+            .filter(
+                Boolean
+            )
+            .map(
+                serializeItem
+            );
     }
 
+
     function getReady() {
+
         return state.order
-            .map(id =>
-                state.items.get(id)
+            .map(
+                id =>
+                    state.items.get(
+                        id
+                    )
             )
             .filter(
                 item =>
                     item &&
                     item.ready === true &&
-                    item.status === "ready"
+                    item.status ===
+                        "ready"
             )
-            .map(serializeItem);
+            .map(
+                serializeItem
+            );
     }
+
 
     /* =====================================================
        STATE EMIT
        ===================================================== */
 
     function emitState() {
+
         const all =
             getAll();
 
@@ -1033,9 +1267,11 @@ IMPORTANT
                     )
             );
 
+
         emit(
             "neyo:attachments-change",
             {
+
                 count:
                     all.length,
 
@@ -1056,9 +1292,12 @@ IMPORTANT
         );
     }
 
+
     function syncComposerClass() {
+
         const hasFiles =
-            state.items.size > 0;
+            state.items.size >
+            0;
 
         composerWrapper
             ?.classList
@@ -1075,21 +1314,28 @@ IMPORTANT
             );
     }
 
+
     /* =====================================================
        RENDER
        ===================================================== */
 
-    function renderItem(item) {
+    function renderItem(
+        item
+    ) {
+
         if (!attachmentList) {
             return;
         }
 
         let chip =
-            attachmentList.querySelector(
-                `[data-attachment-id="${item.id}"]`
-            );
+            attachmentList
+                .querySelector(
+                    `[data-attachment-id="${item.id}"]`
+                );
+
 
         if (!chip) {
+
             chip =
                 document.createElement(
                     "div"
@@ -1098,46 +1344,65 @@ IMPORTANT
             chip.className =
                 "attachment-chip";
 
-            chip.dataset.attachmentId =
+            chip.dataset
+                .attachmentId =
                 item.id;
 
-            attachmentList.appendChild(
-                chip
-            );
+            attachmentList
+                .appendChild(
+                    chip
+                );
         }
+
 
         chip.dataset.status =
             item.status;
+
 
         const status =
             getStatusLabel(
                 item
             );
 
+
         const isError =
-            item.status === "error";
+            item.status ===
+            "error";
+
 
         const preview =
             item.previewUrl
+
                 ? `
-                    <div class="attachment-chip-preview">
+                    <div
+                        class="attachment-chip-preview"
+                    >
                         <img
-                            src="${escapeHtml(item.previewUrl)}"
+                            src="${escapeHtml(
+                                item.previewUrl
+                            )}"
                             alt=""
                         >
                     </div>
                 `
+
                 : `
-                    <div class="attachment-chip-icon">
+                    <div
+                        class="attachment-chip-icon"
+                    >
                         <i
-                            data-lucide="${getIcon(item.category)}"
+                            data-lucide="${getIcon(
+                                item.category
+                            )}"
                             size="16"
                         ></i>
                     </div>
                 `;
 
+
         const action =
             isError
+
                 ? `
                     <button
                         class="attachment-chip-retry"
@@ -1152,6 +1417,7 @@ IMPORTANT
                         ></i>
                     </button>
                 `
+
                 : `
                     <button
                         class="attachment-chip-remove"
@@ -1167,10 +1433,15 @@ IMPORTANT
                     </button>
                 `;
 
+
         const progress =
-            item.status === "uploading"
+            item.status ===
+            "uploading"
+
                 ? `
-                    <div class="attachment-chip-progress">
+                    <div
+                        class="attachment-chip-progress"
+                    >
                         <span
                             style="width:${clamp(
                                 item.progress || 0,
@@ -1180,110 +1451,156 @@ IMPORTANT
                         ></span>
                     </div>
                 `
+
                 : "";
 
-        chip.innerHTML = `
-            ${preview}
 
-            <div class="attachment-chip-body">
+        chip.innerHTML =
+            `
+                ${preview}
 
                 <div
-                    class="attachment-chip-name"
-                    title="${escapeHtml(item.name)}"
+                    class="attachment-chip-body"
                 >
-                    ${escapeHtml(item.name)}
-                </div>
 
-                <div class="attachment-chip-meta">
-
-                    <span>
-                        ${escapeHtml(
-                            formatBytes(
-                                item.size
-                            )
-                        )}
-                    </span>
-
-                    <span aria-hidden="true">
-                        ·
-                    </span>
-
-                    <span
-                        class="attachment-chip-status"
-                        title="${escapeHtml(status)}"
+                    <div
+                        class="attachment-chip-name"
+                        title="${escapeHtml(
+                            item.name
+                        )}"
                     >
-                        ${escapeHtml(status)}
-                    </span>
+                        ${escapeHtml(
+                            item.name
+                        )}
+                    </div>
+
+                    <div
+                        class="attachment-chip-meta"
+                    >
+
+                        <span>
+                            ${escapeHtml(
+                                formatBytes(
+                                    item.size
+                                )
+                            )}
+                        </span>
+
+                        <span
+                            aria-hidden="true"
+                        >
+                            ·
+                        </span>
+
+                        <span
+                            class="attachment-chip-status"
+                            title="${escapeHtml(
+                                status
+                            )}"
+                        >
+                            ${escapeHtml(
+                                status
+                            )}
+                        </span>
+
+                    </div>
+
+                    ${progress}
 
                 </div>
 
-                ${progress}
+                ${action}
+            `;
 
-            </div>
-
-            ${action}
-        `;
 
         try {
-            window.lucide?.createIcons?.();
+
+            window.lucide
+                ?.createIcons
+                ?.();
+
         } catch {}
     }
 
+
     function renderAll() {
+
         if (!attachmentList) {
             return;
         }
+
 
         for (
             const id
             of state.order
         ) {
+
             const item =
-                state.items.get(id);
+                state.items.get(
+                    id
+                );
 
             if (item) {
-                renderItem(item);
+
+                renderItem(
+                    item
+                );
             }
         }
+
 
         const knownIds =
             new Set(
                 state.order
             );
 
+
         for (
             const chip
-            of attachmentList.querySelectorAll(
-                "[data-attachment-id]"
-            )
+            of attachmentList
+                .querySelectorAll(
+                    "[data-attachment-id]"
+                )
         ) {
+
             if (
                 !knownIds.has(
                     chip.dataset
                         .attachmentId
                 )
             ) {
+
                 chip.remove();
             }
         }
 
+
         attachmentList.hidden =
-            state.items.size === 0;
+            state.items.size ===
+            0;
 
         syncComposerClass();
 
         emitState();
     }
 
+
     /* =====================================================
-       PICKER / POPUP
+       PICKER
        ===================================================== */
 
     function openPicker() {
+
         try {
+
             fileInput.click();
+
             return true;
-        } catch (error) {
+
+        } catch (
+            error
+        ) {
+
             console.error(
                 "[NEYO Attachments] Could not open file picker:",
                 error
@@ -1293,53 +1610,72 @@ IMPORTANT
         }
     }
 
+
     function closeLegacyPopup() {
+
         if (!attachPopupMenu) {
             return;
         }
 
-        attachPopupMenu.classList.remove(
-            "active",
-            "open",
-            "show"
-        );
+        attachPopupMenu
+            .classList
+            .remove(
+                "active",
+                "open",
+                "show"
+            );
 
-        attachPopupMenu.setAttribute(
-            "aria-hidden",
-            "true"
-        );
+        attachPopupMenu
+            .setAttribute(
+                "aria-hidden",
+                "true"
+            );
 
-        attachBtn?.setAttribute(
-            "aria-expanded",
-            "false"
-        );
+        attachBtn
+            ?.setAttribute(
+                "aria-expanded",
+                "false"
+            );
     }
+
 
     /* =====================================================
        ADD FILES
        ===================================================== */
 
-    async function addFiles(files) {
+    async function addFiles(
+        files
+    ) {
+
         const incoming =
             Array.from(
                 files || []
             );
 
         if (
-            incoming.length === 0
+            incoming.length ===
+            0
         ) {
+
             return [];
         }
 
-        const added = [];
+
+        const added =
+            [];
+
 
         for (
             const file
             of incoming
         ) {
+
             if (
-                isDuplicate(file)
+                isDuplicate(
+                    file
+                )
             ) {
+
                 debug(
                     "Duplicate ignored:",
                     file.name
@@ -1348,14 +1684,17 @@ IMPORTANT
                 continue;
             }
 
+
             const validation =
                 validateFile(
                     file
                 );
 
+
             if (
                 !validation.valid
             ) {
+
                 emitError(
                     validation.message
                 );
@@ -1363,24 +1702,29 @@ IMPORTANT
                 continue;
             }
 
+
             const item =
                 createItem(
                     file
                 );
+
 
             item.previewUrl =
                 createPreviewUrl(
                     item
                 );
 
+
             state.items.set(
                 item.id,
                 item
             );
 
+
             state.order.push(
                 item.id
             );
+
 
             added.push(
                 serializeItem(
@@ -1388,60 +1732,117 @@ IMPORTANT
                 )
             );
 
+
             renderItem(
                 item
             );
 
             renderAll();
 
+
+            /*
+            -------------------------------------------------
+            Pipeline runs asynchronously.
+            -------------------------------------------------
+            */
+
             void processPipeline(
                 item.id
             );
         }
 
+
         return added;
     }
 
+
     /* =====================================================
-       STEP 1 — UPLOAD SESSION
+       FETCH JSON HELPER
        ===================================================== */
 
-    async function createUploadSession(item) {
+    async function readResponse(
+        response
+    ) {
+
+        const raw =
+            await response
+                .text();
+
+        let data =
+            null;
+
+
+        if (raw) {
+
+            try {
+
+                data =
+                    JSON.parse(
+                        raw
+                    );
+
+            } catch {}
+        }
+
+
+        return {
+            raw,
+            data
+        };
+    }
+
+
+    /* =====================================================
+       STEP 1 — CREATE UPLOAD SESSION
+       ===================================================== */
+
+    async function createUploadSession(
+        item
+    ) {
+
         if (!item?.name) {
+
             throw new Error(
                 "Attachment filename is missing before upload."
             );
         }
 
-        const payload = {
-            name:
-                item.name,
 
-            size:
-                item.size,
+        const payload =
+            {
 
-            mime:
-                item.mime,
+                name:
+                    item.name,
 
-            extension:
-                item.extension,
+                size:
+                    item.size,
 
-            category:
-                item.category,
+                mime:
+                    item.mime,
 
-            clientAttachmentId:
-                item.id
-        };
+                extension:
+                    item.extension,
+
+                category:
+                    item.category,
+
+                clientAttachmentId:
+                    item.id
+            };
+
 
         debug(
             "UPLOAD_SESSION_REQUEST",
             payload
         );
 
+
         const response =
             await fetch(
-                CONFIG.uploadSessionEndpoint,
+                CONFIG
+                    .uploadSessionEndpoint,
                 {
+
                     method:
                         "POST",
 
@@ -1451,16 +1852,18 @@ IMPORTANT
                     cache:
                         "no-store",
 
-                    headers: {
-                        "Content-Type":
-                            "application/json",
+                    headers:
+                        {
 
-                        Accept:
-                            "application/json",
+                            "Content-Type":
+                                "application/json",
 
-                        "X-Neyo-Attachment-Client":
-                            VERSION
-                    },
+                            Accept:
+                                "application/json",
+
+                            "X-Neyo-Attachment-Client":
+                                VERSION
+                        },
 
                     body:
                         JSON.stringify(
@@ -1469,22 +1872,20 @@ IMPORTANT
                 }
             );
 
-        const raw =
-            await response.text();
 
-        let data =
-            null;
+        const {
+            data,
+            raw
+        } =
+            await readResponse(
+                response
+            );
 
-        try {
-            data =
-                raw
-                    ? JSON.parse(raw)
-                    : null;
-        } catch {}
 
         debug(
             "UPLOAD_SESSION_RESPONSE",
             {
+
                 status:
                     response.status,
 
@@ -1500,7 +1901,9 @@ IMPORTANT
             }
         );
 
+
         if (!response.ok) {
+
             throw new Error(
                 data?.error ||
                 raw ||
@@ -1508,276 +1911,256 @@ IMPORTANT
             );
         }
 
+
         if (
             !data ||
-            typeof data !== "object"
+            typeof data !==
+                "object"
         ) {
+
             throw new Error(
                 "Upload API returned an invalid response."
             );
         }
 
+
         if (!data.uploadId) {
+
             throw new Error(
                 "Upload ID is missing."
             );
         }
 
+
         if (!data.bucket) {
+
             throw new Error(
                 "Storage bucket is missing."
             );
         }
 
+
         if (!data.path) {
+
             throw new Error(
                 "Storage path is missing."
             );
         }
 
-        /*
-         * CRITICAL:
-         * Supabase browser upload uses:
-         *
-         * uploadToSignedUrl(
-         *   path,
-         *   token,
-         *   file
-         * )
-         */
 
         if (!data.token) {
+
             throw new Error(
                 "Signed upload token is missing."
             );
         }
 
-        return {
-            ...data,
 
-            method:
-                String(
-                    data.method ||
-                    "PUT"
-                )
-                    .trim()
-                    .toUpperCase()
-        };
+        /*
+        -----------------------------------------------------
+        v6 requires signedUrl.
+
+        Backend creates this against the correct Supabase
+        project so frontend does not need its own client.
+        -----------------------------------------------------
+        */
+
+        if (!data.signedUrl) {
+
+            throw new Error(
+                "Signed upload URL is missing."
+            );
+        }
+
+
+        return data;
     }
 
+
     /* =====================================================
-       STEP 2 — DIRECT SUPABASE SIGNED UPLOAD
+       STEP 2 — DIRECT SIGNED UPLOAD
        ===================================================== */
 
     async function uploadToSignedUrl(
         item,
         session
     ) {
-        const client =
-            discoverSupabaseClient();
-
-        if (!client) {
-            throw new Error(
-                "Supabase upload service is not ready."
-            );
-        }
 
         if (
+            !session?.signedUrl ||
             !session?.bucket ||
             !session?.path ||
             !session?.token
         ) {
+
             throw new Error(
                 "Signed upload information is incomplete."
             );
         }
 
-        item.progress =
-            0;
 
-        renderItem(item);
-        emitState();
+        if (
+            !(item?.file instanceof File)
+        ) {
 
-        /*
-         * Supabase JS handles the signed upload.
-         */
-
-        const uploadPromise =
-            client
-                .storage
-                .from(
-                    session.bucket
-                )
-                .uploadToSignedUrl(
-                    session.path,
-                    session.token,
-                    item.file,
-                    {
-                        contentType:
-                            item.mime ||
-                            "application/octet-stream",
-
-                        upsert:
-                            false
-                    }
-                );
-
-        const timeoutPromise =
-            new Promise(
-                (_, reject) => {
-                    const timer =
-                        window.setTimeout(
-                            () => {
-                                reject(
-                                    new Error(
-                                        "File upload timed out."
-                                    )
-                                );
-                            },
-                            CONFIG.uploadTimeoutMs
-                        );
-
-                    uploadPromise.finally(
-                        () =>
-                            window.clearTimeout(
-                                timer
-                            )
-                    );
-                }
-            );
-
-        /*
-         * Signed uploads don't expose upload
-         * progress through uploadToSignedUrl().
-         *
-         * Keep the UI in a clear uploading state.
-         */
-
-        const result =
-            await Promise.race([
-                uploadPromise,
-                timeoutPromise
-            ]);
-
-        if (result?.error) {
             throw new Error(
-                result.error.message ||
-                "File upload failed."
+                "Attachment file is unavailable."
             );
         }
 
+
         item.progress =
-            100;
+            0;
 
-        item.status =
-            "uploaded";
+        renderItem(
+            item
+        );
 
-        renderItem(item);
         emitState();
 
-        return true;
-    }
 
-    /* =====================================================
-       STEP 3 — PROCESS FILE
-       ===================================================== */
-
-    async function requestProcessing(item) {
         const controller =
             new AbortController();
 
-        item.processController =
-            controller;
 
-        const timer =
+        const timeout =
             window.setTimeout(
-                () =>
-                    controller.abort(),
-                CONFIG.processTimeoutMs
+                () => {
+
+                    controller.abort();
+
+                },
+                CONFIG
+                    .uploadTimeoutMs
             );
+
 
         try {
-            const payload = {
-                uploadId:
-                    item.uploadId,
 
-                bucket:
-                    item.bucket,
+            /*
+            -------------------------------------------------
+            Supabase Storage signed-upload body.
 
-                path:
-                    item.path,
+            Important:
+            Do NOT manually set Content-Type header here.
+            Browser must generate multipart boundary itself.
+            -------------------------------------------------
+            */
 
-                name:
-                    item.name,
+            const form =
+                new FormData();
 
-                size:
-                    item.size,
 
-                mime:
-                    item.mime,
+            form.append(
+                "cacheControl",
+                CONFIG.cacheControl
+            );
 
-                extension:
-                    item.extension,
 
-                category:
-                    item.category
-            };
+            form.append(
+                "",
+                item.file,
+                item.file.name
+            );
+
+
+            let signedHost =
+                null;
+
+
+            try {
+
+                signedHost =
+                    new URL(
+                        session.signedUrl
+                    ).host;
+
+            } catch {}
+
 
             debug(
-                "PROCESS_REQUEST",
-                payload
+                "SIGNED_UPLOAD_REQUEST",
+                {
+
+                    uploadId:
+                        session.uploadId,
+
+                    bucket:
+                        session.bucket,
+
+                    path:
+                        session.path,
+
+                    signedHost,
+
+                    size:
+                        item.file.size,
+
+                    mime:
+                        item.mime
+                }
             );
+
+
+            /*
+            -------------------------------------------------
+            Show uploading state.
+
+            Raw fetch does not expose reliable upload progress,
+            so keep a visual non-zero state while uploading.
+            -------------------------------------------------
+            */
+
+            item.progress =
+                15;
+
+            renderItem(
+                item
+            );
+
+            emitState();
+
 
             const response =
                 await fetch(
-                    CONFIG.processEndpoint,
+                    session.signedUrl,
                     {
-                        method:
-                            "POST",
 
-                        credentials:
-                            "include",
+                        method:
+                            "PUT",
+
+                        headers:
+                            {
+
+                                "x-upsert":
+                                    "false"
+                            },
+
+                        body:
+                            form,
 
                         cache:
                             "no-store",
-
-                        headers: {
-                            "Content-Type":
-                                "application/json",
-
-                            Accept:
-                                "application/json",
-
-                            "X-Neyo-Attachment-Client":
-                                VERSION
-                        },
-
-                        body:
-                            JSON.stringify(
-                                payload
-                            ),
 
                         signal:
                             controller.signal
                     }
                 );
 
-            const raw =
-                await response.text();
 
-            let data =
-                null;
+            const {
+                data,
+                raw
+            } =
+                await readResponse(
+                    response
+                );
 
-            try {
-                data =
-                    raw
-                        ? JSON.parse(raw)
-                        : null;
-            } catch {}
 
             debug(
-                "PROCESS_RESPONSE",
+                "SIGNED_UPLOAD_RESPONSE",
                 {
+
                     status:
                         response.status,
 
@@ -1793,11 +2176,213 @@ IMPORTANT
                 }
             );
 
+
+            if (!response.ok) {
+
+                const message =
+                    data?.message ||
+                    data?.error ||
+                    data?.error_description ||
+                    raw ||
+                    `Supabase upload failed (${response.status}).`;
+
+
+                throw new Error(
+                    String(
+                        message
+                    )
+                );
+            }
+
+
+            item.progress =
+                100;
+
+            item.status =
+                "uploaded";
+
+
+            renderItem(
+                item
+            );
+
+            emitState();
+
+
+            return true;
+
+        } catch (
+            error
+        ) {
+
+            if (
+                error?.name ===
+                "AbortError"
+            ) {
+
+                throw new Error(
+                    "File upload timed out."
+                );
+            }
+
+
+            throw error;
+
+        } finally {
+
+            window.clearTimeout(
+                timeout
+            );
+        }
+    }
+
+
+    /* =====================================================
+       STEP 3 — PROCESS FILE
+       ===================================================== */
+
+    async function requestProcessing(
+        item
+    ) {
+
+        const controller =
+            new AbortController();
+
+
+        item.processController =
+            controller;
+
+
+        const timer =
+            window.setTimeout(
+                () => {
+
+                    controller.abort();
+
+                },
+                CONFIG
+                    .processTimeoutMs
+            );
+
+
+        try {
+
+            const payload =
+                {
+
+                    uploadId:
+                        item.uploadId,
+
+                    bucket:
+                        item.bucket,
+
+                    path:
+                        item.path,
+
+                    name:
+                        item.name,
+
+                    size:
+                        item.size,
+
+                    mime:
+                        item.mime,
+
+                    extension:
+                        item.extension,
+
+                    category:
+                        item.category
+                };
+
+
+            debug(
+                "PROCESS_REQUEST",
+                payload
+            );
+
+
+            const response =
+                await fetch(
+                    CONFIG
+                        .processEndpoint,
+                    {
+
+                        method:
+                            "POST",
+
+                        credentials:
+                            "include",
+
+                        cache:
+                            "no-store",
+
+                        headers:
+                            {
+
+                                "Content-Type":
+                                    "application/json",
+
+                                Accept:
+                                    "application/json",
+
+                                "X-Neyo-Attachment-Client":
+                                    VERSION
+                            },
+
+                        body:
+                            JSON.stringify(
+                                payload
+                            ),
+
+                        signal:
+                            controller.signal
+                    }
+                );
+
+
+            const {
+                data,
+                raw
+            } =
+                await readResponse(
+                    response
+                );
+
+
+            debug(
+                "PROCESS_RESPONSE",
+                {
+
+                    status:
+                        response.status,
+
+                    ok:
+                        response.ok,
+
+                    data,
+
+                    raw:
+                        data
+                            ? undefined
+                            : raw
+                }
+            );
+
+
+            /*
+            -------------------------------------------------
+            202 = processing accepted asynchronously.
+            -------------------------------------------------
+            */
+
             if (
                 response.status ===
                 202
             ) {
+
                 return {
+
                     queued:
                         true,
 
@@ -1806,7 +2391,9 @@ IMPORTANT
                 };
             }
 
+
             if (!response.ok) {
+
                 throw new Error(
                     data?.error ||
                     raw ||
@@ -1814,47 +2401,68 @@ IMPORTANT
                 );
             }
 
+
             return {
+
                 queued:
                     false,
 
                 data:
                     data || {}
             };
-        } catch (error) {
+
+        } catch (
+            error
+        ) {
+
             if (
                 error?.name ===
                 "AbortError"
             ) {
+
                 throw new Error(
                     "File processing timed out."
                 );
             }
 
+
             throw error;
+
         } finally {
+
             window.clearTimeout(
                 timer
             );
+
 
             item.processController =
                 null;
         }
     }
 
+
     /* =====================================================
        COMPLETE PIPELINE
        ===================================================== */
 
-    async function processPipeline(id) {
+    async function processPipeline(
+        id
+    ) {
+
         const item =
-            state.items.get(id);
+            state.items.get(
+                id
+            );
+
 
         if (!item) {
+
             return false;
         }
 
+
         try {
+
             /* ---------------------------------------------
                PREPARING
                --------------------------------------------- */
@@ -1871,11 +2479,16 @@ IMPORTANT
             item.ready =
                 false;
 
-            renderItem(item);
+
+            renderItem(
+                item
+            );
+
             emitState();
 
+
             /* ---------------------------------------------
-               AUTHORIZATION
+               CREATE SIGNED SESSION
                --------------------------------------------- */
 
             const session =
@@ -1883,11 +2496,16 @@ IMPORTANT
                     item
                 );
 
+
             if (
-                !state.items.has(id)
+                !state.items.has(
+                    id
+                )
             ) {
+
                 return false;
             }
+
 
             item.uploadId =
                 session.uploadId;
@@ -1898,6 +2516,13 @@ IMPORTANT
             item.path =
                 session.path;
 
+            item.token =
+                session.token;
+
+            item.signedUrl =
+                session.signedUrl;
+
+
             /* ---------------------------------------------
                UPLOAD
                --------------------------------------------- */
@@ -1905,19 +2530,29 @@ IMPORTANT
             item.status =
                 "uploading";
 
-            renderItem(item);
+
+            renderItem(
+                item
+            );
+
             emitState();
+
 
             await uploadToSignedUrl(
                 item,
                 session
             );
 
+
             if (
-                !state.items.has(id)
+                !state.items.has(
+                    id
+                )
             ) {
+
                 return false;
             }
+
 
             /* ---------------------------------------------
                PROCESS
@@ -1926,35 +2561,49 @@ IMPORTANT
             item.status =
                 "processing";
 
-            renderItem(item);
+
+            renderItem(
+                item
+            );
+
             emitState();
+
 
             const processing =
                 await requestProcessing(
                     item
                 );
 
+
             if (
-                !state.items.has(id)
+                !state.items.has(
+                    id
+                )
             ) {
+
                 return false;
             }
+
 
             const data =
                 processing.data ||
                 {};
 
+
             item.processId =
                 data.processId ||
                 null;
+
 
             item.documentId =
                 data.documentId ||
                 null;
 
+
             item.stats =
                 data.stats ||
                 null;
+
 
             item.warnings =
                 Array.isArray(
@@ -1963,25 +2612,33 @@ IMPORTANT
                     ? data.warnings
                     : [];
 
+
             /* ---------------------------------------------
-               SERVER-SIDE QUEUE
+               QUEUED PROCESSING
                --------------------------------------------- */
 
             if (
                 processing.queued
             ) {
+
                 item.status =
                     "queued-processing";
 
                 item.ready =
                     false;
 
-                renderItem(item);
+
+                renderItem(
+                    item
+                );
+
                 emitState();
+
 
                 emit(
                     "neyo:attachment-processing-queued",
                     {
+
                         attachment:
                             serializeItem(
                                 item
@@ -1989,8 +2646,10 @@ IMPORTANT
                     }
                 );
 
+
                 return true;
             }
+
 
             /* ---------------------------------------------
                READY
@@ -2000,6 +2659,7 @@ IMPORTANT
                 data.document ||
                 null;
 
+
             item.chunks =
                 Array.isArray(
                     data.chunks
@@ -2007,22 +2667,32 @@ IMPORTANT
                     ? data.chunks
                     : [];
 
+
             item.extraction =
                 data.extraction ||
                 null;
 
+
             item.ready =
-                data.ready !== false;
+                data.ready !==
+                false;
+
 
             item.status =
                 "ready";
 
-            renderItem(item);
+
+            renderItem(
+                item
+            );
+
             emitState();
+
 
             emit(
                 "neyo:attachment-ready",
                 {
+
                     attachment:
                         serializeItem(
                             item
@@ -2030,9 +2700,11 @@ IMPORTANT
                 }
             );
 
+
             debug(
                 "READY",
                 {
+
                     name:
                         item.name,
 
@@ -2061,13 +2733,22 @@ IMPORTANT
                 }
             );
 
+
             return true;
-        } catch (error) {
+
+        } catch (
+            error
+        ) {
+
             if (
-                !state.items.has(id)
+                !state.items.has(
+                    id
+                )
             ) {
+
                 return false;
             }
+
 
             item.status =
                 "error";
@@ -2075,48 +2756,74 @@ IMPORTANT
             item.ready =
                 false;
 
+            item.progress =
+                0;
+
             item.error =
                 error?.message ||
                 "Couldn't process this file.";
 
-            renderItem(item);
+
+            renderItem(
+                item
+            );
+
             emitState();
+
 
             emitError(
                 item.error,
                 item
             );
 
+
             debug(
                 "PIPELINE_ERROR",
                 {
+
                     name:
                         item.name,
 
-                    status:
-                        item.status,
+                    uploadId:
+                        item.uploadId,
+
+                    bucket:
+                        item.bucket,
+
+                    path:
+                        item.path,
 
                     error:
                         item.error
                 }
             );
 
+
             return false;
         }
     }
+
 
     /* =====================================================
        RETRY
        ===================================================== */
 
-    function resetItemForRetry(item) {
+    function resetItemForRetry(
+        item
+    ) {
+
         try {
+
             item.processController
-                ?.abort?.();
+                ?.abort
+                ?.();
+
         } catch {}
+
 
         item.processController =
             null;
+
 
         item.uploadId =
             null;
@@ -2125,6 +2832,12 @@ IMPORTANT
             null;
 
         item.path =
+            null;
+
+        item.token =
+            null;
+
+        item.signedUrl =
             null;
 
         item.processId =
@@ -2161,64 +2874,99 @@ IMPORTANT
             false;
     }
 
-    function retryAttachment(id) {
+
+    function retryAttachment(
+        id
+    ) {
+
         const item =
-            state.items.get(id);
+            state.items.get(
+                id
+            );
+
 
         if (!item) {
+
             return false;
         }
+
 
         resetItemForRetry(
             item
         );
 
-        renderItem(item);
+
+        renderItem(
+            item
+        );
+
         emitState();
+
 
         void processPipeline(
             id
         );
 
+
         return true;
     }
+
 
     /* =====================================================
        REMOVE
        ===================================================== */
 
-    function removeAttachment(id) {
+    function removeAttachment(
+        id
+    ) {
+
         const item =
-            state.items.get(id);
+            state.items.get(
+                id
+            );
+
 
         if (!item) {
+
             return false;
         }
 
+
         try {
+
             item.processController
-                ?.abort?.();
+                ?.abort
+                ?.();
+
         } catch {}
+
 
         if (
             item.previewUrl
         ) {
+
             try {
+
                 URL.revokeObjectURL(
                     item.previewUrl
                 );
+
             } catch {}
         }
+
 
         state.items.delete(
             id
         );
 
+
         state.order =
             state.order.filter(
                 value =>
-                    value !== id
+                    value !==
+                    id
             );
+
 
         attachmentList
             ?.querySelector(
@@ -2226,39 +2974,55 @@ IMPORTANT
             )
             ?.remove();
 
+
         renderAll();
+
 
         emit(
             "neyo:attachment-removed",
             {
+
                 id,
 
                 uploadId:
                     item.uploadId,
+
+                bucket:
+                    item.bucket,
 
                 path:
                     item.path
             }
         );
 
+
         return true;
     }
+
 
     /* =====================================================
        CLEAR
        ===================================================== */
 
     function clearAttachments() {
+
         for (
             const id
-            of [...state.order]
+            of [
+                ...state.order
+            ]
         ) {
+
             removeAttachment(
                 id
             );
         }
 
-        if (attachmentList) {
+
+        if (
+            attachmentList
+        ) {
+
             attachmentList.innerHTML =
                 "";
 
@@ -2266,34 +3030,51 @@ IMPORTANT
                 true;
         }
 
+
         syncComposerClass();
+
         emitState();
     }
 
+
     /* =====================================================
-       BUTTON OWNERSHIP
+       ATTACH BUTTON OWNERSHIP
        ===================================================== */
 
-    if (attachBtn) {
+    if (
+        attachBtn
+    ) {
+
         debug(
             "#attachBtn preserved for neo.js popup UX."
         );
     }
 
-    if (addFilesMenuBtn) {
-        addFilesMenuBtn.addEventListener(
-            "click",
-            event => {
-                event.preventDefault();
-                event.stopPropagation();
-                event.stopImmediatePropagation();
 
-                closeLegacyPopup();
-                openPicker();
-            },
-            true
-        );
+    if (
+        addFilesMenuBtn
+    ) {
+
+        addFilesMenuBtn
+            .addEventListener(
+                "click",
+                event => {
+
+                    event.preventDefault();
+
+                    event.stopPropagation();
+
+                    event.stopImmediatePropagation();
+
+
+                    closeLegacyPopup();
+
+                    openPicker();
+                },
+                true
+            );
     }
+
 
     /* =====================================================
        FILE INPUT
@@ -2302,20 +3083,33 @@ IMPORTANT
     fileInput.addEventListener(
         "change",
         async event => {
+
             const files =
                 Array.from(
-                    event.target?.files ||
+                    event.target
+                        ?.files ||
                     []
                 );
+
+
+            /*
+            -------------------------------------------------
+            Reset allows selecting same file again after remove.
+            -------------------------------------------------
+            */
 
             fileInput.value =
                 "";
 
+
             if (
-                files.length === 0
+                files.length ===
+                0
             ) {
+
                 return;
             }
+
 
             await addFiles(
                 files
@@ -2323,25 +3117,32 @@ IMPORTANT
         }
     );
 
+
     /* =====================================================
-       EXTERNAL OPEN
+       EXTERNAL OPEN EVENT
        ===================================================== */
 
     window.addEventListener(
         "neyo:attachments-open-request",
         () => {
+
             openPicker();
         }
     );
+
 
     /* =====================================================
        DRAG / DROP
        ===================================================== */
 
-    function eventHasFiles(event) {
+    function eventHasFiles(
+        event
+    ) {
+
         const types =
             Array.from(
-                event?.dataTransfer?.types ||
+                event?.dataTransfer
+                    ?.types ||
                 []
             );
 
@@ -2350,27 +3151,45 @@ IMPORTANT
         );
     }
 
-    function isInsideComposer(event) {
+
+    function isInsideComposer(
+        event
+    ) {
+
         const target =
             event.target;
 
+
         if (
             !target ||
-            !(target instanceof Node)
+            !(
+                target instanceof
+                Node
+            )
         ) {
+
             return false;
         }
 
+
         return Boolean(
-            composerWrapper?.contains(
-                target
-            )
+            composerWrapper
+                ?.contains(
+                    target
+                )
         );
     }
 
-    function setDragging(active) {
+
+    function setDragging(
+        active
+    ) {
+
         state.dragging =
-            Boolean(active);
+            Boolean(
+                active
+            );
+
 
         composerWrapper
             ?.classList
@@ -2379,12 +3198,14 @@ IMPORTANT
                 state.dragging
             );
 
+
         dragDropOverlay
             ?.classList
             .toggle(
                 "active",
                 state.dragging
             );
+
 
         dragDropOverlay
             ?.setAttribute(
@@ -2395,100 +3216,156 @@ IMPORTANT
             );
     }
 
+
     document.addEventListener(
         "dragenter",
         event => {
+
             if (
-                !eventHasFiles(event) ||
-                !isInsideComposer(event)
+                !eventHasFiles(
+                    event
+                ) ||
+                !isInsideComposer(
+                    event
+                )
             ) {
+
                 return;
             }
 
+
             event.preventDefault();
+
             event.stopPropagation();
 
-            setDragging(true);
+
+            setDragging(
+                true
+            );
         },
         true
     );
+
 
     document.addEventListener(
         "dragover",
         event => {
+
             if (
-                !eventHasFiles(event) ||
-                !isInsideComposer(event)
+                !eventHasFiles(
+                    event
+                ) ||
+                !isInsideComposer(
+                    event
+                )
             ) {
+
                 return;
             }
 
+
             event.preventDefault();
+
             event.stopPropagation();
+
 
             if (
                 event.dataTransfer
             ) {
-                event.dataTransfer.dropEffect =
+
+                event.dataTransfer
+                    .dropEffect =
                     "copy";
             }
 
-            setDragging(true);
+
+            setDragging(
+                true
+            );
         },
         true
     );
+
 
     document.addEventListener(
         "dragleave",
         event => {
+
             if (
                 !state.dragging
             ) {
+
                 return;
             }
+
 
             const related =
                 event.relatedTarget;
 
+
             if (
-                related instanceof Node &&
-                composerWrapper?.contains(
-                    related
-                )
+                related instanceof
+                    Node &&
+                composerWrapper
+                    ?.contains(
+                        related
+                    )
             ) {
+
                 return;
             }
 
-            setDragging(false);
+
+            setDragging(
+                false
+            );
         },
         true
     );
 
+
     document.addEventListener(
         "drop",
         async event => {
+
             if (
-                !eventHasFiles(event) ||
-                !isInsideComposer(event)
+                !eventHasFiles(
+                    event
+                ) ||
+                !isInsideComposer(
+                    event
+                )
             ) {
+
                 return;
             }
 
+
             event.preventDefault();
+
             event.stopPropagation();
+
             event.stopImmediatePropagation();
 
-            setDragging(false);
+
+            setDragging(
+                false
+            );
+
 
             const files =
                 Array.from(
-                    event.dataTransfer?.files ||
+                    event.dataTransfer
+                        ?.files ||
                     []
                 );
 
+
             if (
-                files.length > 0
+                files.length >
+                0
             ) {
+
                 await addFiles(
                     files
                 );
@@ -2497,6 +3374,7 @@ IMPORTANT
         true
     );
 
+
     /* =====================================================
        PASTE FILES
        ===================================================== */
@@ -2504,41 +3382,60 @@ IMPORTANT
     document.addEventListener(
         "paste",
         async event => {
+
             const clipboard =
                 event.clipboardData;
 
+
             if (!clipboard) {
+
                 return;
             }
 
-            const files = [];
+
+            const files =
+                [];
+
 
             for (
-                const item
+                const clipboardItem
                 of clipboard.items
             ) {
+
                 if (
-                    item.kind !==
+                    clipboardItem.kind !==
                     "file"
                 ) {
+
                     continue;
                 }
 
+
                 const file =
-                    item.getAsFile();
+                    clipboardItem
+                        .getAsFile();
+
 
                 if (file) {
-                    files.push(file);
+
+                    files.push(
+                        file
+                    );
                 }
             }
 
+
             if (
-                files.length === 0
+                files.length ===
+                0
             ) {
+
                 return;
             }
 
+
             event.preventDefault();
+
 
             await addFiles(
                 files
@@ -2547,67 +3444,87 @@ IMPORTANT
         true
     );
 
+
     /* =====================================================
-       CHIP ACTIONS
+       CHIP BUTTONS
        ===================================================== */
 
-    attachmentList.addEventListener(
-        "click",
-        event => {
-            const button =
-                event.target.closest(
-                    "[data-action]"
-                );
+    attachmentList
+        ?.addEventListener(
+            "click",
+            event => {
 
-            if (!button) {
-                return;
+                const button =
+                    event.target
+                        ?.closest
+                        ?.(
+                            "[data-action]"
+                        );
+
+
+                if (!button) {
+
+                    return;
+                }
+
+
+                const chip =
+                    button.closest(
+                        "[data-attachment-id]"
+                    );
+
+
+                const id =
+                    chip?.dataset
+                        ?.attachmentId;
+
+
+                if (!id) {
+
+                    return;
+                }
+
+
+                if (
+                    button.dataset
+                        .action ===
+                    "remove"
+                ) {
+
+                    removeAttachment(
+                        id
+                    );
+
+                    return;
+                }
+
+
+                if (
+                    button.dataset
+                        .action ===
+                    "retry"
+                ) {
+
+                    retryAttachment(
+                        id
+                    );
+                }
             }
+        );
 
-            const chip =
-                button.closest(
-                    "[data-attachment-id]"
-                );
-
-            const id =
-                chip?.dataset
-                    ?.attachmentId;
-
-            if (!id) {
-                return;
-            }
-
-            if (
-                button.dataset.action ===
-                "remove"
-            ) {
-                removeAttachment(
-                    id
-                );
-
-                return;
-            }
-
-            if (
-                button.dataset.action ===
-                "retry"
-            ) {
-                retryAttachment(
-                    id
-                );
-            }
-        }
-    );
 
     /* =====================================================
-       PUBLIC CLEAR REQUEST
+       CLEAR REQUEST
        ===================================================== */
 
     window.addEventListener(
         "neyo:attachments-clear-request",
         () => {
+
             clearAttachments();
         }
     );
+
 
     /* =====================================================
        PUBLIC API
@@ -2615,13 +3532,33 @@ IMPORTANT
 
     const publicApi =
         Object.freeze({
+
             __controller:
                 true,
 
             version:
                 VERSION,
 
-            setSupabaseClient,
+
+            /*
+            -------------------------------------------------
+            Compatibility method.
+
+            Old code may try to wire a Supabase client.
+            v6 no longer needs it, so return true safely.
+            -------------------------------------------------
+            */
+
+            setSupabaseClient:
+                () => {
+
+                    debug(
+                        "External Supabase client ignored; v6 uses backend signedUrl."
+                    );
+
+                    return true;
+                },
+
 
             open:
                 openPicker,
@@ -2641,32 +3578,38 @@ IMPORTANT
 
             getReady,
 
+
             hasPending:
                 () =>
-                    getAll().some(
-                        item =>
-                            [
-                                "queued",
-                                "authorizing",
-                                "uploading",
-                                "uploaded",
-                                "processing",
-                                "queued-processing"
-                            ].includes(
-                                item.status
-                            )
-                    ),
+                    getAll()
+                        .some(
+                            item =>
+                                [
+                                    "queued",
+                                    "authorizing",
+                                    "uploading",
+                                    "uploaded",
+                                    "processing",
+                                    "queued-processing"
+                                ].includes(
+                                    item.status
+                                )
+                        ),
+
 
             hasErrors:
                 () =>
-                    getAll().some(
-                        item =>
-                            item.status ===
-                            "error"
-                    ),
+                    getAll()
+                        .some(
+                            item =>
+                                item.status ===
+                                "error"
+                        ),
+
 
             getState:
                 () => ({
+
                     version:
                         VERSION,
 
@@ -2680,17 +3623,20 @@ IMPORTANT
                         state.dragging,
 
                     ready:
-                        getReady().length,
+                        getReady()
+                            .length,
 
                     attachments:
                         getAll()
                 })
         });
 
+
     Object.defineProperty(
         window,
         "NeyoAttachments",
         {
+
             value:
                 publicApi,
 
@@ -2705,6 +3651,7 @@ IMPORTANT
         }
     );
 
+
     /* =====================================================
        INIT
        ===================================================== */
@@ -2712,21 +3659,27 @@ IMPORTANT
     attachmentList.hidden =
         true;
 
+
     syncComposerClass();
 
+
     emitState();
+
 
     emit(
         "neyo:attachments-ready",
         {
+
             version:
                 VERSION
         }
     );
 
+
     debug(
-        "FINAL v5 READY",
+        "FINAL v6 READY",
         {
+
             version:
                 VERSION,
 
@@ -2736,6 +3689,11 @@ IMPORTANT
             maxFileSize:
                 formatBytes(
                     CONFIG.maxFileSize
+                ),
+
+            maxTotalSize:
+                formatBytes(
+                    CONFIG.maxTotalSize
                 ),
 
             privateInput:
@@ -2754,10 +3712,12 @@ IMPORTANT
                     addFilesMenuBtn
                 ),
 
-            supabaseReady:
-                Boolean(
-                    discoverSupabaseClient()
-                )
+            directSignedUpload:
+                true,
+
+            browserSupabaseClientRequired:
+                false
         }
     );
+
 })();

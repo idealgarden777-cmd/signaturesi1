@@ -2670,14 +2670,29 @@
   <!-- END #neyoVoiceMode -->
 
   <!-- ========================================================= -->
-  <!-- SCRIPTS — FINAL STABLE ORDER                              -->
+  <!-- NEYO — STABLE MIGRATION LOADER                            -->
+  <!-- Phase 1                                                  -->
+  <!--                                                         -->
+  <!-- RULES                                                   -->
+  <!-- - neo.js remains untouched                              -->
+  <!-- - no second chat owner                                  -->
+  <!-- - no second send-button owner                           -->
+  <!-- - UI-only modules may coexist                           -->
+  <!-- - V2 chat modules will be activated only after QA       -->
   <!-- ========================================================= -->
 
-  <!-- Main legacy application — KEEP FIRST / UNTOUCHED -->
+
+  <!-- ========================================================= -->
+  <!-- 1. LEGACY STABLE APPLICATION                              -->
+  <!-- ========================================================= -->
+
   <script src="/neo.js?v=86"></script>
 
 
-  <!-- ===== UI COMPONENTS ===== -->
+  <!-- ========================================================= -->
+  <!-- 2. SAFE UI MODULES                                        -->
+  <!-- These do not replace the main chat transport yet.         -->
+  <!-- ========================================================= -->
 
   <script
     type="module"
@@ -2694,6 +2709,14 @@
     src="/js/components/checkout.js?v=4"
   ></script>
 
+
+  <!-- ========================================================= -->
+  <!-- 3. COMPOSER VISUAL HELPERS                                -->
+  <!--                                                          -->
+  <!-- These may control visual expansion/scroll behavior only.  -->
+  <!-- They must NOT own Send, Enter, or /api/chat.             -->
+  <!-- ========================================================= -->
+
   <script
     type="module"
     src="/js/components/composer-expand.js?v=2"
@@ -2705,7 +2728,10 @@
   ></script>
 
 
-  <!-- ===== CHARACTER DEFINITIONS ===== -->
+  <!-- ========================================================= -->
+  <!-- 4. CHARACTER DEFINITIONS                                  -->
+  <!-- Definitions load before mascot / picker consumers.        -->
+  <!-- ========================================================= -->
 
   <script
     type="module"
@@ -2723,7 +2749,9 @@
   ></script>
 
 
-  <!-- ===== VOICE + MASCOT + PICKER ===== -->
+  <!-- ========================================================= -->
+  <!-- 5. VOICE / MASCOT                                         -->
+  <!-- ========================================================= -->
 
   <script
     type="module"
@@ -2752,41 +2780,70 @@
 
 
   <!-- ========================================================= -->
-  <!-- STABLE CORE CHAT PIPELINE                                -->
+  <!-- 6. ATTACHMENT ENGINE                                      -->
+  <!--                                                          -->
+  <!-- Important:                                               -->
+  <!-- attachments.js owns file lifecycle only.                  -->
+  <!--                                                          -->
+  <!-- It may own:                                              -->
+  <!-- - #addFilesMenuBtn                                       -->
+  <!-- - private file input                                     -->
+  <!-- - drag/drop                                              -->
+  <!-- - upload                                                 -->
+  <!-- - processing                                             -->
+  <!-- - retry/remove                                           -->
+  <!--                                                          -->
+  <!-- It must NOT own:                                         -->
+  <!-- - #attachBtn popup launcher                              -->
+  <!-- - #sendBtn                                               -->
+  <!-- - Enter                                                  -->
+  <!-- - /api/chat                                              -->
   <!-- ========================================================= -->
 
-
-  <!--
-    1. Attachments first.
-    Owns file lifecycle only.
-  -->
   <script
     type="module"
-    src="/js/components/attachments.js?v=3"
+    src="/js/components/attachments.js?v=6"
   ></script>
 
 
+  <!-- ========================================================= -->
+  <!-- 7. CHAT V2 — DISABLED DURING MIGRATION                    -->
+  <!--                                                          -->
+  <!-- DO NOT enable these while neo.js still owns chat.        -->
+  <!--                                                          -->
+  <!-- Enabling them now creates duplicate:                     -->
+  <!-- - conversation state                                     -->
+  <!-- - message rendering                                      -->
+  <!-- - send handling                                          -->
+  <!-- - Abort/generation state                                 -->
+  <!-- ========================================================= -->
+
   <!--
-    2. Chat transport/state.
-    Updated final v4.
-  -->
   <script
     type="module"
-    src="/js/components/chat.js?v=4"
+    src="/js/components/chat.js?v=1"
   ></script>
 
-
-  <!--
-    3. Send/Stop owner.
-    Updated final v4.
-  -->
   <script
     type="module"
-    src="/js/components/send-state.js?v=4"
+    src="/js/components/messages.js?v=1"
   ></script>
 
+  <script
+    type="module"
+    src="/js/components/message-renderer.js?v=1"
+  ></script>
 
-  <!-- ===== UTILITIES ===== -->
+  <script
+    type="module"
+    src="/js/components/send-state.js?v=1"
+  ></script>
+  -->
+
+
+  <!-- ========================================================= -->
+  <!-- 8. UI UTILITIES                                           -->
+  <!-- ========================================================= -->
 
   <script
     type="module"
@@ -2798,12 +2855,16 @@
     src="/js/components/tooltip-registry.js?v=2"
   ></script>
 
-
   <script
     type="module"
     src="/js/components/ads.js?v=3"
   ></script>
 
+
+  <!-- ========================================================= -->
+  <!-- 9. MOBILE                                                 -->
+  <!-- Mobile helpers last so DOM + primary modules already exist -->
+  <!-- ========================================================= -->
 
   <script
     type="module"
@@ -2814,6 +2875,71 @@
     type="module"
     src="/js/components/mobile-keyboard.js?v=1"
   ></script>
+
+
+  <!-- ========================================================= -->
+  <!-- 10. FINAL BOOT SAFETY                                     -->
+  <!-- ========================================================= -->
+
+  <script>
+    (() => {
+      "use strict";
+
+      const boot = () => {
+        try {
+          window.lucide?.createIcons?.();
+        } catch (error) {
+          console.warn(
+            "[NEYO Boot] Icon initialization failed:",
+            error
+          );
+        }
+
+        document.documentElement.classList.add(
+          "neyo-ready"
+        );
+
+        window.dispatchEvent(
+          new CustomEvent(
+            "neyo:app-ready",
+            {
+              detail: {
+                architecture:
+                  "legacy-stable-migration",
+
+                legacyChat:
+                  true,
+
+                modularChat:
+                  false
+              }
+            }
+          )
+        );
+
+        console.log(
+          "[NEYO] Stable migration runtime ready."
+        );
+      };
+
+
+      if (
+        document.readyState ===
+        "loading"
+      ) {
+        document.addEventListener(
+          "DOMContentLoaded",
+          boot,
+          {
+            once:
+              true
+          }
+        );
+      } else {
+        boot();
+      }
+    })();
+  </script>
 
 </body>
 </html>

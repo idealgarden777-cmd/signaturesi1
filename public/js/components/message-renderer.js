@@ -1,203 +1,150 @@
-/*
-=========================================================
-NEYO — MESSAGE RENDERER
-FINAL CLEAN v1
-
-FILE:
-public/js/components/message-renderer.js
-
-OWNS
----------------------------------------------------------
-- Assistant Markdown rendering
-- Safe HTML sanitization
-- Inline code styling hook
-- Code block enhancement
-- Safe links
-- Tables
-- Blockquotes
-- Headings
-- Optional syntax highlighting
-- Optional KaTeX rendering
-- Re-render after history load
-
-DOES NOT OWN
----------------------------------------------------------
-- Message shell creation
-- Conversation state
-- Chat API
-- Thinking UI
-- Send button
-- Enter key
-- Attachments
-- Copy / regenerate / share actions
-
-EVENTS LISTENED
----------------------------------------------------------
-- neyo:message-created
-- neyo:message-updated
-- neyo:messages-replaced
-- neyo:message-render-request
-
-PUBLIC API
----------------------------------------------------------
-window.NeyoMessageRenderer.render(...)
-window.NeyoMessageRenderer.renderElement(...)
-window.NeyoMessageRenderer.renderAll()
-=========================================================
-*/
-
 (() => {
   "use strict";
 
-
-  /* =====================================================
-     VERSION / GUARD
-     ===================================================== */
-
   const VERSION =
-    "neyo-message-renderer-final-clean-v1";
-
+    "neyo-message-renderer-recovery-v1";
 
   if (
-    window.NeyoMessageRenderer?.__controller ===
-    true
+    window.NeyoMessageRenderer
+      ?.__controller
   ) {
-    console.warn(
-      "[NEYO Renderer] Already initialized."
-    );
-
     return;
   }
 
 
   /* =====================================================
-     CONFIG
+     RUNTIME OWNERSHIP
      ===================================================== */
 
-  const CONFIG =
-    Object.freeze({
-
-      markdown:
-        true,
-
-      syntaxHighlight:
-        true,
-
-      math:
-        true,
-
-      externalLinksNewTab:
-        true
-    });
-
-
-  /* =====================================================
-     DOM
-     ===================================================== */
-
-  const chatMessages =
-    document.getElementById(
-      "chatMessages"
-    );
-
-
-  if (
-    !chatMessages
-  ) {
-    console.warn(
-      "[NEYO Renderer] #chatMessages not found."
-    );
-
-    return;
-  }
-
-
-  /* =====================================================
-     EVENTS
-     ===================================================== */
-
-  function emit(
-    name,
-    detail = {}
-  ) {
-    window.dispatchEvent(
-      new CustomEvent(
-        name,
-        {
-          detail
-        }
-      )
-    );
-  }
-
-
-  /* =====================================================
-     ESCAPE
-     ===================================================== */
-
-  function escapeHtml(
-    value
-  ) {
-    return String(
-      value ?? ""
+  const legacy =
+    Array.from(
+      document.scripts ||
+      []
     )
-      .replace(
-        /&/g,
-        "&amp;"
-      )
-      .replace(
-        /</g,
-        "&lt;"
-      )
-      .replace(
-        />/g,
-        "&gt;"
-      )
-      .replace(
-        /"/g,
-        "&quot;"
-      )
-      .replace(
-        /'/g,
-        "&#039;"
+      .some(
+        script =>
+          /(?:^|\/)neo\.js(?:\?|$)/
+            .test(
+              script.src ||
+              ""
+            )
       );
-  }
+
+  const active =
+    !legacy;
 
 
   /* =====================================================
-     MARKED CONFIG
+     SECURITY
+     ===================================================== */
+
+  const SAFE_PROTOCOLS =
+    new Set([
+      "http:",
+      "https:",
+      "mailto:"
+    ]);
+
+
+  /* =====================================================
+     HELPERS
+     ===================================================== */
+
+  const emit =
+    (
+      name,
+      detail = {}
+    ) => {
+
+      window.dispatchEvent(
+        new CustomEvent(
+          name,
+          {
+            detail
+          }
+        )
+      );
+    };
+
+
+  const text =
+    value =>
+
+      String(
+        value ??
+        ""
+      )
+        .replace(
+          /\u0000/g,
+          ""
+        )
+        .replace(
+          /\r\n?/g,
+          "\n"
+        );
+
+
+  const escapeHtml =
+    value =>
+
+      text(
+        value
+      )
+        .replace(
+          /&/g,
+          "&amp;"
+        )
+        .replace(
+          /</g,
+          "&lt;"
+        )
+        .replace(
+          />/g,
+          "&gt;"
+        )
+        .replace(
+          /"/g,
+          "&quot;"
+        )
+        .replace(
+          /'/g,
+          "&#039;"
+        );
+
+
+  /* =====================================================
+     MARKED
      ===================================================== */
 
   function configureMarked() {
-    if (
-      !window.marked
-        ?.parse
-    ) {
+
+    if (!window.marked) {
       return false;
     }
 
-
     try {
+
       window.marked
         .setOptions({
           gfm:
             true,
 
           breaks:
-            true
-        });
+            true,
 
+          pedantic:
+            false,
+
+          mangle:
+            false,
+
+          headerIds:
+            false
+        });
 
       return true;
 
-    } catch (
-      error
-    ) {
-      console.warn(
-        "[NEYO Renderer] Marked config failed:",
-        error
-      );
-
+    } catch {
 
       return false;
     }
@@ -208,36 +155,31 @@ window.NeyoMessageRenderer.renderAll()
      SANITIZE
      ===================================================== */
 
-  function sanitize(
+  function sanitizeHtml(
     html
   ) {
-    const source =
-      String(
-        html ?? ""
-      );
 
+    /*
+     * Never trust Markdown-generated HTML
+     * when DOMPurify is unavailable.
+     */
 
-    if (
-      !window.DOMPurify
-        ?.sanitize
-    ) {
-      return escapeHtml(
-        source
-      );
+    if (!window.DOMPurify) {
+      return null;
     }
 
-
-    return window.DOMPurify
+    return window
+      .DOMPurify
       .sanitize(
-        source,
+        String(
+          html ??
+          ""
+        ),
         {
           USE_PROFILES: {
             html:
               true
           },
-
-          ALLOW_DATA_ATTR:
-            false,
 
           FORBID_TAGS: [
             "script",
@@ -247,9 +189,10 @@ window.NeyoMessageRenderer.renderAll()
             "embed",
             "form",
             "input",
+            "button",
             "textarea",
             "select",
-            "button",
+            "option",
             "meta",
             "link",
             "base"
@@ -257,8 +200,9 @@ window.NeyoMessageRenderer.renderAll()
 
           FORBID_ATTR: [
             "style",
-            "srcset",
-            "formaction"
+            "srcdoc",
+            "formaction",
+            "autofocus"
           ]
         }
       );
@@ -266,25 +210,30 @@ window.NeyoMessageRenderer.renderAll()
 
 
   /* =====================================================
-     MARKDOWN
+     MARKDOWN → HTML
      ===================================================== */
 
   function markdownToHtml(
-    value
+    markdown
   ) {
-    const text =
-      String(
-        value ?? ""
+
+    const input =
+      text(
+        markdown
       );
 
 
+    /*
+     * Safe plain-text fallback.
+     */
+
     if (
-      !CONFIG.markdown ||
-      !window.marked
-        ?.parse
+      !window.marked ||
+      !window.DOMPurify
     ) {
+
       return escapeHtml(
-        text
+        input
       )
         .replace(
           /\n/g,
@@ -294,20 +243,34 @@ window.NeyoMessageRenderer.renderAll()
 
 
     try {
-      const html =
+
+      configureMarked();
+
+      const parsed =
         window.marked
           .parse(
-            text
+            input
           );
 
 
-      return sanitize(
-        html
+      return (
+        sanitizeHtml(
+          parsed
+        ) ||
+
+        escapeHtml(
+          input
+        )
+          .replace(
+            /\n/g,
+            "<br>"
+          )
       );
 
     } catch (
       error
     ) {
+
       console.warn(
         "[NEYO Renderer] Markdown failed:",
         error
@@ -315,7 +278,7 @@ window.NeyoMessageRenderer.renderAll()
 
 
       return escapeHtml(
-        text
+        input
       )
         .replace(
           /\n/g,
@@ -329,51 +292,33 @@ window.NeyoMessageRenderer.renderAll()
      SAFE LINKS
      ===================================================== */
 
-  function isSafeUrl(
-    href
+  function safeUrl(
+    value
   ) {
-    const raw =
-      String(
-        href ?? ""
-      )
-        .trim();
 
-
-    if (
-      !raw
-    ) {
-      return false;
+    if (!value) {
+      return null;
     }
-
-
-    if (
-      /^(javascript|data|vbscript|file):/i
-        .test(
-          raw
-        )
-    ) {
-      return false;
-    }
-
 
     try {
+
       const url =
         new URL(
-          raw,
-          window.location.origin
+          value,
+          location.origin
         );
 
 
-      return [
-        "http:",
-        "https:",
-        "mailto:"
-      ].includes(
-        url.protocol
-      );
+      return SAFE_PROTOCOLS
+        .has(
+          url.protocol
+        )
+          ? url
+          : null;
 
     } catch {
-      return false;
+
+      return null;
     }
   }
 
@@ -381,8 +326,12 @@ window.NeyoMessageRenderer.renderAll()
   function secureLinks(
     root
   ) {
+
     if (
-      !(root instanceof HTMLElement)
+      !(
+        root instanceof
+        HTMLElement
+      )
     ) {
       return;
     }
@@ -394,150 +343,203 @@ window.NeyoMessageRenderer.renderAll()
       )
       .forEach(
         link => {
-          const href =
-            link.getAttribute(
-              "href"
+
+          const url =
+            safeUrl(
+              link.getAttribute(
+                "href"
+              )
             );
 
 
-          if (
-            !isSafeUrl(
-              href
-            )
-          ) {
+          /*
+           * Unsafe protocol:
+           * remove navigation entirely.
+           */
+
+          if (!url) {
+
             link.removeAttribute(
               "href"
             );
-
 
             link.removeAttribute(
               "target"
             );
 
-
             link.removeAttribute(
               "rel"
             );
-
 
             return;
           }
 
 
-          try {
-            const url =
-              new URL(
-                href,
-                window.location.origin
-              );
+          link.href =
+            url.href;
 
 
-            if (
-              CONFIG.externalLinksNewTab &&
-              (
-                url.protocol ===
-                  "http:" ||
-                url.protocol ===
-                  "https:"
-              )
-            ) {
-              link.target =
-                "_blank";
+          /*
+           * External links open safely.
+           */
 
+          if (
+            url.origin !==
+            location.origin
+          ) {
 
-              link.rel =
-                "noopener noreferrer";
-            }
+            link.target =
+              "_blank";
 
-          } catch {}
+            link.rel =
+              "noopener noreferrer nofollow";
+
+          } else {
+
+            link.removeAttribute(
+              "target"
+            );
+
+            link.rel =
+              "noopener";
+          }
         }
       );
   }
 
 
   /* =====================================================
-     INLINE CODE
+     CODE LANGUAGE
      ===================================================== */
 
-  function enhanceInlineCode(
-    root
+  function languageOf(
+    code
   ) {
-    root
-      .querySelectorAll(
-        "code:not(pre code)"
-      )
-      .forEach(
-        code => {
-          code.classList.add(
-            "message-inline-code"
-          );
-        }
-      );
-  }
 
-
-  /* =====================================================
-     LANGUAGE
-     ===================================================== */
-
-  function normalizeLanguage(
-    value
-  ) {
-    const raw =
+    const className =
       String(
-        value ?? ""
-      )
-        .trim()
-        .toLowerCase();
-
-
-    const aliases =
-      {
-        js:
-          "javascript",
-
-        jsx:
-          "javascript",
-
-        ts:
-          "typescript",
-
-        tsx:
-          "typescript",
-
-        py:
-          "python",
-
-        sh:
-          "shell",
-
-        bash:
-          "shell",
-
-        zsh:
-          "shell",
-
-        yml:
-          "yaml",
-
-        md:
-          "markdown",
-
-        rs:
-          "rust",
-
-        cs:
-          "csharp"
-      };
+        code?.className ||
+        ""
+      );
 
 
     return (
-      aliases[
-        raw
-      ] ||
-      raw ||
-      "text"
-    );
+      className
+        .match(
+          /(?:language|lang)-([\w#+.-]+)/i
+        )
+        ?.[1] ||
+
+      "code"
+    )
+      .toLowerCase();
+  }
+
+
+  /* =====================================================
+     COPY CODE
+     ===================================================== */
+
+  async function copyText(
+    value,
+    button
+  ) {
+
+    try {
+
+      await navigator
+        .clipboard
+        .writeText(
+          value
+        );
+
+
+      const previous =
+        button
+          ?.getAttribute(
+            "aria-label"
+          ) ||
+
+        "Copy code";
+
+
+      if (button) {
+
+        button.setAttribute(
+          "aria-label",
+          "Copied"
+        );
+
+        button.dataset
+          .copied =
+          "true";
+
+
+        window.setTimeout(
+          () => {
+
+            button.setAttribute(
+              "aria-label",
+              previous
+            );
+
+            delete button
+              .dataset
+              .copied;
+
+          },
+          1200
+        );
+      }
+
+    } catch (
+      error
+    ) {
+
+      console.warn(
+        "[NEYO Renderer] Copy failed:",
+        error
+      );
+    }
+  }
+
+
+  /* =====================================================
+     SYNTAX HIGHLIGHTING
+     ===================================================== */
+
+  function highlight(
+    code
+  ) {
+
+    try {
+
+      if (
+        window.hljs
+          ?.highlightElement
+      ) {
+
+        window.hljs
+          .highlightElement(
+            code
+          );
+
+        return;
+      }
+
+
+      if (
+        window.Prism
+          ?.highlightElement
+      ) {
+
+        window.Prism
+          .highlightElement(
+            code
+          );
+      }
+
+    } catch {}
   }
 
 
@@ -548,140 +550,12 @@ window.NeyoMessageRenderer.renderAll()
   function enhanceCodeBlocks(
     root
   ) {
-    root
-      .querySelectorAll(
-        "pre > code"
-      )
-      .forEach(
-        code => {
-          const pre =
-            code.parentElement;
 
-
-          if (
-            !pre
-          ) {
-            return;
-          }
-
-
-          if (
-            pre.dataset
-              .neyoEnhanced ===
-            "true"
-          ) {
-            return;
-          }
-
-
-          pre.dataset
-            .neyoEnhanced =
-            "true";
-
-
-          pre.classList.add(
-            "message-code-block"
-          );
-
-
-          code.classList.add(
-            "message-code-content"
-          );
-
-
-          const languageClass =
-            Array.from(
-              code.classList
-            )
-              .find(
-                className =>
-                  className.startsWith(
-                    "language-"
-                  )
-              );
-
-
-          const language =
-            normalizeLanguage(
-              languageClass
-                ?.slice(
-                  "language-".length
-                )
-            );
-
-
-          pre.dataset.language =
-            language;
-
-
-          const wrapper =
-            document.createElement(
-              "div"
-            );
-
-
-          wrapper.className =
-            "message-code-wrapper";
-
-
-          wrapper.dataset.language =
-            language;
-
-
-          const header =
-            document.createElement(
-              "div"
-            );
-
-
-          header.className =
-            "message-code-header";
-
-
-          const label =
-            document.createElement(
-              "span"
-            );
-
-
-          label.className =
-            "message-code-language";
-
-
-          label.textContent =
-            language;
-
-
-          header.appendChild(
-            label
-          );
-
-
-          pre.replaceWith(
-            wrapper
-          );
-
-
-          wrapper.append(
-            header,
-            pre
-          );
-        }
-      );
-  }
-
-
-  /* =====================================================
-     SYNTAX HIGHLIGHTING
-     ===================================================== */
-
-  function highlightCode(
-    root
-  ) {
     if (
-      !CONFIG.syntaxHighlight ||
-      !window.hljs
-        ?.highlightElement
+      !(
+        root instanceof
+        HTMLElement
+      )
     ) {
       return;
     }
@@ -689,33 +563,117 @@ window.NeyoMessageRenderer.renderAll()
 
     root
       .querySelectorAll(
-        "pre code"
+        "pre > code"
       )
       .forEach(
         code => {
+
+          const pre =
+            code.parentElement;
+
+
           if (
-            code.dataset
-              .highlighted ===
-            "yes"
+            !pre ||
+            pre.closest(
+              ".neyo-code-block"
+            )
           ) {
             return;
           }
 
 
-          try {
-            window.hljs
-              .highlightElement(
-                code
-              );
-
-          } catch (
-            error
-          ) {
-            console.warn(
-              "[NEYO Renderer] Highlight failed:",
-              error
+          const shell =
+            document.createElement(
+              "div"
             );
-          }
+
+          shell.className =
+            "neyo-code-block";
+
+
+          const header =
+            document.createElement(
+              "div"
+            );
+
+          header.className =
+            "neyo-code-header";
+
+
+          const label =
+            document.createElement(
+              "span"
+            );
+
+          label.className =
+            "neyo-code-language";
+
+          label.textContent =
+            languageOf(
+              code
+            );
+
+
+          const copy =
+            document.createElement(
+              "button"
+            );
+
+          copy.type =
+            "button";
+
+          copy.className =
+            "neyo-code-copy";
+
+          copy.setAttribute(
+            "aria-label",
+            "Copy code"
+          );
+
+          copy.title =
+            "Copy code";
+
+          copy.textContent =
+            "Copy";
+
+
+          copy.addEventListener(
+            "click",
+            () => {
+
+              void copyText(
+                code.textContent ||
+                "",
+                copy
+              );
+            }
+          );
+
+
+          header.append(
+            label,
+            copy
+          );
+
+
+          /*
+           * Move existing <pre> into
+           * code block shell.
+           */
+
+          pre.before(
+            shell
+          );
+
+          shell.append(
+            header,
+            pre
+          );
+
+
+          highlight(
+            code
+          );
         }
       );
   }
@@ -725,85 +683,66 @@ window.NeyoMessageRenderer.renderAll()
      TABLES
      ===================================================== */
 
-  function enhanceTables(
+  function wrapTables(
     root
   ) {
+
+    if (
+      !(
+        root instanceof
+        HTMLElement
+      )
+    ) {
+      return;
+    }
+
+
     root
       .querySelectorAll(
         "table"
       )
       .forEach(
         table => {
+
           if (
             table.parentElement
               ?.classList
               .contains(
-                "message-table-wrapper"
+                "neyo-table-wrap"
               )
           ) {
             return;
           }
 
 
-          const wrapper =
+          const wrap =
             document.createElement(
               "div"
             );
 
+          wrap.className =
+            "neyo-table-wrap";
 
-          wrapper.className =
-            "message-table-wrapper";
-
-
-          table.replaceWith(
-            wrapper
+          wrap.setAttribute(
+            "role",
+            "region"
           );
 
+          wrap.setAttribute(
+            "aria-label",
+            "Scrollable table"
+          );
 
-          wrapper.appendChild(
+          wrap.tabIndex =
+            0;
+
+
+          table.before(
+            wrap
+          );
+
+          wrap.appendChild(
             table
-          );
-        }
-      );
-  }
-
-
-  /* =====================================================
-     BLOCKQUOTES
-     ===================================================== */
-
-  function enhanceBlockquotes(
-    root
-  ) {
-    root
-      .querySelectorAll(
-        "blockquote"
-      )
-      .forEach(
-        blockquote => {
-          blockquote.classList.add(
-            "message-blockquote"
-          );
-        }
-      );
-  }
-
-
-  /* =====================================================
-     HEADINGS
-     ===================================================== */
-
-  function enhanceHeadings(
-    root
-  ) {
-    root
-      .querySelectorAll(
-        "h1, h2, h3, h4, h5, h6"
-      )
-      .forEach(
-        heading => {
-          heading.classList.add(
-            "message-heading"
           );
         }
       );
@@ -817,197 +756,182 @@ window.NeyoMessageRenderer.renderAll()
   function renderMath(
     root
   ) {
+
     if (
-      !CONFIG.math ||
-      typeof window
-        .renderMathInElement !==
-        "function"
+      !(
+        root instanceof
+        HTMLElement
+      )
     ) {
-      return;
+      return false;
     }
 
 
     try {
-      window.renderMathInElement(
-        root,
-        {
-          throwOnError:
-            false,
 
-          strict:
-            false,
+      if (
+        typeof window
+          .renderMathInElement ===
+        "function"
+      ) {
 
-          delimiters: [
-            {
-              left:
-                "$$",
+        window.renderMathInElement(
+          root,
+          {
+            throwOnError:
+              false,
 
-              right:
-                "$$",
+            strict:
+              "ignore",
 
-              display:
-                true
-            },
+            ignoredTags: [
+              "script",
+              "noscript",
+              "style",
+              "textarea",
+              "pre",
+              "code"
+            ],
 
-            {
-              left:
-                "\\[",
+            delimiters: [
+              {
+                left:
+                  "$$",
 
-              right:
-                "\\]",
+                right:
+                  "$$",
 
-              display:
-                true
-            },
+                display:
+                  true
+              },
 
-            {
-              left:
-                "\\(",
+              {
+                left:
+                  "\\[",
 
-              right:
-                "\\)",
+                right:
+                  "\\]",
 
-              display:
-                false
-            }
-          ]
-        }
-      );
+                display:
+                  true
+              },
+
+              {
+                left:
+                  "\\(",
+
+                right:
+                  "\\)",
+
+                display:
+                  false
+              }
+            ]
+          }
+        );
+
+
+        return true;
+      }
 
     } catch (
       error
     ) {
+
       console.warn(
-        "[NEYO Renderer] Math rendering failed:",
+        "[NEYO Renderer] Math failed:",
         error
       );
     }
+
+
+    return false;
   }
 
 
   /* =====================================================
-     POST PROCESS
+     RENDER CONTENT
      ===================================================== */
 
-  function postProcess(
-    root
-  ) {
-    if (
-      !(root instanceof HTMLElement)
-    ) {
-      return false;
-    }
-
-
-    secureLinks(
-      root
-    );
-
-
-    enhanceInlineCode(
-      root
-    );
-
-
-    enhanceCodeBlocks(
-      root
-    );
-
-
-    highlightCode(
-      root
-    );
-
-
-    enhanceTables(
-      root
-    );
-
-
-    enhanceBlockquotes(
-      root
-    );
-
-
-    enhanceHeadings(
-      root
-    );
-
-
-    renderMath(
-      root
-    );
-
-
-    return true;
-  }
-
-
-  /* =====================================================
-     RENDER ELEMENT
-     ===================================================== */
-
-  function renderElement(
+  function renderInto(
     element,
     content,
-    {
-      role =
-        "assistant",
-
-      markdown =
-        null
-    } = {}
+    options = {}
   ) {
+
     if (
-      !(element instanceof HTMLElement)
+      !active ||
+      !(
+        element instanceof
+        HTMLElement
+      )
     ) {
       return false;
     }
 
 
-    const useMarkdown =
-      markdown ===
-        null
-        ? role ===
-          "assistant"
-        : Boolean(
-            markdown
-          );
+    const role =
+      options.role ||
+      "assistant";
 
 
-    if (
-      !useMarkdown
-    ) {
-      element.textContent =
-        String(
-          content ?? ""
-        );
-
-
-      emit(
-        "neyo:message-rendered",
-        {
-          element,
-          role,
-          markdown:
-            false
-        }
+    const markdown =
+      options.markdown ??
+      (
+        role ===
+        "assistant"
       );
 
 
-      return true;
-    }
-
-
-    element.innerHTML =
-      markdownToHtml(
+    const value =
+      text(
         content
       );
 
 
-    postProcess(
-      element
-    );
+    /*
+     * User messages remain plain text.
+     */
+
+    if (!markdown) {
+
+      element.textContent =
+        value;
+
+    }
+
+    /*
+     * Assistant messages:
+     * Markdown + sanitization.
+     */
+
+    else {
+
+      element.innerHTML =
+        markdownToHtml(
+          value
+        );
+
+
+      secureLinks(
+        element
+      );
+
+
+      wrapTables(
+        element
+      );
+
+
+      enhanceCodeBlocks(
+        element
+      );
+
+
+      renderMath(
+        element
+      );
+    }
 
 
     emit(
@@ -1015,8 +939,9 @@ window.NeyoMessageRenderer.renderAll()
       {
         element,
         role,
-        markdown:
-          true
+        markdown,
+        content:
+          value
       }
     );
 
@@ -1029,12 +954,14 @@ window.NeyoMessageRenderer.renderAll()
      RENDER MESSAGE
      ===================================================== */
 
-  function render(
+  function renderMessage(
     messageElement,
     content,
     options = {}
   ) {
+
     if (
+      !active ||
       !(
         messageElement instanceof
         HTMLElement
@@ -1044,22 +971,20 @@ window.NeyoMessageRenderer.renderAll()
     }
 
 
-    const contentElement =
+    const target =
       messageElement
         .querySelector(
           ".message-content"
         );
 
 
-    if (
-      !contentElement
-    ) {
+    if (!target) {
       return false;
     }
 
 
-    return renderElement(
-      contentElement,
+    return renderInto(
+      target,
       content,
       options
     );
@@ -1067,232 +992,55 @@ window.NeyoMessageRenderer.renderAll()
 
 
   /* =====================================================
-     RENDER ALL
+     EVENTS
      ===================================================== */
 
-  function renderAll() {
-    chatMessages
-      .querySelectorAll(
-        '.message[data-role="assistant"]'
-      )
-      .forEach(
-        message => {
-          const content =
-            message
-              .querySelector(
-                ".message-content"
-              );
+  if (active) {
+
+    window.addEventListener(
+      "neyo:message-render-request",
+      event => {
+
+        renderMessage(
+          event.detail
+            ?.message,
+
+          event.detail
+            ?.content,
+
+          event.detail
+            ?.options ||
+          {}
+        );
+      }
+    );
 
 
-          if (
-            !content
-          ) {
-            return;
-          }
+    window.addEventListener(
+      "neyo:content-render-request",
+      event => {
 
+        renderInto(
+          event.detail
+            ?.element,
 
-          const raw =
-            message.dataset
-              .rawContent ??
-            content.textContent ??
-            "";
+          event.detail
+            ?.content,
 
-
-          message.dataset
-            .rawContent =
-            raw;
-
-
-          renderElement(
-            content,
-            raw,
-            {
-              role:
-                "assistant",
-
-              markdown:
-                true
-            }
-          );
-        }
-      );
+          event.detail
+            ?.options ||
+          {}
+        );
+      }
+    );
   }
-
-
-  /* =====================================================
-     MESSAGE CREATED
-     ===================================================== */
-
-  window.addEventListener(
-    "neyo:message-created",
-    event => {
-      const element =
-        event.detail
-          ?.element;
-
-
-      const message =
-        event.detail
-          ?.message;
-
-
-      if (
-        !(
-          element instanceof
-          HTMLElement
-        ) ||
-        !message
-      ) {
-        return;
-      }
-
-
-      if (
-        message.role !==
-        "assistant"
-      ) {
-        return;
-      }
-
-
-      /*
-      -------------------------------------------------------
-      Preserve original Markdown source.
-
-      This prevents re-rendering already-rendered HTML.
-      -------------------------------------------------------
-      */
-
-      element.dataset
-        .rawContent =
-        String(
-          message.content ??
-          ""
-        );
-
-
-      render(
-        element,
-        message.content,
-        {
-          role:
-            "assistant",
-
-          markdown:
-            true
-        }
-      );
-    }
-  );
-
-
-  /* =====================================================
-     MESSAGE UPDATED
-     ===================================================== */
-
-  window.addEventListener(
-    "neyo:message-updated",
-    event => {
-      const element =
-        event.detail
-          ?.element;
-
-
-      const content =
-        event.detail
-          ?.content;
-
-
-      if (
-        !(
-          element instanceof
-          HTMLElement
-        )
-      ) {
-        return;
-      }
-
-
-      if (
-        element.dataset.role !==
-        "assistant"
-      ) {
-        return;
-      }
-
-
-      element.dataset
-        .rawContent =
-        String(
-          content ??
-          ""
-        );
-
-
-      render(
-        element,
-        content,
-        {
-          role:
-            "assistant",
-
-          markdown:
-            true
-        }
-      );
-    }
-  );
-
-
-  /* =====================================================
-     HISTORY REPLACED
-     ===================================================== */
-
-  window.addEventListener(
-    "neyo:messages-replaced",
-    () => {
-      renderAll();
-    }
-  );
-
-
-  /* =====================================================
-     MANUAL RENDER EVENT
-     ===================================================== */
-
-  window.addEventListener(
-    "neyo:message-render-request",
-    event => {
-      const element =
-        event.detail
-          ?.element;
-
-
-      const content =
-        event.detail
-          ?.content;
-
-
-      const options =
-        event.detail
-          ?.options ||
-        {};
-
-
-      render(
-        element,
-        content,
-        options
-      );
-    }
-  );
 
 
   /* =====================================================
      PUBLIC API
      ===================================================== */
 
-  const publicApi =
+  const api =
     Object.freeze({
 
       __controller:
@@ -1301,17 +1049,62 @@ window.NeyoMessageRenderer.renderAll()
       version:
         VERSION,
 
-      render,
+      active,
 
-      renderElement,
+      legacyOwnerActive:
+        legacy,
 
-      renderAll,
+      render:
+        renderMessage,
+
+      renderInto,
 
       markdownToHtml,
 
-      sanitize,
+      sanitize:
+        sanitizeHtml,
 
-      postProcess
+      escape:
+        escapeHtml,
+
+      secureLinks,
+
+      enhanceCodeBlocks,
+
+      renderMath,
+
+      getState:
+        () => ({
+
+          version:
+            VERSION,
+
+          active,
+
+          legacyOwnerActive:
+            legacy,
+
+          marked:
+            Boolean(
+              window.marked
+            ),
+
+          domPurify:
+            Boolean(
+              window.DOMPurify
+            ),
+
+          katex:
+            Boolean(
+              window.renderMathInElement
+            ),
+
+          highlighter:
+            Boolean(
+              window.hljs ||
+              window.Prism
+            )
+        })
     });
 
 
@@ -1319,9 +1112,8 @@ window.NeyoMessageRenderer.renderAll()
     window,
     "NeyoMessageRenderer",
     {
-
       value:
-        publicApi,
+        api,
 
       writable:
         false,
@@ -1335,18 +1127,16 @@ window.NeyoMessageRenderer.renderAll()
   );
 
 
-  /* =====================================================
-     INIT
-     ===================================================== */
-
-  configureMarked();
-
-
   emit(
     "neyo:message-renderer-ready",
     {
       version:
-        VERSION
+        VERSION,
+
+      active,
+
+      legacyOwnerActive:
+        legacy
     }
   );
 

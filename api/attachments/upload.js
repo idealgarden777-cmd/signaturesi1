@@ -1,7 +1,7 @@
 /*
 =========================================================
 NEYO — ATTACHMENT UPLOAD AUTHORIZATION
-FINAL v2
+STABLE v3
 
 FILE:
 api/attachments/upload.js
@@ -9,26 +9,31 @@ api/attachments/upload.js
 RESPONSIBILITIES
 ---------------------------------------------------------
 ✅ Authenticate user
-✅ Validate file metadata
-✅ Enforce upload size limit
-✅ Create isolated user storage path
-✅ Create signed Supabase upload URL
-✅ Return upload session to frontend
+✅ Validate upload metadata
+✅ Validate size / MIME / filename
+✅ Verify storage bucket exists
+✅ Create tenant-isolated storage path
+✅ Create Supabase signed upload token
+✅ Return clean upload session
 
-DOES NOT:
-❌ Receive file bytes
-❌ Parse files
-❌ Process files
-❌ Touch chat
-❌ Touch neo.js
+IMPORTANT
+---------------------------------------------------------
+This endpoint DOES NOT receive file bytes.
+
+Frontend should upload with:
+
+supabase.storage
+  .from(bucket)
+  .uploadToSignedUrl(path, token, file, {
+    contentType: file.type
+  });
+
 =========================================================
 */
 
 import crypto from "node:crypto";
 
-import {
-  createClient
-} from "@supabase/supabase-js";
+import { createClient } from "@supabase/supabase-js";
 
 import {
   getAuthenticatedUser
@@ -71,22 +76,43 @@ const ALLOWED_CATEGORIES =
   ]);
 
 
+const ALLOWED_MIME_TYPES =
+  new Set([
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+
+    "application/pdf",
+
+    "text/plain",
+    "text/html",
+    "text/css",
+
+    "application/javascript",
+    "text/javascript",
+
+    "application/json",
+
+    "audio/mpeg",
+    "audio/wav",
+
+    "video/mp4",
+    "video/webm",
+
+    "application/octet-stream"
+  ]);
+
+
 /* =====================================================
    ENV
    ===================================================== */
 
-function cleanEnv(
-  value
-) {
-  return typeof value ===
-    "string"
-      ? value
-          .trim()
-          .replace(
-            /^["']|["']$/g,
-            ""
-          )
-      : "";
+function cleanEnv(value) {
+  return typeof value === "string"
+    ? value
+        .trim()
+        .replace(/^["']|["']$/g, "")
+    : "";
 }
 
 
@@ -97,15 +123,13 @@ function cleanEnv(
 function createSupabaseAdmin() {
   const url =
     cleanEnv(
-      process.env
-        .SUPABASE_URL
+      process.env.SUPABASE_URL
     );
 
 
-  const key =
+  const serviceRoleKey =
     cleanEnv(
-      process.env
-        .SUPABASE_SERVICE_ROLE_KEY
+      process.env.SUPABASE_SERVICE_ROLE_KEY
     );
 
 
@@ -116,7 +140,7 @@ function createSupabaseAdmin() {
   }
 
 
-  if (!key) {
+  if (!serviceRoleKey) {
     throw new Error(
       "SUPABASE_SERVICE_ROLE_KEY is missing."
     );
@@ -125,23 +149,18 @@ function createSupabaseAdmin() {
 
   return createClient(
     url,
-    key,
+    serviceRoleKey,
     {
       auth: {
-        persistSession:
-          false,
-
-        autoRefreshToken:
-          false,
-
-        detectSessionInUrl:
-          false
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false
       },
 
       global: {
         headers: {
           "X-Client-Info":
-            "signaturesi-neyo-attachment-upload"
+            "signaturesi-neyo-upload-v3"
         }
       }
     }
@@ -150,12 +169,10 @@ function createSupabaseAdmin() {
 
 
 /* =====================================================
-   JSON HEADERS
+   RESPONSE HEADERS
    ===================================================== */
 
-function setJsonHeaders(
-  res
-) {
+function setHeaders(res) {
   res.setHeader(
     "Content-Type",
     "application/json; charset=utf-8"
@@ -174,36 +191,21 @@ function setJsonHeaders(
 
 
 /* =====================================================
-   REQUEST BODY
+   JSON BODY
    ===================================================== */
 
-async function readJsonBody(
-  req
-) {
-  /*
-   * Vercel often pre-parses JSON.
-   */
-
+async function readJsonBody(req) {
   if (
     req.body &&
-    typeof req.body ===
-      "object" &&
-    !Buffer.isBuffer(
-      req.body
-    ) &&
-    !Array.isArray(
-      req.body
-    )
+    typeof req.body === "object" &&
+    !Buffer.isBuffer(req.body) &&
+    !Array.isArray(req.body)
   ) {
     return req.body;
   }
 
 
-  if (
-    Buffer.isBuffer(
-      req.body
-    )
-  ) {
+  if (Buffer.isBuffer(req.body)) {
     if (
       req.body.length >
       MAX_BODY_SIZE
@@ -216,10 +218,7 @@ async function readJsonBody(
 
     try {
       return JSON.parse(
-        req.body
-          .toString(
-            "utf8"
-          )
+        req.body.toString("utf8")
       );
     } catch {
       throw new Error(
@@ -230,8 +229,7 @@ async function readJsonBody(
 
 
   if (
-    typeof req.body ===
-    "string"
+    typeof req.body === "string"
   ) {
     if (
       Buffer.byteLength(
@@ -258,24 +256,16 @@ async function readJsonBody(
   }
 
 
-  /*
-   * Fallback for raw Node request streams.
-   */
+  const chunks = [];
 
-  const chunks =
-    [];
-
-
-  let total =
-    0;
+  let total = 0;
 
 
   for await (
     const chunk
     of req
   ) {
-    total +=
-      chunk.length;
+    total += chunk.length;
 
 
     if (
@@ -288,15 +278,12 @@ async function readJsonBody(
     }
 
 
-    chunks.push(
-      chunk
-    );
+    chunks.push(chunk);
   }
 
 
   if (
-    chunks.length ===
-    0
+    chunks.length === 0
   ) {
     return {};
   }
@@ -304,18 +291,12 @@ async function readJsonBody(
 
   const raw =
     Buffer
-      .concat(
-        chunks
-      )
-      .toString(
-        "utf8"
-      );
+      .concat(chunks)
+      .toString("utf8");
 
 
   try {
-    return JSON.parse(
-      raw
-    );
+    return JSON.parse(raw);
   } catch {
     throw new Error(
       "Invalid JSON request body."
@@ -330,42 +311,30 @@ async function readJsonBody(
 
 function cleanString(
   value,
-  maxLength =
-    512
+  maxLength = 512
 ) {
   return String(
-    value ??
-    ""
+    value ?? ""
   )
-    .replace(
-      /\u0000/g,
-      ""
-    )
+    .replace(/\u0000/g, "")
     .trim()
-    .slice(
-      0,
-      maxLength
-    );
+    .slice(0, maxLength);
 }
 
 
 /* =====================================================
-   PATH SAFE
+   SAFE PATH
    ===================================================== */
 
 function sanitizePathSegment(
   value,
-  fallback =
-    "file"
+  fallback = "file"
 ) {
   const cleaned =
     String(
-      value ??
-      ""
+      value ?? ""
     )
-      .normalize(
-        "NFKC"
-      )
+      .normalize("NFKC")
       .replace(
         /[\u0000-\u001f\u007f]/g,
         ""
@@ -386,16 +355,10 @@ function sanitizePathSegment(
         /[._-]+$/,
         ""
       )
-      .slice(
-        0,
-        180
-      );
+      .slice(0, 180);
 
 
-  return (
-    cleaned ||
-    fallback
-  );
+  return cleaned || fallback;
 }
 
 
@@ -403,27 +366,50 @@ function sanitizePathSegment(
    EXTENSION
    ===================================================== */
 
+function getExtensionFromName(
+  filename
+) {
+  const name =
+    String(
+      filename ?? ""
+    );
+
+
+  const lastDot =
+    name.lastIndexOf(".");
+
+
+  if (
+    lastDot <= 0 ||
+    lastDot ===
+      name.length - 1
+  ) {
+    return "";
+  }
+
+
+  return normalizeExtension(
+    name.slice(
+      lastDot + 1
+    )
+  );
+}
+
+
 function normalizeExtension(
   value
 ) {
   return String(
-    value ??
-    ""
+    value ?? ""
   )
     .trim()
     .toLowerCase()
-    .replace(
-      /^\./,
-      ""
-    )
+    .replace(/^\./, "")
     .replace(
       /[^a-z0-9]/g,
       ""
     )
-    .slice(
-      0,
-      32
-    );
+    .slice(0, 32);
 }
 
 
@@ -436,17 +422,14 @@ function normalizeCategory(
 ) {
   const category =
     String(
-      value ??
-      ""
+      value ?? ""
     )
       .trim()
       .toLowerCase();
 
 
   return ALLOWED_CATEGORIES
-    .has(
-      category
-    )
+    .has(category)
       ? category
       : "unknown";
 }
@@ -458,35 +441,49 @@ function normalizeCategory(
 
 function buildSafeFilename(
   originalName,
-  extension
+  requestedExtension
 ) {
-  const name =
+  const original =
     cleanString(
       originalName,
       MAX_FILENAME_LENGTH
     );
 
 
-  const ext =
+  const detectedExtension =
+    getExtensionFromName(
+      original
+    );
+
+
+  const requested =
     normalizeExtension(
-      extension
+      requestedExtension
     );
 
 
-  const lastDot =
-    name.lastIndexOf(
-      "."
-    );
+  const extension =
+    requested ||
+    detectedExtension;
 
 
   let baseName =
-    lastDot >
-      0
-      ? name.slice(
-          0,
-          lastDot
-        )
-      : name;
+    original;
+
+
+  const lastDot =
+    original.lastIndexOf(".");
+
+
+  if (
+    lastDot > 0
+  ) {
+    baseName =
+      original.slice(
+        0,
+        lastDot
+      );
+  }
 
 
   baseName =
@@ -496,13 +493,34 @@ function buildSafeFilename(
     );
 
 
-  if (!ext) {
+  if (!extension) {
     return baseName;
   }
 
 
+  return `${baseName}.${extension}`;
+}
+
+
+/* =====================================================
+   MIME
+   ===================================================== */
+
+function normalizeMime(value) {
+  const mime =
+    cleanString(
+      value ||
+      "application/octet-stream",
+      180
+    )
+      .toLowerCase()
+      .split(";")[0]
+      .trim();
+
+
   return (
-    `${baseName}.${ext}`
+    mime ||
+    "application/octet-stream"
   );
 }
 
@@ -511,16 +529,11 @@ function buildSafeFilename(
    VALIDATION
    ===================================================== */
 
-function validatePayload(
-  body
-) {
+function validatePayload(body) {
   if (
     !body ||
-    typeof body !==
-      "object" ||
-    Array.isArray(
-      body
-    )
+    typeof body !== "object" ||
+    Array.isArray(body)
   ) {
     throw new Error(
       "Invalid upload metadata."
@@ -542,10 +555,8 @@ function validatePayload(
 
 
   const mime =
-    cleanString(
-      body.mime ||
-      "application/octet-stream",
-      180
+    normalizeMime(
+      body.mime
     );
 
 
@@ -576,11 +587,8 @@ function validatePayload(
 
 
   if (
-    !Number.isSafeInteger(
-      size
-    ) ||
-    size <=
-      0
+    !Number.isSafeInteger(size) ||
+    size <= 0
   ) {
     throw new Error(
       "Invalid file size."
@@ -593,23 +601,18 @@ function validatePayload(
     MAX_FILE_SIZE
   ) {
     throw new Error(
-      `File exceeds the ${Math.round(
-        MAX_FILE_SIZE /
-        (
-          1024 *
-          1024
-        )
-      )} MB upload limit.`
+      "File exceeds the 100 MB upload limit."
     );
   }
 
 
   if (
-    mime.length >
-    180
+    !ALLOWED_MIME_TYPES.has(
+      mime
+    )
   ) {
     throw new Error(
-      "Invalid MIME type."
+      "Unsupported file type."
     );
   }
 
@@ -626,12 +629,10 @@ function validatePayload(
 
 
 /* =====================================================
-   PUBLIC ERROR
+   SAFE ERROR MESSAGE
    ===================================================== */
 
-function publicError(
-  error
-) {
+function publicError(error) {
   const message =
     String(
       error?.message ||
@@ -639,24 +640,22 @@ function publicError(
     );
 
 
-  const safePhrases =
+  const allowed =
     [
       "File name",
-      "file size",
+      "Invalid file size",
       "upload limit",
       "Invalid upload metadata",
-      "Invalid MIME",
+      "Unsupported file type",
       "Request body",
       "Invalid JSON"
     ];
 
 
   if (
-    safePhrases.some(
+    allowed.some(
       phrase =>
-        message.includes(
-          phrase
-        )
+        message.includes(phrase)
     )
   ) {
     return message;
@@ -677,9 +676,7 @@ export default async function handler(
   req,
   res
 ) {
-  setJsonHeaders(
-    res
-  );
+  setHeaders(res);
 
 
   /* ===================================================
@@ -687,8 +684,7 @@ export default async function handler(
      =================================================== */
 
   if (
-    req.method !==
-    "POST"
+    req.method !== "POST"
   ) {
     res.setHeader(
       "Allow",
@@ -697,10 +693,9 @@ export default async function handler(
 
 
     return res
-      .status(
-        405
-      )
+      .status(405)
       .json({
+        ok: false,
         error:
           "Method Not Allowed"
       });
@@ -717,24 +712,19 @@ export default async function handler(
   try {
     auth =
       await Promise.resolve(
-        getAuthenticatedUser(
-          req
-        )
+        getAuthenticatedUser(req)
       );
-  } catch (
-    error
-  ) {
+  } catch (error) {
     console.error(
-      "[NEYO Attachment Upload] Auth error:",
+      "[NEYO Attachment Upload] Auth failed:",
       error?.message
     );
 
 
     return res
-      .status(
-        401
-      )
+      .status(401)
       .json({
+        ok: false,
         error:
           "Authentication required."
       });
@@ -749,10 +739,9 @@ export default async function handler(
 
   if (!userId) {
     return res
-      .status(
-        401
-      )
+      .status(401)
       .json({
+        ok: false,
         error:
           "Authentication required."
       });
@@ -768,27 +757,20 @@ export default async function handler(
 
   try {
     body =
-      await readJsonBody(
-        req
-      );
-  } catch (
-    error
-  ) {
+      await readJsonBody(req);
+  } catch (error) {
     return res
-      .status(
-        400
-      )
+      .status(400)
       .json({
+        ok: false,
         error:
-          publicError(
-            error
-          )
+          publicError(error)
       });
   }
 
 
   /* ===================================================
-     VALIDATE
+     VALIDATION
      =================================================== */
 
   let file;
@@ -796,21 +778,14 @@ export default async function handler(
 
   try {
     file =
-      validatePayload(
-        body
-      );
-  } catch (
-    error
-  ) {
+      validatePayload(body);
+  } catch (error) {
     return res
-      .status(
-        400
-      )
+      .status(400)
       .json({
+        ok: false,
         error:
-          publicError(
-            error
-          )
+          publicError(error)
       });
   }
 
@@ -825,20 +800,17 @@ export default async function handler(
   try {
     supabase =
       createSupabaseAdmin();
-  } catch (
-    error
-  ) {
+  } catch (error) {
     console.error(
-      "[NEYO Attachment Upload] Supabase configuration error:",
+      "[NEYO Attachment Upload] Supabase config:",
       error?.message
     );
 
 
     return res
-      .status(
-        500
-      )
+      .status(500)
       .json({
+        ok: false,
         error:
           "Attachment storage is not configured."
       });
@@ -847,7 +819,46 @@ export default async function handler(
 
   try {
     /* =================================================
-       IDS / PATH
+       VERIFY BUCKET
+       ================================================= */
+
+    const {
+      data: bucketData,
+      error: bucketError
+    } =
+      await supabase
+        .storage
+        .getBucket(
+          BUCKET
+        );
+
+
+    if (
+      bucketError ||
+      !bucketData
+    ) {
+      console.error(
+        "[NEYO Attachment Upload] Bucket missing:",
+        {
+          bucket: BUCKET,
+          message:
+            bucketError?.message
+        }
+      );
+
+
+      return res
+        .status(500)
+        .json({
+          ok: false,
+          error:
+            "Attachment storage bucket is unavailable."
+        });
+    }
+
+
+    /* =================================================
+       PATH
        ================================================= */
 
     const uploadId =
@@ -868,28 +879,17 @@ export default async function handler(
       );
 
 
-    /*
-     * Tenant-isolated storage layout:
-     *
-     * users/
-     *   {userId}/
-     *     {uploadId}/
-     *       {filename}
-     */
-
     const path =
       [
         "users",
         safeUserId,
         uploadId,
         safeFilename
-      ].join(
-        "/"
-      );
+      ].join("/");
 
 
     /* =================================================
-       SIGNED UPLOAD URL
+       CREATE SIGNED UPLOAD TOKEN
        ================================================= */
 
     const {
@@ -898,20 +898,26 @@ export default async function handler(
     } =
       await supabase
         .storage
-        .from(
-          BUCKET
-        )
+        .from(BUCKET)
         .createSignedUploadUrl(
           path,
           {
-            upsert:
-              false
+            upsert: false
           }
         );
 
 
     if (error) {
       throw error;
+    }
+
+
+    if (
+      !data?.token
+    ) {
+      throw new Error(
+        "Supabase did not return an upload token."
+      );
     }
 
 
@@ -933,10 +939,11 @@ export default async function handler(
       {
         userId,
         uploadId,
-        name:
-          file.name,
-        size:
-          file.size,
+        bucket: BUCKET,
+        path,
+        name: file.name,
+        size: file.size,
+        mime: file.mime,
         category:
           file.category
       }
@@ -944,12 +951,9 @@ export default async function handler(
 
 
     return res
-      .status(
-        200
-      )
+      .status(200)
       .json({
-        ok:
-          true,
+        ok: true,
 
         status:
           "authorized",
@@ -959,24 +963,16 @@ export default async function handler(
         bucket:
           BUCKET,
 
-        path:
-          data.path ||
-          path,
+        path,
+
+        token:
+          data.token,
 
         signedUrl:
           data.signedUrl,
 
-        token:
-          data.token ||
-          null,
-
-        method:
-          "PUT",
-
-        headers: {
-          "x-upsert":
-            "false"
-        },
+        uploadMethod:
+          "supabase-uploadToSignedUrl",
 
         file: {
           name:
@@ -992,7 +988,10 @@ export default async function handler(
             file.mime,
 
           extension:
-            file.extension,
+            file.extension ||
+            getExtensionFromName(
+              file.name
+            ),
 
           category:
             file.category
@@ -1002,11 +1001,7 @@ export default async function handler(
           file.clientAttachmentId ||
           null
       });
-
-
-  } catch (
-    error
-  ) {
+  } catch (error) {
     console.error(
       "[NEYO Attachment Upload] Failed",
       {
@@ -1015,6 +1010,12 @@ export default async function handler(
 
         code:
           error?.code,
+
+        status:
+          error?.status,
+
+        statusCode:
+          error?.statusCode,
 
         details:
           error?.details,
@@ -1026,10 +1027,9 @@ export default async function handler(
 
 
     return res
-      .status(
-        500
-      )
+      .status(500)
       .json({
+        ok: false,
         error:
           "Unable to prepare this file for upload."
       });

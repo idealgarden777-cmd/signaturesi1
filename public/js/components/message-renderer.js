@@ -1,37 +1,48 @@
 /*
 =========================================================
 NEYO — MESSAGE RENDERER
-CHATGPT-STANDARD v8
+FINAL CLEAN v1
 
 FILE:
 public/js/components/message-renderer.js
 
 OWNS
 ---------------------------------------------------------
-✅ Assistant Markdown rendering
-✅ User plain-text rendering
-✅ DOMPurify sanitization
-✅ Safe links
-✅ Code blocks
-✅ Inline code
-✅ Language labels
-✅ Syntax highlighting hook
-✅ KaTeX rendering
-✅ Plain-text fallback
-✅ Render lifecycle events
-✅ Streaming-safe re-rendering
+- Assistant Markdown rendering
+- Safe HTML sanitization
+- Inline code styling hook
+- Code block enhancement
+- Safe links
+- Tables
+- Blockquotes
+- Headings
+- Optional syntax highlighting
+- Optional KaTeX rendering
+- Re-render after history load
 
 DOES NOT OWN
 ---------------------------------------------------------
-❌ Message shell
-❌ Chat API
-❌ Send button
-❌ History
-❌ Message actions
-❌ Copy button behavior
-❌ Regenerate
-❌ Attachment upload
+- Message shell creation
+- Conversation state
+- Chat API
+- Thinking UI
+- Send button
+- Enter key
+- Attachments
+- Copy / regenerate / share actions
 
+EVENTS LISTENED
+---------------------------------------------------------
+- neyo:message-created
+- neyo:message-updated
+- neyo:messages-replaced
+- neyo:message-render-request
+
+PUBLIC API
+---------------------------------------------------------
+window.NeyoMessageRenderer.render(...)
+window.NeyoMessageRenderer.renderElement(...)
+window.NeyoMessageRenderer.renderAll()
 =========================================================
 */
 
@@ -44,12 +55,12 @@ DOES NOT OWN
      ===================================================== */
 
   const VERSION =
-    "neyo-message-renderer-v8-chatgpt-standard";
+    "neyo-message-renderer-final-clean-v1";
 
 
   if (
-    window.NeyoMessageRenderer
-      ?.__controller === true
+    window.NeyoMessageRenderer?.__controller ===
+    true
   ) {
     console.warn(
       "[NEYO Renderer] Already initialized."
@@ -65,33 +76,40 @@ DOES NOT OWN
 
   const CONFIG =
     Object.freeze({
-      enableMarkdown:
+
+      markdown:
         true,
 
-      enableMath:
+      syntaxHighlight:
         true,
 
-      enableHighlight:
+      math:
         true,
 
-      openExternalLinksInNewTab:
-        true,
-
-      debug:
-        false
+      externalLinksNewTab:
+        true
     });
 
 
   /* =====================================================
-     SAFE PROTOCOLS
+     DOM
      ===================================================== */
 
-  const SAFE_PROTOCOLS =
-    new Set([
-      "http:",
-      "https:",
-      "mailto:"
-    ]);
+  const chatMessages =
+    document.getElementById(
+      "chatMessages"
+    );
+
+
+  if (
+    !chatMessages
+  ) {
+    console.warn(
+      "[NEYO Renderer] #chatMessages not found."
+    );
+
+    return;
+  }
 
 
   /* =====================================================
@@ -114,28 +132,7 @@ DOES NOT OWN
 
 
   /* =====================================================
-     DEBUG
-     ===================================================== */
-
-  function debug(
-    ...args
-  ) {
-    if (
-      !CONFIG.debug
-    ) {
-      return;
-    }
-
-
-    console.log(
-      "[NEYO Renderer]",
-      ...args
-    );
-  }
-
-
-  /* =====================================================
-     ESCAPE HTML
+     ESCAPE
      ===================================================== */
 
   function escapeHtml(
@@ -174,6 +171,7 @@ DOES NOT OWN
   function configureMarked() {
     if (
       !window.marked
+        ?.parse
     ) {
       return false;
     }
@@ -186,13 +184,7 @@ DOES NOT OWN
             true,
 
           breaks:
-            true,
-
-          mangle:
-            false,
-
-          headerIds:
-            false
+            true
         });
 
 
@@ -202,7 +194,7 @@ DOES NOT OWN
       error
     ) {
       console.warn(
-        "[NEYO Renderer] marked configuration failed:",
+        "[NEYO Renderer] Marked config failed:",
         error
       );
 
@@ -213,30 +205,146 @@ DOES NOT OWN
 
 
   /* =====================================================
-     URL SAFETY
+     SANITIZE
+     ===================================================== */
+
+  function sanitize(
+    html
+  ) {
+    const source =
+      String(
+        html ?? ""
+      );
+
+
+    if (
+      !window.DOMPurify
+        ?.sanitize
+    ) {
+      return escapeHtml(
+        source
+      );
+    }
+
+
+    return window.DOMPurify
+      .sanitize(
+        source,
+        {
+          USE_PROFILES: {
+            html:
+              true
+          },
+
+          ALLOW_DATA_ATTR:
+            false,
+
+          FORBID_TAGS: [
+            "script",
+            "style",
+            "iframe",
+            "object",
+            "embed",
+            "form",
+            "input",
+            "textarea",
+            "select",
+            "button",
+            "meta",
+            "link",
+            "base"
+          ],
+
+          FORBID_ATTR: [
+            "style",
+            "srcset",
+            "formaction"
+          ]
+        }
+      );
+  }
+
+
+  /* =====================================================
+     MARKDOWN
+     ===================================================== */
+
+  function markdownToHtml(
+    value
+  ) {
+    const text =
+      String(
+        value ?? ""
+      );
+
+
+    if (
+      !CONFIG.markdown ||
+      !window.marked
+        ?.parse
+    ) {
+      return escapeHtml(
+        text
+      )
+        .replace(
+          /\n/g,
+          "<br>"
+        );
+    }
+
+
+    try {
+      const html =
+        window.marked
+          .parse(
+            text
+          );
+
+
+      return sanitize(
+        html
+      );
+
+    } catch (
+      error
+    ) {
+      console.warn(
+        "[NEYO Renderer] Markdown failed:",
+        error
+      );
+
+
+      return escapeHtml(
+        text
+      )
+        .replace(
+          /\n/g,
+          "<br>"
+        );
+    }
+  }
+
+
+  /* =====================================================
+     SAFE LINKS
      ===================================================== */
 
   function isSafeUrl(
-    value
+    href
   ) {
+    const raw =
+      String(
+        href ?? ""
+      )
+        .trim();
+
+
     if (
-      !value
+      !raw
     ) {
       return false;
     }
 
-
-    const raw =
-      String(
-        value
-      ).trim();
-
-
-    /*
-    -------------------------------------------------------
-    Block dangerous schemes immediately.
-    -------------------------------------------------------
-    */
 
     if (
       /^(javascript|data|vbscript|file):/i
@@ -256,90 +364,19 @@ DOES NOT OWN
         );
 
 
-      return SAFE_PROTOCOLS
-        .has(
-          url.protocol
-        );
+      return [
+        "http:",
+        "https:",
+        "mailto:"
+      ].includes(
+        url.protocol
+      );
 
     } catch {
       return false;
     }
   }
 
-
-  /* =====================================================
-     SANITIZE
-     ===================================================== */
-
-  function sanitizeHtml(
-    html
-  ) {
-    const input =
-      String(
-        html ?? ""
-      );
-
-
-    /*
-    -------------------------------------------------------
-    Critical rule:
-    raw Markdown-generated HTML is NEVER trusted without
-    DOMPurify.
-    -------------------------------------------------------
-    */
-
-    if (
-      !window.DOMPurify
-        ?.sanitize
-    ) {
-      return escapeHtml(
-        input
-      );
-    }
-
-
-    return window.DOMPurify
-      .sanitize(
-        input,
-        {
-          USE_PROFILES: {
-            html:
-              true
-          },
-
-          ALLOW_DATA_ATTR:
-            false,
-
-          FORBID_TAGS: [
-            "script",
-            "style",
-            "iframe",
-            "object",
-            "embed",
-            "form",
-            "input",
-            "button",
-            "textarea",
-            "select",
-            "option",
-            "meta",
-            "link",
-            "base"
-          ],
-
-          FORBID_ATTR: [
-            "style",
-            "srcset",
-            "formaction"
-          ]
-        }
-      );
-  }
-
-
-  /* =====================================================
-     SECURE LINKS
-     ===================================================== */
 
   function secureLinks(
     root
@@ -351,83 +388,70 @@ DOES NOT OWN
     }
 
 
-    const links =
-      root.querySelectorAll(
+    root
+      .querySelectorAll(
         "a[href]"
-      );
-
-
-    links.forEach(
-      link => {
-        const href =
-          link.getAttribute(
-            "href"
-          );
-
-
-        if (
-          !isSafeUrl(
-            href
-          )
-        ) {
-          link.removeAttribute(
-            "href"
-          );
-
-
-          link.removeAttribute(
-            "target"
-          );
-
-
-          link.removeAttribute(
-            "rel"
-          );
-
-
-          link.classList.add(
-            "unsafe-link"
-          );
-
-
-          return;
-        }
-
-
-        let url;
-
-
-        try {
-          url =
-            new URL(
-              href,
-              window.location.origin
+      )
+      .forEach(
+        link => {
+          const href =
+            link.getAttribute(
+              "href"
             );
 
-        } catch {
-          return;
+
+          if (
+            !isSafeUrl(
+              href
+            )
+          ) {
+            link.removeAttribute(
+              "href"
+            );
+
+
+            link.removeAttribute(
+              "target"
+            );
+
+
+            link.removeAttribute(
+              "rel"
+            );
+
+
+            return;
+          }
+
+
+          try {
+            const url =
+              new URL(
+                href,
+                window.location.origin
+              );
+
+
+            if (
+              CONFIG.externalLinksNewTab &&
+              (
+                url.protocol ===
+                  "http:" ||
+                url.protocol ===
+                  "https:"
+              )
+            ) {
+              link.target =
+                "_blank";
+
+
+              link.rel =
+                "noopener noreferrer";
+            }
+
+          } catch {}
         }
-
-
-        if (
-          (
-            url.protocol ===
-              "http:" ||
-            url.protocol ===
-              "https:"
-          ) &&
-          CONFIG
-            .openExternalLinksInNewTab
-        ) {
-          link.target =
-            "_blank";
-
-
-          link.rel =
-            "noopener noreferrer";
-        }
-      }
-    );
+      );
   }
 
 
@@ -438,31 +462,22 @@ DOES NOT OWN
   function enhanceInlineCode(
     root
   ) {
-    if (
-      !(root instanceof HTMLElement)
-    ) {
-      return;
-    }
-
-
-    const inline =
-      root.querySelectorAll(
+    root
+      .querySelectorAll(
         "code:not(pre code)"
+      )
+      .forEach(
+        code => {
+          code.classList.add(
+            "message-inline-code"
+          );
+        }
       );
-
-
-    inline.forEach(
-      code => {
-        code.classList.add(
-          "message-inline-code"
-        );
-      }
-    );
   }
 
 
   /* =====================================================
-     LANGUAGE NAME
+     LANGUAGE
      ===================================================== */
 
   function normalizeLanguage(
@@ -508,41 +523,11 @@ DOES NOT OWN
         md:
           "markdown",
 
-        html:
-          "html",
-
-        css:
-          "css",
-
-        json:
-          "json",
-
-        sql:
-          "sql",
-
-        java:
-          "java",
-
-        c:
-          "c",
-
-        cpp:
-          "cpp",
-
-        csharp:
-          "csharp",
-
-        cs:
-          "csharp",
-
-        go:
-          "go",
-
-        rust:
+        rs:
           "rust",
 
-        rs:
-          "rust"
+        cs:
+          "csharp"
       };
 
 
@@ -557,337 +542,145 @@ DOES NOT OWN
 
 
   /* =====================================================
-     CODE BLOCK ENHANCEMENT
+     CODE BLOCKS
      ===================================================== */
 
   function enhanceCodeBlocks(
     root
   ) {
-    if (
-      !(root instanceof HTMLElement)
-    ) {
-      return;
-    }
-
-
-    const blocks =
-      root.querySelectorAll(
+    root
+      .querySelectorAll(
         "pre > code"
-      );
+      )
+      .forEach(
+        code => {
+          const pre =
+            code.parentElement;
 
 
-    blocks.forEach(
-      code => {
-        const pre =
-          code.parentElement;
+          if (
+            !pre
+          ) {
+            return;
+          }
 
 
-        if (
-          !pre
-        ) {
-          return;
-        }
+          if (
+            pre.dataset
+              .neyoEnhanced ===
+            "true"
+          ) {
+            return;
+          }
 
 
-        /*
-        -----------------------------------------------------
-        Prevent duplicate enhancement.
-        -----------------------------------------------------
-        */
-
-        if (
           pre.dataset
-            .neyoEnhanced ===
-          "true"
-        ) {
-          return;
-        }
+            .neyoEnhanced =
+            "true";
 
 
-        pre.dataset
-          .neyoEnhanced =
-          "true";
+          pre.classList.add(
+            "message-code-block"
+          );
 
 
-        pre.classList.add(
-          "message-code-block"
-        );
+          code.classList.add(
+            "message-code-content"
+          );
 
 
-        code.classList.add(
-          "message-code-content"
-        );
+          const languageClass =
+            Array.from(
+              code.classList
+            )
+              .find(
+                className =>
+                  className.startsWith(
+                    "language-"
+                  )
+              );
 
 
-        const languageClass =
-          Array.from(
-            code.classList
-          )
-            .find(
-              item =>
-                item.startsWith(
-                  "language-"
+          const language =
+            normalizeLanguage(
+              languageClass
+                ?.slice(
+                  "language-".length
                 )
             );
 
 
-        const language =
-          normalizeLanguage(
-            languageClass
-              ?.replace(
-                "language-",
-                ""
-              )
+          pre.dataset.language =
+            language;
+
+
+          const wrapper =
+            document.createElement(
+              "div"
+            );
+
+
+          wrapper.className =
+            "message-code-wrapper";
+
+
+          wrapper.dataset.language =
+            language;
+
+
+          const header =
+            document.createElement(
+              "div"
+            );
+
+
+          header.className =
+            "message-code-header";
+
+
+          const label =
+            document.createElement(
+              "span"
+            );
+
+
+          label.className =
+            "message-code-language";
+
+
+          label.textContent =
+            language;
+
+
+          header.appendChild(
+            label
           );
 
 
-        pre.dataset.language =
-          language;
+          pre.replaceWith(
+            wrapper
+          );
 
 
-        /*
-        -----------------------------------------------------
-        Wrapper/header.
-
-        Copy behavior itself may remain owned by the message
-        actions module; this renderer only creates structure.
-        -----------------------------------------------------
-        */
-
-        const parent =
-          pre.parentElement;
-
-
-        if (
-          parent
-            ?.classList
-            .contains(
-              "message-code-wrapper"
-            )
-        ) {
-          return;
+          wrapper.append(
+            header,
+            pre
+          );
         }
-
-
-        const wrapper =
-          document.createElement(
-            "div"
-          );
-
-
-        wrapper.className =
-          "message-code-wrapper";
-
-
-        wrapper.dataset.language =
-          language;
-
-
-        const header =
-          document.createElement(
-            "div"
-          );
-
-
-        header.className =
-          "message-code-header";
-
-
-        const languageLabel =
-          document.createElement(
-            "span"
-          );
-
-
-        languageLabel.className =
-          "message-code-language";
-
-
-        languageLabel.textContent =
-          language;
-
-
-        header.appendChild(
-          languageLabel
-        );
-
-
-        /*
-        -----------------------------------------------------
-        Copy button is safe to expose here because it only
-        copies already rendered text and does not alter chat.
-        -----------------------------------------------------
-        */
-
-        const copyButton =
-          document.createElement(
-            "button"
-          );
-
-
-        copyButton.type =
-          "button";
-
-
-        copyButton.className =
-          "message-code-copy";
-
-
-        copyButton.setAttribute(
-          "aria-label",
-          "Copy code"
-        );
-
-
-        copyButton.setAttribute(
-          "title",
-          "Copy code"
-        );
-
-
-        copyButton.innerHTML = `
-          <i
-            data-lucide="copy"
-            size="14"
-            aria-hidden="true"
-          ></i>
-
-          <span>
-            Copy
-          </span>
-        `;
-
-
-        copyButton.addEventListener(
-          "click",
-          async () => {
-            try {
-              await navigator
-                .clipboard
-                .writeText(
-                  code.textContent ||
-                  ""
-                );
-
-
-              copyButton
-                .classList
-                .add(
-                  "is-copied"
-                );
-
-
-              const label =
-                copyButton.querySelector(
-                  "span"
-                );
-
-
-              if (
-                label
-              ) {
-                label.textContent =
-                  "Copied";
-              }
-
-
-              emit(
-                "neyo:code-copied",
-                {
-                  language,
-
-                  content:
-                    code.textContent ||
-                    ""
-                }
-              );
-
-
-              window.setTimeout(
-                () => {
-                  copyButton
-                    .classList
-                    .remove(
-                      "is-copied"
-                    );
-
-
-                  if (
-                    label
-                  ) {
-                    label.textContent =
-                      "Copy";
-                  }
-                },
-                1200
-              );
-
-            } catch (
-              error
-            ) {
-              console.warn(
-                "[NEYO Renderer] Copy code failed:",
-                error
-              );
-            }
-          }
-        );
-
-
-        header.appendChild(
-          copyButton
-        );
-
-
-        pre.replaceWith(
-          wrapper
-        );
-
-
-        wrapper.append(
-          header,
-          pre
-        );
-      }
-    );
-
-
-    try {
-      window.lucide
-        ?.createIcons
-        ?.();
-
-    } catch {}
+      );
   }
 
 
   /* =====================================================
-     SYNTAX HIGHLIGHT
+     SYNTAX HIGHLIGHTING
      ===================================================== */
 
   function highlightCode(
     root
   ) {
     if (
-      !CONFIG.enableHighlight ||
-      !(root instanceof HTMLElement)
-    ) {
-      return;
-    }
-
-
-    /*
-    -------------------------------------------------------
-    highlight.js integration if loaded.
-    -------------------------------------------------------
-    */
-
-    const hljs =
-      window.hljs;
-
-
-    if (
-      !hljs
+      !CONFIG.syntaxHighlight ||
+      !window.hljs
         ?.highlightElement
     ) {
       return;
@@ -910,15 +703,16 @@ DOES NOT OWN
 
 
           try {
-            hljs.highlightElement(
-              code
-            );
+            window.hljs
+              .highlightElement(
+                code
+              );
 
           } catch (
             error
           ) {
-            debug(
-              "Highlight failed",
+            console.warn(
+              "[NEYO Renderer] Highlight failed:",
               error
             );
           }
@@ -928,19 +722,12 @@ DOES NOT OWN
 
 
   /* =====================================================
-     TABLE ENHANCEMENT
+     TABLES
      ===================================================== */
 
   function enhanceTables(
     root
   ) {
-    if (
-      !(root instanceof HTMLElement)
-    ) {
-      return;
-    }
-
-
     root
       .querySelectorAll(
         "table"
@@ -982,26 +769,19 @@ DOES NOT OWN
 
 
   /* =====================================================
-     BLOCKQUOTE ENHANCEMENT
+     BLOCKQUOTES
      ===================================================== */
 
   function enhanceBlockquotes(
     root
   ) {
-    if (
-      !(root instanceof HTMLElement)
-    ) {
-      return;
-    }
-
-
     root
       .querySelectorAll(
         "blockquote"
       )
       .forEach(
-        quote => {
-          quote.classList.add(
+        blockquote => {
+          blockquote.classList.add(
             "message-blockquote"
           );
         }
@@ -1016,13 +796,6 @@ DOES NOT OWN
   function enhanceHeadings(
     root
   ) {
-    if (
-      !(root instanceof HTMLElement)
-    ) {
-      return;
-    }
-
-
     root
       .querySelectorAll(
         "h1, h2, h3, h4, h5, h6"
@@ -1045,28 +818,17 @@ DOES NOT OWN
     root
   ) {
     if (
-      !CONFIG.enableMath ||
-      !(root instanceof HTMLElement)
-    ) {
-      return;
-    }
-
-
-    const renderer =
-      window
-        .renderMathInElement;
-
-
-    if (
-      typeof renderer !==
-      "function"
+      !CONFIG.math ||
+      typeof window
+        .renderMathInElement !==
+        "function"
     ) {
       return;
     }
 
 
     try {
-      renderer(
+      window.renderMathInElement(
         root,
         {
           throwOnError:
@@ -1116,71 +878,9 @@ DOES NOT OWN
       error
     ) {
       console.warn(
-        "[NEYO Renderer] KaTeX rendering failed:",
+        "[NEYO Renderer] Math rendering failed:",
         error
       );
-    }
-  }
-
-
-  /* =====================================================
-     MARKDOWN → SAFE HTML
-     ===================================================== */
-
-  function markdownToHtml(
-    markdown
-  ) {
-    const input =
-      String(
-        markdown ?? ""
-      );
-
-
-    if (
-      !CONFIG.enableMarkdown ||
-      !window.marked
-    ) {
-      return escapeHtml(
-        input
-      )
-        .replace(
-          /\n/g,
-          "<br>"
-        );
-    }
-
-
-    try {
-      configureMarked();
-
-
-      const rawHtml =
-        window.marked
-          .parse(
-            input
-          );
-
-
-      return sanitizeHtml(
-        rawHtml
-      );
-
-    } catch (
-      error
-    ) {
-      console.warn(
-        "[NEYO Renderer] Markdown parse failed:",
-        error
-      );
-
-
-      return escapeHtml(
-        input
-      )
-        .replace(
-          /\n/g,
-          "<br>"
-        );
     }
   }
 
@@ -1195,7 +895,7 @@ DOES NOT OWN
     if (
       !(root instanceof HTMLElement)
     ) {
-      return;
+      return false;
     }
 
 
@@ -1237,18 +937,26 @@ DOES NOT OWN
     renderMath(
       root
     );
+
+
+    return true;
   }
 
 
   /* =====================================================
-     RENDER INTO ELEMENT
+     RENDER ELEMENT
      ===================================================== */
 
-  function renderInto(
+  function renderElement(
     element,
     content,
-    options =
-      {}
+    {
+      role =
+        "assistant",
+
+      markdown =
+        null
+    } = {}
   ) {
     if (
       !(element instanceof HTMLElement)
@@ -1257,26 +965,14 @@ DOES NOT OWN
     }
 
 
-    const role =
-      options.role ===
-        "user"
-        ? "user"
-        : "assistant";
-
-
-    /*
-    -------------------------------------------------------
-    User messages default plain-text.
-    Assistant messages default Markdown.
-    -------------------------------------------------------
-    */
-
     const useMarkdown =
-      options.markdown ??
-      (
-        role ===
-        "assistant"
-      );
+      markdown ===
+        null
+        ? role ===
+          "assistant"
+        : Boolean(
+            markdown
+          );
 
 
     if (
@@ -1292,9 +988,7 @@ DOES NOT OWN
         "neyo:message-rendered",
         {
           element,
-
           role,
-
           markdown:
             false
         }
@@ -1305,14 +999,10 @@ DOES NOT OWN
     }
 
 
-    const html =
+    element.innerHTML =
       markdownToHtml(
         content
       );
-
-
-    element.innerHTML =
-      html;
 
 
     postProcess(
@@ -1324,9 +1014,7 @@ DOES NOT OWN
       "neyo:message-rendered",
       {
         element,
-
         role,
-
         markdown:
           true
       }
@@ -1338,17 +1026,19 @@ DOES NOT OWN
 
 
   /* =====================================================
-     RENDER MESSAGE SHELL
+     RENDER MESSAGE
      ===================================================== */
 
-  function renderMessage(
+  function render(
     messageElement,
     content,
-    options =
-      {}
+    options = {}
   ) {
     if (
-      !(messageElement instanceof HTMLElement)
+      !(
+        messageElement instanceof
+        HTMLElement
+      )
     ) {
       return false;
     }
@@ -1368,7 +1058,7 @@ DOES NOT OWN
     }
 
 
-    return renderInto(
+    return renderElement(
       contentElement,
       content,
       options
@@ -1377,75 +1067,45 @@ DOES NOT OWN
 
 
   /* =====================================================
-     CHAT EVENT INTEGRATION
+     RENDER ALL
      ===================================================== */
 
-  window.addEventListener(
-    "neyo:chat-message-added",
-    event => {
-      const message =
-        event.detail
-          ?.message;
-
-
-      if (
-        !message ||
-        message.role !==
-          "assistant"
-      ) {
-        return;
-      }
-
-
-      const id =
-        message.id;
-
-
-      if (
-        !id
-      ) {
-        return;
-      }
-
-
-      /*
-      -----------------------------------------------------
-      messages.js/chat.js already creates the shell.
-
-      Renderer only upgrades its content.
-      -----------------------------------------------------
-      */
-
-      window.requestAnimationFrame(
-        () => {
-          const safeId =
-            globalThis.CSS
-              ?.escape
-              ? CSS.escape(
-                  id
-                )
-              : String(
-                  id
-                );
-
-
-          const element =
-            document.querySelector(
-              `[data-neyo-message-id="${safeId}"],` +
-              `[data-message-id="${safeId}"]`
-            );
+  function renderAll() {
+    chatMessages
+      .querySelectorAll(
+        '.message[data-role="assistant"]'
+      )
+      .forEach(
+        message => {
+          const content =
+            message
+              .querySelector(
+                ".message-content"
+              );
 
 
           if (
-            !element
+            !content
           ) {
             return;
           }
 
 
-          renderMessage(
-            element,
-            message.content,
+          const raw =
+            message.dataset
+              .rawContent ??
+            content.textContent ??
+            "";
+
+
+          message.dataset
+            .rawContent =
+            raw;
+
+
+          renderElement(
+            content,
+            raw,
             {
               role:
                 "assistant",
@@ -1456,45 +1116,173 @@ DOES NOT OWN
           );
         }
       );
-    }
-  );
+  }
 
 
   /* =====================================================
-     PUBLIC EVENTS
+     MESSAGE CREATED
      ===================================================== */
 
   window.addEventListener(
-    "neyo:message-render-request",
+    "neyo:message-created",
     event => {
-      renderMessage(
+      const element =
         event.detail
-          ?.message,
+          ?.element;
 
-        event.detail
-          ?.content,
 
+      const message =
         event.detail
-          ?.options ||
-        {}
+          ?.message;
+
+
+      if (
+        !(
+          element instanceof
+          HTMLElement
+        ) ||
+        !message
+      ) {
+        return;
+      }
+
+
+      if (
+        message.role !==
+        "assistant"
+      ) {
+        return;
+      }
+
+
+      /*
+      -------------------------------------------------------
+      Preserve original Markdown source.
+
+      This prevents re-rendering already-rendered HTML.
+      -------------------------------------------------------
+      */
+
+      element.dataset
+        .rawContent =
+        String(
+          message.content ??
+          ""
+        );
+
+
+      render(
+        element,
+        message.content,
+        {
+          role:
+            "assistant",
+
+          markdown:
+            true
+        }
       );
     }
   );
 
 
+  /* =====================================================
+     MESSAGE UPDATED
+     ===================================================== */
+
   window.addEventListener(
-    "neyo:content-render-request",
+    "neyo:message-updated",
     event => {
-      renderInto(
+      const element =
         event.detail
-          ?.element,
+          ?.element;
 
+
+      const content =
         event.detail
-          ?.content,
+          ?.content;
 
+
+      if (
+        !(
+          element instanceof
+          HTMLElement
+        )
+      ) {
+        return;
+      }
+
+
+      if (
+        element.dataset.role !==
+        "assistant"
+      ) {
+        return;
+      }
+
+
+      element.dataset
+        .rawContent =
+        String(
+          content ??
+          ""
+        );
+
+
+      render(
+        element,
+        content,
+        {
+          role:
+            "assistant",
+
+          markdown:
+            true
+        }
+      );
+    }
+  );
+
+
+  /* =====================================================
+     HISTORY REPLACED
+     ===================================================== */
+
+  window.addEventListener(
+    "neyo:messages-replaced",
+    () => {
+      renderAll();
+    }
+  );
+
+
+  /* =====================================================
+     MANUAL RENDER EVENT
+     ===================================================== */
+
+  window.addEventListener(
+    "neyo:message-render-request",
+    event => {
+      const element =
+        event.detail
+          ?.element;
+
+
+      const content =
+        event.detail
+          ?.content;
+
+
+      const options =
         event.detail
           ?.options ||
-        {}
+        {};
+
+
+      render(
+        element,
+        content,
+        options
       );
     }
   );
@@ -1506,32 +1294,22 @@ DOES NOT OWN
 
   const publicApi =
     Object.freeze({
+
       __controller:
         true,
 
       version:
         VERSION,
 
-      render:
-        renderMessage,
+      render,
 
-      renderInto,
+      renderElement,
+
+      renderAll,
 
       markdownToHtml,
 
-      sanitize:
-        sanitizeHtml,
-
-      escape:
-        escapeHtml,
-
-      secureLinks,
-
-      enhanceCodeBlocks,
-
-      highlightCode,
-
-      renderMath,
+      sanitize,
 
       postProcess
     });
@@ -1541,6 +1319,7 @@ DOES NOT OWN
     window,
     "NeyoMessageRenderer",
     {
+
       value:
         publicApi,
 
@@ -1561,32 +1340,6 @@ DOES NOT OWN
      ===================================================== */
 
   configureMarked();
-
-
-  console.log(
-    "[NEYO Renderer] ChatGPT-standard v8 ready.",
-    {
-      markdown:
-        Boolean(
-          window.marked
-        ),
-
-      domPurify:
-        Boolean(
-          window.DOMPurify
-        ),
-
-      katex:
-        Boolean(
-          window.renderMathInElement
-        ),
-
-      highlightJs:
-        Boolean(
-          window.hljs
-        )
-    }
-  );
 
 
   emit(

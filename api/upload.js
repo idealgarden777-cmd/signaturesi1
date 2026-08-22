@@ -4,81 +4,52 @@ import { getAuthenticatedUser } from "../lib/auth.js";
 import { setJsonHeaders, isAllowedOrigin } from "../lib/http.js";
 
 const BUCKET =
-  process.env.LEGACY_UPLOAD_BUCKET ||
-  "neo-uploads";
+  process.env.UPLOAD_BUCKET ||
+  "neyo-attachments";
 
-const MAX_FILE_SIZE =
-  Number(process.env.MAX_UPLOAD_BYTES) ||
+const MAX_SIZE =
+  Number(process.env.MAX_ATTACHMENT_BYTES) ||
   100 * 1024 * 1024;
 
-
-const clean = (value, max = 512) =>
+const clean = (value, max = 220) =>
   String(value ?? "")
     .replace(/\u0000/g, "")
     .trim()
     .slice(0, max);
 
-
-function adminClient() {
-  const url =
-    clean(process.env.SUPABASE_URL);
-
-  const key =
-    clean(
-      process.env.SUPABASE_SERVICE_ROLE_KEY
-    );
+function supabaseAdmin() {
+  const url = clean(process.env.SUPABASE_URL, 500);
+  const key = clean(process.env.SUPABASE_SERVICE_ROLE_KEY, 1000);
 
   if (!url || !key) {
-    throw new Error(
-      "Upload storage is not configured."
-    );
+    throw new Error("Storage is not configured.");
   }
 
-  return createClient(
-    url,
-    key,
-    {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-        detectSessionInUrl: false
-      }
+  return createClient(url, key, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false
     }
-  );
+  });
 }
 
+function safeFilename(name) {
+  const value = clean(name || "file");
 
-function safeName(name) {
-  const raw =
-    clean(name || "file", 220)
-      .normalize("NFKC");
-
-  const dot =
-    raw.lastIndexOf(".");
-
+  const dot = value.lastIndexOf(".");
   const ext =
     dot > 0
-      ? raw
-          .slice(dot + 1)
+      ? value.slice(dot + 1)
           .toLowerCase()
           .replace(/[^a-z0-9]/g, "")
           .slice(0, 20)
       : "";
 
   const base =
-    (dot > 0
-      ? raw.slice(0, dot)
-      : raw
-    )
-      .replace(
-        /[^a-zA-Z0-9._-]+/g,
-        "-"
-      )
+    (dot > 0 ? value.slice(0, dot) : value)
+      .replace(/[^a-zA-Z0-9._-]+/g, "-")
       .replace(/-+/g, "-")
-      .replace(
-        /^[._-]+|[._-]+$/g,
-        ""
-      )
+      .replace(/^[._-]+|[._-]+$/g, "")
       .slice(0, 120) ||
     "file";
 
@@ -87,102 +58,47 @@ function safeName(name) {
     : base;
 }
 
-
-function bodyOf(req) {
-  if (
-    req.body &&
-    typeof req.body === "object" &&
-    !Buffer.isBuffer(req.body)
-  ) {
-    return req.body;
-  }
-
-  const raw =
-    Buffer.isBuffer(req.body)
-      ? req.body.toString("utf8")
-      : req.body;
-
-  if (
-    typeof raw !== "string"
-  ) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return null;
-  }
-}
-
-
-export default async function handler(
-  req,
-  res
-) {
+export default async function handler(req, res) {
   setJsonHeaders(res);
 
-  if (
-    req.method !== "POST"
-  ) {
-    res.setHeader(
-      "Allow",
-      "POST"
-    );
+  if (req.method !== "POST") {
+    res.setHeader("Allow", "POST");
 
-    return res
-      .status(405)
-      .json({
-        error:
-          "Method Not Allowed"
-      });
+    return res.status(405).json({
+      error: "Method Not Allowed"
+    });
   }
 
   try {
-    if (
-      !isAllowedOrigin(req)
-    ) {
-      return res
-        .status(403)
-        .json({
-          error:
-            "Request origin is not allowed."
-        });
+    if (!isAllowedOrigin(req)) {
+      return res.status(403).json({
+        error: "Request origin is not allowed."
+      });
     }
-
 
     const auth =
       await getAuthenticatedUser(req);
 
     if (!auth?.userId) {
-      return res
-        .status(401)
-        .json({
-          error:
-            "Authentication required."
-        });
+      return res.status(401).json({
+        error: "Authentication required."
+      });
     }
-
 
     const body =
-      bodyOf(req);
-
-    if (!body) {
-      return res
-        .status(400)
-        .json({
-          error:
-            "Invalid upload request."
-        });
-    }
-
+      req.body &&
+      typeof req.body === "object"
+        ? req.body
+        : {};
 
     const filename =
       clean(
         body.filename ||
-        body.name,
-        220
+        body.name
       );
+
+    const size =
+      Number(body.size);
 
     const mimeType =
       clean(
@@ -192,149 +108,72 @@ export default async function handler(
         180
       ).toLowerCase();
 
-    const size =
-      Number(body.size);
-
-
     if (
       !filename ||
-      !Number.isSafeInteger(size) ||
+      !Number.isFinite(size) ||
       size <= 0
     ) {
-      return res
-        .status(400)
-        .json({
-          error:
-            "Valid file name and size are required."
-        });
+      return res.status(400).json({
+        error: "Valid file name and size are required."
+      });
     }
 
-
-    if (
-      size > MAX_FILE_SIZE
-    ) {
-      return res
-        .status(413)
-        .json({
-          error:
-            `File exceeds the ${Math.round(
-              MAX_FILE_SIZE /
-              1024 /
-              1024
-            )} MB upload limit.`
-        });
+    if (size > MAX_SIZE) {
+      return res.status(413).json({
+        error: "File is too large."
+      });
     }
 
+    const uploadId =
+      crypto.randomUUID();
 
-    const safeFilename =
-      safeName(filename);
+    const path = [
+      "users",
+      clean(auth.userId, 128),
+      uploadId,
+      safeFilename(filename)
+    ].join("/");
 
-    const now =
-      new Date();
-
-    const path =
-      [
-        "users",
-        clean(auth.userId, 128),
-        String(
-          now.getUTCFullYear()
-        ),
-        String(
-          now.getUTCMonth() + 1
-        ).padStart(2, "0"),
-        `${crypto.randomUUID()}-${safeFilename}`
-      ].join("/");
-
-
-    const {
-      data,
-      error
-    } =
-      await adminClient()
+    const { data, error } =
+      await supabaseAdmin()
         .storage
         .from(BUCKET)
-        .createSignedUploadUrl(
-          path
-        );
-
+        .createSignedUploadUrl(path);
 
     if (error) {
       throw error;
     }
 
-
-    if (
-      !data?.path ||
-      !data?.token
-    ) {
+    if (!data?.path || !data?.token) {
       throw new Error(
-        "Signed upload information was not returned."
+        "Upload information was not returned."
       );
     }
 
+    return res.status(200).json({
+      success: true,
 
-    return res
-      .status(200)
-      .json({
-        success: true,
+      uploadId,
 
-        upload: {
-          bucket:
-            BUCKET,
-
-          path:
-            data.path,
-
-          token:
-            data.token,
-
-          signedUrl:
-            data.signedUrl ||
-            null,
-
-          filename:
-            safeFilename,
-
-          mimeType,
-
-          size
-        }
-      });
-
+      upload: {
+        bucket: BUCKET,
+        path: data.path,
+        token: data.token,
+        signedUrl: data.signedUrl || null,
+        filename: safeFilename(filename),
+        mimeType,
+        size
+      }
+    });
 
   } catch (error) {
     console.error(
-      "[NEYO Upload] Failed:",
-      {
-        message:
-          error?.message,
-
-        code:
-          error?.code
-      }
+      "[NEYO Upload]",
+      error?.message
     );
 
-
-    if (
-      /auth|session|token/i.test(
-        error?.message ||
-        ""
-      )
-    ) {
-      return res
-        .status(401)
-        .json({
-          error:
-            "Authentication required."
-        });
-    }
-
-
-    return res
-      .status(500)
-      .json({
-        error:
-          "Unable to prepare the upload."
-      });
+    return res.status(500).json({
+      error: "Unable to prepare file upload."
+    });
   }
 }

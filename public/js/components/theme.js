@@ -1,546 +1,867 @@
 /*
 =========================================================
-NEYO — THEME ENGINE COMPONENT
+NEYO — THEME CONTROLLER
+FULL MODULAR RUNTIME
 
-Owns:
-- Light / dark / system theme
-- Theme persistence
-- System preference detection
-- Document theme application
-- Global theme events
-- Public theme API
+FILE:
+public/js/components/theme.js
 
-Does NOT own:
-- Topbar button UI
-- Settings modal UI
-- Accent colors
-- Typography
+OWNS
+---------------------------------------------------------
+✅ System / Light / Dark theme resolution
+✅ document + body theme classes
+✅ color-scheme metadata
+✅ prefers-color-scheme listener
+✅ top bar quick theme toggle
+✅ sidebar quick appearance/theme toggle
+✅ settings theme request bridge
+✅ theme persistence compatibility
+✅ public theme API
+
+DOES NOT OWN
+---------------------------------------------------------
+❌ Settings modal
+❌ Accent
+❌ Interface style
+❌ Text size
+❌ Sidebar density
+❌ Profile
+❌ Chat
 =========================================================
 */
 
 (() => {
-    "use strict";
+  "use strict";
 
 
-    /* =====================================================
-       CONSTANTS
-       ===================================================== */
+  /* =====================================================
+     VERSION / GUARD
+     ===================================================== */
 
-    const STORAGE_KEY =
-        "neyo-theme";
-
-    const VALID_MODES =
-        new Set([
-            "light",
-            "dark",
-            "system"
-        ]);
+  const VERSION =
+    "neyo-theme-modular-v1";
 
 
-    /* =====================================================
-       SYSTEM THEME
-       ===================================================== */
-
-    const systemThemeQuery =
-        window.matchMedia(
-            "(prefers-color-scheme: dark)"
-        );
+  if (
+    window.NeyoTheme
+      ?.__controller === true
+  ) {
+    return;
+  }
 
 
-    const getSystemTheme = () =>
-        systemThemeQuery.matches
-            ? "dark"
-            : "light";
+  /* =====================================================
+     LEGACY OWNERSHIP GATE
+     ===================================================== */
 
-
-    /* =====================================================
-       STORAGE
-       ===================================================== */
-
-    const readStoredTheme = () => {
-
-        try {
-
-            const stored =
-                localStorage.getItem(
-                    STORAGE_KEY
-                );
-
-
-            if (
-                stored &&
-                VALID_MODES.has(stored)
-            ) {
-                return stored;
-            }
-
-        }
-
-        catch {
-            // Storage unavailable.
-        }
-
-
-        return null;
-    };
-
-
-    const saveTheme = mode => {
-
-        try {
-
-            localStorage.setItem(
-                STORAGE_KEY,
-                mode
-            );
-
-        }
-
-        catch {
-            // Storage unavailable.
-        }
-
-    };
-
-
-    /* =====================================================
-       STATE
-       ===================================================== */
-
-    let themeMode =
-        readStoredTheme() ||
-        document.documentElement
-            .dataset.themeMode ||
-        "system";
-
-
-    let resolvedTheme =
-        "light";
-
-
-    /* =====================================================
-       HELPERS
-       ===================================================== */
-
-    const emit = (
-        name,
-        detail = {}
-    ) => {
-
-        window.dispatchEvent(
-            new CustomEvent(
-                name,
-                {
-                    detail
-                }
+  const legacyOwnerActive =
+    Array
+      .from(
+        document.scripts || []
+      )
+      .some(
+        script =>
+          /(?:^|\/)neo\.js(?:\?|$)/
+            .test(
+              script.src || ""
             )
-        );
+      );
 
-    };
 
+  const active =
+    !legacyOwnerActive;
 
-    const resolveTheme =
-        mode => {
 
-            if (mode === "system") {
-                return getSystemTheme();
-            }
+  /* =====================================================
+     DOM
+     ===================================================== */
 
+  const topBarDarkModeToggle =
+    document.getElementById(
+      "topBarDarkModeToggle"
+    );
 
-            return mode === "dark"
-                ? "dark"
-                : "light";
 
-        };
+  const sidebarDarkModeToggle =
+    document.getElementById(
+      "sidebarDarkModeToggle"
+    );
 
 
-    /* =====================================================
-       APPLY THEME
-       ===================================================== */
+  const themeMeta =
+    document.querySelector(
+      'meta[name="theme-color"]'
+    );
 
-    const applyTheme =
-        (
-            mode,
-            options = {}
-        ) => {
 
-            if (
-                !VALID_MODES.has(mode)
-            ) {
-                return false;
-            }
+  /* =====================================================
+     CONFIG
+     ===================================================== */
 
+  const CONFIG =
+    Object.freeze({
 
-            themeMode =
-                mode;
+      storageKey:
+        "neo_theme",
 
+      fallback:
+        "system",
 
-            resolvedTheme =
-                resolveTheme(mode);
+      lightColor:
+        "#ffffff",
 
+      darkColor:
+        "#0b0b0b"
+    });
 
-            const root =
-                document.documentElement;
 
+  const ALLOWED =
+    Object.freeze([
+      "system",
+      "light",
+      "dark"
+    ]);
 
-            /* -----------------------------------------
-               DATA ATTRIBUTES
-               ----------------------------------------- */
 
-            root.dataset.themeMode =
-                themeMode;
+  /* =====================================================
+     STATE
+     ===================================================== */
 
+  const mediaQuery =
+    window.matchMedia
+      ? window.matchMedia(
+          "(prefers-color-scheme: dark)"
+        )
+      : null;
 
-            root.dataset.theme =
-                resolvedTheme;
 
+  const state = {
 
-            /* -----------------------------------------
-               CLASSES
-               ----------------------------------------- */
+    preference:
+      CONFIG.fallback,
 
-            root.classList.toggle(
-                "dark",
-                resolvedTheme === "dark"
-            );
+    resolved:
+      "light"
+  };
 
 
-            root.classList.toggle(
-                "light",
-                resolvedTheme === "light"
-            );
+  /* =====================================================
+     EVENTS
+     ===================================================== */
 
+  function emit(
+    name,
+    detail = {}
+  ) {
 
-            document.body?.classList.toggle(
-                "dark-theme",
-                resolvedTheme === "dark"
-            );
-
-
-            document.body?.classList.toggle(
-                "light-theme",
-                resolvedTheme === "light"
-            );
-
-
-            /* -----------------------------------------
-               COLOR SCHEME
-               ----------------------------------------- */
-
-            root.style.colorScheme =
-                resolvedTheme;
-
-
-            /* -----------------------------------------
-               SAVE
-               ----------------------------------------- */
-
-            if (
-                options.persist !== false
-            ) {
-
-                saveTheme(
-                    themeMode
-                );
-
-            }
-
-
-            /* -----------------------------------------
-               EVENT
-               ----------------------------------------- */
-
-            if (
-                options.silent !== true
-            ) {
-
-                emit(
-                    "neyo:theme-change",
-                    {
-                        mode:
-                            themeMode,
-
-                        theme:
-                            resolvedTheme,
-
-                        source:
-                            options.source ||
-                            "theme"
-                    }
-                );
-
-            }
-
-
-            return true;
-
-        };
-
-
-    /* =====================================================
-       SET THEME
-       ===================================================== */
-
-    const setTheme =
-        (
-            mode,
-            options = {}
-        ) => {
-
-            return applyTheme(
-                mode,
-                options
-            );
-
-        };
-
-
-    /* =====================================================
-       TOGGLE
-       ===================================================== */
-
-    const toggleTheme = (
-        options = {}
-    ) => {
-
-        /*
-        Manual toggle intentionally switches
-        between light and dark.
-
-        If current mode is "system", toggle
-        from the currently resolved theme.
-        */
-
-        const nextTheme =
-            resolvedTheme === "dark"
-                ? "light"
-                : "dark";
-
-
-        applyTheme(
-            nextTheme,
-            {
-                ...options,
-
-                source:
-                    options.source ||
-                    "toggle"
-            }
-        );
-
-
-        return nextTheme;
-
-    };
-
-
-    /* =====================================================
-       SYSTEM MODE
-       ===================================================== */
-
-    const useSystemTheme = (
-        options = {}
-    ) => {
-
-        applyTheme(
-            "system",
-            {
-                ...options,
-
-                source:
-                    options.source ||
-                    "system"
-            }
-        );
-
-    };
-
-
-    /* =====================================================
-       SYSTEM PREFERENCE CHANGE
-       ===================================================== */
-
-    const handleSystemThemeChange = () => {
-
-        if (
-            themeMode !== "system"
-        ) {
-            return;
+    window.dispatchEvent(
+      new CustomEvent(
+        name,
+        {
+          detail
         }
+      )
+    );
+  }
 
 
-        /*
-        Do not rewrite stored preference.
-        User still selected "system".
-        */
+  /* =====================================================
+     STORAGE
+     ===================================================== */
 
-        applyTheme(
-            "system",
-            {
-                persist:
-                    false,
+  function readStoredTheme() {
 
-                source:
-                    "system-change"
-            }
+    try {
+
+      const value =
+        localStorage.getItem(
+          CONFIG.storageKey
         );
 
-    };
+
+      return ALLOWED.includes(
+        value
+      )
+        ? value
+        : CONFIG.fallback;
+
+    } catch {
+
+      return CONFIG.fallback;
+    }
+  }
+
+
+  function storeTheme(
+    value
+  ) {
+
+    try {
+
+      localStorage.setItem(
+        CONFIG.storageKey,
+        value
+      );
+
+
+      return true;
+
+    } catch {
+
+      return false;
+    }
+  }
+
+
+  /* =====================================================
+     NORMALIZE
+     ===================================================== */
+
+  function normalizeTheme(
+    value
+  ) {
+
+    const theme =
+      String(
+        value || ""
+      )
+        .trim()
+        .toLowerCase();
+
+
+    return ALLOWED.includes(
+      theme
+    )
+      ? theme
+      : CONFIG.fallback;
+  }
+
+
+  /* =====================================================
+     RESOLVE
+     ===================================================== */
+
+  function resolveTheme(
+    preference =
+      state.preference
+  ) {
+
+    if (
+      preference ===
+      "dark"
+    ) {
+      return "dark";
+    }
 
 
     if (
-        typeof systemThemeQuery
-            .addEventListener ===
-        "function"
+      preference ===
+      "light"
+    ) {
+      return "light";
+    }
+
+
+    return mediaQuery
+      ?.matches
+      ? "dark"
+      : "light";
+  }
+
+
+  /* =====================================================
+     ICONS
+     ===================================================== */
+
+  function refreshIcons() {
+
+    try {
+
+      window.lucide
+        ?.createIcons
+        ?.();
+
+    } catch {}
+  }
+
+
+  function renderQuickToggleIcon(
+    button
+  ) {
+
+    if (!button) {
+      return;
+    }
+
+
+    const resolved =
+      state.resolved;
+
+
+    const icon =
+      resolved ===
+      "dark"
+        ? "moon"
+        : "sun";
+
+
+    button.innerHTML = `
+      <i
+        data-lucide="${icon}"
+        size="20"
+        aria-hidden="true"
+      ></i>
+    `;
+
+
+    button.setAttribute(
+      "aria-label",
+      resolved === "dark"
+        ? "Switch to light theme"
+        : "Switch to dark theme"
+    );
+
+
+    button.setAttribute(
+      "title",
+      resolved === "dark"
+        ? "Switch to light theme"
+        : "Switch to dark theme"
+    );
+
+
+    button.dataset.tooltip =
+      resolved === "dark"
+        ? "Light theme"
+        : "Dark theme";
+
+
+    refreshIcons();
+  }
+
+
+  /* =====================================================
+     APPLY
+     ===================================================== */
+
+  function applyResolvedTheme() {
+
+    const resolved =
+      resolveTheme();
+
+
+    state.resolved =
+      resolved;
+
+
+    const dark =
+      resolved ===
+      "dark";
+
+
+    const root =
+      document.documentElement;
+
+
+    root.dataset.theme =
+      resolved;
+
+
+    root.dataset.neyoTheme =
+      state.preference;
+
+
+    root.classList.toggle(
+      "dark",
+      dark
+    );
+
+
+    root.classList.toggle(
+      "dark-mode",
+      dark
+    );
+
+
+    root.classList.toggle(
+      "light",
+      !dark
+    );
+
+
+    document.body
+      ?.classList
+      .toggle(
+        "dark-mode",
+        dark
+      );
+
+
+    document.body
+      ?.classList
+      .toggle(
+        "light-mode",
+        !dark
+      );
+
+
+    if (
+      document.body
     ) {
 
-        systemThemeQuery.addEventListener(
-            "change",
-            handleSystemThemeChange
-        );
+      document.body.dataset
+        .theme =
+        resolved;
 
-    }
 
-    else {
-
-        /*
-        Legacy Safari fallback.
-        */
-
-        systemThemeQuery.addListener?.(
-            handleSystemThemeChange
-        );
-
+      document.body.dataset
+        .neyoTheme =
+        state.preference;
     }
 
 
-    /* =====================================================
-       TOPBAR TOGGLE REQUEST
-       ===================================================== */
+    root.style
+      .colorScheme =
+      resolved;
 
-    window.addEventListener(
-        "neyo:theme-toggle-request",
-        event => {
 
-            toggleTheme({
-                source:
-                    event.detail?.source ||
-                    "request"
-            });
+    if (
+      themeMeta
+    ) {
 
-        }
+      themeMeta.setAttribute(
+        "content",
+        dark
+          ? CONFIG.darkColor
+          : CONFIG.lightColor
+      );
+    }
+
+
+    renderQuickToggleIcon(
+      topBarDarkModeToggle
     );
 
 
-    /* =====================================================
-       GENERIC SET REQUEST
-       ===================================================== */
+    renderQuickToggleIcon(
+      sidebarDarkModeToggle
+    );
 
-    window.addEventListener(
-        "neyo:theme-set-request",
+
+    emit(
+      "neyo:theme-change",
+      {
+        preference:
+          state.preference,
+
+        resolved
+      }
+    );
+
+
+    return resolved;
+  }
+
+
+  /* =====================================================
+     SET THEME
+     ===================================================== */
+
+  function setTheme(
+    value,
+    {
+      persist = true,
+      notifySettings = false
+    } = {}
+  ) {
+
+    const next =
+      normalizeTheme(
+        value
+      );
+
+
+    const previous =
+      state.preference;
+
+
+    state.preference =
+      next;
+
+
+    if (persist) {
+
+      storeTheme(
+        next
+      );
+    }
+
+
+    const resolved =
+      applyResolvedTheme();
+
+
+    if (
+      notifySettings &&
+      previous !== next
+    ) {
+
+      emit(
+        "neyo:settings-set",
+        {
+          key:
+            "theme",
+
+          value:
+            next
+        }
+      );
+    }
+
+
+    return {
+      preference:
+        next,
+
+      resolved
+    };
+  }
+
+
+  /* =====================================================
+     QUICK TOGGLE
+
+     Quick controls intentionally switch only
+     between light and dark.
+
+     "System" remains available from Settings.
+     ===================================================== */
+
+  function toggleQuick() {
+
+    const next =
+      state.resolved ===
+      "dark"
+        ? "light"
+        : "dark";
+
+
+    return setTheme(
+      next,
+      {
+        persist:
+          true,
+
+        notifySettings:
+          true
+      }
+    );
+  }
+
+
+  /* =====================================================
+     SYSTEM CHANGE
+     ===================================================== */
+
+  function handleSystemThemeChange() {
+
+    if (
+      state.preference !==
+      "system"
+    ) {
+      return;
+    }
+
+
+    applyResolvedTheme();
+  }
+
+
+  /* =====================================================
+     SETTINGS BRIDGE
+     ===================================================== */
+
+  function handleThemeRequest(
+    event
+  ) {
+
+    const requested =
+      event.detail
+        ?.theme;
+
+
+    if (!requested) {
+      return;
+    }
+
+
+    setTheme(
+      requested,
+      {
+        persist:
+          true,
+
+        notifySettings:
+          false
+      }
+    );
+  }
+
+
+  /* =====================================================
+     BUTTON HANDLERS
+     ===================================================== */
+
+  function handleQuickToggle(
+    event
+  ) {
+
+    if (!active) {
+      return;
+    }
+
+
+    event.preventDefault();
+
+    event.stopPropagation();
+
+
+    toggleQuick();
+  }
+
+
+  /* =====================================================
+     BIND
+     ===================================================== */
+
+  function bind() {
+
+    if (!active) {
+      return false;
+    }
+
+
+    topBarDarkModeToggle
+      ?.addEventListener(
+        "click",
+        handleQuickToggle
+      );
+
+
+    /*
+     * Sidebar button currently represents
+     * Appearance in the sidebar menu.
+     *
+     * If settings.js is available,
+     * open Appearance instead of blindly toggling.
+     */
+
+    sidebarDarkModeToggle
+      ?.addEventListener(
+        "click",
         event => {
 
-            const mode =
-                event.detail?.mode ||
-                event.detail?.theme;
+          event.preventDefault();
+
+          event.stopPropagation();
 
 
-            if (!mode) {
-                return;
-            }
+          if (
+            window.NeyoSettings
+              ?.active === true
+          ) {
 
-
-            setTheme(
-                mode,
-                {
-                    source:
-                        event.detail?.source ||
-                        "request"
-                }
+            emit(
+              "neyo:appearance-open-request"
             );
 
+
+            return;
+          }
+
+
+          toggleQuick();
         }
-    );
+      );
 
-
-    /* =====================================================
-       SYSTEM REQUEST
-       ===================================================== */
 
     window.addEventListener(
-        "neyo:theme-system-request",
-        () => {
-
-            useSystemTheme({
-                source:
-                    "request"
-            });
-
-        }
+      "neyo:theme-change-request",
+      handleThemeRequest
     );
 
 
-    /* =====================================================
-       INITIALIZE
-       ===================================================== */
+    if (
+      mediaQuery
+    ) {
 
-    applyTheme(
-        themeMode,
-        {
-            /*
-            Existing preference does not need
-            to be written back on startup.
-            */
+      if (
+        typeof mediaQuery
+          .addEventListener ===
+        "function"
+      ) {
 
-            persist:
-                false,
+        mediaQuery.addEventListener(
+          "change",
+          handleSystemThemeChange
+        );
 
-            source:
-                "initial",
+      } else if (
+        typeof mediaQuery
+          .addListener ===
+        "function"
+      ) {
 
-            silent:
-                false
-        }
-    );
+        mediaQuery.addListener(
+          handleSystemThemeChange
+        );
+      }
+    }
 
 
-    /* =====================================================
-       PUBLIC API
-       ===================================================== */
+    return true;
+  }
 
-    window.NeyoTheme =
-        Object.freeze({
 
-            set:
-                setTheme,
+  /* =====================================================
+     INIT
+     ===================================================== */
 
-            toggle:
-                toggleTheme,
+  state.preference =
+    readStoredTheme();
 
-            useSystem:
-                useSystemTheme,
 
-            getMode:
-                () =>
-                    themeMode,
+  if (active) {
 
-            getResolved:
-                () =>
-                    resolvedTheme,
+    bind();
 
-            getSystem:
-                getSystemTheme,
+    applyResolvedTheme();
+  }
 
-            isDark:
-                () =>
-                    resolvedTheme ===
-                    "dark",
 
-            isLight:
-                () =>
-                    resolvedTheme ===
-                    "light"
+  /* =====================================================
+     PUBLIC API
+     ===================================================== */
 
-        });
+  const api =
+    Object.freeze({
+
+      __controller:
+        true,
+
+
+      version:
+        VERSION,
+
+
+      active,
+
+
+      legacyOwnerActive,
+
+
+      set:
+        setTheme,
+
+
+      toggle:
+        toggleQuick,
+
+
+      refresh:
+        applyResolvedTheme,
+
+
+      getPreference:
+        () =>
+          state.preference,
+
+
+      getResolved:
+        () =>
+          state.resolved,
+
+
+      isDark:
+        () =>
+          state.resolved ===
+          "dark",
+
+
+      isLight:
+        () =>
+          state.resolved ===
+          "light",
+
+
+      isSystem:
+        () =>
+          state.preference ===
+          "system",
+
+
+      getState() {
+
+        return {
+
+          version:
+            VERSION,
+
+          active,
+
+          legacyOwnerActive,
+
+          preference:
+            state.preference,
+
+          resolved:
+            state.resolved,
+
+          systemDark:
+            Boolean(
+              mediaQuery
+                ?.matches
+            )
+        };
+      }
+    });
+
+
+  Object.defineProperty(
+    window,
+    "NeyoTheme",
+    {
+      value:
+        api,
+
+      writable:
+        false,
+
+      configurable:
+        true,
+
+      enumerable:
+        true
+    }
+  );
+
+
+  emit(
+    "neyo:theme-ready",
+    {
+      version:
+        VERSION,
+
+      active,
+
+      legacyOwnerActive,
+
+      preference:
+        state.preference,
+
+      resolved:
+        state.resolved
+    }
+  );
 
 })();

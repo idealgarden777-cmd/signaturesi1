@@ -1,1037 +1,239 @@
-/*
-=========================================================
-NEYO — ATTACHMENT UPLOAD AUTHORIZATION
-STABLE v3
-
-FILE:
-api/attachments/upload.js
-
-RESPONSIBILITIES
----------------------------------------------------------
-✅ Authenticate user
-✅ Validate upload metadata
-✅ Validate size / MIME / filename
-✅ Verify storage bucket exists
-✅ Create tenant-isolated storage path
-✅ Create Supabase signed upload token
-✅ Return clean upload session
-
-IMPORTANT
----------------------------------------------------------
-This endpoint DOES NOT receive file bytes.
-
-Frontend should upload with:
-
-supabase.storage
-  .from(bucket)
-  .uploadToSignedUrl(path, token, file, {
-    contentType: file.type
-  });
-
-=========================================================
-*/
-
 import crypto from "node:crypto";
-
 import { createClient } from "@supabase/supabase-js";
 
 import {
   getAuthenticatedUser
 } from "../../lib/auth.js";
 
-
-/* =====================================================
-   CONFIG
-   ===================================================== */
-
-const BUCKET =
-  "neyo-attachments";
+import {
+  setJsonHeaders,
+  isAllowedOrigin
+} from "../../lib/http.js";
 
 
-const MAX_FILE_SIZE =
+const BUCKET = "neyo-attachments";
+const MAX_SIZE =
+  Number(process.env.MAX_ATTACHMENT_BYTES) ||
   100 * 1024 * 1024;
 
 
-const MAX_BODY_SIZE =
-  64 * 1024;
+const clean = (value, max = 220) =>
+  String(value ?? "")
+    .replace(/\u0000/g, "")
+    .trim()
+    .slice(0, max);
 
 
-const MAX_FILENAME_LENGTH =
-  220;
+function admin() {
+  const url = clean(process.env.SUPABASE_URL, 500);
+  const key = clean(
+    process.env.SUPABASE_SERVICE_ROLE_KEY,
+    1000
+  );
 
-
-const ALLOWED_CATEGORIES =
-  new Set([
-    "document",
-    "spreadsheet",
-    "presentation",
-    "image",
-    "audio",
-    "video",
-    "archive",
-    "data",
-    "code",
-    "text",
-    "unknown"
-  ]);
-
-
-const ALLOWED_MIME_TYPES =
-  new Set([
-    "image/jpeg",
-    "image/png",
-    "image/webp",
-
-    "application/pdf",
-
-    "text/plain",
-    "text/html",
-    "text/css",
-
-    "application/javascript",
-    "text/javascript",
-
-    "application/json",
-
-    "audio/mpeg",
-    "audio/wav",
-
-    "video/mp4",
-    "video/webm",
-
-    "application/octet-stream"
-  ]);
-
-
-/* =====================================================
-   ENV
-   ===================================================== */
-
-function cleanEnv(value) {
-  return typeof value === "string"
-    ? value
-        .trim()
-        .replace(/^["']|["']$/g, "")
-    : "";
-}
-
-
-/* =====================================================
-   SUPABASE ADMIN
-   ===================================================== */
-
-function createSupabaseAdmin() {
-  const url =
-    cleanEnv(
-      process.env.SUPABASE_URL
-    );
-
-
-  const serviceRoleKey =
-    cleanEnv(
-      process.env.SUPABASE_SERVICE_ROLE_KEY
-    );
-
-
-  if (!url) {
+  if (!url || !key) {
     throw new Error(
-      "SUPABASE_URL is missing."
+      "Attachment storage is not configured."
     );
   }
 
-
-  if (!serviceRoleKey) {
-    throw new Error(
-      "SUPABASE_SERVICE_ROLE_KEY is missing."
-    );
-  }
-
-
-  return createClient(
-    url,
-    serviceRoleKey,
-    {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-        detectSessionInUrl: false
-      },
-
-      global: {
-        headers: {
-          "X-Client-Info":
-            "signaturesi-neyo-upload-v3"
-        }
-      }
+  return createClient(url, key, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false
     }
-  );
+  });
 }
 
 
-/* =====================================================
-   RESPONSE HEADERS
-   ===================================================== */
+function safeFilename(name) {
+  const value = clean(name || "file");
 
-function setHeaders(res) {
-  res.setHeader(
-    "Content-Type",
-    "application/json; charset=utf-8"
-  );
+  const dot = value.lastIndexOf(".");
+  const ext =
+    dot > 0
+      ? value
+          .slice(dot + 1)
+          .toLowerCase()
+          .replace(/[^a-z0-9]/g, "")
+          .slice(0, 20)
+      : "";
 
-  res.setHeader(
-    "Cache-Control",
-    "no-store, max-age=0"
-  );
+  const base =
+    (dot > 0
+      ? value.slice(0, dot)
+      : value
+    )
+      .replace(/[^a-zA-Z0-9._-]+/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^[._-]+|[._-]+$/g, "")
+      .slice(0, 120) ||
+    "file";
 
-  res.setHeader(
-    "X-Content-Type-Options",
-    "nosniff"
-  );
+  return ext
+    ? `${base}.${ext}`
+    : base;
 }
 
 
-/* =====================================================
-   JSON BODY
-   ===================================================== */
-
-async function readJsonBody(req) {
+function bodyOf(req) {
   if (
     req.body &&
     typeof req.body === "object" &&
-    !Buffer.isBuffer(req.body) &&
-    !Array.isArray(req.body)
+    !Buffer.isBuffer(req.body)
   ) {
     return req.body;
   }
 
-
-  if (Buffer.isBuffer(req.body)) {
-    if (
-      req.body.length >
-      MAX_BODY_SIZE
-    ) {
-      throw new Error(
-        "Request body is too large."
-      );
-    }
-
-
-    try {
-      return JSON.parse(
-        req.body.toString("utf8")
-      );
-    } catch {
-      throw new Error(
-        "Invalid JSON request body."
-      );
-    }
-  }
-
-
-  if (
-    typeof req.body === "string"
-  ) {
-    if (
-      Buffer.byteLength(
-        req.body,
-        "utf8"
-      ) >
-      MAX_BODY_SIZE
-    ) {
-      throw new Error(
-        "Request body is too large."
-      );
-    }
-
-
-    try {
-      return JSON.parse(
-        req.body
-      );
-    } catch {
-      throw new Error(
-        "Invalid JSON request body."
-      );
-    }
-  }
-
-
-  const chunks = [];
-
-  let total = 0;
-
-
-  for await (
-    const chunk
-    of req
-  ) {
-    total += chunk.length;
-
-
-    if (
-      total >
-      MAX_BODY_SIZE
-    ) {
-      throw new Error(
-        "Request body is too large."
-      );
-    }
-
-
-    chunks.push(chunk);
-  }
-
-
-  if (
-    chunks.length === 0
-  ) {
-    return {};
-  }
-
-
-  const raw =
-    Buffer
-      .concat(chunks)
-      .toString("utf8");
-
-
   try {
-    return JSON.parse(raw);
+    return JSON.parse(
+      Buffer.isBuffer(req.body)
+        ? req.body.toString("utf8")
+        : req.body || "{}"
+    );
   } catch {
-    throw new Error(
-      "Invalid JSON request body."
-    );
+    return null;
   }
 }
 
 
-/* =====================================================
-   STRING HELPERS
-   ===================================================== */
+export default async function handler(req, res) {
+  setJsonHeaders(res);
 
-function cleanString(
-  value,
-  maxLength = 512
-) {
-  return String(
-    value ?? ""
-  )
-    .replace(/\u0000/g, "")
-    .trim()
-    .slice(0, maxLength);
-}
+  if (req.method !== "POST") {
+    res.setHeader("Allow", "POST");
 
-
-/* =====================================================
-   SAFE PATH
-   ===================================================== */
-
-function sanitizePathSegment(
-  value,
-  fallback = "file"
-) {
-  const cleaned =
-    String(
-      value ?? ""
-    )
-      .normalize("NFKC")
-      .replace(
-        /[\u0000-\u001f\u007f]/g,
-        ""
-      )
-      .replace(
-        /[^a-zA-Z0-9._-]+/g,
-        "_"
-      )
-      .replace(
-        /_+/g,
-        "_"
-      )
-      .replace(
-        /^[._-]+/,
-        ""
-      )
-      .replace(
-        /[._-]+$/,
-        ""
-      )
-      .slice(0, 180);
-
-
-  return cleaned || fallback;
-}
-
-
-/* =====================================================
-   EXTENSION
-   ===================================================== */
-
-function getExtensionFromName(
-  filename
-) {
-  const name =
-    String(
-      filename ?? ""
-    );
-
-
-  const lastDot =
-    name.lastIndexOf(".");
-
-
-  if (
-    lastDot <= 0 ||
-    lastDot ===
-      name.length - 1
-  ) {
-    return "";
+    return res.status(405).json({
+      error: "Method Not Allowed"
+    });
   }
-
-
-  return normalizeExtension(
-    name.slice(
-      lastDot + 1
-    )
-  );
-}
-
-
-function normalizeExtension(
-  value
-) {
-  return String(
-    value ?? ""
-  )
-    .trim()
-    .toLowerCase()
-    .replace(/^\./, "")
-    .replace(
-      /[^a-z0-9]/g,
-      ""
-    )
-    .slice(0, 32);
-}
-
-
-/* =====================================================
-   CATEGORY
-   ===================================================== */
-
-function normalizeCategory(
-  value
-) {
-  const category =
-    String(
-      value ?? ""
-    )
-      .trim()
-      .toLowerCase();
-
-
-  return ALLOWED_CATEGORIES
-    .has(category)
-      ? category
-      : "unknown";
-}
-
-
-/* =====================================================
-   FILENAME
-   ===================================================== */
-
-function buildSafeFilename(
-  originalName,
-  requestedExtension
-) {
-  const original =
-    cleanString(
-      originalName,
-      MAX_FILENAME_LENGTH
-    );
-
-
-  const detectedExtension =
-    getExtensionFromName(
-      original
-    );
-
-
-  const requested =
-    normalizeExtension(
-      requestedExtension
-    );
-
-
-  const extension =
-    requested ||
-    detectedExtension;
-
-
-  let baseName =
-    original;
-
-
-  const lastDot =
-    original.lastIndexOf(".");
-
-
-  if (
-    lastDot > 0
-  ) {
-    baseName =
-      original.slice(
-        0,
-        lastDot
-      );
-  }
-
-
-  baseName =
-    sanitizePathSegment(
-      baseName,
-      "attachment"
-    );
-
-
-  if (!extension) {
-    return baseName;
-  }
-
-
-  return `${baseName}.${extension}`;
-}
-
-
-/* =====================================================
-   MIME
-   ===================================================== */
-
-function normalizeMime(value) {
-  const mime =
-    cleanString(
-      value ||
-      "application/octet-stream",
-      180
-    )
-      .toLowerCase()
-      .split(";")[0]
-      .trim();
-
-
-  return (
-    mime ||
-    "application/octet-stream"
-  );
-}
-
-
-/* =====================================================
-   VALIDATION
-   ===================================================== */
-
-function validatePayload(body) {
-  if (
-    !body ||
-    typeof body !== "object" ||
-    Array.isArray(body)
-  ) {
-    throw new Error(
-      "Invalid upload metadata."
-    );
-  }
-
-
-  const name =
-    cleanString(
-      body.name,
-      MAX_FILENAME_LENGTH
-    );
-
-
-  const size =
-    Number(
-      body.size
-    );
-
-
-  const mime =
-    normalizeMime(
-      body.mime
-    );
-
-
-  const extension =
-    normalizeExtension(
-      body.extension
-    );
-
-
-  const category =
-    normalizeCategory(
-      body.category
-    );
-
-
-  const clientAttachmentId =
-    cleanString(
-      body.clientAttachmentId,
-      128
-    );
-
-
-  if (!name) {
-    throw new Error(
-      "File name is required."
-    );
-  }
-
-
-  if (
-    !Number.isSafeInteger(size) ||
-    size <= 0
-  ) {
-    throw new Error(
-      "Invalid file size."
-    );
-  }
-
-
-  if (
-    size >
-    MAX_FILE_SIZE
-  ) {
-    throw new Error(
-      "File exceeds the 100 MB upload limit."
-    );
-  }
-
-
-  if (
-    !ALLOWED_MIME_TYPES.has(
-      mime
-    )
-  ) {
-    throw new Error(
-      "Unsupported file type."
-    );
-  }
-
-
-  return {
-    name,
-    size,
-    mime,
-    extension,
-    category,
-    clientAttachmentId
-  };
-}
-
-
-/* =====================================================
-   SAFE ERROR MESSAGE
-   ===================================================== */
-
-function publicError(error) {
-  const message =
-    String(
-      error?.message ||
-      ""
-    );
-
-
-  const allowed =
-    [
-      "File name",
-      "Invalid file size",
-      "upload limit",
-      "Invalid upload metadata",
-      "Unsupported file type",
-      "Request body",
-      "Invalid JSON"
-    ];
-
-
-  if (
-    allowed.some(
-      phrase =>
-        message.includes(phrase)
-    )
-  ) {
-    return message;
-  }
-
-
-  return (
-    "Unable to prepare this file for upload."
-  );
-}
-
-
-/* =====================================================
-   HANDLER
-   ===================================================== */
-
-export default async function handler(
-  req,
-  res
-) {
-  setHeaders(res);
-
-
-  /* ===================================================
-     METHOD
-     =================================================== */
-
-  if (
-    req.method !== "POST"
-  ) {
-    res.setHeader(
-      "Allow",
-      "POST"
-    );
-
-
-    return res
-      .status(405)
-      .json({
-        ok: false,
-        error:
-          "Method Not Allowed"
-      });
-  }
-
-
-  /* ===================================================
-     AUTH
-     =================================================== */
-
-  let auth;
-
 
   try {
-    auth =
-      await Promise.resolve(
-        getAuthenticatedUser(req)
-      );
-  } catch (error) {
-    console.error(
-      "[NEYO Attachment Upload] Auth failed:",
-      error?.message
-    );
-
-
-    return res
-      .status(401)
-      .json({
-        ok: false,
-        error:
-          "Authentication required."
+    if (!isAllowedOrigin(req)) {
+      return res.status(403).json({
+        error: "Request origin is not allowed."
       });
-  }
-
-
-  const userId =
-    auth?.userId ||
-    auth?.id ||
-    auth?.user?.id;
-
-
-  if (!userId) {
-    return res
-      .status(401)
-      .json({
-        ok: false,
-        error:
-          "Authentication required."
-      });
-  }
-
-
-  /* ===================================================
-     BODY
-     =================================================== */
-
-  let body;
-
-
-  try {
-    body =
-      await readJsonBody(req);
-  } catch (error) {
-    return res
-      .status(400)
-      .json({
-        ok: false,
-        error:
-          publicError(error)
-      });
-  }
-
-
-  /* ===================================================
-     VALIDATION
-     =================================================== */
-
-  let file;
-
-
-  try {
-    file =
-      validatePayload(body);
-  } catch (error) {
-    return res
-      .status(400)
-      .json({
-        ok: false,
-        error:
-          publicError(error)
-      });
-  }
-
-
-  /* ===================================================
-     SUPABASE
-     =================================================== */
-
-  let supabase;
-
-
-  try {
-    supabase =
-      createSupabaseAdmin();
-  } catch (error) {
-    console.error(
-      "[NEYO Attachment Upload] Supabase config:",
-      error?.message
-    );
-
-
-    return res
-      .status(500)
-      .json({
-        ok: false,
-        error:
-          "Attachment storage is not configured."
-      });
-  }
-
-
-  try {
-    /* =================================================
-       VERIFY BUCKET
-       ================================================= */
-
-    const {
-      data: bucketData,
-      error: bucketError
-    } =
-      await supabase
-        .storage
-        .getBucket(
-          BUCKET
-        );
-
-
-    if (
-      bucketError ||
-      !bucketData
-    ) {
-      console.error(
-        "[NEYO Attachment Upload] Bucket missing:",
-        {
-          bucket: BUCKET,
-          message:
-            bucketError?.message
-        }
-      );
-
-
-      return res
-        .status(500)
-        .json({
-          ok: false,
-          error:
-            "Attachment storage bucket is unavailable."
-        });
     }
 
+    const auth =
+      await getAuthenticatedUser(req);
 
-    /* =================================================
-       PATH
-       ================================================= */
+    if (!auth?.userId) {
+      return res.status(401).json({
+        error: "Authentication required."
+      });
+    }
+
+    const body = bodyOf(req);
+
+    if (!body) {
+      return res.status(400).json({
+        error: "Invalid request."
+      });
+    }
+
+    const name = clean(body.name);
+    const size = Number(body.size);
+
+    const mime =
+      clean(
+        body.mime ||
+        body.mimeType ||
+        "application/octet-stream",
+        180
+      ).toLowerCase();
+
+    if (
+      !name ||
+      !Number.isSafeInteger(size) ||
+      size <= 0
+    ) {
+      return res.status(400).json({
+        error:
+          "Valid file name and size are required."
+      });
+    }
+
+    if (size > MAX_SIZE) {
+      return res.status(413).json({
+        error:
+          "Attachment exceeds the 100 MB limit."
+      });
+    }
 
     const uploadId =
       crypto.randomUUID();
 
-
-    const safeUserId =
-      sanitizePathSegment(
-        userId,
-        "user"
-      );
-
-
-    const safeFilename =
-      buildSafeFilename(
-        file.name,
-        file.extension
-      );
-
+    const filename =
+      safeFilename(name);
 
     const path =
-      [
-        "users",
-        safeUserId,
-        uploadId,
-        safeFilename
-      ].join("/");
-
-
-    /* =================================================
-       CREATE SIGNED UPLOAD TOKEN
-       ================================================= */
+      `users/${clean(auth.userId, 128)}/` +
+      `${uploadId}/${filename}`;
 
     const {
       data,
       error
     } =
-      await supabase
+      await admin()
         .storage
         .from(BUCKET)
-        .createSignedUploadUrl(
-          path,
-          {
-            upsert: false
-          }
-        );
-
+        .createSignedUploadUrl(path);
 
     if (error) {
       throw error;
     }
 
-
     if (
+      !data?.path ||
       !data?.token
     ) {
       throw new Error(
-        "Supabase did not return an upload token."
+        "Signed upload session was not created."
       );
     }
 
+    return res.status(200).json({
+      ok: true,
 
-    if (
-      !data?.signedUrl
-    ) {
-      throw new Error(
-        "Supabase did not return a signed upload URL."
-      );
-    }
+      uploadId,
+      bucket: BUCKET,
+      path: data.path,
+      token: data.token,
+      signedUrl: data.signedUrl || null,
 
+      name,
+      filename,
+      mime,
+      size,
 
-    /* =================================================
-       SUCCESS
-       ================================================= */
+      extension:
+        clean(body.extension, 24)
+          .replace(/^\./, "")
+          .toLowerCase(),
 
-    console.log(
-      "[NEYO Attachment Upload] Authorized",
-      {
-        userId,
-        uploadId,
-        bucket: BUCKET,
-        path,
-        name: file.name,
-        size: file.size,
-        mime: file.mime,
-        category:
-          file.category
-      }
-    );
+      category:
+        clean(
+          body.category || "unknown",
+          32
+        ).toLowerCase(),
 
+      clientAttachmentId:
+        clean(
+          body.clientAttachmentId,
+          128
+        ) || null
+    });
 
-    return res
-      .status(200)
-      .json({
-        ok: true,
-
-        status:
-          "authorized",
-
-        uploadId,
-
-        bucket:
-          BUCKET,
-
-        path,
-
-        token:
-          data.token,
-
-        signedUrl:
-          data.signedUrl,
-
-        uploadMethod:
-          "supabase-uploadToSignedUrl",
-
-        file: {
-          name:
-            safeFilename,
-
-          originalName:
-            file.name,
-
-          size:
-            file.size,
-
-          mime:
-            file.mime,
-
-          extension:
-            file.extension ||
-            getExtensionFromName(
-              file.name
-            ),
-
-          category:
-            file.category
-        },
-
-        clientAttachmentId:
-          file.clientAttachmentId ||
-          null
-      });
   } catch (error) {
     console.error(
-      "[NEYO Attachment Upload] Failed",
-      {
-        message:
-          error?.message,
-
-        code:
-          error?.code,
-
-        status:
-          error?.status,
-
-        statusCode:
-          error?.statusCode,
-
-        details:
-          error?.details,
-
-        hint:
-          error?.hint
-      }
+      "[NEYO Attachment Upload]",
+      error?.message
     );
 
-
-    return res
-      .status(500)
-      .json({
-        ok: false,
-        error:
-          "Unable to prepare this file for upload."
-      });
+    return res.status(500).json({
+      error:
+        "Unable to authorize attachment upload."
+    });
   }
 }

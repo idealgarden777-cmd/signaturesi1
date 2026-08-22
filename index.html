@@ -2671,14 +2671,14 @@
 
   <!-- ========================================================= -->
   <!-- NEYO — STABLE MIGRATION LOADER                            -->
-  <!-- Phase 1                                                  -->
+  <!-- Phase 2                                                  -->
   <!--                                                         -->
   <!-- RULES                                                   -->
   <!-- - neo.js remains untouched                              -->
-  <!-- - no second chat owner                                  -->
-  <!-- - no second send-button owner                           -->
-  <!-- - UI-only modules may coexist                           -->
-  <!-- - V2 chat modules will be activated only after QA       -->
+  <!-- - V2 chat modules are now active                        -->
+  <!-- - chat-runtime.js bridges legacy & V2                   -->
+  <!-- - order: attachments → chat → messages → renderer       -->
+  <!--          → history → send-state → chat-runtime LAST      -->
   <!-- ========================================================= -->
 
 
@@ -2691,7 +2691,6 @@
 
   <!-- ========================================================= -->
   <!-- 2. SAFE UI MODULES                                        -->
-  <!-- These do not replace the main chat transport yet.         -->
   <!-- ========================================================= -->
 
   <script
@@ -2712,9 +2711,6 @@
 
   <!-- ========================================================= -->
   <!-- 3. COMPOSER VISUAL HELPERS                                -->
-  <!--                                                          -->
-  <!-- These may control visual expansion/scroll behavior only.  -->
-  <!-- They must NOT own Send, Enter, or /api/chat.             -->
   <!-- ========================================================= -->
 
   <script
@@ -2730,7 +2726,6 @@
 
   <!-- ========================================================= -->
   <!-- 4. CHARACTER DEFINITIONS                                  -->
-  <!-- Definitions load before mascot / picker consumers.        -->
   <!-- ========================================================= -->
 
   <script
@@ -2780,69 +2775,50 @@
 
 
   <!-- ========================================================= -->
-  <!-- 6. ATTACHMENT ENGINE                                      -->
-  <!--                                                          -->
-  <!-- Important:                                               -->
-  <!-- attachments.js owns file lifecycle only.                  -->
-  <!--                                                          -->
-  <!-- It may own:                                              -->
-  <!-- - #addFilesMenuBtn                                       -->
-  <!-- - private file input                                     -->
-  <!-- - drag/drop                                              -->
-  <!-- - upload                                                 -->
-  <!-- - processing                                             -->
-  <!-- - retry/remove                                           -->
-  <!--                                                          -->
-  <!-- It must NOT own:                                         -->
-  <!-- - #attachBtn popup launcher                              -->
-  <!-- - #sendBtn                                               -->
-  <!-- - Enter                                                  -->
-  <!-- - /api/chat                                              -->
+  <!-- 6. CHAT V2 RUNTIME                                        -->
+  <!-- ========================================================= -->
+  <!-- ORDER: attachments → chat → messages → renderer           -->
+  <!--        → history → send-state → chat-runtime LAST         -->
   <!-- ========================================================= -->
 
   <script
     type="module"
-    src="/js/components/attachments.js?v=6"
+    src="/js/components/attachments.js?v=7"
+  ></script>
+
+  <script
+    type="module"
+    src="/js/components/chat.js?v=2"
+  ></script>
+
+  <script
+    type="module"
+    src="/js/components/messages.js?v=2"
+  ></script>
+
+  <script
+    type="module"
+    src="/js/components/message-renderer.js?v=2"
+  ></script>
+
+  <script
+    type="module"
+    src="/js/components/history.js?v=2"
+  ></script>
+
+  <script
+    type="module"
+    src="/js/components/send-state.js?v=2"
+  ></script>
+
+  <script
+    type="module"
+    src="/js/components/chat-runtime.js?v=1"
   ></script>
 
 
   <!-- ========================================================= -->
-  <!-- 7. CHAT V2 — DISABLED DURING MIGRATION                    -->
-  <!--                                                          -->
-  <!-- DO NOT enable these while neo.js still owns chat.        -->
-  <!--                                                          -->
-  <!-- Enabling them now creates duplicate:                     -->
-  <!-- - conversation state                                     -->
-  <!-- - message rendering                                      -->
-  <!-- - send handling                                          -->
-  <!-- - Abort/generation state                                 -->
-  <!-- ========================================================= -->
-
-  <!--
-  <script
-    type="module"
-    src="/js/components/chat.js?v=1"
-  ></script>
-
-  <script
-    type="module"
-    src="/js/components/messages.js?v=1"
-  ></script>
-
-  <script
-    type="module"
-    src="/js/components/message-renderer.js?v=1"
-  ></script>
-
-  <script
-    type="module"
-    src="/js/components/send-state.js?v=1"
-  ></script>
-  -->
-
-
-  <!-- ========================================================= -->
-  <!-- 8. UI UTILITIES                                           -->
+  <!-- 7. UI UTILITIES                                           -->
   <!-- ========================================================= -->
 
   <script
@@ -2862,8 +2838,7 @@
 
 
   <!-- ========================================================= -->
-  <!-- 9. MOBILE                                                 -->
-  <!-- Mobile helpers last so DOM + primary modules already exist -->
+  <!-- 8. MOBILE                                                 -->
   <!-- ========================================================= -->
 
   <script
@@ -2878,7 +2853,7 @@
 
 
   <!-- ========================================================= -->
-  <!-- 10. FINAL BOOT SAFETY                                     -->
+  <!-- 9. FINAL BOOT SAFETY                                      -->
   <!-- ========================================================= -->
 
   <script>
@@ -2905,20 +2880,23 @@
             {
               detail: {
                 architecture:
-                  "legacy-stable-migration",
+                  "v2-runtime-active",
 
                 legacyChat:
                   true,
 
                 modularChat:
-                  false
+                  true,
+
+                runtime:
+                  "chat-runtime.js"
               }
             }
           )
         );
 
         console.log(
-          "[NEYO] Stable migration runtime ready."
+          "[NEYO] V2 runtime active. Chat-runtime bridge engaged."
         );
       };
 

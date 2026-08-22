@@ -1,7 +1,7 @@
 /*
 =========================================================
 NEYO — CHAT CORE
-CHATGPT-STANDARD v7
+CHATGPT-STANDARD v8
 
 FILE:
 public/js/components/chat.js
@@ -9,37 +9,40 @@ public/js/components/chat.js
 OWNS
 ---------------------------------------------------------
 ✅ Single conversation state
-✅ /api/chat requests
-✅ Current conversation ID
-✅ Live user-message rendering
-✅ Live assistant-message rendering
-✅ Thinking indicator
-✅ Stop / AbortController
-✅ History state synchronization
+✅ /api/chat request
+✅ Conversation ID
+✅ Request lifecycle
+✅ Abort / Stop
+✅ Duplicate-send prevention
+✅ History state sync
 ✅ Attachment metadata
-✅ Chat lifecycle events
-✅ Error recovery
-✅ Duplicate-send protection
+✅ Preferences
+✅ Error / limit handling
+✅ Public chat events
 
 DOES NOT OWN
 ---------------------------------------------------------
-❌ Send button click
+❌ Message DOM
+❌ Markdown rendering
+❌ Thinking UI
+❌ Send button
 ❌ Enter key
 ❌ Attachment upload
-❌ Sidebar/history list UI
-❌ File picker
+❌ Sidebar/history rendering
 
-ARCHITECTURE
+PIPELINE
 ---------------------------------------------------------
 send-state.js
       ↓
 neyo:chat-send-request
       ↓
 chat.js
-      ├── render user instantly
-      ├── call /api/chat
-      ├── render assistant instantly
-      └── emit lifecycle events
+      ↓
+neyo:chat-message-added
+      ↓
+messages.js
+      ↓
+message-renderer.js
 
 =========================================================
 */
@@ -49,17 +52,16 @@ chat.js
 
 
   /* =====================================================
-     VERSION / GUARD
+     VERSION / DUPLICATE GUARD
      ===================================================== */
 
   const VERSION =
-    "neyo-chat-v7-chatgpt-standard";
+    "neyo-chat-v8-single-owner";
 
 
   if (
     window.NeyoChat
-      ?.__controller ===
-    true
+      ?.__controller === true
   ) {
     console.warn(
       "[NEYO Chat] Already initialized."
@@ -82,7 +84,7 @@ chat.js
         50,
 
       maxAttachments:
-        10,
+        5,
 
       requestTimeoutMs:
         180_000,
@@ -90,28 +92,6 @@ chat.js
       debug:
         true
     });
-
-
-  /* =====================================================
-     DOM
-     ===================================================== */
-
-  const chatMessages =
-    document.getElementById(
-      "chatMessages"
-    );
-
-
-  const heroSection =
-    document.getElementById(
-      "heroSection"
-    );
-
-
-  const scrollArea =
-    document.getElementById(
-      "scrollArea"
-    );
 
 
   /* =====================================================
@@ -126,15 +106,15 @@ chat.js
     null;
 
 
-  let isGenerating =
+  let generating =
     false;
 
 
-  let abortController =
+  let activeController =
     null;
 
 
-  let requestSerial =
+  let activeRequestId =
     0;
 
 
@@ -179,13 +159,12 @@ chat.js
 
 
   /* =====================================================
-     EVENTS
+     EVENT
      ===================================================== */
 
   function emit(
     name,
-    detail =
-      {}
+    detail = {}
   ) {
     window.dispatchEvent(
       new CustomEvent(
@@ -194,6 +173,29 @@ chat.js
           detail
         }
       )
+    );
+  }
+
+
+  /* =====================================================
+     ID
+     ===================================================== */
+
+  function createId() {
+    if (
+      globalThis.crypto
+        ?.randomUUID
+    ) {
+      return globalThis.crypto
+        .randomUUID();
+    }
+
+
+    return (
+      `msg_${Date.now()}_` +
+      Math.random()
+        .toString(36)
+        .slice(2)
     );
   }
 
@@ -227,586 +229,6 @@ chat.js
 
 
   /* =====================================================
-     IDS
-     ===================================================== */
-
-  function createId() {
-    if (
-      globalThis.crypto
-        ?.randomUUID
-    ) {
-      return globalThis.crypto
-        .randomUUID();
-    }
-
-
-    return (
-      `msg_${Date.now()}_` +
-      Math.random()
-        .toString(36)
-        .slice(2)
-    );
-  }
-
-
-  /* =====================================================
-     ESCAPE
-     ===================================================== */
-
-  function escapeHtml(
-    value
-  ) {
-    return String(
-      value ??
-      ""
-    )
-      .replace(
-        /&/g,
-        "&amp;"
-      )
-      .replace(
-        /</g,
-        "&lt;"
-      )
-      .replace(
-        />/g,
-        "&gt;"
-      )
-      .replace(
-        /"/g,
-        "&quot;"
-      )
-      .replace(
-        /'/g,
-        "&#039;"
-      );
-  }
-
-
-  /* =====================================================
-     MARKDOWN
-     ===================================================== */
-
-  function renderMarkdown(
-    text
-  ) {
-    const value =
-      String(
-        text ??
-        ""
-      );
-
-
-    try {
-      if (
-        !window.marked
-          ?.parse
-      ) {
-        return escapeHtml(
-          value
-        )
-          .replace(
-            /\n/g,
-            "<br>"
-          );
-      }
-
-
-      const rawHtml =
-        window.marked.parse(
-          value
-        );
-
-
-      /*
-      -----------------------------------------------------
-      Sanitize if DOMPurify exists.
-      -----------------------------------------------------
-      */
-
-      if (
-        window.DOMPurify
-          ?.sanitize
-      ) {
-        return window
-          .DOMPurify
-          .sanitize(
-            rawHtml
-          );
-      }
-
-
-      /*
-      -----------------------------------------------------
-      Never trust unsanitized Markdown HTML.
-
-      If DOMPurify isn't available, use plain safe text.
-      -----------------------------------------------------
-      */
-
-      return escapeHtml(
-        value
-      )
-        .replace(
-          /\n/g,
-          "<br>"
-        );
-
-    } catch (
-      error
-    ) {
-      console.warn(
-        "[NEYO Chat] Markdown render failed:",
-        error
-      );
-
-
-      return escapeHtml(
-        value
-      )
-        .replace(
-          /\n/g,
-          "<br>"
-        );
-    }
-  }
-
-
-  /* =====================================================
-     ICONS
-     ===================================================== */
-
-  function refreshIcons() {
-    try {
-      window.lucide
-        ?.createIcons
-        ?.();
-
-    } catch {}
-  }
-
-
-  /* =====================================================
-     SCROLL
-     ===================================================== */
-
-  function scrollToBottom() {
-    window.requestAnimationFrame(
-      () => {
-        if (
-          scrollArea
-        ) {
-          scrollArea.scrollTop =
-            scrollArea.scrollHeight;
-
-          return;
-        }
-
-
-        chatMessages
-          ?.lastElementChild
-          ?.scrollIntoView
-          ?.({
-            block:
-              "end"
-          });
-      }
-    );
-  }
-
-
-  /* =====================================================
-     START CHAT
-     ===================================================== */
-
-  function ensureChatVisible() {
-    if (
-      heroSection
-    ) {
-      heroSection.style.display =
-        "none";
-    }
-  }
-
-
-  /* =====================================================
-     MESSAGE DOM
-     ===================================================== */
-
-  function findRenderedMessage(
-    id
-  ) {
-    if (
-      !chatMessages ||
-      !id
-    ) {
-      return null;
-    }
-
-
-    return chatMessages
-      .querySelector(
-        `[data-neyo-message-id="${CSS.escape(
-          id
-        )}"]`
-      );
-  }
-
-
-  function createAttachmentSummary(
-    attachments
-  ) {
-    if (
-      !Array.isArray(
-        attachments
-      ) ||
-      attachments.length ===
-        0
-    ) {
-      return null;
-    }
-
-
-    const wrapper =
-      document.createElement(
-        "div"
-      );
-
-
-    wrapper.className =
-      "message-attachments";
-
-
-    attachments.forEach(
-      file => {
-        const chip =
-          document.createElement(
-            "div"
-          );
-
-
-        chip.className =
-          "message-attachment-chip";
-
-
-        const icon =
-          document.createElement(
-            "i"
-          );
-
-
-        icon.setAttribute(
-          "data-lucide",
-          file.category ===
-            "image"
-              ? "image"
-              : file.category ===
-                  "code"
-                ? "file-code-2"
-                : "file"
-        );
-
-
-        icon.setAttribute(
-          "size",
-          "14"
-        );
-
-
-        const label =
-          document.createElement(
-            "span"
-          );
-
-
-        label.textContent =
-          file.name ||
-          "Attachment";
-
-
-        chip.append(
-          icon,
-          label
-        );
-
-
-        wrapper.appendChild(
-          chip
-        );
-      }
-    );
-
-
-    return wrapper;
-  }
-
-
-  function renderMessageToUI(
-    message,
-    {
-      thinking =
-        false
-    } = {}
-  ) {
-    if (
-      !chatMessages ||
-      !message
-    ) {
-      return null;
-    }
-
-
-    ensureChatVisible();
-
-
-    const existing =
-      findRenderedMessage(
-        message.id
-      );
-
-
-    if (
-      existing
-    ) {
-      return existing;
-    }
-
-
-    const article =
-      document.createElement(
-        "article"
-      );
-
-
-    article.className =
-      `message ${message.role}`;
-
-
-    article.dataset
-      .neyoMessageId =
-      message.id;
-
-
-    article.dataset.role =
-      message.role;
-
-
-    const content =
-      document.createElement(
-        "div"
-      );
-
-
-    content.className =
-      "message-content";
-
-
-    if (
-      thinking
-    ) {
-      article.id =
-        "neyoThinkingIndicator";
-
-
-      content.classList.add(
-        "typing-indicator"
-      );
-
-
-      content.innerHTML = `
-        <span class="typing-dot"></span>
-        <span class="typing-dot"></span>
-        <span class="typing-dot"></span>
-      `;
-
-    } else if (
-      message.role ===
-      "assistant"
-    ) {
-      content.innerHTML =
-        renderMarkdown(
-          message.content
-        );
-
-    } else {
-      content.textContent =
-        message.content;
-
-
-      const attachmentSummary =
-        createAttachmentSummary(
-          message.attachments
-        );
-
-
-      if (
-        attachmentSummary
-      ) {
-        content.appendChild(
-          attachmentSummary
-        );
-      }
-    }
-
-
-    article.appendChild(
-      content
-    );
-
-
-    /*
-    -------------------------------------------------------
-    Assistant actions.
-    -------------------------------------------------------
-    */
-
-    if (
-      !thinking &&
-      message.role ===
-        "assistant"
-    ) {
-      const actions =
-        document.createElement(
-          "div"
-        );
-
-
-      actions.className =
-        "message-actions";
-
-
-      const copyButton =
-        document.createElement(
-          "button"
-        );
-
-
-      copyButton.type =
-        "button";
-
-
-      copyButton.className =
-        "action-btn";
-
-
-      copyButton.setAttribute(
-        "aria-label",
-        "Copy response"
-      );
-
-
-      copyButton.innerHTML = `
-        <i
-          data-lucide="copy"
-          size="14"
-        ></i>
-      `;
-
-
-      copyButton.addEventListener(
-        "click",
-        async () => {
-          try {
-            await navigator
-              .clipboard
-              .writeText(
-                message.content
-              );
-
-
-            emit(
-              "neyo:message-copied",
-              {
-                message
-              }
-            );
-
-          } catch (
-            error
-          ) {
-            console.warn(
-              "[NEYO Chat] Copy failed:",
-              error
-            );
-          }
-        }
-      );
-
-
-      actions.appendChild(
-        copyButton
-      );
-
-
-      article.appendChild(
-        actions
-      );
-    }
-
-
-    chatMessages.appendChild(
-      article
-    );
-
-
-    refreshIcons();
-
-
-    scrollToBottom();
-
-
-    return article;
-  }
-
-
-  /* =====================================================
-     THINKING
-     ===================================================== */
-
-  function showThinking() {
-    removeThinking();
-
-
-    const message =
-      {
-        id:
-          "neyo-thinking",
-
-        role:
-          "assistant",
-
-        content:
-          ""
-      };
-
-
-    return renderMessageToUI(
-      message,
-      {
-        thinking:
-          true
-      }
-    );
-  }
-
-
-  function removeThinking() {
-    document
-      .getElementById(
-        "neyoThinkingIndicator"
-      )
-      ?.remove();
-
-
-    document
-      .querySelector(
-        '[data-neyo-message-id="neyo-thinking"]'
-      )
-      ?.remove();
-  }
-
-
-  /* =====================================================
      ATTACHMENTS
      ===================================================== */
 
@@ -823,34 +245,50 @@ chat.js
 
 
     return attachments
+      .filter(
+        attachment =>
+          attachment &&
+          typeof attachment ===
+            "object"
+      )
       .slice(
         0,
         CONFIG.maxAttachments
       )
       .map(
-        file => {
+        attachment => {
           const mime =
-            file?.mimeType ||
-            file?.mime ||
-            file?.type ||
+            cleanText(
+              attachment.mimeType ||
+              attachment.mime ||
+              attachment.type ||
+              "application/octet-stream"
+            ) ||
             "application/octet-stream";
 
 
           return {
             provider:
-              file?.provider ||
+              cleanText(
+                attachment.provider
+              ) ||
               "supabase",
 
             bucket:
-              file?.bucket ||
+              cleanText(
+                attachment.bucket
+              ) ||
               "neyo-attachments",
 
             path:
-              file?.path ||
-              "",
+              cleanText(
+                attachment.path
+              ),
 
             name:
-              file?.name ||
+              cleanText(
+                attachment.name
+              ) ||
               "Attached file",
 
             mimeType:
@@ -860,21 +298,25 @@ chat.js
               mime,
 
             category:
-              file?.category ||
+              cleanText(
+                attachment.category
+              ) ||
               "unknown",
 
             size:
-              Number(
-                file?.size
-              ) ||
-              0
+              Math.max(
+                0,
+                Number(
+                  attachment.size
+                ) || 0
+              )
           };
         }
       )
       .filter(
-        file =>
+        attachment =>
           Boolean(
-            file.path
+            attachment.path
           )
       );
   }
@@ -906,22 +348,21 @@ chat.js
     }
 
 
-    const content =
-      cleanText(
-        message.content
-      );
-
-
     const normalized =
       {
         id:
-          message.id ||
+          cleanText(
+            message.id
+          ) ||
           createId(),
 
         role:
           message.role,
 
-        content
+        content:
+          cleanText(
+            message.content
+          )
       };
 
 
@@ -951,6 +392,14 @@ chat.js
         [
           ...message.sources
         ];
+    }
+
+
+    if (
+      message.error === true
+    ) {
+      normalized.error =
+        true;
     }
 
 
@@ -996,25 +445,34 @@ chat.js
 
 
   /* =====================================================
+     BOUND STATE
+     ===================================================== */
+
+  function boundConversation() {
+    if (
+      conversation.length <=
+      CONFIG.maxHistoryMessages
+    ) {
+      return;
+    }
+
+
+    conversation =
+      conversation.slice(
+        -CONFIG.maxHistoryMessages
+      );
+  }
+
+
+  /* =====================================================
      ADD MESSAGE
      ===================================================== */
 
   function addMessage(
     role,
     content,
-    options =
-      {}
+    options = {}
   ) {
-    if (
-      role !==
-        "user" &&
-      role !==
-        "assistant"
-    ) {
-      return null;
-    }
-
-
     const message =
       normalizeMessage({
         id:
@@ -1029,7 +487,10 @@ chat.js
           options.attachments,
 
         sources:
-          options.sources
+          options.sources,
+
+        error:
+          options.error
       });
 
 
@@ -1045,30 +506,19 @@ chat.js
     );
 
 
-    if (
-      conversation.length >
-      CONFIG.maxHistoryMessages
-    ) {
-      conversation =
-        conversation.slice(
-          -CONFIG.maxHistoryMessages
-        );
-    }
+    boundConversation();
 
 
     /*
     -------------------------------------------------------
-    Render immediately.
+    IMPORTANT:
 
-    This fixes the bug where message only appeared after
-    reloading history.
+    chat.js does NOT render DOM.
+
+    messages.js receives this event and creates the shell.
+    message-renderer.js upgrades assistant content.
     -------------------------------------------------------
     */
-
-    renderMessageToUI(
-      message
-    );
-
 
     emit(
       "neyo:chat-message-added",
@@ -1079,11 +529,7 @@ chat.js
           },
 
         conversation:
-          conversation.map(
-            item => ({
-              ...item
-            })
-          )
+          getConversation()
       }
     );
 
@@ -1101,33 +547,75 @@ chat.js
   ) {
     const index =
       conversation.findIndex(
-        item =>
-          item.id ===
+        message =>
+          message.id ===
           id
       );
 
 
     if (
-      index <
-      0
+      index ===
+      -1
     ) {
       return false;
     }
 
 
-    conversation.splice(
-      index,
-      1
+    const [
+      removed
+    ] =
+      conversation.splice(
+        index,
+        1
+      );
+
+
+    emit(
+      "neyo:chat-message-removed",
+      {
+        message:
+          removed,
+
+        conversation:
+          getConversation()
+      }
     );
 
 
-    findRenderedMessage(
-      id
-    )
-      ?.remove();
-
-
     return true;
+  }
+
+
+  /* =====================================================
+     GET CONVERSATION
+     ===================================================== */
+
+  function getConversation() {
+    return conversation.map(
+      message => ({
+        ...message,
+
+        attachments:
+          Array.isArray(
+            message.attachments
+          )
+            ? message.attachments.map(
+                attachment => ({
+                  ...attachment
+                })
+              )
+            : undefined,
+
+        sources:
+          Array.isArray(
+            message.sources
+          )
+            ? [
+                ...message.sources
+              ]
+            : undefined
+      })
+    );
   }
 
 
@@ -1155,10 +643,9 @@ chat.js
      TITLE
      ===================================================== */
 
-  function makeConversationTitle(
+  function createTitle(
     text,
-    attachments =
-      []
+    attachments
   ) {
     const clean =
       cleanText(
@@ -1205,24 +692,18 @@ chat.js
 
 
   /* =====================================================
-     PAYLOAD
+     BUILD PAYLOAD
      ===================================================== */
 
-  function buildPayload(
-    apiContent,
+  function buildPayload({
+    prompt,
     attachments
-  ) {
+  }) {
     const privateChat =
       Boolean(
         preferences.privateChat
       );
 
-
-    /*
-    -------------------------------------------------------
-    conversation already contains the latest user message.
-    -------------------------------------------------------
-    */
 
     return {
       messages:
@@ -1265,8 +746,8 @@ chat.js
         ),
 
       title:
-        makeConversationTitle(
-          apiContent,
+        createTitle(
+          prompt,
           attachments
         )
     };
@@ -1274,10 +755,10 @@ chat.js
 
 
   /* =====================================================
-     JSON
+     RESPONSE JSON
      ===================================================== */
 
-  async function readJsonResponse(
+  async function readResponse(
     response
   ) {
     const raw =
@@ -1308,12 +789,18 @@ chat.js
     if (
       !response.ok
     ) {
-      const error =
-        new Error(
+      const message =
+        cleanText(
           data?.message ||
           data?.error ||
-          raw ||
-          `Request failed (${response.status}).`
+          raw
+        ) ||
+        `Request failed (${response.status}).`;
+
+
+      const error =
+        new Error(
+          message
         );
 
 
@@ -1334,7 +821,7 @@ chat.js
 
 
   /* =====================================================
-     REPLY
+     REPLY EXTRACTION
      ===================================================== */
 
   function extractReply(
@@ -1351,10 +838,39 @@ chat.js
       data?.text;
 
 
-    return typeof value ===
+    if (
+      typeof value !==
       "string"
-        ? value.trim()
-        : "";
+    ) {
+      return "";
+    }
+
+
+    return value.trim();
+  }
+
+
+  /* =====================================================
+     STOP
+     ===================================================== */
+
+  function stop() {
+    if (
+      !activeController
+    ) {
+      return false;
+    }
+
+
+    try {
+      activeController.abort();
+
+
+      return true;
+
+    } catch {
+      return false;
+    }
   }
 
 
@@ -1363,19 +879,17 @@ chat.js
      ===================================================== */
 
   async function send({
-    text =
-      "",
-    attachments =
-      []
+    text = "",
+    attachments = []
   } = {}) {
     /*
     -------------------------------------------------------
-    Prevent duplicate calls.
+    Never allow two parallel generations from one chat.
     -------------------------------------------------------
     */
 
     if (
-      isGenerating
+      generating
     ) {
       emit(
         "neyo:chat-busy"
@@ -1407,25 +921,40 @@ chat.js
     }
 
 
+    /*
+    -------------------------------------------------------
+    Text shown to API when user sends only attachment.
+
+    User-visible text stays clean via displayContent.
+    -------------------------------------------------------
+    */
+
     const apiContent =
       clean ||
-      "Please analyze the attached file.";
+      "Please analyze the attached file or files.";
 
 
-    const serial =
-      ++requestSerial;
+    const displayContent =
+      clean ||
+      "Please analyze the attached file or files.";
+
+
+    const requestId =
+      ++activeRequestId;
 
 
     /*
     -------------------------------------------------------
-    Add + render user instantly.
+    Add user message first.
+
+    messages.js renders it immediately.
     -------------------------------------------------------
     */
 
     const userMessage =
       addMessage(
         "user",
-        apiContent,
+        displayContent,
         {
           attachments:
             readyAttachments
@@ -1440,23 +969,34 @@ chat.js
     }
 
 
-    isGenerating =
+    /*
+    -------------------------------------------------------
+    API needs actual prompt content.
+
+    For attachment-only request these are the same.
+    -------------------------------------------------------
+    */
+
+    userMessage.content =
+      apiContent;
+
+
+    generating =
       true;
 
 
-    abortController =
+    const controller =
       new AbortController();
 
 
-    const thisController =
-      abortController;
+    activeController =
+      controller;
 
 
     emit(
       "neyo:chat-send-start",
       {
-        requestId:
-          serial,
+        requestId,
 
         text:
           clean,
@@ -1470,19 +1010,17 @@ chat.js
     );
 
 
-    showThinking();
-
-
-    let timeoutId =
+    let timeout =
       null;
 
 
     try {
-      timeoutId =
+      timeout =
         window.setTimeout(
           () => {
             try {
-              thisController.abort();
+              controller.abort();
+
             } catch {}
           },
           CONFIG.requestTimeoutMs
@@ -1490,17 +1028,19 @@ chat.js
 
 
       const payload =
-        buildPayload(
-          apiContent,
-          readyAttachments
-        );
+        buildPayload({
+          prompt:
+            apiContent,
+
+          attachments:
+            readyAttachments
+        });
 
 
       debug(
-        "SEND",
+        "REQUEST",
         {
-          requestId:
-            serial,
+          requestId,
 
           conversationId:
             currentConversationId,
@@ -1509,7 +1049,7 @@ chat.js
             payload.messages.length,
 
           attachments:
-            readyAttachments.length
+            payload.attachments.length
         }
       );
 
@@ -1527,17 +1067,16 @@ chat.js
             cache:
               "no-store",
 
-            headers:
-              {
-                "Content-Type":
-                  "application/json",
+            headers: {
+              "Content-Type":
+                "application/json",
 
-                Accept:
-                  "application/json",
+              Accept:
+                "application/json",
 
-                "X-Neyo-Chat-Client":
-                  VERSION
-              },
+              "X-Neyo-Chat-Client":
+                VERSION
+            },
 
             body:
               JSON.stringify(
@@ -1545,16 +1084,14 @@ chat.js
               ),
 
             signal:
-              thisController.signal
+              controller.signal
           }
         );
 
 
-      /*
-      -------------------------------------------------------
-      429 handling.
-      -------------------------------------------------------
-      */
+      /* =================================================
+         RATE LIMIT
+         ================================================= */
 
       if (
         response.status ===
@@ -1568,19 +1105,10 @@ chat.js
             );
 
 
-        removeThinking();
-
-
-        /*
-        Keep user message visible.
-        ChatGPT does not make the user's text disappear just
-        because the server limit failed.
-        */
-
-
         emit(
           "neyo:chat-limit-reached",
           {
+            requestId,
             data
           }
         );
@@ -1591,21 +1119,28 @@ chat.js
 
 
       const data =
-        await readJsonResponse(
+        await readResponse(
           response
         );
 
 
       /*
       -------------------------------------------------------
-      Ignore stale response if a newer request/reset occurred.
+      Ignore response from request invalidated by history/new
+      chat.
       -------------------------------------------------------
       */
 
       if (
-        serial !==
-        requestSerial
+        requestId !==
+        activeRequestId
       ) {
+        debug(
+          "STALE_RESPONSE_IGNORED",
+          requestId
+        );
+
+
         return null;
       }
 
@@ -1625,11 +1160,9 @@ chat.js
       }
 
 
-      /*
-      -------------------------------------------------------
-      Conversation ID.
-      -------------------------------------------------------
-      */
+      /* =================================================
+         CONVERSATION ID
+         ================================================= */
 
       if (
         !preferences.privateChat &&
@@ -1645,6 +1178,10 @@ chat.js
       }
 
 
+      /* =================================================
+         SOURCES
+         ================================================= */
+
       const sources =
         Array.isArray(
           data?.sources
@@ -1653,14 +1190,9 @@ chat.js
           : [];
 
 
-      removeThinking();
-
-
-      /*
-      -------------------------------------------------------
-      Render assistant instantly.
-      -------------------------------------------------------
-      */
+      /* =================================================
+         ASSISTANT MESSAGE
+         ================================================= */
 
       const assistantMessage =
         addMessage(
@@ -1674,9 +1206,14 @@ chat.js
 
       const result =
         {
+          requestId,
+
           reply,
 
           sources,
+
+          message:
+            assistantMessage,
 
           conversationId:
             currentConversationId,
@@ -1694,10 +1231,7 @@ chat.js
 
           creditType:
             data?.creditType ||
-            null,
-
-          message:
-            assistantMessage
+            null
         };
 
 
@@ -1707,11 +1241,21 @@ chat.js
       );
 
 
+      /*
+      -------------------------------------------------------
+      History module may refresh sidebar.
+      -------------------------------------------------------
+      */
+
       if (
         !preferences.privateChat
       ) {
         emit(
-          "neyo:history-load-request"
+          "neyo:history-load-request",
+          {
+            conversationId:
+              currentConversationId
+          }
         );
       }
 
@@ -1721,8 +1265,11 @@ chat.js
     } catch (
       error
     ) {
-      removeThinking();
-
+      /*
+      -------------------------------------------------------
+      STOP
+      -------------------------------------------------------
+      */
 
       if (
         error?.name ===
@@ -1731,8 +1278,10 @@ chat.js
         emit(
           "neyo:chat-aborted",
           {
-            requestId:
-              serial
+            requestId,
+
+            conversationId:
+              currentConversationId
           }
         );
 
@@ -1742,57 +1291,68 @@ chat.js
 
 
       console.error(
-        "[NEYO Chat] Send failed:",
+        "[NEYO Chat] Request failed:",
         error
       );
 
 
       /*
       -------------------------------------------------------
-      Show an inline assistant error so screen never appears
-      frozen/blank.
+      Render a visible error message through messages.js.
+
+      Prevents "nothing happened" experience.
       -------------------------------------------------------
       */
 
-      const errorText =
+      let userFacingError =
+        "Something went wrong. Please try again.";
+
+
+      if (
         error?.status ===
-          401
-          ? "Your session has expired. Please sign in again."
-          : error?.message ||
-            "Something went wrong. Please try again.";
+        401
+      ) {
+        userFacingError =
+          "Your session has expired. Please sign in again.";
+
+      } else if (
+        error?.status ===
+        413
+      ) {
+        userFacingError =
+          "This request is too large.";
+
+      } else if (
+        error?.status >=
+        500
+      ) {
+        userFacingError =
+          "NEYO is temporarily unavailable. Please try again.";
+
+      } else if (
+        error?.message
+      ) {
+        userFacingError =
+          error.message;
+      }
 
 
       const errorMessage =
         addMessage(
           "assistant",
-          `⚠️ ${errorText}`,
+          `⚠️ ${userFacingError}`,
           {
-            id:
-              createId()
+            error:
+              true
           }
         );
-
-
-      if (
-        errorMessage
-      ) {
-        const element =
-          findRenderedMessage(
-            errorMessage.id
-          );
-
-
-        element
-          ?.classList
-          .add(
-            "message-error"
-          );
-      }
 
 
       emit(
         "neyo:chat-error",
         {
+          requestId,
+
           error,
 
           message:
@@ -1805,40 +1365,37 @@ chat.js
 
     } finally {
       if (
-        timeoutId
+        timeout !==
+        null
       ) {
         window.clearTimeout(
-          timeoutId
+          timeout
         );
       }
 
 
       /*
       -------------------------------------------------------
-      Only current request may release state.
+      Only the active request may reset generation state.
       -------------------------------------------------------
       */
 
       if (
-        serial ===
-        requestSerial
+        requestId ===
+        activeRequestId
       ) {
-        isGenerating =
+        generating =
           false;
 
 
-        abortController =
+        activeController =
           null;
-
-
-        removeThinking();
 
 
         emit(
           "neyo:chat-send-end",
           {
-            requestId:
-              serial,
+            requestId,
 
             conversationId:
               currentConversationId
@@ -1850,67 +1407,27 @@ chat.js
 
 
   /* =====================================================
-     STOP
-     ===================================================== */
-
-  function stop() {
-    if (
-      !abortController
-    ) {
-      return false;
-    }
-
-
-    try {
-      abortController.abort();
-
-      return true;
-
-    } catch {
-      return false;
-    }
-  }
-
-
-  /* =====================================================
-     CLEAR UI
-     ===================================================== */
-
-  function clearMessagesUI() {
-    if (
-      chatMessages
-    ) {
-      chatMessages.innerHTML =
-        "";
-    }
-
-
-    removeThinking();
-  }
-
-
-  /* =====================================================
      NEW CONVERSATION
      ===================================================== */
 
   function newConversation() {
     /*
-    Invalidate any response already in flight.
+    Invalidate existing request before aborting.
     */
 
-    requestSerial +=
+    activeRequestId +=
       1;
 
 
     stop();
 
 
-    isGenerating =
-      false;
-
-
-    abortController =
+    activeController =
       null;
+
+
+    generating =
+      false;
 
 
     conversation =
@@ -1921,15 +1438,13 @@ chat.js
       null;
 
 
-    clearMessagesUI();
+    /*
+    messages.js owns clearing DOM.
+    */
 
-
-    if (
-      heroSection
-    ) {
-      heroSection.style.display =
-        "";
-    }
+    emit(
+      "neyo:messages-clear"
+    );
 
 
     emit(
@@ -1941,40 +1456,52 @@ chat.js
     );
 
 
+    emit(
+      "neyo:chat-send-end",
+      {
+        conversationId:
+          null
+      }
+    );
+
+
     return true;
   }
 
 
   /* =====================================================
-     LOAD HISTORY INTO SAME STATE
+     LOAD CONVERSATION
      ===================================================== */
 
   function loadConversation({
     conversationId,
-    messages =
-      []
+    messages = []
   } = {}) {
     /*
-    Invalidate in-flight request.
+    -------------------------------------------------------
+    Cancel any old generation.
+    -------------------------------------------------------
     */
 
-    requestSerial +=
+    activeRequestId +=
       1;
 
 
     stop();
 
 
-    isGenerating =
-      false;
-
-
-    abortController =
+    activeController =
       null;
 
 
+    generating =
+      false;
+
+
     currentConversationId =
-      conversationId ||
+      cleanText(
+        conversationId
+      ) ||
       null;
 
 
@@ -1997,36 +1524,36 @@ chat.js
 
     /*
     -------------------------------------------------------
-    Render loaded history immediately as well.
+    Renderer pipeline owns DOM.
 
-    This keeps one source of truth.
+    Clear then emit every message in correct order.
     -------------------------------------------------------
     */
 
-    clearMessagesUI();
+    emit(
+      "neyo:messages-clear"
+    );
 
 
-    if (
-      conversation.length >
-      0
-    ) {
-      ensureChatVisible();
+    conversation.forEach(
+      message => {
+        emit(
+          "neyo:chat-message-added",
+          {
+            message:
+              {
+                ...message
+              },
 
+            conversation:
+              getConversation(),
 
-      conversation.forEach(
-        message => {
-          renderMessageToUI(
-            message
-          );
-        }
-      );
-
-    } else if (
-      heroSection
-    ) {
-      heroSection.style.display =
-        "";
-    }
+            historyLoad:
+              true
+          }
+        );
+      }
+    );
 
 
     emit(
@@ -2036,11 +1563,7 @@ chat.js
           currentConversationId,
 
         messages:
-          conversation.map(
-            message => ({
-              ...message
-            })
-          )
+          getConversation()
       }
     );
 
@@ -2070,7 +1593,7 @@ chat.js
       typeof values !==
         "object"
     ) {
-      return;
+      return false;
     }
 
 
@@ -2090,6 +1613,9 @@ chat.js
           }
       }
     );
+
+
+    return true;
   }
 
 
@@ -2143,10 +1669,10 @@ chat.js
 
 
   /* =====================================================
-     HISTORY LOAD EVENTS
+     HISTORY LOAD
      ===================================================== */
 
-  function receiveConversationLoad(
+  function handleConversationLoad(
     event
   ) {
     const detail =
@@ -2170,19 +1696,13 @@ chat.js
 
   window.addEventListener(
     "neyo:conversation-loaded",
-    receiveConversationLoad
+    handleConversationLoad
   );
 
 
-  /*
-  ---------------------------------------------------------
-  Compatibility with other history implementations.
-  ---------------------------------------------------------
-  */
-
   window.addEventListener(
     "neyo:history-conversation-loaded",
-    receiveConversationLoad
+    handleConversationLoad
   );
 
 
@@ -2202,7 +1722,7 @@ chat.js
 
 
   /* =====================================================
-     EXTERNAL STATE SYNC
+     STATE REQUEST
      ===================================================== */
 
   window.addEventListener(
@@ -2215,14 +1735,14 @@ chat.js
             currentConversationId,
 
           messages:
-            conversation.map(
-              message => ({
-                ...message
-              })
-            ),
+            getConversation(),
 
-          generating:
-            isGenerating
+          generating,
+
+          preferences:
+            {
+              ...preferences
+            }
         }
       );
     }
@@ -2251,20 +1771,11 @@ chat.js
 
       addMessage,
 
+      removeMessage,
+
       setPreferences,
 
-      getPreferences:
-        () => ({
-          ...preferences
-        }),
-
-      getConversation:
-        () =>
-          conversation.map(
-            message => ({
-              ...message
-            })
-          ),
+      getConversation,
 
       getConversationId:
         () =>
@@ -2274,24 +1785,30 @@ chat.js
         id
       ) {
         currentConversationId =
-          id ||
+          cleanText(
+            id
+          ) ||
           null;
+
+
+        return true;
       },
+
+      getPreferences:
+        () => ({
+          ...preferences
+        }),
 
       isGenerating:
         () =>
-          isGenerating,
-
-      clearUI:
-        clearMessagesUI,
-
-      render:
-        renderMessageToUI,
+          generating,
 
       getState:
         () => ({
           version:
             VERSION,
+
+          generating,
 
           conversationId:
             currentConversationId,
@@ -2299,8 +1816,8 @@ chat.js
           messageCount:
             conversation.length,
 
-          generating:
-            isGenerating,
+          requestId:
+            activeRequestId,
 
           preferences:
             {
@@ -2330,7 +1847,7 @@ chat.js
 
 
   /* =====================================================
-     INIT
+     READY
      ===================================================== */
 
   debug(
@@ -2339,20 +1856,17 @@ chat.js
       version:
         VERSION,
 
-      chatMessages:
-        Boolean(
-          chatMessages
-        ),
+      domRendering:
+        false,
 
-      heroSection:
-        Boolean(
-          heroSection
-        ),
+      singleConversationState:
+        true,
 
-      scrollArea:
-        Boolean(
-          scrollArea
-        )
+      duplicateSendProtection:
+        true,
+
+      neoJsTouched:
+        false
     }
   );
 

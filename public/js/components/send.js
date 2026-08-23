@@ -1,584 +1,887 @@
 /*
 =========================================================
-NEYO — SEND ORCHESTRATOR
+NEYO — SEND COMPATIBILITY FACADE
+FINAL STABLE v5
 
-Owns:
-- Send button click
-- Enter-to-send
-- Composer → upload → chat flow
-- Send busy state
-- Composer reset after success
-- Attachment clear after success
-- Stop generation button state bridge
+FILE:
+public/js/components/send.js
 
-Does NOT own:
-- Chat API
-- File upload implementation
-- Attachment picker
-- Message rendering
-- Composer resize logic
+PURPOSE
+---------------------------------------------------------
+Keep the old window.NeyoSend public contract without
+creating a second Send owner.
+
+CANONICAL OWNERS
+---------------------------------------------------------
+send-state.js
+- #sendBtn click
+- Enter / Shift+Enter
+- Send ↔ Stop visual state
+- attachment readiness/error gating
+- neyo:chat-send-request / neyo:chat-stop-request
+
+chat.js
+- conversation state
+- /api/chat
+- request lifecycle / abort
+
+attachments.js
+- attachment selection/upload/process state
+
+chat-runtime.js
+- legacy action bridge while neo.js is still loaded
+
+THIS FILE OWNS ONLY
+---------------------------------------------------------
+- window.NeyoSend compatibility API
+- programmatic send/stop delegation
+- legacy neyo:send-request bridge
+- legacy neyo:send-* lifecycle aliases
+- read-only diagnostics
+
+THIS FILE MUST NOT
+---------------------------------------------------------
+- bind #sendBtn
+- bind Enter
+- upload files
+- clear composer text
+- clear attachments
+- call /api/chat
+- mutate conversation
+- modify top bar/model picker/UI
+
+WHY
+---------------------------------------------------------
+The old send.js duplicated send-state.js and could cause
+multiple sends, multiple uploads, or multiple resets.
+This version removes only that conflict and preserves the
+public compatibility surface.
 =========================================================
 */
 
 (() => {
-    "use strict";
+  "use strict";
 
+  const VERSION =
+    "neyo-send-facade-final-v5";
 
-    /* =====================================================
-       ELEMENTS
-       ===================================================== */
+  if (
+    window.NeyoSend
+      ?.__controller === true
+  ) {
+    return;
+  }
 
-    const chatInput =
-        document.getElementById(
-            "chatInput"
-        );
+  /* =====================================================
+     LEGACY TELEMETRY
+     ===================================================== */
 
-    const sendBtn =
-        document.getElementById(
-            "sendBtn"
-        );
+  const legacyScriptPresent =
+    Array
+      .from(
+        document.scripts || []
+      )
+      .some(
+        script =>
+          /(?:^|\/)neo\.js(?:\?|$)/
+            .test(
+              script.src || ""
+            )
+      );
 
+  /* =====================================================
+     STATE
+     ===================================================== */
+
+  let delegating =
+    false;
+
+  let lifecycleOpen =
+    false;
+
+  let lastRequestAt =
+    0;
+
+  let lastResult =
+    null;
+
+  const metrics = {
+    sendRequests:
+      0,
+
+    stopRequests:
+      0,
+
+    delegatedToSendState:
+      0,
+
+    unavailableRequests:
+      0,
+
+    duplicateRequestsBlocked:
+      0,
+
+    refreshes:
+      0,
+
+    lifecycleStarts:
+      0,
+
+    lifecycleSuccesses:
+      0,
+
+    lifecycleErrors:
+      0,
+
+    lifecycleEnds:
+      0,
+
+    lastRequestedAt:
+      null
+  };
+
+  /* =====================================================
+     EVENT
+     ===================================================== */
+
+  function emit(
+    name,
+    detail = {}
+  ) {
+    window.dispatchEvent(
+      new CustomEvent(
+        name,
+        {
+          detail
+        }
+      )
+    );
+  }
+
+  /* =====================================================
+     CONTROLLERS
+     ===================================================== */
+
+  function getSendState() {
+    const value =
+      window.NeyoSendState;
+
+    return (
+      value &&
+      typeof value ===
+        "object"
+    )
+      ? value
+      : null;
+  }
+
+  function getChat() {
+    const value =
+      window.NeyoChat;
+
+    return (
+      value &&
+      typeof value ===
+        "object"
+    )
+      ? value
+      : null;
+  }
+
+  /* =====================================================
+     SEND STATE SNAPSHOT
+     ===================================================== */
+
+  function getSendStateSnapshot() {
+    try {
+      const state =
+        getSendState()
+          ?.getState
+          ?.();
+
+      return (
+        state &&
+        typeof state ===
+          "object"
+      )
+        ? state
+        : null;
+
+    } catch {
+      return null;
+    }
+  }
+
+  /* =====================================================
+     CAN SEND
+     ===================================================== */
+
+  function canSend() {
+    const controller =
+      getSendState();
 
     if (
-        !chatInput ||
-        !sendBtn
+      !controller
     ) {
-        return;
+      return false;
     }
 
+    try {
+      if (
+        typeof controller
+          .canSend ===
+        "function"
+      ) {
+        return Boolean(
+          controller.canSend()
+        );
+      }
 
-    /* =====================================================
-       STATE
-       ===================================================== */
+      const state =
+        controller
+          .getState
+          ?.();
 
-    let sending =
+      if (
+        typeof state
+          ?.canSend ===
+        "boolean"
+      ) {
+        return state.canSend;
+      }
+
+    } catch {}
+
+    return false;
+  }
+
+  /* =====================================================
+     GENERATING
+     ===================================================== */
+
+  function isGenerating() {
+    const state =
+      getSendStateSnapshot();
+
+    if (
+      typeof state
+        ?.generating ===
+      "boolean"
+    ) {
+      return state.generating;
+    }
+
+    try {
+      return Boolean(
+        getChat()
+          ?.isGenerating
+          ?.()
+      );
+
+    } catch {
+      return false;
+    }
+  }
+
+  /* =====================================================
+     SEND
+
+     IMPORTANT:
+     No direct NeyoChat.send().
+     No upload.
+     No input clearing.
+     No attachment clearing.
+
+     Everything goes through NeyoSendState.
+     ===================================================== */
+
+  function send() {
+    const now =
+      performance.now();
+
+    if (
+      delegating &&
+      now -
+        lastRequestAt <
+        160
+    ) {
+      metrics
+        .duplicateRequestsBlocked +=
+        1;
+
+      return false;
+    }
+
+    lastRequestAt =
+      now;
+
+    delegating =
+      true;
+
+    metrics.sendRequests +=
+      1;
+
+    metrics.lastRequestedAt =
+      Date.now();
+
+    try {
+      const controller =
+        getSendState();
+
+      if (
+        !controller
+      ) {
+        metrics
+          .unavailableRequests +=
+          1;
+
+        emit(
+          "neyo:send-unavailable",
+          {
+            reason:
+              "send-state-missing",
+
+            message:
+              "Send controller is not ready."
+          }
+        );
+
+        return false;
+      }
+
+      let result;
+
+      /*
+       * Current final send-state API.
+       */
+
+      if (
+        typeof controller
+          .requestSend ===
+        "function"
+      ) {
+        result =
+          controller
+            .requestSend();
+      }
+
+      /*
+       * Compatibility with versions exposing .send().
+       */
+
+      else if (
+        typeof controller
+          .send ===
+        "function"
+      ) {
+        result =
+          controller.send();
+      }
+
+      else {
+        metrics
+          .unavailableRequests +=
+          1;
+
+        emit(
+          "neyo:send-unavailable",
+          {
+            reason:
+              "send-method-missing",
+
+            message:
+              "Send controller is not ready."
+          }
+        );
+
+        return false;
+      }
+
+      metrics
+        .delegatedToSendState +=
+        1;
+
+      lastResult =
+        result ??
+        null;
+
+      emit(
+        "neyo:send-delegated",
+        {
+          accepted:
+            Boolean(
+              result
+            ),
+
+          source:
+            "NeyoSend"
+        }
+      );
+
+      return result;
+
+    } catch (
+      error
+    ) {
+      console.error(
+        "[NEYO Send] Delegation failed:",
+        error
+      );
+
+      emit(
+        "neyo:send-facade-error",
+        {
+          error,
+
+          message:
+            error?.message ||
+            "Send delegation failed."
+        }
+      );
+
+      return false;
+
+    } finally {
+      queueMicrotask(
+        () => {
+          delegating =
+            false;
+        }
+      );
+    }
+  }
+
+  /* =====================================================
+     STOP
+     ===================================================== */
+
+  function stop(
+    reason =
+      "send-facade-stop"
+  ) {
+    metrics.stopRequests +=
+      1;
+
+    const controller =
+      getSendState();
+
+    try {
+      if (
+        typeof controller
+          ?.stop ===
+        "function"
+      ) {
+        return Boolean(
+          controller.stop(
+            reason
+          )
+        );
+      }
+
+    } catch (
+      error
+    ) {
+      console.warn(
+        "[NEYO Send] Send-state stop failed:",
+        error
+      );
+    }
+
+    /*
+     * Canonical stop fallback.
+     *
+     * chat.js already consumes this event.
+     */
+
+    emit(
+      "neyo:chat-stop-request",
+      {
+        reason,
+
+        source:
+          "NeyoSend"
+      }
+    );
+
+    return true;
+  }
+
+  /* =====================================================
+     REFRESH
+
+     app-init.js / older modules can keep calling
+     NeyoSend.refresh().
+
+     Actual button rendering remains send-state.js.
+     ===================================================== */
+
+  function refresh() {
+    metrics.refreshes +=
+      1;
+
+    const controller =
+      getSendState();
+
+    try {
+      if (
+        typeof controller
+          ?.update ===
+        "function"
+      ) {
+        controller.update();
+
+        return true;
+      }
+
+      if (
+        typeof controller
+          ?.refresh ===
+        "function"
+      ) {
+        controller.refresh();
+
+        return true;
+      }
+
+    } catch (
+      error
+    ) {
+      console.warn(
+        "[NEYO Send] Refresh failed:",
+        error
+      );
+    }
+
+    return false;
+  }
+
+  /* =====================================================
+     LEGACY PROGRAMMATIC REQUEST
+
+     Preserve:
+       window.dispatchEvent(
+         new CustomEvent("neyo:send-request")
+       )
+
+     But route it through the canonical send owner.
+     ===================================================== */
+
+  window.addEventListener(
+    "neyo:send-request",
+    () => {
+      send();
+    }
+  );
+
+  /* =====================================================
+     LEGACY STOP REQUEST
+     ===================================================== */
+
+  window.addEventListener(
+    "neyo:send-stop-request",
+    event => {
+      stop(
+        event.detail
+          ?.reason ||
+        "send-stop-request"
+      );
+    }
+  );
+
+  /* =====================================================
+     LEGACY SEND LIFECYCLE ALIASES
+
+     Old observers may expect:
+     - neyo:send-start
+     - neyo:send-success
+     - neyo:send-error
+     - neyo:send-end
+
+     We preserve those events WITHOUT owning transport.
+     ===================================================== */
+
+  window.addEventListener(
+    "neyo:chat-send-start",
+    event => {
+      /*
+       * Avoid duplicate lifecycle starts.
+       */
+
+      if (
+        lifecycleOpen
+      ) {
+        return;
+      }
+
+      lifecycleOpen =
+        true;
+
+      metrics.lifecycleStarts +=
+        1;
+
+      emit(
+        "neyo:send-start",
+        {
+          ...(
+            event.detail ||
+            {}
+          ),
+
+          compatibility:
+            true
+        }
+      );
+    }
+  );
+
+  /* =====================================================
+     SUCCESS ALIAS
+     ===================================================== */
+
+  window.addEventListener(
+    "neyo:chat-response",
+    event => {
+      if (
+        !lifecycleOpen
+      ) {
+        return;
+      }
+
+      metrics.lifecycleSuccesses +=
+        1;
+
+      emit(
+        "neyo:send-success",
+        {
+          ...(
+            event.detail ||
+            {}
+          ),
+
+          compatibility:
+            true
+        }
+      );
+    }
+  );
+
+  /* =====================================================
+     ERROR ALIAS
+     ===================================================== */
+
+  window.addEventListener(
+    "neyo:chat-error",
+    event => {
+      if (
+        !lifecycleOpen
+      ) {
+        return;
+      }
+
+      metrics.lifecycleErrors +=
+        1;
+
+      emit(
+        "neyo:send-error",
+        {
+          ...(
+            event.detail ||
+            {}
+          ),
+
+          compatibility:
+            true
+        }
+      );
+    }
+  );
+
+  /* =====================================================
+     END ALIAS
+
+     Only chat-send-end closes the compatibility cycle,
+     avoiding duplicate send-end events from abort/error.
+     ===================================================== */
+
+  window.addEventListener(
+    "neyo:chat-send-end",
+    event => {
+      if (
+        !lifecycleOpen
+      ) {
+        return;
+      }
+
+      lifecycleOpen =
         false;
 
+      metrics.lifecycleEnds +=
+        1;
 
-    /* =====================================================
-       HELPERS
-       ===================================================== */
+      emit(
+        "neyo:send-end",
+        {
+          ...(
+            event.detail ||
+            {}
+          ),
 
-    const emit = (
-        name,
-        detail = {}
-    ) => {
+          compatibility:
+            true
+        }
+      );
+    }
+  );
 
-        window.dispatchEvent(
-            new CustomEvent(
-                name,
-                {
-                    detail
-                }
-            )
-        );
+  /* =====================================================
+     NEW CHAT CLEANUP
+     ===================================================== */
 
-    };
+  window.addEventListener(
+    "neyo:chat-new",
+    () => {
+      lifecycleOpen =
+        false;
 
+      delegating =
+        false;
+    }
+  );
 
-    const getText = () => {
+  /* =====================================================
+     PUBLIC API
+     ===================================================== */
 
-        return String(
-            chatInput.value || ""
-        ).trim();
+  const api =
+    Object.freeze({
+      __controller:
+        true,
 
-    };
+      version:
+        VERSION,
 
+      active:
+        true,
 
-    const getAttachments = () => {
+      compatibilityFacade:
+        true,
 
-        return (
-            window.NeyoAttachments
-                ?.getFiles?.() ||
-            []
-        );
+      legacyScriptPresent,
 
-    };
+      legacyOwnerActive:
+        false,
 
+      /*
+       * Compatibility methods
+       */
 
-    const hasContent = () => {
+      send,
 
-        return (
-            getText().length > 0 ||
-            getAttachments().length > 0
-        );
+      request:
+        send,
 
-    };
+      stop,
 
+      refresh,
 
-    /* =====================================================
-       BUTTON STATE
-       ===================================================== */
+      canSend,
 
-    const updateSendButton = () => {
+      isGenerating,
 
-        const generating =
-            window.NeyoChat
-                ?.isGenerating?.() ||
-            false;
+      isSending() {
+        return delegating;
+      },
 
+      /*
+       * Diagnostics
+       */
 
-        const enabled =
-            hasContent() &&
-            !sending &&
-            !generating;
+      getState() {
+        return {
+          version:
+            VERSION,
 
+          active:
+            true,
 
-        sendBtn.disabled =
-            !enabled;
+          compatibilityFacade:
+            true,
 
+          canonicalOwner:
+            getSendState()
+              ? "NeyoSendState"
+              : null,
 
-        sendBtn.classList.toggle(
-            "is-ready",
-            enabled
-        );
+          delegating,
 
+          lifecycleOpen,
 
-        sendBtn.classList.toggle(
-            "is-busy",
-            sending ||
-            generating
-        );
+          generating:
+            isGenerating(),
 
+          canSend:
+            canSend(),
 
-        sendBtn.setAttribute(
-            "aria-disabled",
-            String(!enabled)
-        );
+          lastResult,
 
-    };
+          legacyScriptPresent,
 
+          legacyOwnerActive:
+            false,
 
-    /* =====================================================
-       RESET COMPOSER
-       ===================================================== */
+          ownerState:
+            getSendStateSnapshot(),
 
-    const resetComposer = () => {
-
-        /*
-        composer.js owns the actual
-        composer reset behavior.
-        */
-
-        window.dispatchEvent(
-            new CustomEvent(
-                "neyo:composer-reset"
-            )
-        );
-
-
-        window.NeyoAttachments
-            ?.clear?.();
-
-
-        updateSendButton();
-
-    };
-
-
-    /* =====================================================
-       UPLOAD ATTACHMENTS
-       ===================================================== */
-
-    const prepareAttachments =
-        async () => {
-
-            const attachments =
-                getAttachments();
-
-
-            if (!attachments.length) {
-                return [];
-            }
-
-
-            /*
-            Already uploaded attachments
-            can be passed directly.
-            */
-
-            const uploaded =
-                attachments.filter(
-                    file =>
-                        Boolean(
-                            file?.path
-                        )
-                );
-
-
-            const pending =
-                attachments.filter(
-                    file =>
-                        !file?.path
-                );
-
-
-            if (!pending.length) {
-
-                return uploaded;
-
-            }
-
-
-            if (
-                !window.NeyoUpload
-                    ?.uploadFiles
-            ) {
-
-                throw new Error(
-                    "Upload service is not available."
-                );
-
-            }
-
-
-            const newUploads =
-                await window
-                    .NeyoUpload
-                    .uploadFiles(
-                        pending
-                    );
-
-
-            return [
-                ...uploaded,
-                ...newUploads
-            ];
-
+          metrics: {
+            ...metrics
+          }
         };
-
-
-    /* =====================================================
-       SEND
-       ===================================================== */
-
-    const sendMessage =
-        async () => {
-
-            if (sending) {
-                return null;
-            }
-
-
-            if (
-                window.NeyoChat
-                    ?.isGenerating?.()
-            ) {
-                return null;
-            }
-
-
-            const text =
-                getText();
-
-
-            const attachments =
-                getAttachments();
-
-
-            if (
-                !text &&
-                attachments.length === 0
-            ) {
-
-                updateSendButton();
-
-                return null;
-
-            }
-
-
-            if (
-                !window.NeyoChat
-                    ?.send
-            ) {
-
-                throw new Error(
-                    "Chat service is not available."
-                );
-
-            }
-
-
-            sending =
-                true;
-
-
-            updateSendButton();
-
-
-            emit(
-                "neyo:send-start",
-                {
-                    text,
-
-                    attachmentCount:
-                        attachments.length
-                }
-            );
-
-
-            try {
-
-                /* -----------------------------------------
-                   UPLOAD
-                   ----------------------------------------- */
-
-                const uploadedFiles =
-                    await prepareAttachments();
-
-
-                /* -----------------------------------------
-                   CHAT
-                   ----------------------------------------- */
-
-                const result =
-                    await window
-                        .NeyoChat
-                        .send({
-                            text,
-                            attachments:
-                                uploadedFiles
-                        });
-
-
-                /*
-                A null result can mean:
-                - rate limit
-                - aborted generation
-                - no response
-
-                Do not clear user input in those cases.
-                */
-
-                if (!result) {
-
-                    updateSendButton();
-
-                    return null;
-
-                }
-
-
-                /* -----------------------------------------
-                   SUCCESS
-                   ----------------------------------------- */
-
-                resetComposer();
-
-
-                emit(
-                    "neyo:send-success",
-                    {
-                        result
-                    }
-                );
-
-
-                return result;
-
-            }
-
-            catch (error) {
-
-                emit(
-                    "neyo:send-error",
-                    {
-                        error
-                    }
-                );
-
-
-                window.NeyoNotifications
-                    ?.error?.(
-                        error?.message ||
-                        "Message could not be sent."
-                    );
-
-
-                throw error;
-
-            }
-
-            finally {
-
-                sending =
-                    false;
-
-
-                updateSendButton();
-
-
-                emit(
-                    "neyo:send-end"
-                );
-
-            }
-
-        };
-
-
-    /* =====================================================
-       SEND BUTTON
-       ===================================================== */
-
-    sendBtn.addEventListener(
-        "click",
-        event => {
-
-            event.preventDefault();
-
-
-            sendMessage()
-                .catch(
-                    error => {
-
-                        console.error(
-                            "Send failed:",
-                            error
-                        );
-
-                    }
-                );
-
-        }
-    );
-
-
-    /* =====================================================
-       ENTER TO SEND
-       ===================================================== */
-
-    chatInput.addEventListener(
-        "keydown",
-        event => {
-
-            /*
-            Enter       = send
-            Shift+Enter = new line
-
-            IME composition must not trigger send.
-            */
-
-            if (
-                event.key !== "Enter" ||
-                event.shiftKey ||
-                event.isComposing
-            ) {
-                return;
-            }
-
-
-            event.preventDefault();
-
-
-            sendMessage()
-                .catch(
-                    error => {
-
-                        console.error(
-                            "Send failed:",
-                            error
-                        );
-
-                    }
-                );
-
-        }
-    );
-
-
-    /* =====================================================
-       INPUT STATE
-       ===================================================== */
-
-    chatInput.addEventListener(
-        "input",
-        updateSendButton
-    );
-
-
-    window.addEventListener(
-        "neyo:attachments-change",
-        updateSendButton
-    );
-
-
-    window.addEventListener(
-        "neyo:chat-send-start",
-        updateSendButton
-    );
-
-
-    window.addEventListener(
-        "neyo:chat-send-end",
-        updateSendButton
-    );
-
-
-    window.addEventListener(
-        "neyo:composer-change",
-        updateSendButton
-    );
-
-
-    /* =====================================================
-       PUBLIC SEND REQUEST
-       ===================================================== */
-
-    window.addEventListener(
-        "neyo:send-request",
-        () => {
-
-            sendMessage()
-                .catch(
-                    error => {
-
-                        console.error(
-                            "Send failed:",
-                            error
-                        );
-
-                    }
-                );
-
-        }
-    );
-
-
-    /* =====================================================
-       INITIAL STATE
-       ===================================================== */
-
-    updateSendButton();
-
-
-    /* =====================================================
-       PUBLIC API
-       ===================================================== */
-
-    window.NeyoSend =
-        Object.freeze({
-
-            send:
-                sendMessage,
-
-            refresh:
-                updateSendButton,
-
-            canSend:
-                () =>
-                    hasContent() &&
-                    !sending &&
-                    !(
-                        window.NeyoChat
-                            ?.isGenerating?.()
-                    ),
-
-            isSending:
-                () =>
-                    sending
-
-        });
-
+      }
+    });
+
+  Object.defineProperty(
+    window,
+    "NeyoSend",
+    {
+      value:
+        api,
+
+      writable:
+        false,
+
+      configurable:
+        true,
+
+      enumerable:
+        true
+    }
+  );
+
+  /* =====================================================
+     READY
+     ===================================================== */
+
+  emit(
+    "neyo:send-facade-ready",
+    {
+      version:
+        VERSION,
+
+      active:
+        true,
+
+      compatibilityFacade:
+        true,
+
+      canonicalOwner:
+        getSendState()
+          ? "NeyoSendState"
+          : null,
+
+      legacyScriptPresent,
+
+      legacyOwnerActive:
+        false
+    }
+  );
 })();

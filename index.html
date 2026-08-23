@@ -2670,66 +2670,193 @@
   <!-- END #neyoVoiceMode -->
 
   <!-- ========================================================= -->
-  <!-- NEYO — SAFE HYBRID MIGRATION LOADER                      -->
-  <!--                                                          -->
-  <!-- IMPORTANT                                                 -->
-  <!-- - neo.js remains untouched and ACTIVE                    -->
-  <!-- - chat-runtime.js remains the legacy/V2 bridge           -->
-  <!-- - new modular owners load in passive compatibility mode  -->
-  <!-- - no legacy DOM has been removed                         -->
+  <!-- NEYO — STABLE MIGRATION LOADER                            -->
+  <!-- Phase 2                                                  -->
+  <!--                                                         -->
+  <!-- RULES                                                   -->
+  <!-- - neo.js remains untouched                              -->
+  <!-- - V2 chat modules are now active                        -->
+  <!-- - chat-runtime.js bridges legacy & V2                   -->
+  <!-- - order: attachments → chat → messages → renderer       -->
+  <!--          → history → send-state → chat-runtime LAST      -->
+  <!-- - voice.js bumped to v104 to bust cache                 -->
   <!-- ========================================================= -->
 
-  <!-- 1. LEGACY STABLE APPLICATION -->
+
+  <!-- ========================================================= -->
+  <!-- 1. LEGACY STABLE APPLICATION                              -->
+  <!-- ========================================================= -->
+
   <script src="/neo.js?v=86"></script>
 
-  <!-- 2. NEW MODULAR COMPATIBILITY LAYER -->
-  <script type="module" src="/js/components/theme.js?v=1"></script>
-  <script type="module" src="/js/components/auth.js?v=1"></script>
-  <script type="module" src="/js/components/sidebar.js?v=1"></script>
-  <script type="module" src="/js/components/settings.js?v=1"></script>
-  <script type="module" src="/js/components/composer.js?v=1"></script>
 
-  <!-- 3. SAFE UI MODULES -->
-  <script type="module" src="/js/components/model-menu.js?v=5"></script>
-  <script type="module" src="/js/components/profile.js?v=4"></script>
-  <script type="module" src="/js/components/checkout.js?v=4"></script>
+  <!-- ========================================================= -->
+  <!-- 2. SAFE UI MODULES                                        -->
+  <!-- ========================================================= -->
 
-  <!-- 4. COMPOSER VISUAL HELPERS -->
-  <script type="module" src="/js/components/composer-expand.js?v=2"></script>
-  <script type="module" src="/js/components/composer-scrollbar.js?v=1"></script>
+  <script
+    type="module"
+    src="/js/components/model-menu.js?v=5"
+  ></script>
 
-  <!-- 5. CHARACTER DEFINITIONS -->
-  <script type="module" src="/js/characters/neyo.js?v=1"></script>
-  <script type="module" src="/js/characters/zadi.js?v=1"></script>
-  <script type="module" src="/js/characters/wizi.js?v=1"></script>
+  <script
+    type="module"
+    src="/js/components/profile.js?v=3"
+  ></script>
 
-  <!-- 6. VOICE / MASCOT -->
-  <script type="module" src="/js/components/voice.js?v=104"></script>
-  <script type="module" src="/js/components/mascot.js?v=7"></script>
-  <script type="module" src="/js/components/mascot-intelligence.js?v=1"></script>
-  <script type="module" src="/js/components/voice-mode.js?v=4"></script>
-  <script type="module" src="/js/components/character-picker.js?v=1"></script>
+  <script
+    type="module"
+    src="/js/components/checkout.js?v=4"
+  ></script>
 
-  <!-- 7. CHAT V2 RUNTIME -->
-  <!-- attachments → chat → messages → renderer → history → send-state → chat-runtime -->
-  <script type="module" src="/js/components/attachments.js?v=7"></script>
-  <script type="module" src="/js/components/chat.js?v=2"></script>
-  <script type="module" src="/js/components/messages.js?v=2"></script>
-  <script type="module" src="/js/components/message-renderer.js?v=2"></script>
-  <script type="module" src="/js/components/history.js?v=2"></script>
-  <script type="module" src="/js/components/send-state.js?v=7"></script>
-  <script type="module" src="/js/components/chat-runtime.js?v=1"></script>
 
-  <!-- 8. UI UTILITIES -->
-  <script type="module" src="/js/components/native-tooltips.js?v=1"></script>
-  <script type="module" src="/js/components/tooltip-registry.js?v=2"></script>
-  <script type="module" src="/js/components/ads.js?v=3"></script>
+  <!-- ========================================================= -->
+  <!-- 3. COMPOSER VISUAL HELPERS                                -->
+  <!-- ========================================================= -->
 
-  <!-- 9. MOBILE -->
-  <script type="module" src="/js/components/mobile-viewport.js?v=1"></script>
-  <script type="module" src="/js/components/mobile-keyboard.js?v=1"></script>
+  <script
+    type="module"
+    src="/js/components/composer-expand.js?v=2"
+  ></script>
 
-  <!-- 10. FINAL BOOT SAFETY -->
+  <script
+    type="module"
+    src="/js/components/composer-scrollbar.js?v=1"
+  ></script>
+
+
+  <!-- ========================================================= -->
+  <!-- 4. CHARACTER DEFINITIONS                                  -->
+  <!-- ========================================================= -->
+
+  <script
+    type="module"
+    src="/js/characters/neyo.js?v=1"
+  ></script>
+
+  <script
+    type="module"
+    src="/js/characters/zadi.js?v=1"
+  ></script>
+
+  <script
+    type="module"
+    src="/js/characters/wizi.js?v=1"
+  ></script>
+
+
+  <!-- ========================================================= -->
+  <!-- 5. VOICE / MASCOT  (VERSIONS BUMPED TO BUST CACHE)        -->
+  <!-- ========================================================= -->
+
+  <script
+    type="module"
+    src="/js/components/voice.js?v=104"
+  ></script>
+
+  <script
+    type="module"
+    src="/js/components/mascot.js?v=7"
+  ></script>
+
+  <script
+    type="module"
+    src="/js/components/mascot-intelligence.js?v=1"
+  ></script>
+
+  <script
+    type="module"
+    src="/js/components/voice-mode.js?v=4"
+  ></script>
+
+  <script
+    type="module"
+    src="/js/components/character-picker.js?v=1"
+  ></script>
+
+
+  <!-- ========================================================= -->
+  <!-- 6. CHAT V2 RUNTIME                                        -->
+  <!-- ========================================================= -->
+  <!-- ORDER: attachments → chat → messages → renderer           -->
+  <!--        → history → send-state → chat-runtime LAST         -->
+  <!-- ========================================================= -->
+
+  <script
+    type="module"
+    src="/js/components/attachments.js?v=7"
+  ></script>
+
+  <script
+    type="module"
+    src="/js/components/chat.js?v=2"
+  ></script>
+
+  <script
+    type="module"
+    src="/js/components/messages.js?v=2"
+  ></script>
+
+  <script
+    type="module"
+    src="/js/components/message-renderer.js?v=2"
+  ></script>
+
+  <script
+    type="module"
+    src="/js/components/history.js?v=2"
+  ></script>
+
+  <script
+    type="module"
+    src="/js/components/send-state.js?v=2"
+  ></script>
+
+  <script
+    type="module"
+    src="/js/components/chat-runtime.js?v=1"
+  ></script>
+
+
+  <!-- ========================================================= -->
+  <!-- 7. UI UTILITIES                                           -->
+  <!-- ========================================================= -->
+
+  <script
+    type="module"
+    src="/js/components/native-tooltips.js?v=1"
+  ></script>
+
+  <script
+    type="module"
+    src="/js/components/tooltip-registry.js?v=2"
+  ></script>
+
+  <script
+    type="module"
+    src="/js/components/ads.js?v=3"
+  ></script>
+
+
+  <!-- ========================================================= -->
+  <!-- 8. MOBILE                                                 -->
+  <!-- ========================================================= -->
+
+  <script
+    type="module"
+    src="/js/components/mobile-viewport.js?v=1"
+  ></script>
+
+  <script
+    type="module"
+    src="/js/components/mobile-keyboard.js?v=1"
+  ></script>
+
+
+  <!-- ========================================================= -->
+  <!-- 9. FINAL BOOT SAFETY                                      -->
+  <!-- ========================================================= -->
+
   <script>
     (() => {
       "use strict";
@@ -2738,35 +2865,71 @@
         try {
           window.lucide?.createIcons?.();
         } catch (error) {
-          console.warn("[NEYO Boot] Icon initialization failed:", error);
+          console.warn(
+            "[NEYO Boot] Icon initialization failed:",
+            error
+          );
         }
 
-        document.documentElement.classList.add("neyo-ready");
-
-        window.dispatchEvent(
-          new CustomEvent("neyo:app-ready", {
-            detail: {
-              architecture: "safe-hybrid",
-              legacyRuntime: true,
-              legacyChat: true,
-              modularChat: true,
-              runtime: "chat-runtime.js",
-              neoVersion: "86",
-              voiceVersion: "104"
-            }
-          })
+        document.documentElement.classList.add(
+          "neyo-ready"
         );
 
-        console.log("[NEYO] Safe hybrid runtime ready.");
+        window.dispatchEvent(
+          new CustomEvent(
+            "neyo:app-ready",
+            {
+              detail: {
+                architecture:
+                  "v2-runtime-active",
+
+                legacyChat:
+                  true,
+
+                modularChat:
+                  true,
+
+                runtime:
+                  "chat-runtime.js",
+
+                voiceCache:
+                  "bumped-v104"
+              }
+            }
+          )
+        );
+
+        console.log(
+          "[NEYO] V2 runtime active."
+        );
       };
 
-      if (document.readyState === "loading") {
-        document.addEventListener("DOMContentLoaded", boot, { once: true });
+      if (
+        document.readyState ===
+        "loading"
+      ) {
+        document.addEventListener(
+          "DOMContentLoaded",
+          boot,
+          {
+            once: true
+          }
+        );
       } else {
         boot();
       }
     })();
   </script>
+
+
+  <!-- ========================================================= -->
+  <!-- 10. LAUNCH SMOKE TEST                                     -->
+  <!-- ========================================================= -->
+
+  <script
+    type="module"
+    src="/js/components/launch-smoke.js?v=1"
+  ></script>
 
 </body>
 </html>

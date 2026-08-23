@@ -1,282 +1,712 @@
+/*
+=========================================================
+NEYO — VOICE ENGINE
+FINAL PRODUCTION MIXER v12
+
+FILE:
+public/js/components/voice.js
+
+PRIMARY ENGINE
+---------------------------------------------------------
+Gemini Live conversational voice
+
+/api/voice-token
+    ↓
+Gemini Live WebSocket
+    ↓
+16 kHz PCM microphone
+    ↓
+native Gemini audio
+    ↓
+24 kHz browser playback
+
+PRESERVED FALLBACK ENGINE
+---------------------------------------------------------
+Stable transcription / dictation
+
+MediaRecorder
+    ↓
+audio Blob
+    ↓
+POST /api/transcribe
+    ↓
+transcript event
+
+OWNS
+---------------------------------------------------------
+- Gemini Live transport
+- Ephemeral voice-token request
+- Microphone audio transport
+- PCM conversion / resampling
+- WebSocket lifecycle
+- Gemini setup message
+- VAD configuration
+- Native audio playback
+- Input/output transcription events
+- Interruption handling
+- Mic mute transport state
+- Speaker transport state
+- Character voice-session selection
+- Session cleanup
+- Unexpected socket cleanup
+- Stable MediaRecorder transcription API
+- Audio-level events
+- Voice lifecycle events
+
+DOES NOT OWN
+---------------------------------------------------------
+- Composer mic button
+- Fullscreen voice shell
+- Camera
+- Waveform DOM
+- Status DOM
+- Mascot DOM / face
+- Character picker DOM
+- Composer transcript insertion
+- Chat sending
+- History
+
+IMPORTANT
+---------------------------------------------------------
+voice-mode.js owns the visible voice experience.
+
+mascot.js owns face animation.
+
+character-picker.js owns character picker UI.
+
+A transcription fallback emits transcript events; the
+consumer decides where the transcript is inserted.
+
+MIGRATION RULE
+---------------------------------------------------------
+This module is independent of neo.js.
+
+No button cloning.
+No legacy DOM takeover.
+No direct voice-mode manipulation.
+
+After neo.js removal this file continues unchanged.
+=========================================================
+*/
+
 (() => {
   "use strict";
 
-  const VERSION = "neyo-live-voice-v2";
+  const VERSION =
+    "neyo-voice-final-v12";
 
-  if (window.NeyoVoice?.__controller === true) return;
+  if (
+    window.NeyoVoice
+      ?.__controller === true
+  ) {
+    return;
+  }
 
-  const CONFIG = Object.freeze({
-    tokenEndpoint: "/api/voice-token",
+  /* =====================================================
+     CONFIG
+     ===================================================== */
 
-    websocketEndpoint:
-      "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained",
+  const CONFIG =
+    Object.freeze({
+      tokenEndpoint:
+        "/api/voice-token",
 
-    inputSampleRate: 16000,
-    outputSampleRate: 24000,
+      transcribeEndpoint:
+        "/api/transcribe",
 
-    processorBufferSize: 4096,
-    analyserFftSize: 256,
+      websocketEndpoint:
+        "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained",
 
-    setupTimeoutMs: 12000,
-    maxSessionMs: 28 * 60 * 1000,
+      inputSampleRate:
+        16_000,
 
-    playbackLeadSeconds: 0.06,
+      outputSampleRate:
+        24_000,
 
-    vadPrefixPaddingMs: 90,
-    vadSilenceDurationMs: 760,
+      processorBufferSize:
+        4096,
 
-    vadStartSensitivity:
-      "START_SENSITIVITY_HIGH",
+      analyserFftSize:
+        256,
 
-    vadEndSensitivity:
-      "END_SENSITIVITY_LOW",
+      setupTimeoutMs:
+        12_000,
 
-    defaultCharacter: "neyo",
-    defaultVoice: "Kore"
-  });
+      tokenTimeoutMs:
+        15_000,
 
-  let socket = null;
-  let socketGeneration = 0;
+      transcribeTimeoutMs:
+        90_000,
 
-  let connecting = false;
-  let active = false;
-  let stopping = false;
-  let setupComplete = false;
+      maxSessionMs:
+        28 * 60 * 1000,
 
-  let setupTimer = 0;
-  let sessionTimer = 0;
+      playbackLeadSeconds:
+        0.06,
 
-  let selectedCharacter =
+      vadPrefixPaddingMs:
+        90,
+
+      vadSilenceDurationMs:
+        760,
+
+      vadStartSensitivity:
+        "START_SENSITIVITY_HIGH",
+
+      vadEndSensitivity:
+        "END_SENSITIVITY_LOW",
+
+      defaultCharacter:
+        "neyo",
+
+      defaultVoice:
+        "Kore",
+
+      dictationMaxMs:
+        120_000,
+
+      dictationMinimumMs:
+        350
+    });
+
+  /* =====================================================
+     TELEMETRY ONLY
+     ===================================================== */
+
+  const legacyScriptPresent =
+    Array
+      .from(
+        document.scripts || []
+      )
+      .some(
+        script =>
+          /(?:^|\/)neo\.js(?:\?|$)/
+            .test(
+              script.src || ""
+            )
+      );
+
+  /* =====================================================
+     LIVE SESSION STATE
+     ===================================================== */
+
+  let socket =
+    null;
+
+  let socketGeneration =
+    0;
+
+  let connecting =
+    false;
+
+  let active =
+    false;
+
+  let setupComplete =
+    false;
+
+  let stopping =
+    false;
+
+  let lastPhase =
+    "idle";
+
+  let setupTimer =
+    0;
+
+  let sessionTimer =
+    0;
+
+  let tokenController =
+    null;
+
+  let selectedCharacterId =
     getInitialCharacter();
 
-  let sessionCharacter =
-    selectedCharacter;
+  let sessionCharacterId =
+    selectedCharacterId;
 
-  let sessionVoice =
+  let sessionVoiceName =
     CONFIG.defaultVoice;
 
-  let muted = false;
-  let speakerEnabled = true;
+  /* =====================================================
+     TURN STATE
+     ===================================================== */
 
-  let assistantSpeaking = false;
-  let responsePending = false;
-  let phase = "idle";
+  let assistantSpeaking =
+    false;
 
-  let userTranscript = "";
-  let assistantTranscript = "";
+  let responsePending =
+    false;
 
-  let micStream = null;
-  let micTrack = null;
+  let userTranscriptBuffer =
+    "";
 
-  let inputContext = null;
-  let micSource = null;
-  let processorNode = null;
-  let silentGain = null;
+  let assistantTranscriptBuffer =
+    "";
 
-  let analyser = null;
-  let analyserData = null;
-  let browserInputRate = 48000;
+  /* =====================================================
+     MICROPHONE
+     ===================================================== */
 
-  let micAnimationFrame = 0;
-  let smoothMicLevel = 0;
+  let micStream =
+    null;
 
-  let outputContext = null;
-  let masterGain = null;
+  let micTrack =
+    null;
 
-  let nextPlaybackTime = 0;
-  let playbackStarted = false;
+  let inputContext =
+    null;
+
+  let micSource =
+    null;
+
+  let processorNode =
+    null;
+
+  let silentGain =
+    null;
+
+  let analyser =
+    null;
+
+  let analyserData =
+    null;
+
+  let browserInputRate =
+    48_000;
+
+  let muted =
+    false;
+
+  let micRaf =
+    0;
+
+  let smoothMicLevel =
+    0;
+
+  /* =====================================================
+     OUTPUT AUDIO
+     ===================================================== */
+
+  let outputContext =
+    null;
+
+  let masterGain =
+    null;
+
+  let nextPlaybackTime =
+    0;
+
+  let playbackStarted =
+    false;
+
+  let speakerEnabled =
+    true;
 
   const playingSources =
     new Set();
 
-  function emit(name, detail = {}) {
+  /* =====================================================
+     DICTATION FALLBACK
+     ===================================================== */
+
+  let dictationRecorder =
+    null;
+
+  let dictationStream =
+    null;
+
+  let dictationChunks =
+    [];
+
+  let dictationStartedAt =
+    0;
+
+  let dictationTimer =
+    0;
+
+  let dictating =
+    false;
+
+  let transcribing =
+    false;
+
+  let transcribeController =
+    null;
+
+  /* =====================================================
+     METRICS
+     ===================================================== */
+
+  const metrics = {
+    sessionsStarted:
+      0,
+
+    sessionsCompleted:
+      0,
+
+    unexpectedCloses:
+      0,
+
+    interruptions:
+      0,
+
+    userTranscripts:
+      0,
+
+    assistantTranscripts:
+      0,
+
+    dictations:
+      0,
+
+    transcriptions:
+      0,
+
+    lastStartedAt:
+      null,
+
+    lastEndedAt:
+      null,
+
+    lastError:
+      null
+  };
+
+  /* =====================================================
+     HELPERS
+     ===================================================== */
+
+  function emit(
+    name,
+    detail = {}
+  ) {
     window.dispatchEvent(
-      new CustomEvent(name, {
-        detail
-      })
+      new CustomEvent(
+        name,
+        {
+          detail
+        }
+      )
     );
   }
 
-  function clamp(value, min, max) {
+  function clamp(
+    value,
+    min,
+    max
+  ) {
     return Math.max(
       min,
-      Math.min(max, value)
+      Math.min(
+        max,
+        value
+      )
     );
   }
 
-  function cleanId(value) {
+  function cleanId(
+    value
+  ) {
     return (
-      String(value || "")
+      String(
+        value || ""
+      )
         .trim()
         .toLowerCase()
-        .replace(/[^a-z0-9_-]/g, "")
-        .slice(0, 40) ||
+        .replace(
+          /[^a-z0-9_-]/g,
+          ""
+        )
+        .slice(
+          0,
+          40
+        ) ||
       CONFIG.defaultCharacter
     );
   }
 
-  function getInitialCharacter() {
-    const value =
-      window.NeyoCharacters?.active;
-
-    return typeof value === "string" &&
-      value.trim()
-      ? cleanId(value)
-      : CONFIG.defaultCharacter;
+  function cleanText(
+    value,
+    max = 20_000
+  ) {
+    return String(
+      value ?? ""
+    )
+      .replace(
+        /\u0000/g,
+        ""
+      )
+      .trim()
+      .slice(
+        0,
+        max
+      );
   }
 
-  function setPhase(next, detail = {}) {
+  function getInitialCharacter() {
+    const registry =
+      window.NeyoCharacters;
+
     if (
-      phase === next &&
-      !detail.force
+      typeof registry?.active ===
+        "string" &&
+      registry.active.trim()
     ) {
-      return;
+      return cleanId(
+        registry.active
+      );
     }
 
-    phase = next;
-
-    emit(
-      `neyo:voice-${next}`,
-      {
-        character:
-          sessionCharacter,
-
-        voice:
-          sessionVoice,
-
-        ...detail
-      }
-    );
-
-    emit(
-      "neyo:voice-state",
-      {
-        state:
-          next,
-
-        character:
-          sessionCharacter,
-
-        voice:
-          sessionVoice,
-
-        ...detail
-      }
-    );
+    return CONFIG
+      .defaultCharacter;
   }
 
-  function reportError(message, error = null) {
-    const value =
-      String(
-        message ||
-          "Voice connection failed."
+  /* =====================================================
+     CHARACTER
+     ===================================================== */
+
+  function setSelectedCharacter(
+    id
+  ) {
+    selectedCharacterId =
+      cleanId(
+        id
       );
 
-    emit(
-      "neyo:voice-error",
-      {
-        message:
-          value,
-
-        error,
-
-        character:
-          sessionCharacter,
-
-        voice:
-          sessionVoice
-      }
-    );
+    return selectedCharacterId;
   }
 
-  function setCharacter(value) {
-    selectedCharacter =
-      cleanId(value);
+  function setCharacter(
+    id
+  ) {
+    const next =
+      setSelectedCharacter(
+        id
+      );
+
+    /*
+     * Live Gemini voice configuration belongs to
+     * the session setup.
+     *
+     * Do not silently destroy/restart transport from
+     * this low-level engine.
+     */
+
+    if (
+      active ||
+      connecting
+    ) {
+      emit(
+        "neyo:voice-restart-required",
+        {
+          reason:
+            "character-change",
+
+          character:
+            next,
+
+          currentCharacter:
+            sessionCharacterId
+        }
+      );
+
+    } else {
+      sessionCharacterId =
+        next;
+    }
 
     emit(
       "neyo:voice-character",
       {
         character:
-          selectedCharacter
+          next
       }
     );
 
-    return selectedCharacter;
+    return next;
   }
 
-  function appendTranscript(
-    current,
-    chunk
+  /* =====================================================
+     PHASE
+     ===================================================== */
+
+  function setPhase(
+    phase,
+    detail = {}
   ) {
-    const value =
-      String(chunk || "")
-        .trim();
+    const allowed =
+      new Set([
+        "idle",
+        "listening",
+        "thinking",
+        "speaking"
+      ]);
 
-    if (!value) {
-      return current;
-    }
+    const next =
+      allowed.has(
+        phase
+      )
+        ? phase
+        : "idle";
 
-    if (!current) {
-      return value;
-    }
-
-    if (value.startsWith(current)) {
-      return value;
-    }
-
-    if (current.endsWith(value)) {
-      return current;
-    }
-
-    return `${current} ${value}`
-      .replace(/\s+/g, " ")
-      .trim();
-  }
-
-  function bytesToBase64(bytes) {
-    let binary = "";
-    const size = 32768;
-
-    for (
-      let index = 0;
-      index < bytes.length;
-      index += size
+    if (
+      next ===
+        lastPhase &&
+      !detail.force
     ) {
-      binary +=
-        String.fromCharCode(
-          ...bytes.subarray(
-            index,
-            Math.min(
-              index + size,
-              bytes.length
-            )
-          )
-        );
+      return next;
     }
 
-    return btoa(binary);
+    lastPhase =
+      next;
+
+    const eventDetail =
+      {
+        phase:
+          next,
+
+        character:
+          sessionCharacterId ||
+          selectedCharacterId,
+
+        voice:
+          sessionVoiceName,
+
+        active,
+
+        connecting,
+
+        ...detail
+      };
+
+    emit(
+      `neyo:voice-${next}`,
+      eventDetail
+    );
+
+    emit(
+      "neyo:voice-state",
+      eventDetail
+    );
+
+    /*
+     * Compatibility event for older consumers.
+     */
+
+    document.dispatchEvent(
+      new CustomEvent(
+        "voice:state-change",
+        {
+          detail: {
+            state:
+              next,
+
+            ...eventDetail
+          }
+        }
+      )
+    );
+
+    return next;
   }
 
-  function base64ToBytes(value) {
-    const binary =
-      atob(value);
+  /* =====================================================
+     ERROR
+     ===================================================== */
 
-    const output =
-      new Uint8Array(
-        binary.length
+  function reportError(
+    error,
+    detail = {}
+  ) {
+    const message =
+      cleanText(
+        error?.message ||
+        error ||
+        "Voice connection failed.",
+        1500
       );
 
-    for (
-      let index = 0;
-      index < binary.length;
-      index++
-    ) {
-      output[index] =
-        binary.charCodeAt(index);
-    }
+    metrics.lastError =
+      message;
 
-    return output;
+    console.error(
+      "[NEYO Voice]",
+      message
+    );
+
+    emit(
+      "neyo:voice-error",
+      {
+        message,
+
+        character:
+          sessionCharacterId,
+
+        voice:
+          sessionVoiceName,
+
+        ...detail
+      }
+    );
+
+    return message;
   }
+
+  /* =====================================================
+     FETCH WITH TIMEOUT
+     ===================================================== */
+
+  async function fetchWithTimeout(
+    url,
+    options,
+    timeoutMs,
+    externalController =
+      null
+  ) {
+    const controller =
+      externalController ||
+      new AbortController();
+
+    const timer =
+      window.setTimeout(
+        () => {
+          try {
+            controller.abort(
+              "timeout"
+            );
+
+          } catch {
+            try {
+              controller.abort();
+            } catch {}
+          }
+        },
+        timeoutMs
+      );
+
+    try {
+      return await fetch(
+        url,
+        {
+          ...options,
+
+          signal:
+            controller.signal
+        }
+      );
+
+    } finally {
+      window.clearTimeout(
+        timer
+      );
+    }
+  }
+
+  /* =====================================================
+     PCM — RESAMPLE
+     ===================================================== */
 
   function resampleFloat32(
     input,
@@ -284,19 +714,24 @@
     targetRate
   ) {
     if (
-      sourceRate === targetRate
+      sourceRate ===
+      targetRate
     ) {
-      return new Float32Array(input);
+      return new Float32Array(
+        input
+      );
     }
 
     const ratio =
-      sourceRate / targetRate;
+      sourceRate /
+      targetRate;
 
     const outputLength =
       Math.max(
         1,
         Math.floor(
-          input.length / ratio
+          input.length /
+          ratio
         )
       );
 
@@ -307,45 +742,64 @@
 
     for (
       let index = 0;
-      index < outputLength;
-      index++
+      index <
+        outputLength;
+      index += 1
     ) {
       const position =
-        index * ratio;
+        index *
+        ratio;
 
-      const left =
-        Math.floor(position);
+      const sourceIndex =
+        Math.floor(
+          position
+        );
 
       const fraction =
-        position - left;
+        position -
+        sourceIndex;
 
       const a =
         input[
           Math.min(
-            left,
+            sourceIndex,
             input.length - 1
           )
-        ] || 0;
+        ] ||
+        0;
 
       const b =
         input[
           Math.min(
-            left + 1,
+            sourceIndex + 1,
             input.length - 1
           )
-        ] || a;
+        ] ||
+        a;
 
       output[index] =
-        a + (b - a) * fraction;
+        a +
+        (
+          b -
+          a
+        ) *
+        fraction;
     }
 
     return output;
   }
 
-  function float32ToPcm16(samples) {
+  /* =====================================================
+     FLOAT32 -> PCM16
+     ===================================================== */
+
+  function float32ToPcm16(
+    samples
+  ) {
     const bytes =
       new Uint8Array(
-        samples.length * 2
+        samples.length *
+        2
       );
 
     const view =
@@ -355,8 +809,9 @@
 
     for (
       let index = 0;
-      index < samples.length;
-      index++
+      index <
+        samples.length;
+      index += 1
     ) {
       const sample =
         clamp(
@@ -367,8 +822,10 @@
 
       const integer =
         sample < 0
-          ? sample * 32768
-          : sample * 32767;
+          ? sample *
+            32768
+          : sample *
+            32767;
 
       view.setInt16(
         index * 2,
@@ -380,14 +837,23 @@
     return bytes;
   }
 
-  function pcm16ToFloat32(bytes) {
-    const length =
+  /* =====================================================
+     PCM16 -> FLOAT32
+     ===================================================== */
+
+  function pcm16ToFloat32(
+    bytes
+  ) {
+    const count =
       Math.floor(
-        bytes.byteLength / 2
+        bytes.byteLength /
+        2
       );
 
-    const output =
-      new Float32Array(length);
+    const result =
+      new Float32Array(
+        count
+      );
 
     const view =
       new DataView(
@@ -398,8 +864,9 @@
 
     for (
       let index = 0;
-      index < length;
-      index++
+      index <
+        count;
+      index += 1
     ) {
       const value =
         view.getInt16(
@@ -407,7 +874,7 @@
           true
         );
 
-      output[index] =
+      result[index] =
         value /
         (
           value < 0
@@ -416,310 +883,81 @@
         );
     }
 
-    return output;
+    return result;
   }
 
-  async function fetchVoiceToken(
-    character
+  /* =====================================================
+     BASE64
+     ===================================================== */
+
+  function bytesToBase64(
+    bytes
   ) {
-    const requestedCharacter =
-      cleanId(character);
+    let binary =
+      "";
 
-    const response =
-      await fetch(
-        CONFIG.tokenEndpoint,
-        {
-          method: "POST",
-          credentials: "same-origin",
-          cache: "no-store",
-
-          headers: {
-            "Content-Type":
-              "application/json",
-
-            Accept:
-              "application/json"
-          },
-
-          body:
-            JSON.stringify({
-              character:
-                requestedCharacter
-            })
-        }
-      );
-
-    const raw =
-      await response.text();
-
-    let data = null;
-
-    try {
-      data =
-        JSON.parse(raw);
-    } catch {}
-
-    if (!response.ok) {
-      throw new Error(
-        data?.error ||
-          raw ||
-          `Voice token failed (${response.status}).`
-      );
-    }
-
-    if (
-      !data?.token ||
-      !data?.model
-    ) {
-      throw new Error(
-        "Invalid voice token response."
-      );
-    }
-
-    return {
-      ...data,
-
-      character:
-        cleanId(
-          data.character ||
-            requestedCharacter
-        ),
-
-      voice:
-        String(
-          data.voice ||
-            CONFIG.defaultVoice
-        ).trim() ||
-        CONFIG.defaultVoice
-    };
-  }
-
-  async function ensureOutputContext() {
-    if (
-      outputContext &&
-      outputContext.state !== "closed"
-    ) {
-      if (
-        outputContext.state ===
-        "suspended"
-      ) {
-        await outputContext.resume();
-      }
-
-      return outputContext;
-    }
-
-    const AudioContextClass =
-      window.AudioContext ||
-      window.webkitAudioContext;
-
-    if (!AudioContextClass) {
-      throw new Error(
-        "Audio playback unavailable."
-      );
-    }
-
-    outputContext =
-      new AudioContextClass();
-
-    if (
-      outputContext.state ===
-      "suspended"
-    ) {
-      await outputContext.resume();
-    }
-
-    masterGain =
-      outputContext.createGain();
-
-    masterGain.gain.value =
-      speakerEnabled ? 1 : 0;
-
-    masterGain.connect(
-      outputContext.destination
-    );
-
-    nextPlaybackTime =
-      outputContext.currentTime;
-
-    return outputContext;
-  }
-
-  function getSampleRate(
-    mimeType
-  ) {
-    const match =
-      String(mimeType || "")
-        .match(
-          /rate=(\d+)/i
-        );
-
-    const value =
-      Number(match?.[1]);
-
-    return Number.isFinite(value) &&
-      value > 0
-      ? value
-      : CONFIG.outputSampleRate;
-  }
-
-  function outputLevel(samples) {
-    if (!samples.length) {
-      return 0;
-    }
-
-    let sum = 0;
+    const size =
+      32_768;
 
     for (
       let index = 0;
-      index < samples.length;
-      index++
+      index <
+        bytes.length;
+      index += size
     ) {
-      sum +=
-        samples[index] *
-        samples[index];
-    }
-
-    const rms =
-      Math.sqrt(
-        sum / samples.length
-      );
-
-    return clamp(
-      (rms - 0.008) / 0.16,
-      0,
-      1
-    );
-  }
-
-  async function playAudio(
-    base64,
-    mimeType,
-    generation
-  ) {
-    if (
-      generation !==
-      socketGeneration
-    ) {
-      return;
-    }
-
-    const context =
-      await ensureOutputContext();
-
-    const samples =
-      pcm16ToFloat32(
-        base64ToBytes(base64)
-      );
-
-    if (!samples.length) return;
-
-    emit(
-      "neyo:voice-output-level",
-      {
-        level:
-          outputLevel(samples)
-      }
-    );
-
-    const buffer =
-      context.createBuffer(
-        1,
-        samples.length,
-        getSampleRate(mimeType)
-      );
-
-    buffer
-      .getChannelData(0)
-      .set(samples);
-
-    const source =
-      context.createBufferSource();
-
-    source.buffer =
-      buffer;
-
-    source.connect(
-      masterGain ||
-        context.destination
-    );
-
-    if (!assistantSpeaking) {
-      assistantSpeaking = true;
-      responsePending = false;
-
-      setPhase("speaking");
-    }
-
-    if (!playbackStarted) {
-      nextPlaybackTime =
-        Math.max(
-          context.currentTime +
-            CONFIG.playbackLeadSeconds,
-          nextPlaybackTime
+      const chunk =
+        bytes.subarray(
+          index,
+          Math.min(
+            index + size,
+            bytes.length
+          )
         );
 
-      playbackStarted = true;
-
-    } else if (
-      nextPlaybackTime <
-      context.currentTime + 0.01
-    ) {
-      nextPlaybackTime =
-        context.currentTime +
-        CONFIG.playbackLeadSeconds;
+      binary +=
+        String.fromCharCode(
+          ...chunk
+        );
     }
 
-    source.start(
-      nextPlaybackTime
-    );
-
-    nextPlaybackTime +=
-      buffer.duration;
-
-    playingSources.add(source);
-
-    source.addEventListener(
-      "ended",
-      () => {
-        playingSources.delete(source);
-      },
-      {
-        once: true
-      }
+    return btoa(
+      binary
     );
   }
 
-  function stopPlayback() {
+  function base64ToBytes(
+    value
+  ) {
+    const binary =
+      atob(
+        value
+      );
+
+    const bytes =
+      new Uint8Array(
+        binary.length
+      );
+
     for (
-      const source
-      of playingSources
+      let index = 0;
+      index <
+        binary.length;
+      index += 1
     ) {
-      try {
-        source.stop();
-      } catch {}
+      bytes[index] =
+        binary.charCodeAt(
+          index
+        );
     }
 
-    playingSources.clear();
-
-    playbackStarted = false;
-    assistantSpeaking = false;
-    responsePending = false;
-
-    if (outputContext) {
-      nextPlaybackTime =
-        outputContext.currentTime;
-    }
-
-    emit(
-      "neyo:voice-output-level",
-      {
-        level: 0
-      }
-    );
+    return bytes;
   }
 
-  function calculateMicLevel() {
+  /* =====================================================
+     MIC LEVEL
+     ===================================================== */
+
+  function calculateMicRms() {
     if (
       !analyser ||
       !analyserData
@@ -727,16 +965,19 @@
       return 0;
     }
 
-    analyser.getByteTimeDomainData(
-      analyserData
-    );
+    analyser
+      .getByteTimeDomainData(
+        analyserData
+      );
 
-    let sum = 0;
+    let sum =
+      0;
 
     for (
       let index = 0;
-      index < analyserData.length;
-      index++
+      index <
+        analyserData.length;
+      index += 1
     ) {
       const sample =
         (
@@ -746,27 +987,32 @@
         128;
 
       sum +=
-        sample * sample;
+        sample *
+        sample;
     }
 
     return Math.sqrt(
       sum /
-        analyserData.length
+      analyserData.length
     );
   }
 
-  function updateMicLevel() {
+  function animateMicLevel() {
     if (
       !active &&
       !connecting
     ) {
-      micAnimationFrame = 0;
-      smoothMicLevel = 0;
+      micRaf =
+        0;
+
+      smoothMicLevel =
+        0;
 
       emit(
         "neyo:voice-mic-level",
         {
-          level: 0
+          level:
+            0
         }
       );
 
@@ -774,22 +1020,26 @@
     }
 
     const rms =
-      calculateMicLevel();
+      calculateMicRms();
 
     const target =
       muted
         ? 0
         : clamp(
-            (rms - 0.012) /
-              0.11,
+            (
+              rms -
+              0.012
+            ) /
+            0.11,
             0,
             1
           );
 
     const smoothing =
-      target > smoothMicLevel
-        ? 0.3
-        : 0.1;
+      target >
+      smoothMicLevel
+        ? 0.30
+        : 0.10;
 
     smoothMicLevel +=
       (
@@ -802,43 +1052,73 @@
       "neyo:voice-mic-level",
       {
         level:
-          smoothMicLevel
+          smoothMicLevel,
+
+        rms
       }
     );
 
-    micAnimationFrame =
+    /*
+     * Compatibility energy event.
+     */
+
+    document.dispatchEvent(
+      new CustomEvent(
+        "voice:energy",
+        {
+          detail: {
+            rms
+          }
+        }
+      )
+    );
+
+    micRaf =
       requestAnimationFrame(
-        updateMicLevel
+        animateMicLevel
       );
   }
 
-  function startMicLevel() {
-    if (micAnimationFrame) return;
-
-    micAnimationFrame =
-      requestAnimationFrame(
-        updateMicLevel
-      );
-  }
-
-  function stopMicLevel() {
-    if (micAnimationFrame) {
-      cancelAnimationFrame(
-        micAnimationFrame
-      );
-
-      micAnimationFrame = 0;
+  function ensureMicLevelLoop() {
+    if (
+      micRaf
+    ) {
+      return;
     }
 
-    smoothMicLevel = 0;
+    micRaf =
+      requestAnimationFrame(
+        animateMicLevel
+      );
+  }
+
+  function stopMicLevelLoop() {
+    if (
+      micRaf
+    ) {
+      cancelAnimationFrame(
+        micRaf
+      );
+
+      micRaf =
+        0;
+    }
+
+    smoothMicLevel =
+      0;
 
     emit(
       "neyo:voice-mic-level",
       {
-        level: 0
+        level:
+          0
       }
     );
   }
+
+  /* =====================================================
+     MICROPHONE
+     ===================================================== */
 
   async function ensureMicrophone() {
     if (
@@ -846,11 +1126,12 @@
       inputContext &&
       processorNode
     ) {
-      return;
+      return true;
     }
 
     if (
-      !navigator.mediaDevices
+      !navigator
+        .mediaDevices
         ?.getUserMedia
     ) {
       throw new Error(
@@ -862,23 +1143,34 @@
       window.AudioContext ||
       window.webkitAudioContext;
 
-    if (!AudioContextClass) {
+    if (
+      !AudioContextClass
+    ) {
       throw new Error(
         "Web Audio API unavailable."
       );
     }
 
     micStream =
-      await navigator.mediaDevices
+      await navigator
+        .mediaDevices
         .getUserMedia({
           audio: {
-            channelCount: 1,
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true
+            channelCount:
+              1,
+
+            echoCancellation:
+              true,
+
+            noiseSuppression:
+              true,
+
+            autoGainControl:
+              true
           },
 
-          video: false
+          video:
+            false
         });
 
     micTrack =
@@ -886,7 +1178,9 @@
         .getAudioTracks()[0] ||
       null;
 
-    if (micTrack) {
+    if (
+      micTrack
+    ) {
       micTrack.enabled =
         !muted;
     }
@@ -911,12 +1205,14 @@
         );
 
     analyser =
-      inputContext.createAnalyser();
+      inputContext
+        .createAnalyser();
 
     analyser.fftSize =
       CONFIG.analyserFftSize;
 
-    analyser.smoothingTimeConstant =
+    analyser
+      .smoothingTimeConstant =
       0.82;
 
     analyserData =
@@ -924,20 +1220,31 @@
         analyser.fftSize
       );
 
-    micSource.connect(analyser);
+    micSource.connect(
+      analyser
+    );
+
+    /*
+     * ScriptProcessor remains intentionally used here
+     * because this is the proven production baseline and
+     * does not require an additional worklet file.
+     */
 
     processorNode =
       inputContext
         .createScriptProcessor(
-          CONFIG.processorBufferSize,
+          CONFIG
+            .processorBufferSize,
           1,
           1
         );
 
     silentGain =
-      inputContext.createGain();
+      inputContext
+        .createGain();
 
-    silentGain.gain.value = 0;
+    silentGain.gain.value =
+      0;
 
     micSource.connect(
       processorNode
@@ -951,7 +1258,8 @@
       inputContext.destination
     );
 
-    processorNode.onaudioprocess =
+    processorNode
+      .onaudioprocess =
       event => {
         if (
           !active ||
@@ -965,14 +1273,16 @@
         }
 
         const input =
-          event.inputBuffer
+          event
+            .inputBuffer
             .getChannelData(0);
 
         const resampled =
           resampleFloat32(
             input,
             browserInputRate,
-            CONFIG.inputSampleRate
+            CONFIG
+              .inputSampleRate
           );
 
         const pcm =
@@ -996,54 +1306,78 @@
               }
             })
           );
+
         } catch {}
       };
 
-    startMicLevel();
+    ensureMicLevelLoop();
+
+    return true;
   }
 
+  /* =====================================================
+     DESTROY MICROPHONE
+     ===================================================== */
+
   async function destroyMicrophone() {
-    if (processorNode) {
-      processorNode.onaudioprocess =
+    if (
+      processorNode
+    ) {
+      processorNode
+        .onaudioprocess =
         null;
 
       try {
         processorNode.disconnect();
       } catch {}
 
-      processorNode = null;
+      processorNode =
+        null;
     }
 
-    if (micSource) {
+    if (
+      micSource
+    ) {
       try {
         micSource.disconnect();
       } catch {}
 
-      micSource = null;
+      micSource =
+        null;
     }
 
-    if (analyser) {
+    if (
+      analyser
+    ) {
       try {
         analyser.disconnect();
       } catch {}
 
-      analyser = null;
+      analyser =
+        null;
     }
 
-    analyserData = null;
+    analyserData =
+      null;
 
-    if (silentGain) {
+    if (
+      silentGain
+    ) {
       try {
         silentGain.disconnect();
       } catch {}
 
-      silentGain = null;
+      silentGain =
+        null;
     }
 
-    if (micStream) {
+    if (
+      micStream
+    ) {
       for (
         const track
-        of micStream.getTracks()
+        of micStream
+          .getTracks()
       ) {
         try {
           track.stop();
@@ -1051,8 +1385,11 @@
       }
     }
 
-    micStream = null;
-    micTrack = null;
+    micStream =
+      null;
+
+    micTrack =
+      null;
 
     if (
       inputContext &&
@@ -1064,64 +1401,968 @@
       } catch {}
     }
 
-    inputContext = null;
+    inputContext =
+      null;
 
-    stopMicLevel();
+    stopMicLevelLoop();
   }
+
+  /* =====================================================
+     OUTPUT CONTEXT
+     ===================================================== */
+
+  async function ensureOutputContext() {
+    if (
+      outputContext &&
+      outputContext.state !==
+        "closed"
+    ) {
+      if (
+        outputContext.state ===
+        "suspended"
+      ) {
+        await outputContext.resume();
+      }
+
+      return outputContext;
+    }
+
+    const AudioContextClass =
+      window.AudioContext ||
+      window.webkitAudioContext;
+
+    if (
+      !AudioContextClass
+    ) {
+      throw new Error(
+        "Audio playback unavailable."
+      );
+    }
+
+    outputContext =
+      new AudioContextClass();
+
+    if (
+      outputContext.state ===
+      "suspended"
+    ) {
+      await outputContext.resume();
+    }
+
+    masterGain =
+      outputContext
+        .createGain();
+
+    masterGain.gain.value =
+      speakerEnabled
+        ? 1
+        : 0;
+
+    masterGain.connect(
+      outputContext.destination
+    );
+
+    nextPlaybackTime =
+      outputContext.currentTime;
+
+    return outputContext;
+  }
+
+  /* =====================================================
+     OUTPUT LEVEL
+     ===================================================== */
+
+  function calculateOutputLevel(
+    samples
+  ) {
+    if (
+      !samples.length
+    ) {
+      return 0;
+    }
+
+    let sum =
+      0;
+
+    for (
+      let index = 0;
+      index <
+        samples.length;
+      index += 1
+    ) {
+      sum +=
+        samples[index] *
+        samples[index];
+    }
+
+    const rms =
+      Math.sqrt(
+        sum /
+        samples.length
+      );
+
+    return clamp(
+      (
+        rms -
+        0.008
+      ) /
+      0.16,
+      0,
+      1
+    );
+  }
+
+  function getSampleRateFromMime(
+    mime
+  ) {
+    const match =
+      String(
+        mime || ""
+      )
+        .match(
+          /rate=(\d+)/i
+        );
+
+    const value =
+      Number(
+        match?.[1]
+      );
+
+    return (
+      Number.isFinite(
+        value
+      ) &&
+      value >
+        0
+    )
+      ? value
+      : CONFIG
+          .outputSampleRate;
+  }
+
+  /* =====================================================
+     PLAY AUDIO CHUNK
+     ===================================================== */
+
+  async function playAudioChunk(
+    base64,
+    mimeType,
+    generation
+  ) {
+    if (
+      generation !==
+      socketGeneration
+    ) {
+      return false;
+    }
+
+    const context =
+      await ensureOutputContext();
+
+    const bytes =
+      base64ToBytes(
+        base64
+      );
+
+    const samples =
+      pcm16ToFloat32(
+        bytes
+      );
+
+    if (
+      samples.length ===
+      0
+    ) {
+      return false;
+    }
+
+    emit(
+      "neyo:voice-output-level",
+      {
+        level:
+          calculateOutputLevel(
+            samples
+          )
+      }
+    );
+
+    const buffer =
+      context.createBuffer(
+        1,
+        samples.length,
+        getSampleRateFromMime(
+          mimeType
+        )
+      );
+
+    buffer
+      .getChannelData(0)
+      .set(
+        samples
+      );
+
+    const source =
+      context
+        .createBufferSource();
+
+    source.buffer =
+      buffer;
+
+    source.connect(
+      masterGain ||
+      context.destination
+    );
+
+    if (
+      !assistantSpeaking
+    ) {
+      assistantSpeaking =
+        true;
+
+      responsePending =
+        false;
+
+      setPhase(
+        "speaking"
+      );
+    }
+
+    if (
+      !playbackStarted
+    ) {
+      nextPlaybackTime =
+        Math.max(
+          context.currentTime +
+            CONFIG
+              .playbackLeadSeconds,
+
+          nextPlaybackTime
+        );
+
+      playbackStarted =
+        true;
+
+    } else if (
+      nextPlaybackTime <
+      context.currentTime +
+        0.01
+    ) {
+      nextPlaybackTime =
+        context.currentTime +
+        CONFIG
+          .playbackLeadSeconds;
+    }
+
+    playingSources.add(
+      source
+    );
+
+    source.addEventListener(
+      "ended",
+      () => {
+        playingSources.delete(
+          source
+        );
+      },
+      {
+        once:
+          true
+      }
+    );
+
+    source.start(
+      nextPlaybackTime
+    );
+
+    nextPlaybackTime +=
+      buffer.duration;
+
+    return true;
+  }
+
+  /* =====================================================
+     STOP PLAYBACK
+     ===================================================== */
+
+  function stopPlayback() {
+    for (
+      const source
+      of playingSources
+    ) {
+      try {
+        source.stop();
+      } catch {}
+    }
+
+    playingSources.clear();
+
+    playbackStarted =
+      false;
+
+    assistantSpeaking =
+      false;
+
+    responsePending =
+      false;
+
+    if (
+      outputContext
+    ) {
+      nextPlaybackTime =
+        outputContext.currentTime;
+    }
+
+    emit(
+      "neyo:voice-output-level",
+      {
+        level:
+          0
+      }
+    );
+  }
+
+  /* =====================================================
+     DESTROY OUTPUT
+     ===================================================== */
+
+  async function destroyOutput() {
+    stopPlayback();
+
+    if (
+      masterGain
+    ) {
+      try {
+        masterGain.disconnect();
+      } catch {}
+
+      masterGain =
+        null;
+    }
+
+    if (
+      outputContext &&
+      outputContext.state !==
+        "closed"
+    ) {
+      try {
+        await outputContext.close();
+      } catch {}
+    }
+
+    outputContext =
+      null;
+
+    nextPlaybackTime =
+      0;
+
+    playbackStarted =
+      false;
+  }
+
+  /* =====================================================
+     MUTE
+     ===================================================== */
+
+  function setMuted(
+    value
+  ) {
+    muted =
+      Boolean(
+        value
+      );
+
+    if (
+      micTrack
+    ) {
+      micTrack.enabled =
+        !muted;
+    }
+
+    emit(
+      "neyo:voice-muted",
+      {
+        muted
+      }
+    );
+
+    return muted;
+  }
+
+  /* =====================================================
+     SPEAKER
+     ===================================================== */
+
+  function setSpeakerEnabled(
+    value
+  ) {
+    speakerEnabled =
+      Boolean(
+        value
+      );
+
+    if (
+      masterGain
+    ) {
+      masterGain.gain.value =
+        speakerEnabled
+          ? 1
+          : 0;
+    }
+
+    emit(
+      "neyo:voice-speaker",
+      {
+        enabled:
+          speakerEnabled
+      }
+    );
+
+    return speakerEnabled;
+  }
+
+  /* =====================================================
+     TOKEN
+     ===================================================== */
+
+  async function fetchVoiceToken(
+    character
+  ) {
+    const requestedCharacter =
+      cleanId(
+        character
+      );
+
+    if (
+      tokenController
+    ) {
+      try {
+        tokenController.abort(
+          "superseded"
+        );
+      } catch {}
+    }
+
+    tokenController =
+      new AbortController();
+
+    try {
+      const response =
+        await fetchWithTimeout(
+          CONFIG.tokenEndpoint,
+          {
+            method:
+              "POST",
+
+            credentials:
+              "same-origin",
+
+            cache:
+              "no-store",
+
+            headers: {
+              "Content-Type":
+                "application/json",
+
+              Accept:
+                "application/json",
+
+              "X-Neyo-Voice-Client":
+                VERSION
+            },
+
+            body:
+              JSON.stringify({
+                character:
+                  requestedCharacter
+              })
+          },
+          CONFIG.tokenTimeoutMs,
+          tokenController
+        );
+
+      const raw =
+        await response.text();
+
+      let data =
+        null;
+
+      try {
+        data =
+          JSON.parse(
+            raw
+          );
+      } catch {}
+
+      if (
+        !response.ok
+      ) {
+        throw new Error(
+          data?.error ||
+          data?.message ||
+          raw ||
+          `Voice token failed (${response.status}).`
+        );
+      }
+
+      if (
+        !data?.token ||
+        !data?.model
+      ) {
+        throw new Error(
+          "Invalid voice token response."
+        );
+      }
+
+      return {
+        ...data,
+
+        character:
+          cleanId(
+            data.character ||
+            requestedCharacter
+          ),
+
+        voice:
+          cleanText(
+            data.voice ||
+            CONFIG.defaultVoice,
+            80
+          ) ||
+          CONFIG.defaultVoice
+      };
+
+    } finally {
+      tokenController =
+        null;
+    }
+  }
+
+  /* =====================================================
+     TRANSCRIPT MERGE
+     ===================================================== */
+
+  function appendTranscript(
+    current,
+    chunk
+  ) {
+    const value =
+      cleanText(
+        chunk
+      );
+
+    if (!value) {
+      return current;
+    }
+
+    if (!current) {
+      return value;
+    }
+
+    if (
+      value.startsWith(
+        current
+      )
+    ) {
+      return value;
+    }
+
+    if (
+      current.endsWith(
+        value
+      )
+    ) {
+      return current;
+    }
+
+    return `${current} ${value}`
+      .replace(
+        /\s+/g,
+        " "
+      )
+      .trim();
+  }
+
+  /* =====================================================
+     SOCKET MESSAGE DECODER
+     ===================================================== */
 
   async function decodeSocketMessage(
     data
   ) {
     if (
-      typeof data === "string"
+      typeof data ===
+      "string"
     ) {
       return data;
     }
 
-    if (data instanceof Blob) {
+    if (
+      data instanceof Blob
+    ) {
       return data.text();
     }
 
     if (
       data instanceof ArrayBuffer
     ) {
-      return new TextDecoder()
-        .decode(data);
+      return new TextDecoder(
+        "utf-8"
+      )
+        .decode(
+          data
+        );
     }
 
-    return new TextDecoder()
-      .decode(data);
+    return new TextDecoder(
+      "utf-8"
+    )
+      .decode(
+        data
+      );
   }
+
+  /* =====================================================
+     TURN COMPLETE
+     ===================================================== */
+
+  function finishTurnWhenPlaybackEnds(
+    generation
+  ) {
+    const check =
+      () => {
+        if (
+          generation !==
+          socketGeneration
+        ) {
+          return;
+        }
+
+        if (
+          playingSources.size >
+          0
+        ) {
+          window.setTimeout(
+            check,
+            25
+          );
+
+          return;
+        }
+
+        assistantSpeaking =
+          false;
+
+        responsePending =
+          false;
+
+        const userText =
+          userTranscriptBuffer;
+
+        const assistantText =
+          assistantTranscriptBuffer;
+
+        userTranscriptBuffer =
+          "";
+
+        assistantTranscriptBuffer =
+          "";
+
+        emit(
+          "neyo:voice-output-level",
+          {
+            level:
+              0
+          }
+        );
+
+        emit(
+          "neyo:voice-turn-complete",
+          {
+            userText,
+
+            assistantText,
+
+            character:
+              sessionCharacterId
+          }
+        );
+
+        if (
+          active
+        ) {
+          setPhase(
+            "listening"
+          );
+        }
+      };
+
+    check();
+  }
+
+  /* =====================================================
+     HANDLE GEMINI MESSAGE
+     ===================================================== */
+
+  async function handleServerMessage(
+    message,
+    generation
+  ) {
+    if (
+      generation !==
+      socketGeneration
+    ) {
+      return;
+    }
+
+    if (
+      message?.setupComplete
+    ) {
+      clearTimeout(
+        setupTimer
+      );
+
+      setupTimer =
+        0;
+
+      setupComplete =
+        true;
+
+      connecting =
+        false;
+
+      active =
+        true;
+
+      lastPhase =
+        "";
+
+      ensureMicLevelLoop();
+
+      setPhase(
+        "listening"
+      );
+
+      emit(
+        "neyo:voice-session-ready",
+        {
+          character:
+            sessionCharacterId,
+
+          voice:
+            sessionVoiceName
+        }
+      );
+
+      return;
+    }
+
+    const content =
+      message
+        ?.serverContent;
+
+    if (!content) {
+      return;
+    }
+
+    const userText =
+      content
+        ?.inputTranscription
+        ?.text;
+
+    if (
+      userText
+    ) {
+      userTranscriptBuffer =
+        appendTranscript(
+          userTranscriptBuffer,
+          userText
+        );
+
+      metrics.userTranscripts +=
+        1;
+
+      emit(
+        "neyo:voice-user-text",
+        {
+          text:
+            userTranscriptBuffer,
+
+          character:
+            sessionCharacterId
+        }
+      );
+    }
+
+    const assistantText =
+      content
+        ?.outputTranscription
+        ?.text;
+
+    if (
+      assistantText
+    ) {
+      assistantTranscriptBuffer =
+        appendTranscript(
+          assistantTranscriptBuffer,
+          assistantText
+        );
+
+      metrics.assistantTranscripts +=
+        1;
+
+      emit(
+        "neyo:voice-assistant-text",
+        {
+          text:
+            assistantTranscriptBuffer,
+
+          character:
+            sessionCharacterId
+        }
+      );
+    }
+
+    /* =================================================
+       INTERRUPTION
+       ================================================= */
+
+    if (
+      content.interrupted
+    ) {
+      metrics.interruptions +=
+        1;
+
+      stopPlayback();
+
+      lastPhase =
+        "";
+
+      setPhase(
+        "listening",
+        {
+          interrupted:
+            true
+        }
+      );
+
+      emit(
+        "neyo:voice-interrupted",
+        {
+          character:
+            sessionCharacterId
+        }
+      );
+
+      return;
+    }
+
+    /* =================================================
+       MODEL TURN
+       ================================================= */
+
+    const parts =
+      content
+        ?.modelTurn
+        ?.parts ||
+      [];
+
+    if (
+      content.modelTurn
+    ) {
+      if (
+        !assistantSpeaking
+      ) {
+        responsePending =
+          true;
+
+        setPhase(
+          "thinking"
+        );
+      }
+
+      for (
+        const part
+        of parts
+      ) {
+        const inline =
+          part?.inlineData;
+
+        if (
+          !inline?.data ||
+          !String(
+            inline.mimeType ||
+            ""
+          )
+            .startsWith(
+              "audio/"
+            )
+        ) {
+          continue;
+        }
+
+        await playAudioChunk(
+          inline.data,
+          inline.mimeType,
+          generation
+        );
+      }
+    }
+
+    if (
+      content.turnComplete
+    ) {
+      finishTurnWhenPlaybackEnds(
+        generation
+      );
+    }
+  }
+
+  /* =====================================================
+     SYSTEM INSTRUCTION
+     ===================================================== */
 
   function buildSystemInstruction(
     credentials
   ) {
     const provided =
-      credentials?.systemInstruction ||
-      credentials?.system_instruction ||
-      credentials?.instructions;
+      credentials
+        ?.systemInstruction ||
+      credentials
+        ?.system_instruction ||
+      credentials
+        ?.instructions;
 
     if (
-      typeof provided === "string" &&
+      typeof provided ===
+        "string" &&
       provided.trim()
     ) {
-      return provided.trim();
+      return provided
+        .trim();
     }
 
     const name =
-      String(
-        credentials?.characterName ||
-          credentials?.character ||
-          sessionCharacter ||
-          "Neyo"
-      ).trim();
+      cleanText(
+        credentials
+          ?.characterName ||
+        credentials
+          ?.character ||
+        sessionCharacterId ||
+        "Neyo",
+        80
+      ) ||
+      "Neyo";
 
     return (
-      `You are ${name}, a natural conversational AI assistant. ` +
-      "Respond naturally in the user's language. " +
-      "Keep spoken responses concise unless more detail is useful."
+      `You are ${name}, a natural, intelligent and friendly conversational AI assistant. ` +
+      "Respond naturally in the user's language. Keep spoken replies concise unless more detail is useful. " +
+      "Do not mention internal voice configuration."
     );
   }
+
+  /* =====================================================
+     GEMINI SETUP
+     ===================================================== */
 
   function buildSetupMessage(
     credentials
@@ -1140,7 +2381,7 @@
             voiceConfig: {
               prebuiltVoiceConfig: {
                 voiceName:
-                  sessionVoice
+                  sessionVoiceName
               }
             }
           }
@@ -1157,6 +2398,10 @@
           ]
         },
 
+        /*
+         * Preserve production input + output transcripts.
+         */
+
         inputAudioTranscription:
           {},
 
@@ -1165,7 +2410,8 @@
 
         realtimeInputConfig: {
           automaticActivityDetection: {
-            disabled: false,
+            disabled:
+              false,
 
             startOfSpeechSensitivity:
               CONFIG
@@ -1188,8 +2434,124 @@
     };
   }
 
-  async function handleServerMessage(
-    message,
+  /* =====================================================
+     CLOSE SOCKET ONLY
+     ===================================================== */
+
+  function closeSocket(
+    reason =
+      "Voice ended"
+  ) {
+    socketGeneration +=
+      1;
+
+    const current =
+      socket;
+
+    socket =
+      null;
+
+    if (!current) {
+      return;
+    }
+
+    current.onopen =
+      null;
+
+    current.onmessage =
+      null;
+
+    current.onerror =
+      null;
+
+    current.onclose =
+      null;
+
+    try {
+      if (
+        current.readyState ===
+          WebSocket.OPEN ||
+        current.readyState ===
+          WebSocket.CONNECTING
+      ) {
+        current.close(
+          1000,
+          reason
+        );
+      }
+    } catch {}
+  }
+
+  /* =====================================================
+     RESOURCE CLEANUP
+     ===================================================== */
+
+  async function cleanupLiveResources({
+    closeWebSocket =
+      true
+  } = {}) {
+    clearTimeout(
+      setupTimer
+    );
+
+    clearTimeout(
+      sessionTimer
+    );
+
+    setupTimer =
+      0;
+
+    sessionTimer =
+      0;
+
+    if (
+      tokenController
+    ) {
+      try {
+        tokenController.abort(
+          "voice-cleanup"
+        );
+      } catch {}
+
+      tokenController =
+        null;
+    }
+
+    if (
+      closeWebSocket
+    ) {
+      closeSocket();
+    }
+
+    stopPlayback();
+
+    await Promise.allSettled([
+      destroyMicrophone(),
+      destroyOutput()
+    ]);
+
+    userTranscriptBuffer =
+      "";
+
+    assistantTranscriptBuffer =
+      "";
+
+    assistantSpeaking =
+      false;
+
+    responsePending =
+      false;
+  }
+
+  /* =====================================================
+     UNEXPECTED SOCKET CLOSE
+
+     Critical production fix:
+     old live engine changed flags but could leave the
+     microphone/audio context alive after connection loss.
+     ===================================================== */
+
+  async function handleUnexpectedClose(
     generation
   ) {
     if (
@@ -1199,250 +2561,177 @@
       return;
     }
 
-    if (message?.setupComplete) {
-      clearTimeout(setupTimer);
-      setupTimer = 0;
+    socket =
+      null;
 
-      setupComplete = true;
-      connecting = false;
-      active = true;
-
-      startMicLevel();
-
-      setPhase(
-        "listening",
-        {
-          force: true
-        }
-      );
-
-      emit(
-        "neyo:voice-session-ready",
-        {
-          character:
-            sessionCharacter,
-
-          voice:
-            sessionVoice
-        }
-      );
-
+    if (
+      stopping
+    ) {
       return;
     }
 
-    const content =
-      message?.serverContent;
+    const wasRunning =
+      active ||
+      connecting ||
+      setupComplete;
 
-    if (!content) return;
-
-    const userText =
-      content
-        ?.inputTranscription
-        ?.text;
-
-    if (userText) {
-      userTranscript =
-        appendTranscript(
-          userTranscript,
-          userText
-        );
-
-      emit(
-        "neyo:voice-user-text",
-        {
-          text:
-            userTranscript,
-
-          character:
-            sessionCharacter
-        }
-      );
-    }
-
-    const assistantText =
-      content
-        ?.outputTranscription
-        ?.text;
-
-    if (assistantText) {
-      assistantTranscript =
-        appendTranscript(
-          assistantTranscript,
-          assistantText
-        );
-
-      emit(
-        "neyo:voice-assistant-text",
-        {
-          text:
-            assistantTranscript,
-
-          character:
-            sessionCharacter
-        }
-      );
-    }
-
-    if (content.interrupted) {
-      stopPlayback();
-
-      setPhase(
-        "listening",
-        {
-          interrupted: true,
-          force: true
-        }
-      );
-
-      emit(
-        "neyo:voice-interrupted",
-        {
-          character:
-            sessionCharacter
-        }
-      );
-
+    if (
+      !wasRunning
+    ) {
       return;
     }
 
-    const parts =
-      content?.modelTurn?.parts ||
-      [];
+    metrics.unexpectedCloses +=
+      1;
 
-    if (content.modelTurn) {
-      if (!assistantSpeaking) {
-        responsePending = true;
+    active =
+      false;
 
-        setPhase(
-          "thinking"
-        );
+    connecting =
+      false;
+
+    setupComplete =
+      false;
+
+    await cleanupLiveResources({
+      closeWebSocket:
+        false
+    });
+
+    lastPhase =
+      "";
+
+    setPhase(
+      "idle",
+      {
+        reason:
+          "connection-lost"
       }
+    );
 
-      for (
-        const part
-        of parts
-      ) {
-        const inline =
-          part?.inlineData;
-
-        if (
-          !inline?.data ||
-          !String(
-            inline.mimeType ||
-              ""
-          ).startsWith("audio/")
-        ) {
-          continue;
-        }
-
-        await playAudio(
-          inline.data,
-          inline.mimeType,
-          generation
-        );
+    reportError(
+      "Voice connection lost.",
+      {
+        reason:
+          "socket-close"
       }
-    }
+    );
 
-    if (content.turnComplete) {
-      const finish =
-        () => {
-          if (
-            generation !==
-            socketGeneration
-          ) {
-            return;
-          }
-
-          if (
-            playingSources.size > 0
-          ) {
-            setTimeout(
-              finish,
-              25
-            );
-
-            return;
-          }
-
-          assistantSpeaking = false;
-          responsePending = false;
-
-          userTranscript = "";
-          assistantTranscript = "";
-
-          emit(
-            "neyo:voice-output-level",
-            {
-              level: 0
-            }
-          );
-
-          if (active) {
-            setPhase(
-              "listening",
-              {
-                force: true
-              }
-            );
-          }
-        };
-
-      finish();
-    }
+    emit(
+      "neyo:voice-session-ended",
+      {
+        reason:
+          "connection-lost"
+      }
+    );
   }
 
-  async function start({
+  /* =====================================================
+     START GEMINI LIVE
+     ===================================================== */
+
+  async function startConversation({
     character
   } = {}) {
     if (
-      active ||
+      active
+    ) {
+      return true;
+    }
+
+    if (
       connecting ||
       stopping
     ) {
       return false;
     }
 
-    selectedCharacter =
+    /*
+     * Dictation and Gemini Live never compete for mic.
+     */
+
+    if (
+      dictating ||
+      transcribing
+    ) {
+      return false;
+    }
+
+    sessionCharacterId =
       cleanId(
         character ||
-          selectedCharacter
+        selectedCharacterId ||
+        getInitialCharacter()
       );
 
-    sessionCharacter =
-      selectedCharacter;
+    selectedCharacterId =
+      sessionCharacterId;
 
-    sessionVoice =
+    sessionVoiceName =
       CONFIG.defaultVoice;
 
-    connecting = true;
-    setupComplete = false;
+    connecting =
+      true;
 
-    userTranscript = "";
-    assistantTranscript = "";
+    active =
+      false;
+
+    setupComplete =
+      false;
+
+    assistantSpeaking =
+      false;
+
+    responsePending =
+      false;
+
+    userTranscriptBuffer =
+      "";
+
+    assistantTranscriptBuffer =
+      "";
+
+    metrics.sessionsStarted +=
+      1;
+
+    metrics.lastStartedAt =
+      Date.now();
+
+    metrics.lastError =
+      null;
+
+    lastPhase =
+      "";
 
     setPhase(
       "thinking",
       {
-        connecting: true,
-        force: true
+        connecting:
+          true
       }
     );
 
     emit(
-      "neyo:voice-connecting",
+      "neyo:voice-session-starting",
       {
         character:
-          sessionCharacter
+          sessionCharacterId
       }
     );
 
     try {
+      /*
+       * User gesture generally triggered voice-mode.start,
+       * therefore create/resume output context early.
+       */
+
       await ensureOutputContext();
+
       await ensureMicrophone();
 
       const credentials =
         await fetchVoiceToken(
-          sessionCharacter
+          sessionCharacterId
         );
 
       if (
@@ -1452,141 +2741,244 @@
         return false;
       }
 
-      sessionCharacter =
+      sessionCharacterId =
         cleanId(
           credentials.character ||
-            sessionCharacter
+          sessionCharacterId
         );
 
-      sessionVoice =
-        credentials.voice ||
+      sessionVoiceName =
+        cleanText(
+          credentials.voice ||
+          CONFIG.defaultVoice,
+          80
+        ) ||
         CONFIG.defaultVoice;
 
       const generation =
         ++socketGeneration;
 
-      socket =
+      const url =
+        `${CONFIG.websocketEndpoint}?access_token=${
+          encodeURIComponent(
+            credentials.token
+          )
+        }`;
+
+      const ws =
         new WebSocket(
-          `${CONFIG.websocketEndpoint}?access_token=${
-            encodeURIComponent(
-              credentials.token
-            )
-          }`
+          url
         );
 
-      socket.binaryType =
+      socket =
+        ws;
+
+      ws.binaryType =
         "arraybuffer";
 
-      socket.onopen =
-        () => {
-          if (
-            generation !==
-            socketGeneration
-          ) {
-            return;
-          }
+      /*
+       * start() resolves TRUE only after setupComplete,
+       * not merely after WebSocket construction.
+       */
 
-          socket.send(
-            JSON.stringify(
-              buildSetupMessage(
-                credentials
-              )
-            )
-          );
+      const setupResult =
+        await new Promise(
+          (
+            resolve,
+            reject
+          ) => {
+            let settled =
+              false;
 
-          setupTimer =
-            window.setTimeout(
+            const finishResolve =
+              value => {
+                if (
+                  settled
+                ) {
+                  return;
+                }
+
+                settled =
+                  true;
+
+                resolve(
+                  value
+                );
+              };
+
+            const finishReject =
+              error => {
+                if (
+                  settled
+                ) {
+                  return;
+                }
+
+                settled =
+                  true;
+
+                reject(
+                  error
+                );
+              };
+
+            ws.onopen =
               () => {
                 if (
-                  !setupComplete &&
-                  generation ===
-                    socketGeneration
+                  generation !==
+                  socketGeneration
                 ) {
-                  reportError(
-                    "Voice setup timed out."
+                  return;
+                }
+
+                try {
+                  ws.send(
+                    JSON.stringify(
+                      buildSetupMessage(
+                        credentials
+                      )
+                    )
                   );
 
-                  void stop({
-                    reason:
-                      "setup-timeout"
-                  });
+                } catch (
+                  error
+                ) {
+                  finishReject(
+                    error
+                  );
                 }
-              },
-              CONFIG.setupTimeoutMs
-            );
-        };
 
-      socket.onmessage =
-        async event => {
-          try {
-            const raw =
-              await decodeSocketMessage(
-                event.data
-              );
+                clearTimeout(
+                  setupTimer
+                );
 
-            const message =
-              JSON.parse(raw);
+                setupTimer =
+                  window.setTimeout(
+                    () => {
+                      if (
+                        generation !==
+                          socketGeneration ||
+                        setupComplete
+                      ) {
+                        return;
+                      }
 
-            await handleServerMessage(
-              message,
-              generation
-            );
-          } catch (error) {
-            console.error(
-              "[NEYO Voice] Message error:",
-              error
-            );
+                      finishReject(
+                        new Error(
+                          "Voice setup timed out."
+                        )
+                      );
+                    },
+                    CONFIG
+                      .setupTimeoutMs
+                  );
+              };
+
+            ws.onmessage =
+              async event => {
+                try {
+                  const raw =
+                    await decodeSocketMessage(
+                      event.data
+                    );
+
+                  const message =
+                    JSON.parse(
+                      raw
+                    );
+
+                  const hadSetup =
+                    setupComplete;
+
+                  await handleServerMessage(
+                    message,
+                    generation
+                  );
+
+                  if (
+                    !hadSetup &&
+                    setupComplete
+                  ) {
+                    finishResolve(
+                      true
+                    );
+                  }
+
+                } catch (
+                  error
+                ) {
+                  console.warn(
+                    "[NEYO Voice] Server message failed:",
+                    error
+                  );
+                }
+              };
+
+            ws.onerror =
+              () => {
+                if (
+                  generation !==
+                  socketGeneration
+                ) {
+                  return;
+                }
+
+                if (
+                  !setupComplete
+                ) {
+                  finishReject(
+                    new Error(
+                      "Voice connection error."
+                    )
+                  );
+
+                } else {
+                  emit(
+                    "neyo:voice-transport-error",
+                    {
+                      character:
+                        sessionCharacterId
+                    }
+                  );
+                }
+              };
+
+            ws.onclose =
+              () => {
+                if (
+                  generation !==
+                  socketGeneration
+                ) {
+                  return;
+                }
+
+                if (
+                  !setupComplete
+                ) {
+                  finishReject(
+                    new Error(
+                      "Voice connection closed during setup."
+                    )
+                  );
+
+                  return;
+                }
+
+                void handleUnexpectedClose(
+                  generation
+                );
+              };
           }
-        };
+        );
 
-      socket.onerror =
-        () => {
-          if (
-            generation !==
-            socketGeneration
-          ) {
-            return;
-          }
-
-          reportError(
-            "Voice connection error."
-          );
-        };
-
-      socket.onclose =
-        () => {
-          if (
-            generation !==
-            socketGeneration
-          ) {
-            return;
-          }
-
-          socket = null;
-
-          if (
-            !stopping &&
-            (
-              active ||
-              connecting
-            )
-          ) {
-            active = false;
-            connecting = false;
-            setupComplete = false;
-
-            setPhase(
-              "idle",
-              {
-                force: true
-              }
-            );
-
-            reportError(
-              "Voice connection lost."
-            );
-          }
-        };
+      if (
+        !setupResult ||
+        !active
+      ) {
+        throw new Error(
+          "Voice setup did not complete."
+        );
+      }
 
       clearTimeout(
         sessionTimer
@@ -1595,7 +2987,7 @@
       sessionTimer =
         window.setTimeout(
           () => {
-            void stop({
+            void stopConversation({
               reason:
                 "session-limit"
             });
@@ -1605,48 +2997,66 @@
 
       return true;
 
-    } catch (error) {
-      connecting = false;
-      active = false;
-      setupComplete = false;
+    } catch (
+      error
+    ) {
+      connecting =
+        false;
 
-      ++socketGeneration;
+      active =
+        false;
 
-      if (socket) {
-        try {
-          socket.onclose =
-            null;
+      setupComplete =
+        false;
 
-          socket.close();
-        } catch {}
+      await cleanupLiveResources();
 
-        socket = null;
-      }
-
-      stopPlayback();
-      await destroyMicrophone();
+      lastPhase =
+        "";
 
       setPhase(
         "idle",
         {
-          force: true
+          failed:
+            true
         }
       );
 
       reportError(
-        error?.message ||
-          "Couldn't connect voice.",
-        error
+        error,
+        {
+          operation:
+            "start"
+        }
+      );
+
+      emit(
+        "neyo:voice-session-ended",
+        {
+          reason:
+            "start-failed",
+
+          error:
+            error?.message ||
+            String(error)
+        }
       );
 
       return false;
     }
   }
 
-  async function stop({
-    reason = "user"
+  /* =====================================================
+     STOP LIVE SESSION
+     ===================================================== */
+
+  async function stopConversation({
+    reason =
+      "user"
   } = {}) {
-    if (stopping) {
+    if (
+      stopping
+    ) {
       return false;
     }
 
@@ -1654,178 +3064,869 @@
       !active &&
       !connecting &&
       !socket &&
-      !micStream
+      !micStream &&
+      !outputContext
     ) {
+      lastPhase =
+        "";
+
+      setPhase(
+        "idle",
+        {
+          reason
+        }
+      );
+
       return true;
     }
 
-    stopping = true;
+    stopping =
+      true;
 
-    clearTimeout(setupTimer);
-    clearTimeout(sessionTimer);
+    const hadSession =
+      active ||
+      setupComplete;
 
-    setupTimer = 0;
-    sessionTimer = 0;
+    active =
+      false;
 
-    active = false;
-    connecting = false;
-    setupComplete = false;
+    connecting =
+      false;
 
-    ++socketGeneration;
+    setupComplete =
+      false;
 
-    stopPlayback();
+    try {
+      await cleanupLiveResources();
 
-    if (socket) {
-      try {
-        socket.onclose =
-          null;
-
-        socket.close(
-          1000,
-          "Voice ended"
-        );
-      } catch {}
-
-      socket = null;
+    } finally {
+      stopping =
+        false;
     }
-
-    await destroyMicrophone();
 
     if (
-      outputContext &&
-      outputContext.state !==
-        "closed"
+      hadSession
     ) {
-      try {
-        await outputContext.close();
-      } catch {}
+      metrics.sessionsCompleted +=
+        1;
     }
 
-    outputContext = null;
-    masterGain = null;
+    metrics.lastEndedAt =
+      Date.now();
 
-    nextPlaybackTime = 0;
-    playbackStarted = false;
-
-    userTranscript = "";
-    assistantTranscript = "";
-
-    stopping = false;
+    lastPhase =
+      "";
 
     setPhase(
       "idle",
       {
-        reason,
-        force: true
+        reason
       }
     );
 
     emit(
       "neyo:voice-session-ended",
       {
-        reason
+        reason,
+
+        character:
+          sessionCharacterId,
+
+        voice:
+          sessionVoiceName
       }
     );
 
     return true;
   }
 
-  function setMuted(value) {
-    muted =
-      Boolean(value);
+  /* =====================================================
+     DICTATION MIME
+     ===================================================== */
 
-    if (micTrack) {
-      micTrack.enabled =
-        !muted;
+  function getSupportedDictationMimeType() {
+    if (
+      typeof MediaRecorder ===
+      "undefined"
+    ) {
+      return "";
     }
 
-    emit(
-      "neyo:voice-muted",
-      {
-        muted
-      }
-    );
+    const candidates = [
+      "audio/webm;codecs=opus",
+      "audio/webm",
+      "audio/ogg;codecs=opus",
+      "audio/mp4"
+    ];
 
-    return muted;
+    for (
+      const mime
+      of candidates
+    ) {
+      try {
+        if (
+          MediaRecorder
+            .isTypeSupported
+            ?.(mime)
+        ) {
+          return mime;
+        }
+
+      } catch {}
+    }
+
+    return "";
   }
 
-  function setSpeakerEnabled(
-    value
+  /* =====================================================
+     TRANSCRIBE BLOB
+     ===================================================== */
+
+  async function transcribeBlob(
+    blob
   ) {
-    speakerEnabled =
-      Boolean(value);
-
-    if (masterGain) {
-      masterGain.gain.value =
-        speakerEnabled ? 1 : 0;
+    if (
+      !(blob instanceof Blob) ||
+      blob.size === 0
+    ) {
+      throw new Error(
+        "No voice recording available."
+      );
     }
 
+    if (
+      transcribeController
+    ) {
+      try {
+        transcribeController.abort(
+          "superseded"
+        );
+      } catch {}
+    }
+
+    transcribeController =
+      new AbortController();
+
+    transcribing =
+      true;
+
     emit(
-      "neyo:voice-speaker",
+      "neyo:voice-transcribing",
       {
-        enabled:
-          speakerEnabled
+        active:
+          true
       }
     );
 
-    return speakerEnabled;
+    try {
+      const form =
+        new FormData();
+
+      const extension =
+        blob.type.includes(
+          "mp4"
+        )
+          ? "m4a"
+          : blob.type.includes(
+              "ogg"
+            )
+            ? "ogg"
+            : "webm";
+
+      form.append(
+        "audio",
+        blob,
+        `voice-input.${extension}`
+      );
+
+      const response =
+        await fetchWithTimeout(
+          CONFIG
+            .transcribeEndpoint,
+          {
+            method:
+              "POST",
+
+            credentials:
+              "include",
+
+            cache:
+              "no-store",
+
+            headers: {
+              Accept:
+                "application/json",
+
+              "X-Neyo-Voice-Client":
+                VERSION
+            },
+
+            body:
+              form
+          },
+          CONFIG
+            .transcribeTimeoutMs,
+          transcribeController
+        );
+
+      const raw =
+        await response.text();
+
+      let data =
+        {};
+
+      try {
+        data =
+          JSON.parse(
+            raw
+          );
+
+      } catch {}
+
+      if (
+        !response.ok
+      ) {
+        throw new Error(
+          data?.error ||
+          data?.message ||
+          raw ||
+          `Transcription failed (${response.status}).`
+        );
+      }
+
+      const transcript =
+        cleanText(
+          data?.transcript ||
+          data?.text ||
+          ""
+        );
+
+      if (
+        !transcript
+      ) {
+        throw new Error(
+          "No transcript returned."
+        );
+      }
+
+      metrics.transcriptions +=
+        1;
+
+      emit(
+        "neyo:voice-transcript",
+        {
+          transcript,
+
+          text:
+            transcript,
+
+          source:
+            "dictation"
+        }
+      );
+
+      emit(
+        "neyo:voice-transcript-ready",
+        {
+          transcript,
+
+          text:
+            transcript,
+
+          source:
+            "dictation"
+        }
+      );
+
+      return transcript;
+
+    } finally {
+      transcribeController =
+        null;
+
+      transcribing =
+        false;
+
+      emit(
+        "neyo:voice-transcribing",
+        {
+          active:
+            false
+        }
+      );
+    }
   }
+
+  /* =====================================================
+     CLEANUP DICTATION STREAM
+     ===================================================== */
+
+  async function cleanupDictation() {
+    clearTimeout(
+      dictationTimer
+    );
+
+    dictationTimer =
+      0;
+
+    if (
+      dictationStream
+    ) {
+      for (
+        const track
+        of dictationStream
+          .getTracks()
+      ) {
+        try {
+          track.stop();
+        } catch {}
+      }
+    }
+
+    dictationStream =
+      null;
+
+    dictationRecorder =
+      null;
+  }
+
+  /* =====================================================
+     START DICTATION
+     ===================================================== */
+
+  async function startDictation() {
+    if (
+      active ||
+      connecting ||
+      stopping ||
+      dictating ||
+      transcribing
+    ) {
+      return false;
+    }
+
+    if (
+      !navigator
+        .mediaDevices
+        ?.getUserMedia
+    ) {
+      reportError(
+        "Microphone unavailable.",
+        {
+          engine:
+            "dictation"
+        }
+      );
+
+      return false;
+    }
+
+    if (
+      typeof MediaRecorder ===
+      "undefined"
+    ) {
+      reportError(
+        "Voice recording is unavailable in this browser.",
+        {
+          engine:
+            "dictation"
+        }
+      );
+
+      return false;
+    }
+
+    try {
+      dictationStream =
+        await navigator
+          .mediaDevices
+          .getUserMedia({
+            audio: {
+              echoCancellation:
+                true,
+
+              noiseSuppression:
+                true,
+
+              autoGainControl:
+                true
+            },
+
+            video:
+              false
+          });
+
+      const mime =
+        getSupportedDictationMimeType();
+
+      dictationRecorder =
+        mime
+          ? new MediaRecorder(
+              dictationStream,
+              {
+                mimeType:
+                  mime
+              }
+            )
+          : new MediaRecorder(
+              dictationStream
+            );
+
+      dictationChunks =
+        [];
+
+      dictationStartedAt =
+        Date.now();
+
+      dictating =
+        true;
+
+      metrics.dictations +=
+        1;
+
+      dictationRecorder
+        .addEventListener(
+          "dataavailable",
+          event => {
+            if (
+              event.data &&
+              event.data.size >
+                0
+            ) {
+              dictationChunks.push(
+                event.data
+              );
+            }
+          }
+        );
+
+      const stopped =
+        new Promise(
+          resolve => {
+            dictationRecorder
+              .addEventListener(
+                "stop",
+                resolve,
+                {
+                  once:
+                    true
+                }
+              );
+          }
+        );
+
+      dictationRecorder.start();
+
+      clearTimeout(
+        dictationTimer
+      );
+
+      dictationTimer =
+        window.setTimeout(
+          () => {
+            void stopDictation();
+          },
+          CONFIG
+            .dictationMaxMs
+        );
+
+      emit(
+        "neyo:voice-dictation-start",
+        {
+          mimeType:
+            dictationRecorder
+              .mimeType ||
+            mime
+        }
+      );
+
+      /*
+       * Keep a safe reference for stopDictation.
+       */
+
+      dictationRecorder
+        .__neyoStoppedPromise =
+        stopped;
+
+      return true;
+
+    } catch (
+      error
+    ) {
+      dictating =
+        false;
+
+      await cleanupDictation();
+
+      reportError(
+        error,
+        {
+          engine:
+            "dictation"
+        }
+      );
+
+      return false;
+    }
+  }
+
+  /* =====================================================
+     STOP DICTATION
+     ===================================================== */
+
+  async function stopDictation({
+    transcribe =
+      true
+  } = {}) {
+    if (
+      !dictating ||
+      !dictationRecorder
+    ) {
+      return null;
+    }
+
+    const recorder =
+      dictationRecorder;
+
+    const stoppedPromise =
+      recorder
+        .__neyoStoppedPromise ||
+      Promise.resolve();
+
+    const duration =
+      Date.now() -
+      dictationStartedAt;
+
+    dictating =
+      false;
+
+    clearTimeout(
+      dictationTimer
+    );
+
+    dictationTimer =
+      0;
+
+    try {
+      if (
+        recorder.state !==
+        "inactive"
+      ) {
+        recorder.stop();
+      }
+
+      await stoppedPromise;
+
+    } catch {}
+
+    const chunks =
+      [
+        ...dictationChunks
+      ];
+
+    dictationChunks =
+      [];
+
+    const type =
+      recorder.mimeType ||
+      getSupportedDictationMimeType() ||
+      "audio/webm";
+
+    await cleanupDictation();
+
+    emit(
+      "neyo:voice-dictation-stop",
+      {
+        duration
+      }
+    );
+
+    if (
+      duration <
+        CONFIG
+          .dictationMinimumMs ||
+      chunks.length ===
+        0
+    ) {
+      return null;
+    }
+
+    const blob =
+      new Blob(
+        chunks,
+        {
+          type
+        }
+      );
+
+    if (
+      blob.size ===
+      0
+    ) {
+      return null;
+    }
+
+    if (
+      !transcribe
+    ) {
+      return blob;
+    }
+
+    try {
+      return await transcribeBlob(
+        blob
+      );
+
+    } catch (
+      error
+    ) {
+      reportError(
+        error,
+        {
+          engine:
+            "dictation-transcription"
+        }
+      );
+
+      return null;
+    }
+  }
+
+  /* =====================================================
+     CANCEL DICTATION
+     ===================================================== */
+
+  async function cancelDictation() {
+    if (
+      transcribeController
+    ) {
+      try {
+        transcribeController.abort(
+          "cancelled"
+        );
+      } catch {}
+
+      transcribeController =
+        null;
+    }
+
+    transcribing =
+      false;
+
+    if (
+      dictationRecorder &&
+      dictationRecorder.state !==
+        "inactive"
+    ) {
+      try {
+        dictationRecorder.stop();
+      } catch {}
+    }
+
+    dictating =
+      false;
+
+    dictationChunks =
+      [];
+
+    await cleanupDictation();
+
+    emit(
+      "neyo:voice-dictation-cancelled"
+    );
+
+    return true;
+  }
+
+  /* =====================================================
+     CHARACTER CHANGE EVENT
+     ===================================================== */
 
   window.addEventListener(
     "neyo:character-change",
     event => {
-      const next =
-        cleanId(
-          event.detail?.id ||
-          event.detail
-            ?.character
-        );
-
-      selectedCharacter =
-        next;
-
-      emit(
-        "neyo:voice-character",
-        {
-          character:
-            next
-        }
-      );
+      const id =
+        event.detail?.id ||
+        event.detail?.character;
 
       if (
-        active ||
-        connecting
+        id
       ) {
-        emit(
-          "neyo:voice-restart-required",
-          {
-            character:
-              next
-          }
+        setCharacter(
+          id
         );
       }
     }
   );
 
+  /* =====================================================
+     EXPLICIT ENGINE REQUEST EVENTS
+     ===================================================== */
+
+  window.addEventListener(
+    "neyo:voice-start-request",
+    event => {
+      void startConversation({
+        character:
+          event.detail
+            ?.character
+      });
+    }
+  );
+
+  window.addEventListener(
+    "neyo:voice-stop-request",
+    event => {
+      void stopConversation({
+        reason:
+          event.detail
+            ?.reason ||
+          "request"
+      });
+    }
+  );
+
+  window.addEventListener(
+    "neyo:voice-dictation-start-request",
+    () => {
+      void startDictation();
+    }
+  );
+
+  window.addEventListener(
+    "neyo:voice-dictation-stop-request",
+    () => {
+      void stopDictation();
+    }
+  );
+
+  /* =====================================================
+     PAGE CLEANUP
+     ===================================================== */
+
+  window.addEventListener(
+    "pagehide",
+    () => {
+      /*
+       * pagehide cannot await, but tracks/socket are
+       * stopped synchronously before close promises.
+       */
+
+      active =
+        false;
+
+      connecting =
+        false;
+
+      setupComplete =
+        false;
+
+      closeSocket(
+        "Page hidden"
+      );
+
+      stopPlayback();
+
+      if (
+        micStream
+      ) {
+        for (
+          const track
+          of micStream.getTracks()
+        ) {
+          try {
+            track.stop();
+          } catch {}
+        }
+      }
+
+      if (
+        dictationStream
+      ) {
+        for (
+          const track
+          of dictationStream
+            .getTracks()
+        ) {
+          try {
+            track.stop();
+          } catch {}
+        }
+      }
+    },
+    {
+      once:
+        true
+    }
+  );
+
+  /* =====================================================
+     PUBLIC API
+     ===================================================== */
+
   const api =
     Object.freeze({
-      __controller: true,
-      version: VERSION,
+      __controller:
+        true,
 
-      start,
-      stop,
+      version:
+        VERSION,
+
+      active:
+        true,
+
+      legacyScriptPresent,
+
+      legacyOwnerActive:
+        false,
+
+      /*
+       * Gemini Live
+       */
+
+      start:
+        startConversation,
+
+      stop:
+        stopConversation,
+
+      /*
+       * Audio controls
+       */
 
       setMuted,
+
       setSpeakerEnabled,
+
+      /*
+       * Character
+       */
+
       setCharacter,
 
       getCharacter() {
-        return selectedCharacter;
+        return selectedCharacterId;
       },
 
       getActiveVoiceName() {
-        return sessionVoice;
+        return sessionVoiceName;
       },
+
+      /*
+       * Stable transcription fallback
+       */
+
+      startDictation,
+
+      stopDictation,
+
+      cancelDictation,
+
+      transcribeBlob,
+
+      /*
+       * Status
+       */
 
       isActive() {
         return active;
@@ -1835,36 +3936,126 @@
         return connecting;
       },
 
+      isStopping() {
+        return stopping;
+      },
+
+      isDictating() {
+        return dictating;
+      },
+
+      isTranscribing() {
+        return transcribing;
+      },
+
       getSessionInfo() {
         return {
           version:
             VERSION,
 
+          engine:
+            "gemini-live",
+
           active,
+
           connecting,
+
           stopping,
+
           setupComplete,
 
-          phase,
+          phase:
+            lastPhase,
 
           character:
-            sessionCharacter,
+            sessionCharacterId,
 
-          selectedCharacter,
+          selectedCharacter:
+            selectedCharacterId,
 
           voice:
-            sessionVoice,
+            sessionVoiceName,
 
           muted,
+
           speakerEnabled,
 
           assistantSpeaking,
-          responsePending
+
+          responsePending,
+
+          dictating,
+
+          transcribing,
+
+          userTranscript:
+            userTranscriptBuffer,
+
+          assistantTranscript:
+            assistantTranscriptBuffer
+        };
+      },
+
+      getState() {
+        return {
+          version:
+            VERSION,
+
+          active,
+
+          connecting,
+
+          stopping,
+
+          setupComplete,
+
+          phase:
+            lastPhase,
+
+          selectedCharacter:
+            selectedCharacterId,
+
+          sessionCharacter:
+            sessionCharacterId,
+
+          voice:
+            sessionVoiceName,
+
+          muted,
+
+          speakerEnabled,
+
+          micAcquired:
+            Boolean(
+              micStream
+            ),
+
+          outputContext:
+            Boolean(
+              outputContext
+            ),
+
+          playingSources:
+            playingSources
+              .size,
+
+          dictating,
+
+          transcribing,
+
+          legacyScriptPresent,
+
+          legacyOwnerActive:
+            false,
+
+          metrics: {
+            ...metrics
+          }
         };
       },
 
       engine:
-        "gemini-live"
+        "gemini-live-with-transcription-fallback"
     });
 
   Object.defineProperty(
@@ -1885,14 +4076,32 @@
     }
   );
 
+  /* =====================================================
+     READY
+     ===================================================== */
+
   emit(
     "neyo:voice-ready",
     {
       version:
         VERSION,
 
+      engine:
+        api.engine,
+
       character:
-        selectedCharacter
+        selectedCharacterId,
+
+      live:
+        true,
+
+      dictationFallback:
+        true,
+
+      legacyScriptPresent,
+
+      legacyOwnerActive:
+        false
     }
   );
 })();

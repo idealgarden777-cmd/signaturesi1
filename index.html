@@ -55,7 +55,7 @@
     rel="stylesheet"
   >
 
-  <!-- Styles — Fully Modular Runtime -->
+  <!-- Styles — Final Order (legacy temporarily disabled) -->
   <link rel="stylesheet" href="/neo.css?v=82">
   <link rel="stylesheet" href="/neo-ui-v2.css?v=2">
 
@@ -106,6 +106,40 @@
     rel="stylesheet"
     href="/css/components/character-picker.css?v=1"
   >
+
+  <!-- ===== ZADI VISUAL OVERRIDES (temporary until mascot.css v4) ===== -->
+  <style>
+    /* Zadi: soft-diamond light geometry */
+    .neyo-mascot-face[data-character="zadi"] {
+      --face-shape: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+      --face-bg: #f5efe8;
+      --face-border: #d4c9bc;
+      --face-radius: 0;
+      --eye-color: #2c2a28;
+      --mouth-color: #4a3f38;
+      transform: scale(0.99);
+    }
+    .neyo-mascot-face[data-character="zadi"] .neyo-mascot-features {
+      filter: drop-shadow(0 2px 6px rgba(0,0,0,0.06));
+    }
+    .neyo-mascot-face[data-character="zadi"] .neyo-eye-core {
+      background: #2c2a28;
+    }
+    .neyo-mascot-face[data-character="zadi"] .neyo-mouth-bar {
+      background: #4a3f38;
+    }
+    /* slight diamond glow */
+    .neyo-mascot-face[data-character="zadi"]::after {
+      content: '';
+      position: absolute;
+      inset: -2px;
+      background: radial-gradient(circle at 30% 30%, rgba(255,235,215,0.3), transparent 70%);
+      pointer-events: none;
+      border-radius: inherit;
+      clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+    }
+  </style>
+
   <!-- ========================================================= -->
   <!-- COMPOSER STABILITY OVERRIDES                              -->
   <!-- ========================================================= -->
@@ -737,6 +771,29 @@
       cursor: default;
     }
 
+
+    /* =======================================================
+       VOICE TRANSCRIBE
+
+       Prevent voice state from pushing send button.
+       ======================================================= */
+
+    #voiceTranscribeContainer {
+      flex:
+        0
+        0
+        auto;
+
+      max-width:
+        min(
+          240px,
+          38vw
+        );
+
+      overflow: hidden;
+    }
+
+
     /* =======================================================
        EXPAND BUTTON
 
@@ -921,7 +978,15 @@
         flex-basis:
           30px;
       }
-#chatInput {
+
+
+      #voiceTranscribeContainer {
+        max-width:
+          34vw;
+      }
+
+
+      #chatInput {
         font-size:
           16px !important;
       }
@@ -937,7 +1002,15 @@
     (
       max-width: 390px
     ) {
-#attachmentList
+
+      #voiceTranscribeContainer:not(.active) {
+        max-width: 0;
+
+        overflow: hidden;
+      }
+
+
+      #attachmentList
       .attachment-chip {
         min-width:
           145px;
@@ -1220,9 +1293,9 @@
           + BUTTON POPUP
 
           Ownership:
-          composer.js owns opening/closing this popup.
+          neo.js owns opening/closing this popup.
 
-          attachments.js owns file selection/upload lifecycle.
+          attachments.js owns ONLY #addFilesMenuBtn.
         -->
         <div
           class="attachment-popup-menu"
@@ -1375,7 +1448,64 @@
             ></textarea>
 
 
-            <!-- Fullscreen Gemini Live voice is owned by voice.js / voice-mode.js -->
+            <!-- Existing voice transcription UI -->
+            <div
+              class="voice-transcribe-container"
+              id="voiceTranscribeContainer"
+            >
+
+              <div
+                class="wave-dots-bar"
+                id="waveDotsBar"
+              >
+                <span></span>
+                <span></span>
+                <span></span>
+                <span></span>
+                <span></span>
+                <span></span>
+
+                <span></span>
+                <span></span>
+                <span></span>
+                <span></span>
+                <span></span>
+                <span></span>
+
+                <span></span>
+                <span></span>
+                <span></span>
+                <span></span>
+                <span></span>
+                <span></span>
+
+                <span></span>
+                <span></span>
+                <span></span>
+                <span></span>
+                <span></span>
+                <span></span>
+              </div>
+
+
+              <button
+                class="stop-recording-btn"
+                id="stopRecBtn"
+                title="Stop Listening"
+                type="button"
+                aria-label="Stop listening"
+                data-tooltip="Stop listening"
+                data-tooltip-position="top"
+              >
+                <i
+                  data-lucide="square"
+                  size="14"
+                ></i>
+              </button>
+
+            </div>
+
+
             <!-- Existing voice input -->
             <button
               class="icon-btn mic-btn"
@@ -2540,205 +2670,66 @@
   <!-- END #neyoVoiceMode -->
 
   <!-- ========================================================= -->
-  <!-- NEYO — FULLY MODULAR APPLICATION LOADER                  -->
+  <!-- NEYO — SAFE HYBRID MIGRATION LOADER                      -->
   <!--                                                          -->
-  <!-- Single-owner runtime. No legacy application runtime.     -->
+  <!-- IMPORTANT                                                 -->
+  <!-- - neo.js remains untouched and ACTIVE                    -->
+  <!-- - chat-runtime.js remains the legacy/V2 bridge           -->
+  <!-- - new modular owners load in passive compatibility mode  -->
+  <!-- - no legacy DOM has been removed                         -->
   <!-- ========================================================= -->
 
+  <!-- 1. LEGACY STABLE APPLICATION -->
+  <script src="/neo.js?v=86"></script>
 
-  <!-- ========================================================= -->
-  <!-- 1. FOUNDATION / ACCOUNT                                   -->
-  <!-- ========================================================= -->
+  <!-- 2. NEW MODULAR COMPATIBILITY LAYER -->
+  <script type="module" src="/js/components/theme.js?v=1"></script>
+  <script type="module" src="/js/components/auth.js?v=1"></script>
+  <script type="module" src="/js/components/sidebar.js?v=1"></script>
+  <script type="module" src="/js/components/settings.js?v=1"></script>
+  <script type="module" src="/js/components/composer.js?v=1"></script>
 
-  <script
-    type="module"
-    src="/js/components/theme.js?v=1"
-  ></script>
+  <!-- 3. SAFE UI MODULES -->
+  <script type="module" src="/js/components/model-menu.js?v=5"></script>
+  <script type="module" src="/js/components/profile.js?v=4"></script>
+  <script type="module" src="/js/components/checkout.js?v=4"></script>
 
-  <script
-    type="module"
-    src="/js/components/model-menu.js?v=5"
-  ></script>
+  <!-- 4. COMPOSER VISUAL HELPERS -->
+  <script type="module" src="/js/components/composer-expand.js?v=2"></script>
+  <script type="module" src="/js/components/composer-scrollbar.js?v=1"></script>
 
-  <script
-    type="module"
-    src="/js/components/profile.js?v=4"
-  ></script>
+  <!-- 5. CHARACTER DEFINITIONS -->
+  <script type="module" src="/js/characters/neyo.js?v=1"></script>
+  <script type="module" src="/js/characters/zadi.js?v=1"></script>
+  <script type="module" src="/js/characters/wizi.js?v=1"></script>
 
-  <script
-    type="module"
-    src="/js/components/auth.js?v=1"
-  ></script>
+  <!-- 6. VOICE / MASCOT -->
+  <script type="module" src="/js/components/voice.js?v=104"></script>
+  <script type="module" src="/js/components/mascot.js?v=7"></script>
+  <script type="module" src="/js/components/mascot-intelligence.js?v=1"></script>
+  <script type="module" src="/js/components/voice-mode.js?v=4"></script>
+  <script type="module" src="/js/components/character-picker.js?v=1"></script>
 
-  <script
-    type="module"
-    src="/js/components/checkout.js?v=4"
-  ></script>
+  <!-- 7. CHAT V2 RUNTIME -->
+  <!-- attachments → chat → messages → renderer → history → send-state → chat-runtime -->
+  <script type="module" src="/js/components/attachments.js?v=7"></script>
+  <script type="module" src="/js/components/chat.js?v=2"></script>
+  <script type="module" src="/js/components/messages.js?v=2"></script>
+  <script type="module" src="/js/components/message-renderer.js?v=2"></script>
+  <script type="module" src="/js/components/history.js?v=2"></script>
+  <script type="module" src="/js/components/send-state.js?v=7"></script>
+  <script type="module" src="/js/components/chat-runtime.js?v=1"></script>
 
+  <!-- 8. UI UTILITIES -->
+  <script type="module" src="/js/components/native-tooltips.js?v=1"></script>
+  <script type="module" src="/js/components/tooltip-registry.js?v=2"></script>
+  <script type="module" src="/js/components/ads.js?v=3"></script>
 
-  <!-- ========================================================= -->
-  <!-- 2. APP SHELL / SETTINGS                                   -->
-  <!-- ========================================================= -->
+  <!-- 9. MOBILE -->
+  <script type="module" src="/js/components/mobile-viewport.js?v=1"></script>
+  <script type="module" src="/js/components/mobile-keyboard.js?v=1"></script>
 
-  <script
-    type="module"
-    src="/js/components/sidebar.js?v=1"
-  ></script>
-
-  <script
-    type="module"
-    src="/js/components/settings.js?v=1"
-  ></script>
-
-
-  <!-- ========================================================= -->
-  <!-- 3. COMPOSER                                               -->
-  <!-- ========================================================= -->
-
-  <script
-    type="module"
-    src="/js/components/composer.js?v=1"
-  ></script>
-
-  <script
-    type="module"
-    src="/js/components/composer-expand.js?v=2"
-  ></script>
-
-  <script
-    type="module"
-    src="/js/components/composer-scrollbar.js?v=1"
-  ></script>
-
-
-  <!-- ========================================================= -->
-  <!-- 4. CHARACTER DEFINITIONS                                  -->
-  <!-- ========================================================= -->
-
-  <script
-    type="module"
-    src="/js/characters/neyo.js?v=1"
-  ></script>
-
-  <script
-    type="module"
-    src="/js/characters/zadi.js?v=1"
-  ></script>
-
-  <script
-    type="module"
-    src="/js/characters/wizi.js?v=1"
-  ></script>
-
-
-  <!-- ========================================================= -->
-  <!-- 5. MASCOT / FULLSCREEN GEMINI LIVE VOICE                  -->
-  <!-- ========================================================= -->
-
-  <script
-    type="module"
-    src="/js/components/mascot.js?v=7"
-  ></script>
-
-  <script
-    type="module"
-    src="/js/components/mascot-intelligence.js?v=1"
-  ></script>
-
-  <script
-    type="module"
-    src="/js/components/voice-mode.js?v=4"
-  ></script>
-
-  <script
-    type="module"
-    src="/js/components/character-picker.js?v=1"
-  ></script>
-
-  <script
-    type="module"
-    src="/js/components/voice.js?v=104"
-  ></script>
-
-
-  <!-- ========================================================= -->
-  <!-- 6. CHAT                                                   -->
-  <!--                                                          -->
-  <!-- Required order:                                          -->
-  <!-- attachments → chat → messages → renderer → history       -->
-  <!-- → send-state                                             -->
-  <!-- ========================================================= -->
-
-  <script
-    type="module"
-    src="/js/components/attachments.js?v=7"
-  ></script>
-
-  <script
-    type="module"
-    src="/js/components/chat.js?v=2"
-  ></script>
-
-  <script
-    type="module"
-    src="/js/components/messages.js?v=2"
-  ></script>
-
-  <script
-    type="module"
-    src="/js/components/message-renderer.js?v=2"
-  ></script>
-
-  <script
-    type="module"
-    src="/js/components/history.js?v=2"
-  ></script>
-
-  <script
-    type="module"
-    src="/js/components/send-state.js?v=7"
-  ></script>
-
-
-  <!-- ========================================================= -->
-  <!-- 7. UI UTILITIES                                           -->
-  <!-- ========================================================= -->
-
-  <script
-    type="module"
-    src="/js/components/native-tooltips.js?v=1"
-  ></script>
-
-  <script
-    type="module"
-    src="/js/components/tooltip-registry.js?v=2"
-  ></script>
-
-  <script
-    type="module"
-    src="/js/components/ads.js?v=3"
-  ></script>
-
-
-  <!-- ========================================================= -->
-  <!-- 8. MOBILE                                                 -->
-  <!-- ========================================================= -->
-
-  <script
-    type="module"
-    src="/js/components/mobile-viewport.js?v=1"
-  ></script>
-
-  <script
-    type="module"
-    src="/js/components/mobile-keyboard.js?v=1"
-  ></script>
-
-
-  <!-- ========================================================= -->
-  <!-- 9. FINAL BOOT                                             -->
-  <!-- ========================================================= -->
-
+  <!-- 10. FINAL BOOT SAFETY -->
   <script>
     (() => {
       "use strict";
@@ -2747,57 +2738,30 @@
         try {
           window.lucide?.createIcons?.();
         } catch (error) {
-          console.warn(
-            "[NEYO Boot] Icon initialization failed:",
-            error
-          );
+          console.warn("[NEYO Boot] Icon initialization failed:", error);
         }
 
-        document.documentElement.classList.add(
-          "neyo-ready"
-        );
+        document.documentElement.classList.add("neyo-ready");
 
         window.dispatchEvent(
-          new CustomEvent(
-            "neyo:app-ready",
-            {
-              detail: {
-                architecture:
-                  "fully-modular",
-
-                legacyRuntime:
-                  false,
-
-                legacyChat:
-                  false,
-
-                modularChat:
-                  true,
-
-                voiceEngine:
-                  window.NeyoVoice?.engine ||
-                  "gemini-live-fullscreen"
-              }
+          new CustomEvent("neyo:app-ready", {
+            detail: {
+              architecture: "safe-hybrid",
+              legacyRuntime: true,
+              legacyChat: true,
+              modularChat: true,
+              runtime: "chat-runtime.js",
+              neoVersion: "86",
+              voiceVersion: "104"
             }
-          )
+          })
         );
 
-        console.log(
-          "[NEYO] Fully modular runtime ready."
-        );
+        console.log("[NEYO] Safe hybrid runtime ready.");
       };
 
-      if (
-        document.readyState ===
-        "loading"
-      ) {
-        document.addEventListener(
-          "DOMContentLoaded",
-          boot,
-          {
-            once: true
-          }
-        );
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", boot, { once: true });
       } else {
         boot();
       }

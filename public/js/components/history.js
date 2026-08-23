@@ -1,109 +1,466 @@
+/*
+=========================================================
+NEYO — HISTORY
+FINAL PRODUCTION MIXER v7
+
+FILE:
+public/js/components/history.js
+
+OWNS
+---------------------------------------------------------
+- /api/history communication
+- History list loading
+- History list rendering
+- Conversation opening
+- Active conversation highlight
+- Stale-open protection
+- Rename persistence
+- Delete persistence
+- Pin / unpin persistence
+- Local history cache
+- Loading / empty / error states
+- History lifecycle events
+- Public history API
+
+DOES NOT OWN
+---------------------------------------------------------
+- Chat messages DOM
+- Conversation message state
+- /api/chat
+- Send / Enter
+- Rename modal UI
+- Delete confirmation UI
+- Popup positioning
+- Share business logic
+- Sidebar open / close
+- neo.js internals
+
+ARCHITECTURE
+---------------------------------------------------------
+
+history row click
+      ↓
+history.js
+      ↓
+POST /api/history { action: "get" }
+      ↓
+neyo:conversation-loaded
+      ↓
+chat.js
+      ↓
+messages.js
+
+Chat response
+      ↓
+neyo:history-refresh-request
+      ↓
+history.js
+      ↓
+GET /api/history
+
+MIGRATION RULE
+---------------------------------------------------------
+This controller is authoritative even while neo.js is
+physically loaded.
+
+After neo.js removal this file continues unchanged.
+=========================================================
+*/
+
 (() => {
   "use strict";
 
-  const VERSION = "neyo-history-v2";
-  if (window.NeyoHistory?.__controller === true) return;
+  const VERSION =
+    "neyo-history-final-v7";
 
-  const ENDPOINT = "/api/history";
-  const historyList = document.getElementById("historyList");
-
-  if (!historyList) {
-    console.warn("[NEYO History] #historyList missing.");
+  if (
+    window.NeyoHistory
+      ?.__controller === true
+  ) {
     return;
   }
 
-  let conversations = [];
-  let activeConversationId = null;
-  let loadingPromise = null;
-  let openSerial = 0;
+  /* =====================================================
+     CONFIG
+     ===================================================== */
 
-  function emit(name, detail = {}) {
+  const CONFIG =
+    Object.freeze({
+      endpoint:
+        "/api/history",
+
+      requestTimeoutMs:
+        60_000,
+
+      maxTitleLength:
+        100,
+
+      maxIdLength:
+        256,
+
+      skeletonRows:
+        3,
+
+      /*
+       * Prevent accidental duplicate row opens
+       * caused by legacy/delegated listeners.
+       */
+
+      duplicateOpenWindowMs:
+        180
+    });
+
+  /* =====================================================
+     DOM
+     ===================================================== */
+
+  const historyList =
+    document.getElementById(
+      "historyList"
+    );
+
+  const active =
+    Boolean(
+      historyList
+    );
+
+  /* =====================================================
+     LEGACY TELEMETRY
+
+     Informational ONLY.
+     neo.js never disables this controller.
+     ===================================================== */
+
+  const legacyScriptPresent =
+    Array
+      .from(
+        document.scripts || []
+      )
+      .some(
+        script =>
+          /(?:^|\/)neo\.js(?:\?|$)/
+            .test(
+              script.src || ""
+            )
+      );
+
+  /* =====================================================
+     STATE
+     ===================================================== */
+
+  let conversations =
+    [];
+
+  let activeConversationId =
+    null;
+
+  let loadingPromise =
+    null;
+
+  let openSerial =
+    0;
+
+  let activeOpenController =
+    null;
+
+  let lastOpenAt =
+    0;
+
+  let lastOpenId =
+    null;
+
+  const state = {
+    loaded:
+      false,
+
+    loading:
+      false,
+
+    opening:
+      false,
+
+    lastLoadedAt:
+      null,
+
+    lastOpenedAt:
+      null,
+
+    lastMutationAt:
+      null,
+
+    loadCount:
+      0,
+
+    openCount:
+      0,
+
+    renameCount:
+      0,
+
+    deleteCount:
+      0,
+
+    pinCount:
+      0,
+
+    lastError:
+      null
+  };
+
+  /* =====================================================
+     EVENTS
+     ===================================================== */
+
+  function emit(
+    name,
+    detail = {}
+  ) {
     window.dispatchEvent(
-      new CustomEvent(name, { detail })
+      new CustomEvent(
+        name,
+        {
+          detail
+        }
+      )
     );
   }
 
-  function clean(value, max = 220) {
-    return String(value ?? "")
-      .replace(/\u0000/g, "")
+  /* =====================================================
+     BASIC HELPERS
+     ===================================================== */
+
+  function clean(
+    value,
+    max =
+      CONFIG.maxTitleLength
+  ) {
+    return String(
+      value ?? ""
+    )
+      .replace(
+        /\u0000/g,
+        ""
+      )
       .trim()
-      .slice(0, max);
+      .slice(
+        0,
+        max
+      );
   }
 
-  function cloneConversation(item) {
-    return item
-      ? { ...item }
-      : null;
+  function cleanId(
+    value
+  ) {
+    return clean(
+      value,
+      CONFIG.maxIdLength
+    );
   }
 
-  function cloneConversations() {
-    return conversations.map(item => ({
-      ...item
-    }));
-  }
-
-  function normalizeConversation(item) {
-    if (!item || typeof item !== "object") {
-      return null;
+  function cloneValue(
+    value
+  ) {
+    if (
+      value === null ||
+      value === undefined
+    ) {
+      return value;
     }
 
-    const id = clean(
-      item.id ||
-        item.conversationId ||
-        item.conversation_id,
-      128
-    );
+    if (
+      typeof structuredClone ===
+      "function"
+    ) {
+      try {
+        return structuredClone(
+          value
+        );
+      } catch {}
+    }
 
-    if (!id) return null;
+    try {
+      return JSON.parse(
+        JSON.stringify(
+          value
+        )
+      );
 
-    return {
-      ...item,
-      id,
-      title:
-        clean(
-          item.title ||
-            "New conversation",
-          100
-        ) ||
-        "New conversation",
-      is_pinned: Boolean(
-        item.is_pinned ??
-          item.isPinned ??
-          item.pinned
-      )
-    };
+    } catch {
+      return value;
+    }
   }
 
   function refreshIcons() {
     try {
-      window.lucide?.createIcons?.();
+      window.lucide
+        ?.createIcons
+        ?.();
     } catch {}
   }
 
-  async function readJson(response) {
-    const raw = await response.text();
+  /* =====================================================
+     NORMALIZE CONVERSATION
+     ===================================================== */
 
-    let data = {};
+  function normalizeConversation(
+    item
+  ) {
+    if (
+      !item ||
+      typeof item !==
+        "object"
+    ) {
+      return null;
+    }
+
+    const id =
+      cleanId(
+        item.id ||
+        item.conversationId ||
+        item.conversation_id
+      );
+
+    if (!id) {
+      return null;
+    }
+
+    const title =
+      clean(
+        item.title ||
+        "New conversation"
+      ) ||
+      "New conversation";
+
+    return {
+      ...item,
+
+      id,
+
+      conversationId:
+        id,
+
+      title,
+
+      is_pinned:
+        Boolean(
+          item.is_pinned ??
+          item.isPinned ??
+          item.pinned
+        ),
+
+      isPinned:
+        Boolean(
+          item.is_pinned ??
+          item.isPinned ??
+          item.pinned
+        )
+    };
+  }
+
+  /* =====================================================
+     NORMALIZE LIST
+
+     Backend ordering is preserved.
+
+     We do NOT silently reorder history because backend
+     may already have its own pinned / updated ordering.
+     ===================================================== */
+
+  function normalizeConversationList(
+    values
+  ) {
+    if (
+      !Array.isArray(
+        values
+      )
+    ) {
+      return [];
+    }
+
+    const result =
+      [];
+
+    const seen =
+      new Set();
+
+    for (
+      const raw
+      of values
+    ) {
+      const item =
+        normalizeConversation(
+          raw
+        );
+
+      if (
+        !item ||
+        seen.has(
+          item.id
+        )
+      ) {
+        continue;
+      }
+
+      seen.add(
+        item.id
+      );
+
+      result.push(
+        item
+      );
+    }
+
+    return result;
+  }
+
+  /* =====================================================
+     RESPONSE
+     ===================================================== */
+
+  async function readJson(
+    response
+  ) {
+    const raw =
+      await response.text();
+
+    let data =
+      {};
 
     if (raw) {
       try {
-        data = JSON.parse(raw);
-      } catch {}
+        data =
+          JSON.parse(
+            raw
+          );
+
+      } catch {
+        data =
+          {};
+      }
     }
 
-    if (!response.ok) {
-      const error = new Error(
+    if (
+      !response.ok
+    ) {
+      const message =
         clean(
           data?.error ||
-            data?.message ||
-            raw,
+          data?.message ||
+          raw,
           1500
         ) ||
-          `Request failed (${response.status}).`
-      );
+        `Request failed (${response.status}).`;
 
-      error.status = response.status;
-      error.data = data;
+      const error =
+        new Error(
+          message
+        );
+
+      error.status =
+        response.status;
+
+      error.data =
+        data;
 
       throw error;
     }
@@ -111,43 +468,103 @@
     return data;
   }
 
-  async function request(
-    body = null
+  /* =====================================================
+     FETCH WITH TIMEOUT
+     ===================================================== */
+
+  async function fetchWithTimeout(
+    url,
+    options = {},
+    {
+      timeoutMs =
+        CONFIG.requestTimeoutMs,
+
+      controller:
+        externalController =
+        null
+    } = {}
   ) {
-    const response = await fetch(
-      ENDPOINT,
+    const controller =
+      externalController ||
+      new AbortController();
+
+    const timeout =
+      window.setTimeout(
+        () => {
+          try {
+            controller.abort(
+              "timeout"
+            );
+
+          } catch {
+            try {
+              controller.abort();
+            } catch {}
+          }
+        },
+        timeoutMs
+      );
+
+    try {
+      return await fetch(
+        url,
+        {
+          ...options,
+
+          signal:
+            controller.signal
+        }
+      );
+
+    } finally {
+      window.clearTimeout(
+        timeout
+      );
+    }
+  }
+
+  /* =====================================================
+     ERROR
+     ===================================================== */
+
+  function handleError(
+    error,
+    detail = {}
+  ) {
+    state.lastError =
+      error?.message ||
+      "History request failed.";
+
+    emit(
+      "neyo:history-error",
       {
-        method: body
-          ? "POST"
-          : "GET",
+        error,
 
-        credentials: "include",
-        cache: "no-store",
+        message:
+          state.lastError,
 
-        headers: body
-          ? {
-              "Content-Type":
-                "application/json",
-              Accept:
-                "application/json"
-            }
-          : {
-              Accept:
-                "application/json"
-            },
-
-        body: body
-          ? JSON.stringify(body)
-          : undefined
+        ...detail
       }
     );
 
-    return readJson(response);
+    return error;
   }
 
+  /* =====================================================
+     LOADING UI
+     ===================================================== */
+
   function renderLoading() {
+    if (
+      !active
+    ) {
+      return false;
+    }
+
     const root =
-      document.createElement("div");
+      document.createElement(
+        "div"
+      );
 
     root.className =
       "history-loading";
@@ -157,72 +574,238 @@
       "true"
     );
 
-    for (let i = 0; i < 3; i++) {
-      const row =
-        document.createElement("div");
+    root.setAttribute(
+      "aria-busy",
+      "true"
+    );
 
-      const line =
-        document.createElement("div");
+    for (
+      let index = 0;
+      index <
+        CONFIG.skeletonRows;
+      index += 1
+    ) {
+      const row =
+        document.createElement(
+          "div"
+        );
 
       row.className =
         "history-skeleton-row";
 
+      const line =
+        document.createElement(
+          "div"
+        );
+
       line.className =
         "history-skeleton-line";
 
-      row.appendChild(line);
-      root.appendChild(row);
+      row.appendChild(
+        line
+      );
+
+      root.appendChild(
+        row
+      );
     }
 
-    historyList.replaceChildren(root);
+    historyList
+      .replaceChildren(
+        root
+      );
+
+    historyList.setAttribute(
+      "aria-busy",
+      "true"
+    );
+
+    return true;
   }
 
-  function createHistoryRow(item) {
-    const wrapper =
-      document.createElement("div");
+  /* =====================================================
+     EMPTY
+     ===================================================== */
 
-    const openButton =
-      document.createElement("button");
+  function renderEmpty() {
+    if (
+      !active
+    ) {
+      return false;
+    }
 
-    const title =
-      document.createElement("span");
+    historyList
+      .replaceChildren();
 
-    const menuButton =
-      document.createElement("button");
+    historyList.removeAttribute(
+      "aria-busy"
+    );
 
-    wrapper.className =
-      "history-item-wrapper";
+    emit(
+      "neyo:history-empty"
+    );
 
-    wrapper.dataset.id =
-      item.id;
+    return true;
+  }
 
-    openButton.type =
-      "button";
+  /* =====================================================
+     ACTIVE UI
+     ===================================================== */
 
-    openButton.className =
-      "history-item";
+  function applyActiveState(
+    button,
+    item
+  ) {
+    const isActive =
+      Boolean(
+        activeConversationId &&
+        item.id ===
+          activeConversationId
+      );
 
-    openButton.dataset.conversationId =
-      item.id;
-
-    openButton.title =
-      item.title;
-
-    openButton.classList.toggle(
+    button.classList.toggle(
       "active",
-      item.id ===
-        activeConversationId
+      isActive
+    );
+
+    button.classList.toggle(
+      "is-active",
+      isActive
     );
 
     if (
-      item.id ===
-      activeConversationId
+      isActive
     ) {
-      openButton.setAttribute(
+      button.setAttribute(
         "aria-current",
-        "true"
+        "page"
+      );
+
+    } else {
+      button.removeAttribute(
+        "aria-current"
       );
     }
+  }
+
+  /* =====================================================
+     OPEN BUTTON CLICK
+
+     stopImmediatePropagation protects against legacy
+     delegated click handlers while neo.js still exists.
+     ===================================================== */
+
+  function handleOpenButtonClick(
+    event,
+    item
+  ) {
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation();
+
+    void openConversation(
+      item.id,
+      {
+        source:
+          "history-row"
+      }
+    );
+  }
+
+  /* =====================================================
+     HISTORY MENU REQUEST
+     ===================================================== */
+
+  function requestMenu(
+    item,
+    detail = {}
+  ) {
+    emit(
+      "neyo:history-menu-request",
+      {
+        conversationId:
+          item.id,
+
+        id:
+          item.id,
+
+        title:
+          item.title,
+
+        isPinned:
+          item.is_pinned,
+
+        pinned:
+          item.is_pinned,
+
+        ...detail
+      }
+    );
+  }
+
+  /* =====================================================
+     CREATE HISTORY ROW
+     ===================================================== */
+
+  function createHistoryRow(
+    item
+  ) {
+    const row =
+      document.createElement(
+        "div"
+      );
+
+    row.className =
+      "history-item-wrapper";
+
+    row.dataset.id =
+      item.id;
+
+    row.dataset
+      .conversationId =
+      item.id;
+
+    row.dataset.pinned =
+      String(
+        item.is_pinned
+      );
+
+    /* =================================================
+       MAIN OPEN BUTTON
+       ================================================= */
+
+    const button =
+      document.createElement(
+        "button"
+      );
+
+    button.type =
+      "button";
+
+    button.className =
+      "history-item";
+
+    button.dataset
+      .conversationId =
+      item.id;
+
+    button.title =
+      item.title;
+
+    button.setAttribute(
+      "aria-label",
+      `Open conversation: ${item.title}`
+    );
+
+    applyActiveState(
+      button,
+      item
+    );
+
+    const title =
+      document.createElement(
+        "span"
+      );
 
     title.className =
       "history-item-title";
@@ -230,11 +813,21 @@
     title.textContent =
       item.title;
 
-    openButton.appendChild(title);
+    button.appendChild(
+      title
+    );
 
-    if (item.is_pinned) {
+    /* =================================================
+       PIN INDICATOR
+       ================================================= */
+
+    if (
+      item.is_pinned
+    ) {
       const pin =
-        document.createElement("span");
+        document.createElement(
+          "span"
+        );
 
       pin.className =
         "history-pin-icon";
@@ -244,105 +837,174 @@
         "Pinned"
       );
 
-      pin.innerHTML =
-        '<i data-lucide="pin" width="12" height="12" aria-hidden="true"></i>';
+      pin.title =
+        "Pinned";
 
-      openButton.appendChild(pin);
+      pin.innerHTML = `
+        <i
+          data-lucide="pin"
+          width="12"
+          height="12"
+          aria-hidden="true"
+        ></i>
+      `;
+
+      button.appendChild(
+        pin
+      );
     }
 
-    openButton.addEventListener(
+    button.addEventListener(
       "click",
-      () => {
-        void openConversation(
-          item.id
-        ).catch(handleError);
-      }
+      event =>
+        handleOpenButtonClick(
+          event,
+          item
+        )
     );
+
+    /* =================================================
+       THREE-DOT MENU BUTTON
+
+       Multiple compatibility classes intentionally kept.
+       ================================================= */
+
+    const menuButton =
+      document.createElement(
+        "button"
+      );
 
     menuButton.type =
       "button";
 
     menuButton.className =
-      "history-three-dot";
+      [
+        "history-three-dot",
+        "history-action-btn"
+      ].join(" ");
+
+    menuButton.dataset
+      .conversationId =
+      item.id;
+
+    menuButton.dataset
+      .historyAction =
+      "menu";
 
     menuButton.setAttribute(
       "aria-label",
-      "Conversation options"
+      `Conversation options for ${item.title}`
     );
 
-    menuButton.innerHTML =
-      '<i data-lucide="more-vertical" width="16" height="16" aria-hidden="true"></i>';
+    menuButton.setAttribute(
+      "aria-haspopup",
+      "menu"
+    );
+
+    menuButton.setAttribute(
+      "aria-expanded",
+      "false"
+    );
+
+    menuButton.title =
+      "Conversation options";
+
+    menuButton.innerHTML = `
+      <i
+        data-lucide="more-vertical"
+        width="16"
+        height="16"
+        aria-hidden="true"
+      ></i>
+    `;
 
     menuButton.addEventListener(
       "click",
       event => {
         event.preventDefault();
         event.stopPropagation();
+        event.stopImmediatePropagation();
 
-        emit(
-          "neyo:history-menu-request",
+        requestMenu(
+          item,
           {
-            conversationId:
-              item.id,
-
-            title:
-              item.title,
-
-            isPinned:
-              item.is_pinned,
-
             anchorElement:
-              menuButton
+              menuButton,
+
+            source:
+              "button"
           }
         );
       }
     );
 
-    wrapper.addEventListener(
+    /* =================================================
+       CONTEXT MENU
+       ================================================= */
+
+    row.addEventListener(
       "contextmenu",
       event => {
         event.preventDefault();
         event.stopPropagation();
+        event.stopImmediatePropagation();
 
-        emit(
-          "neyo:history-menu-request",
+        requestMenu(
+          item,
           {
-            conversationId:
-              item.id,
-
-            title:
-              item.title,
-
-            isPinned:
-              item.is_pinned,
-
             clientX:
               event.clientX,
 
             clientY:
-              event.clientY
+              event.clientY,
+
+            source:
+              "contextmenu"
           }
         );
       }
     );
 
-    wrapper.append(
-      openButton,
+    row.append(
+      button,
       menuButton
     );
 
-    return wrapper;
+    return row;
   }
 
-  function render() {
-    historyList.replaceChildren();
+  /* =====================================================
+     RENDER HISTORY
+     ===================================================== */
 
-    if (!conversations.length) {
+  function renderHistory() {
+    if (
+      !active
+    ) {
+      return false;
+    }
+
+    historyList
+      .replaceChildren();
+
+    historyList.removeAttribute(
+      "aria-busy"
+    );
+
+    if (
+      conversations.length ===
+      0
+    ) {
       emit(
         "neyo:history-rendered",
         {
-          conversations: [],
-          count: 0
+          conversations:
+            [],
+
+          count:
+            0,
+
+          activeConversationId
         }
       );
 
@@ -350,15 +1012,23 @@
     }
 
     const fragment =
-      document.createDocumentFragment();
+      document
+        .createDocumentFragment();
 
-    for (const item of conversations) {
+    for (
+      const item
+      of conversations
+    ) {
       fragment.appendChild(
-        createHistoryRow(item)
+        createHistoryRow(
+          item
+        )
       );
     }
 
-    historyList.appendChild(fragment);
+    historyList.appendChild(
+      fragment
+    );
 
     refreshIcons();
 
@@ -366,131 +1036,501 @@
       "neyo:history-rendered",
       {
         conversations:
-          cloneConversations(),
+          getConversations(),
 
         count:
-          conversations.length
+          conversations.length,
+
+        activeConversationId
       }
     );
 
     return true;
   }
 
-  async function performLoad() {
-    renderLoading();
+  /* =====================================================
+     UPDATE ONE LOCAL ITEM
+     ===================================================== */
+
+  function updateLocalConversation(
+    id,
+    values
+  ) {
+    const index =
+      conversations.findIndex(
+        item =>
+          item.id === id
+      );
+
+    if (
+      index < 0
+    ) {
+      return false;
+    }
+
+    conversations[index] =
+      normalizeConversation({
+        ...conversations[index],
+        ...values,
+        id
+      }) ||
+      conversations[index];
+
+    return true;
+  }
+
+  /* =====================================================
+     REMOVE LOCAL ITEM
+     ===================================================== */
+
+  function removeLocalConversation(
+    id
+  ) {
+    const before =
+      conversations.length;
+
+    conversations =
+      conversations.filter(
+        item =>
+          item.id !== id
+      );
+
+    return (
+      conversations.length !==
+      before
+    );
+  }
+
+  /* =====================================================
+     LOAD HISTORY
+     ===================================================== */
+
+  async function performLoadHistory({
+    showLoading =
+      true
+  } = {}) {
+    if (
+      !active
+    ) {
+      return [];
+    }
+
+    state.loading =
+      true;
+
+    state.lastError =
+      null;
+
+    if (
+      showLoading &&
+      !state.loaded
+    ) {
+      renderLoading();
+    }
+
+    emit(
+      "neyo:history-loading",
+      {
+        showLoading
+      }
+    );
 
     try {
+      const response =
+        await fetchWithTimeout(
+          CONFIG.endpoint,
+          {
+            method:
+              "GET",
+
+            credentials:
+              "include",
+
+            cache:
+              "no-store",
+
+            headers: {
+              Accept:
+                "application/json",
+
+              "X-Neyo-History-Client":
+                VERSION
+            }
+          }
+        );
+
       const data =
-        await request();
+        await readJson(
+          response
+        );
 
       conversations =
-        Array.isArray(
+        normalizeConversationList(
           data?.conversations
-        )
-          ? data.conversations
-              .map(
-                normalizeConversation
-              )
-              .filter(Boolean)
-          : [];
+        );
 
-      render();
+      state.loaded =
+        true;
+
+      state.loading =
+        false;
+
+      state.lastLoadedAt =
+        Date.now();
+
+      state.loadCount +=
+        1;
+
+      renderHistory();
 
       emit(
         "neyo:history-loaded",
         {
           conversations:
-            cloneConversations()
+            getConversations(),
+
+          count:
+            conversations.length,
+
+          activeConversationId
         }
       );
 
-      return cloneConversations();
+      return getConversations();
 
-    } catch (error) {
-      conversations = [];
+    } catch (
+      error
+    ) {
+      state.loading =
+        false;
 
-      render();
-
-      emit(
-        "neyo:history-error",
-        { error }
+      handleError(
+        error,
+        {
+          operation:
+            "load"
+        }
       );
+
+      /*
+       * First load failed:
+       * remove the permanent skeleton.
+
+       * Later refresh failed:
+       * retain currently usable history DOM/cache.
+       */
+
+      if (
+        !state.loaded
+      ) {
+        renderEmpty();
+      }
 
       throw error;
     }
   }
 
-  async function load() {
-    if (loadingPromise) {
+  async function loadHistory(
+    options = {}
+  ) {
+    if (
+      !active
+    ) {
+      return [];
+    }
+
+    /*
+     * Deduplicate simultaneous refresh events.
+     *
+     * chat.js currently emits both modern
+     * neyo:history-refresh-request and compatibility
+     * neyo:history-load-request. They resolve to one GET.
+     */
+
+    if (
+      loadingPromise
+    ) {
       return loadingPromise;
     }
 
     loadingPromise =
-      performLoad();
+      performLoadHistory(
+        options
+      );
 
     try {
       return await loadingPromise;
+
     } finally {
-      loadingPromise = null;
+      loadingPromise =
+        null;
     }
   }
 
+  /* =====================================================
+     FETCH ONE CONVERSATION
+     ===================================================== */
+
   async function fetchConversation(
-    conversationId
+    conversationId,
+    {
+      signal =
+        null
+    } = {}
   ) {
+    if (
+      !active
+    ) {
+      return null;
+    }
+
     const id =
-      clean(
-        conversationId,
-        128
+      cleanId(
+        conversationId
       );
 
-    if (!id) return null;
+    if (!id) {
+      return null;
+    }
+
+    const controller =
+      signal
+        ? null
+        : new AbortController();
+
+    const response =
+      await fetchWithTimeout(
+        CONFIG.endpoint,
+        {
+          method:
+            "POST",
+
+          credentials:
+            "include",
+
+          cache:
+            "no-store",
+
+          headers: {
+            "Content-Type":
+              "application/json",
+
+            Accept:
+              "application/json",
+
+            "X-Neyo-History-Client":
+              VERSION
+          },
+
+          body:
+            JSON.stringify({
+              action:
+                "get",
+
+              conversationId:
+                id
+            }),
+
+          ...(signal
+            ? {
+                signal
+              }
+            : {})
+        },
+        {
+          controller:
+            controller ||
+            undefined
+        }
+      );
 
     const data =
-      await request({
-        action: "get",
-        conversationId: id
-      });
+      await readJson(
+        response
+      );
+
+    /*
+     * CRITICAL:
+     *
+     * Do not strip attachment/source/future message
+     * metadata. chat.js performs canonical normalization.
+     */
 
     return {
       id,
+
+      conversationId:
+        id,
+
+      title:
+        clean(
+          data?.title ||
+          getById(id)?.title ||
+          "New conversation"
+        ) ||
+        "New conversation",
+
       messages:
         Array.isArray(
           data?.messages
         )
-          ? data.messages
+          ? cloneValue(
+              data.messages
+            )
           : []
     };
   }
 
-  async function openConversation(
-    conversationId
+  /* =====================================================
+     CANCEL CURRENT OPEN
+     ===================================================== */
+
+  function cancelPendingOpen(
+    reason =
+      "superseded"
   ) {
+    openSerial +=
+      1;
+
+    const controller =
+      activeOpenController;
+
+    activeOpenController =
+      null;
+
+    state.opening =
+      false;
+
+    if (
+      controller
+    ) {
+      try {
+        controller.abort(
+          reason
+        );
+
+      } catch {
+        try {
+          controller.abort();
+        } catch {}
+      }
+    }
+
+    return true;
+  }
+
+  /* =====================================================
+     OPEN CONVERSATION
+     ===================================================== */
+
+  async function openConversation(
+    conversationId,
+    {
+      source =
+        "history"
+    } = {}
+  ) {
+    if (
+      !active
+    ) {
+      return null;
+    }
+
     const id =
-      clean(
-        conversationId,
-        128
+      cleanId(
+        conversationId
       );
 
-    if (!id) return null;
+    if (!id) {
+      return null;
+    }
+
+    const now =
+      performance.now();
+
+    if (
+      lastOpenId === id &&
+      now -
+        lastOpenAt <
+      CONFIG
+        .duplicateOpenWindowMs
+    ) {
+      return null;
+    }
+
+    lastOpenId =
+      id;
+
+    lastOpenAt =
+      now;
+
+    /*
+     * Cancel actual previous fetch in addition to
+     * serial stale-result protection.
+     */
+
+    if (
+      activeOpenController
+    ) {
+      try {
+        activeOpenController
+          .abort(
+            "superseded"
+          );
+
+      } catch {
+        try {
+          activeOpenController
+            .abort();
+        } catch {}
+      }
+    }
+
+    const controller =
+      new AbortController();
+
+    activeOpenController =
+      controller;
 
     const serial =
       ++openSerial;
+
+    state.opening =
+      true;
+
+    state.lastError =
+      null;
 
     emit(
       "neyo:history-opening",
       {
         conversationId:
-          id
+          id,
+
+        source
       }
     );
 
     try {
       const conversation =
-        await fetchConversation(id);
+        await fetchConversation(
+          id,
+          {
+            signal:
+              controller.signal
+          }
+        );
+
+      /*
+       * User clicked A then B:
+       * late A must never replace B.
+       */
 
       if (
-        serial !== openSerial ||
+        serial !==
+          openSerial ||
+        controller.signal
+          .aborted ||
         !conversation
       ) {
         return null;
@@ -499,7 +1539,21 @@
       activeConversationId =
         id;
 
-      render();
+      state.opening =
+        false;
+
+      state.lastOpenedAt =
+        Date.now();
+
+      state.openCount +=
+        1;
+
+      renderHistory();
+
+      /*
+       * chat.js owns canonical conversation state.
+       * messages.js owns actual message DOM.
+       */
 
       emit(
         "neyo:conversation-loaded",
@@ -508,7 +1562,9 @@
             id,
 
           messages:
-            conversation.messages
+            conversation.messages,
+
+          source
         }
       );
 
@@ -516,98 +1572,205 @@
         "neyo:history-opened",
         {
           conversationId:
-            id
+            id,
+
+          conversation:
+            cloneValue(
+              conversation
+            ),
+
+          source
         }
       );
 
       return conversation;
 
-    } catch (error) {
-      if (serial === openSerial) {
-        emit(
-          "neyo:history-error",
-          {
-            error,
-            conversationId:
-              id
-          }
-        );
+    } catch (
+      error
+    ) {
+      /*
+       * Superseded/aborted history opens are expected
+       * and should not surface as user-facing errors.
+       */
+
+      if (
+        error?.name ===
+          "AbortError" ||
+        controller.signal
+          .aborted ||
+        serial !==
+          openSerial
+      ) {
+        return null;
       }
 
+      state.opening =
+        false;
+
+      handleError(
+        error,
+        {
+          operation:
+            "open",
+
+          conversationId:
+            id
+        }
+      );
+
       throw error;
+
+    } finally {
+      if (
+        activeOpenController ===
+        controller
+      ) {
+        activeOpenController =
+          null;
+
+        state.opening =
+          false;
+      }
     }
   }
 
-  async function action(
-    actionName,
+  /* =====================================================
+     ACTION REQUEST
+     ===================================================== */
+
+  async function performAction(
+    action,
     conversationId,
     payload = {}
   ) {
+    if (
+      !active
+    ) {
+      return null;
+    }
+
     const id =
-      clean(
-        conversationId,
-        128
+      cleanId(
+        conversationId
       );
 
-    if (!id) return null;
+    if (!id) {
+      return null;
+    }
 
-    return request({
-      action:
-        actionName,
+    const response =
+      await fetchWithTimeout(
+        CONFIG.endpoint,
+        {
+          method:
+            "POST",
 
-      conversationId:
-        id,
+          credentials:
+            "include",
 
-      ...payload
-    });
+          cache:
+            "no-store",
+
+          headers: {
+            "Content-Type":
+              "application/json",
+
+            Accept:
+              "application/json",
+
+            "X-Neyo-History-Client":
+              VERSION
+          },
+
+          body:
+            JSON.stringify({
+              action,
+
+              conversationId:
+                id,
+
+              ...payload
+            })
+        }
+      );
+
+    return readJson(
+      response
+    );
   }
+
+  /* =====================================================
+     RENAME
+     ===================================================== */
 
   async function renameConversation(
     conversationId,
     title
   ) {
-    const id =
-      clean(
-        conversationId,
-        128
-      );
-
-    const nextTitle =
-      clean(
-        title,
-        100
-      );
-
     if (
-      !id ||
-      !nextTitle
+      !active
     ) {
       return false;
     }
 
-    await action(
+    const id =
+      cleanId(
+        conversationId
+      );
+
+    const cleanTitle =
+      clean(
+        title
+      );
+
+    if (
+      !id ||
+      !cleanTitle
+    ) {
+      return false;
+    }
+
+    const existing =
+      getById(
+        id
+      );
+
+    if (
+      existing?.title ===
+      cleanTitle
+    ) {
+      return true;
+    }
+
+    await performAction(
       "rename",
       id,
       {
         title:
-          nextTitle
+          cleanTitle
       }
     );
 
-    const item =
-      conversations.find(
-        conversation =>
-          conversation.id === id
-      );
+    /*
+     * Update immediately after server success.
+     * No visual flicker while background refresh runs.
+     */
 
-    if (item) {
-      item.title =
-        nextTitle;
+    updateLocalConversation(
+      id,
+      {
+        title:
+          cleanTitle
+      }
+    );
 
-      render();
-    } else {
-      await load();
-    }
+    state.renameCount +=
+      1;
+
+    state.lastMutationAt =
+      Date.now();
+
+    renderHistory();
 
     emit(
       "neyo:history-renamed",
@@ -616,25 +1779,53 @@
           id,
 
         title:
-          nextTitle
+          cleanTitle
+      }
+    );
+
+    /*
+     * Server remains authoritative.
+     * Refresh quietly.
+     */
+
+    void loadHistory({
+      showLoading:
+        false
+    }).catch(
+      error => {
+        console.warn(
+          "[NEYO History] Post-rename refresh failed:",
+          error
+        );
       }
     );
 
     return true;
   }
 
+  /* =====================================================
+     DELETE
+     ===================================================== */
+
   async function deleteConversation(
     conversationId
   ) {
+    if (
+      !active
+    ) {
+      return false;
+    }
+
     const id =
-      clean(
-        conversationId,
-        128
+      cleanId(
+        conversationId
       );
 
-    if (!id) return false;
+    if (!id) {
+      return false;
+    }
 
-    await action(
+    await performAction(
       "delete",
       id
     );
@@ -643,72 +1834,143 @@
       activeConversationId ===
       id;
 
-    conversations =
-      conversations.filter(
-        item =>
-          item.id !== id
-      );
+    removeLocalConversation(
+      id
+    );
 
-    if (wasActive) {
+    state.deleteCount +=
+      1;
+
+    state.lastMutationAt =
+      Date.now();
+
+    if (
+      wasActive
+    ) {
       activeConversationId =
         null;
 
-      openSerial++;
+      /*
+       * Any history fetch still trying to open this
+       * conversation is now stale.
+       */
+
+      cancelPendingOpen(
+        "conversation-deleted"
+      );
+
+      /*
+       * Existing runtime listens to this and routes
+       * canonical neyo:chat-new-request.
+       */
 
       emit(
-        "neyo:chat-new-request"
+        "neyo:active-conversation-deleted",
+        {
+          conversationId:
+            id
+        }
       );
     }
 
-    render();
+    renderHistory();
 
     emit(
       "neyo:history-deleted",
       {
         conversationId:
-          id
+          id,
+
+        wasActive
+      }
+    );
+
+    void loadHistory({
+      showLoading:
+        false
+    }).catch(
+      error => {
+        console.warn(
+          "[NEYO History] Post-delete refresh failed:",
+          error
+        );
       }
     );
 
     return true;
   }
 
+  /* =====================================================
+     PIN / UNPIN
+     ===================================================== */
+
   async function setPinned(
     conversationId,
     pinned
   ) {
+    if (
+      !active
+    ) {
+      return false;
+    }
+
     const id =
-      clean(
-        conversationId,
-        128
+      cleanId(
+        conversationId
       );
 
-    if (!id) return false;
+    if (!id) {
+      return false;
+    }
 
     const value =
-      Boolean(pinned);
+      Boolean(
+        pinned
+      );
 
-    await action(
+    const existing =
+      getById(
+        id
+      );
+
+    if (
+      existing &&
+      Boolean(
+        existing.is_pinned
+      ) ===
+      value
+    ) {
+      return true;
+    }
+
+    await performAction(
       value
         ? "pin"
         : "unpin",
       id
     );
 
-    const item =
-      conversations.find(
-        conversation =>
-          conversation.id === id
-      );
+    updateLocalConversation(
+      id,
+      {
+        is_pinned:
+          value,
 
-    if (item) {
-      item.is_pinned =
-        value;
+        isPinned:
+          value,
 
-      render();
-    } else {
-      await load();
-    }
+        pinned:
+          value
+      }
+    );
+
+    state.pinCount +=
+      1;
+
+    state.lastMutationAt =
+      Date.now();
+
+    renderHistory();
 
     emit(
       "neyo:history-pin-change",
@@ -717,51 +1979,326 @@
           id,
 
         pinned:
+          value,
+
+        isPinned:
           value
       }
     );
 
+    /*
+     * Backend may reorder pinned items.
+     * Quiet refresh gets canonical ordering.
+     */
+
+    void loadHistory({
+      showLoading:
+        false
+    }).catch(
+      error => {
+        console.warn(
+          "[NEYO History] Post-pin refresh failed:",
+          error
+        );
+      }
+    );
+
     return true;
   }
 
-  function setActive(
+  /* =====================================================
+     TOGGLE PIN
+     ===================================================== */
+
+  async function togglePinned(
     conversationId
   ) {
-    activeConversationId =
-      clean(
-        conversationId,
-        128
+    const item =
+      getById(
+        conversationId
+      );
+
+    if (!item) {
+      return false;
+    }
+
+    return setPinned(
+      item.id,
+      !item.is_pinned
+    );
+  }
+
+  /* =====================================================
+     SET ACTIVE
+     ===================================================== */
+
+  function setActiveConversation(
+    conversationId,
+    {
+      render =
+        true
+    } = {}
+  ) {
+    if (
+      !active
+    ) {
+      return false;
+    }
+
+    const id =
+      cleanId(
+        conversationId
       ) ||
       null;
 
-    render();
+    const changed =
+      activeConversationId !==
+      id;
+
+    activeConversationId =
+      id;
+
+    if (
+      render
+    ) {
+      renderHistory();
+    }
+
+    if (
+      changed
+    ) {
+      emit(
+        "neyo:history-active-change",
+        {
+          conversationId:
+            activeConversationId
+        }
+      );
+    }
 
     return true;
   }
 
-  function handleError(
-    error,
-    detail = {}
-  ) {
-    console.warn(
-      "[NEYO History]",
-      error
-    );
+  /* =====================================================
+     GETTERS
+     ===================================================== */
 
-    emit(
-      "neyo:history-error",
-      {
-        error,
-        ...detail
-      }
+  function getConversations() {
+    return conversations.map(
+      item =>
+        cloneValue(
+          item
+        )
     );
   }
+
+  function getById(
+    id
+  ) {
+    const value =
+      cleanId(
+        id
+      );
+
+    if (!value) {
+      return null;
+    }
+
+    const item =
+      conversations.find(
+        conversation =>
+          conversation.id ===
+          value
+      );
+
+    return item
+      ? cloneValue(
+          item
+        )
+      : null;
+  }
+
+  /* =====================================================
+     CHAT STATE SYNC
+
+     chat.js owns actual conversation state.
+     History mirrors only active sidebar selection.
+     ===================================================== */
+
+  function syncFromChatState(
+    detail = {}
+  ) {
+    const privateChat =
+      Boolean(
+        detail.preferences
+          ?.privateChat
+      );
+
+    if (
+      privateChat
+    ) {
+      setActiveConversation(
+        null
+      );
+
+      return;
+    }
+
+    const id =
+      cleanId(
+        detail.conversationId
+      ) ||
+      null;
+
+    setActiveConversation(
+      id
+    );
+  }
+
+  /* =====================================================
+     MENU ACTION EVENTS
+     ===================================================== */
+
+  window.addEventListener(
+    "neyo:history-rename-request",
+    event => {
+      const detail =
+        event.detail ||
+        {};
+
+      void renameConversation(
+        detail.conversationId ||
+        detail.id,
+
+        detail.title
+      ).catch(
+        error =>
+          handleError(
+            error,
+            {
+              operation:
+                "rename",
+
+              conversationId:
+                detail.conversationId ||
+                detail.id
+            }
+          )
+      );
+    }
+  );
+
+  window.addEventListener(
+    "neyo:history-delete-request",
+    event => {
+      const detail =
+        event.detail ||
+        {};
+
+      void deleteConversation(
+        detail.conversationId ||
+        detail.id
+      ).catch(
+        error =>
+          handleError(
+            error,
+            {
+              operation:
+                "delete",
+
+              conversationId:
+                detail.conversationId ||
+                detail.id
+            }
+          )
+      );
+    }
+  );
+
+  window.addEventListener(
+    "neyo:history-pin-request",
+    event => {
+      const detail =
+        event.detail ||
+        {};
+
+      const id =
+        detail.conversationId ||
+        detail.id;
+
+      if (
+        !id
+      ) {
+        return;
+      }
+
+      /*
+       * If menu specifies pinned, use it.
+       * Otherwise toggle current state.
+       */
+
+      if (
+        typeof detail.pinned ===
+          "boolean"
+      ) {
+        void setPinned(
+          id,
+          detail.pinned
+        ).catch(
+          error =>
+            handleError(
+              error,
+              {
+                operation:
+                  "pin",
+
+                conversationId:
+                  id
+              }
+            )
+        );
+
+        return;
+      }
+
+      void togglePinned(
+        id
+      ).catch(
+        error =>
+          handleError(
+            error,
+            {
+              operation:
+                "pin",
+
+              conversationId:
+                id
+            }
+          )
+      );
+    }
+  );
+
+  /* =====================================================
+     LOAD / REFRESH EVENTS
+
+     Both are supported for old + new chat contracts.
+     loadingPromise dedupes simultaneous requests.
+     ===================================================== */
 
   window.addEventListener(
     "neyo:history-load-request",
     () => {
-      void load().catch(
-        handleError
+      void loadHistory({
+        showLoading:
+          !state.loaded
+      }).catch(
+        error => {
+          console.warn(
+            "[NEYO History] Load failed:",
+            error
+          );
+        }
       );
     }
   );
@@ -769,176 +2306,385 @@
   window.addEventListener(
     "neyo:history-refresh-request",
     () => {
-      void load().catch(
-        handleError
+      void loadHistory({
+        showLoading:
+          false
+      }).catch(
+        error => {
+          console.warn(
+            "[NEYO History] Refresh failed:",
+            error
+          );
+        }
       );
     }
   );
+
+  /* =====================================================
+     OPEN REQUEST EVENT
+     ===================================================== */
 
   window.addEventListener(
     "neyo:conversation-open-request",
     event => {
+      const id =
+        event.detail
+          ?.conversationId ||
+        event.detail
+          ?.id;
+
       void openConversation(
-        event.detail
-          ?.conversationId
-      ).catch(handleError);
+        id,
+        {
+          source:
+            event.detail
+              ?.source ||
+            "event"
+        }
+      ).catch(
+        error =>
+          handleError(
+            error,
+            {
+              operation:
+                "open",
+
+              conversationId:
+                id
+            }
+          )
+      );
     }
   );
 
-  window.addEventListener(
-    "neyo:history-rename-request",
-    event => {
-      void renameConversation(
-        event.detail
-          ?.conversationId,
-
-        event.detail
-          ?.title
-      ).catch(handleError);
-    }
-  );
-
-  window.addEventListener(
-    "neyo:history-delete-request",
-    event => {
-      void deleteConversation(
-        event.detail
-          ?.conversationId
-      ).catch(handleError);
-    }
-  );
-
-  window.addEventListener(
-    "neyo:history-pin-request",
-    event => {
-      void setPinned(
-        event.detail
-          ?.conversationId,
-
-        event.detail
-          ?.pinned
-      ).catch(handleError);
-    }
-  );
+  /* =====================================================
+     EXPLICIT ACTIVE SET
+     ===================================================== */
 
   window.addEventListener(
     "neyo:history-active-set",
     event => {
-      setActive(
+      setActiveConversation(
         event.detail
-          ?.conversationId
+          ?.conversationId ||
+        event.detail
+          ?.id ||
+        null
       );
     }
   );
+
+  /* =====================================================
+     CHAT LOADED CONVERSATION
+     ===================================================== */
 
   window.addEventListener(
     "neyo:chat-state-loaded",
     event => {
-      setActive(
+      setActiveConversation(
         event.detail
-          ?.conversationId
+          ?.conversationId ||
+        null
       );
     }
   );
 
+  /* =====================================================
+     GENERAL CHAT STATE
+     ===================================================== */
+
   window.addEventListener(
-    "neyo:chat-new",
-    () => {
-      activeConversationId =
-        null;
-
-      openSerial++;
-
-      render();
+    "neyo:chat-state",
+    event => {
+      syncFromChatState(
+        event.detail ||
+        {}
+      );
     }
   );
 
-  const api = Object.freeze({
-    __controller: true,
-    version: VERSION,
-    active: true,
+  /* =====================================================
+     NEW CHAT
+     ===================================================== */
 
-    load,
-    render,
-    open: openConversation,
-    fetchConversation,
+  window.addEventListener(
+    "neyo:chat-new",
+    () => {
+      cancelPendingOpen(
+        "new-chat"
+      );
 
-    rename:
+      setActiveConversation(
+        null
+      );
+    }
+  );
+
+  /* =====================================================
+     SUCCESSFUL CHAT RESPONSE
+
+     New conversations receive conversationId only after
+     backend responds. This makes the new sidebar row active.
+     ===================================================== */
+
+  window.addEventListener(
+    "neyo:chat-response",
+    event => {
+      const id =
+        cleanId(
+          event.detail
+            ?.conversationId
+        );
+
+      if (
+        id &&
+        !event.detail
+          ?.privateChat
+      ) {
+        setActiveConversation(
+          id,
+          {
+            render:
+              true
+          }
+        );
+      }
+    }
+  );
+
+  /* =====================================================
+     PUBLIC API
+     ===================================================== */
+
+  const api =
+    Object.freeze({
+      __controller:
+        true,
+
+      version:
+        VERSION,
+
+      active,
+
+      legacyScriptPresent,
+
+      legacyOwnerActive:
+        false,
+
+      /*
+       * Load / render
+       */
+
+      load:
+        loadHistory,
+
+      loadHistory,
+
+      refresh(
+        options = {}
+      ) {
+        return loadHistory({
+          showLoading:
+            false,
+
+          ...options
+        });
+      },
+
+      render:
+        renderHistory,
+
+      renderHistory,
+
+      /*
+       * Conversation open
+       */
+
+      open:
+        openConversation,
+
+      openConversation,
+
+      fetchConversation,
+
+      cancelPendingOpen,
+
+      /*
+       * Actions
+       */
+
+      rename:
+        renameConversation,
+
       renameConversation,
 
-    delete:
+      delete:
+        deleteConversation,
+
       deleteConversation,
 
-    setPinned,
-    setActive,
+      setPinned,
 
-    getActive() {
-      return activeConversationId;
-    },
+      togglePinned,
 
-    getConversations() {
-      return cloneConversations();
-    },
+      /*
+       * Active state
+       */
 
-    getById(id) {
-      const value =
-        clean(
-          id,
-          128
-        );
+      setActive:
+        setActiveConversation,
 
-      const item =
-        conversations.find(
-          conversation =>
-            conversation.id ===
-            value
-        );
+      setActiveConversation,
 
-      return cloneConversation(item);
-    },
+      getActive() {
+        return activeConversationId;
+      },
 
-    getState() {
-      return {
-        version: VERSION,
-        active: true,
-        activeConversationId,
-        count:
-          conversations.length,
-        loading:
-          Boolean(
-            loadingPromise
-          ),
-        opening:
-          openSerial
-      };
-    }
-  });
+      /*
+       * Cache
+       */
+
+      getConversations,
+
+      getById,
+
+      /*
+       * State
+       */
+
+      getState() {
+        return {
+          version:
+            VERSION,
+
+          active,
+
+          legacyScriptPresent,
+
+          legacyOwnerActive:
+            false,
+
+          activeConversationId,
+
+          count:
+            conversations.length,
+
+          loaded:
+            state.loaded,
+
+          loading:
+            Boolean(
+              loadingPromise ||
+              state.loading
+            ),
+
+          opening:
+            state.opening,
+
+          lastLoadedAt:
+            state.lastLoadedAt,
+
+          lastOpenedAt:
+            state.lastOpenedAt,
+
+          lastMutationAt:
+            state.lastMutationAt,
+
+          loadCount:
+            state.loadCount,
+
+          openCount:
+            state.openCount,
+
+          renameCount:
+            state.renameCount,
+
+          deleteCount:
+            state.deleteCount,
+
+          pinCount:
+            state.pinCount,
+
+          lastError:
+            state.lastError
+        };
+      }
+    });
 
   Object.defineProperty(
     window,
     "NeyoHistory",
     {
-      value: api,
-      writable: false,
-      configurable: true,
-      enumerable: true
+      value:
+        api,
+
+      writable:
+        false,
+
+      configurable:
+        true,
+
+      enumerable:
+        true
     }
   );
+
+  /* =====================================================
+     INIT
+     ===================================================== */
+
+  if (
+    active
+  ) {
+    /*
+     * Read active chat if chat.js loaded first.
+     */
+
+    try {
+      const chatState =
+        window.NeyoChat
+          ?.getState
+          ?.();
+
+      if (
+        chatState
+      ) {
+        syncFromChatState(
+          chatState
+        );
+      }
+    } catch {}
+
+    /*
+     * Production behavior:
+     * history is available immediately on app load.
+     */
+
+    void loadHistory({
+      showLoading:
+        true
+    }).catch(
+      error => {
+        console.warn(
+          "[NEYO History] Initial load failed:",
+          error
+        );
+      }
+    );
+  }
 
   emit(
     "neyo:history-ready",
     {
-      version: VERSION,
-      active: true
-    }
-  );
+      version:
+        VERSION,
 
-  void load().catch(
-    error => {
-      console.warn(
-        "[NEYO History] Initial load failed:",
-        error
-      );
+      active,
+
+      legacyScriptPresent,
+
+      legacyOwnerActive:
+        false
     }
   );
 })();

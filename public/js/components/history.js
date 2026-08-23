@@ -1,262 +1,153 @@
 (() => {
   "use strict";
 
-  const VERSION =
-    "neyo-history-recovery-v1";
+  const VERSION = "neyo-history-v2";
+  if (window.NeyoHistory?.__controller === true) return;
 
-  if (
-    window.NeyoHistory
-      ?.__controller
-  ) {
+  const ENDPOINT = "/api/history";
+  const historyList = document.getElementById("historyList");
+
+  if (!historyList) {
+    console.warn("[NEYO History] #historyList missing.");
     return;
   }
 
+  let conversations = [];
+  let activeConversationId = null;
+  let loadingPromise = null;
+  let openSerial = 0;
 
-  /* =====================================================
-     DOM
-     ===================================================== */
-
-  const historyList =
-    document.getElementById(
-      "historyList"
+  function emit(name, detail = {}) {
+    window.dispatchEvent(
+      new CustomEvent(name, { detail })
     );
+  }
 
+  function clean(value, max = 220) {
+    return String(value ?? "")
+      .replace(/\u0000/g, "")
+      .trim()
+      .slice(0, max);
+  }
 
-  /* =====================================================
-     RUNTIME OWNERSHIP
+  function cloneConversation(item) {
+    return item
+      ? { ...item }
+      : null;
+  }
 
-     neo.js present:
-     legacy history remains sole owner.
+  function cloneConversations() {
+    return conversations.map(item => ({
+      ...item
+    }));
+  }
 
-     neo.js removed:
-     this controller becomes active.
-     ===================================================== */
-
-  const legacy =
-    Array.from(
-      document.scripts ||
-      []
-    )
-      .some(
-        script =>
-          /(?:^|\/)neo\.js(?:\?|$)/
-            .test(
-              script.src ||
-              ""
-            )
-      );
-
-
-  const active =
-    Boolean(
-      historyList
-    ) &&
-    !legacy;
-
-
-  /* =====================================================
-     STATE
-     ===================================================== */
-
-  let conversations =
-    [];
-
-  let activeConversationId =
-    null;
-
-  let loadingPromise =
-    null;
-
-  let openSerial =
-    0;
-
-
-  /* =====================================================
-     HELPERS
-     ===================================================== */
-
-  const emit =
-    (
-      name,
-      detail = {}
-    ) => {
-
-      window.dispatchEvent(
-        new CustomEvent(
-          name,
-          {
-            detail
-          }
-        )
-      );
-    };
-
-
-  const clean =
-    (
-      value,
-      max = 220
-    ) =>
-
-      String(
-        value ??
-        ""
-      )
-        .replace(
-          /\u0000/g,
-          ""
-        )
-        .trim()
-        .slice(
-          0,
-          max
-        );
-
-
-  const refreshIcons =
-    () => {
-
-      try {
-
-        window.lucide
-          ?.createIcons
-          ?.();
-
-      } catch {}
-    };
-
-
-  /* =====================================================
-     NORMALIZE CONVERSATION
-     ===================================================== */
-
-  function normalizeConversation(
-    item
-  ) {
-
-    if (
-      !item ||
-      typeof item !==
-        "object"
-    ) {
+  function normalizeConversation(item) {
+    if (!item || typeof item !== "object") {
       return null;
     }
 
-
-    const id =
-      clean(
-        item.id ||
+    const id = clean(
+      item.id ||
         item.conversationId ||
         item.conversation_id,
-        128
-      );
+      128
+    );
 
-
-    if (!id) {
-      return null;
-    }
-
+    if (!id) return null;
 
     return {
       ...item,
-
       id,
-
       title:
         clean(
           item.title ||
-          "New conversation",
+            "New conversation",
           100
         ) ||
         "New conversation",
-
-      is_pinned:
-        Boolean(
-          item.is_pinned ??
+      is_pinned: Boolean(
+        item.is_pinned ??
           item.isPinned ??
           item.pinned
-        )
+      )
     };
   }
 
+  function refreshIcons() {
+    try {
+      window.lucide?.createIcons?.();
+    } catch {}
+  }
 
-  /* =====================================================
-     RESPONSE
-     ===================================================== */
+  async function readJson(response) {
+    const raw = await response.text();
 
-  async function readJson(
-    response
-  ) {
-
-    const raw =
-      await response.text();
-
-
-    let data =
-      {};
-
+    let data = {};
 
     if (raw) {
-
       try {
-
-        data =
-          JSON.parse(
-            raw
-          );
-
+        data = JSON.parse(raw);
       } catch {}
     }
 
-
-    if (
-      !response.ok
-    ) {
-
-      const error =
-        new Error(
-          clean(
-            data?.error ||
+    if (!response.ok) {
+      const error = new Error(
+        clean(
+          data?.error ||
             data?.message ||
             raw,
-            1500
-          ) ||
-
+          1500
+        ) ||
           `Request failed (${response.status}).`
-        );
+      );
 
-
-      error.status =
-        response.status;
-
-      error.data =
-        data;
-
+      error.status = response.status;
+      error.data = data;
 
       throw error;
     }
 
-
     return data;
   }
 
+  async function request(
+    body = null
+  ) {
+    const response = await fetch(
+      ENDPOINT,
+      {
+        method: body
+          ? "POST"
+          : "GET",
 
-  /* =====================================================
-     LOADING
-     ===================================================== */
+        credentials: "include",
+        cache: "no-store",
+
+        headers: body
+          ? {
+              "Content-Type":
+                "application/json",
+              Accept:
+                "application/json"
+            }
+          : {
+              Accept:
+                "application/json"
+            },
+
+        body: body
+          ? JSON.stringify(body)
+          : undefined
+      }
+    );
+
+    return readJson(response);
+  }
 
   function renderLoading() {
-
-    if (!active) {
-      return false;
-    }
-
-
     const root =
-      document.createElement(
-        "div"
-      );
-
+      document.createElement("div");
 
     root.className =
       "history-loading";
@@ -266,130 +157,72 @@
       "true"
     );
 
-
-    for (
-      let i = 0;
-      i < 3;
-      i += 1
-    ) {
-
+    for (let i = 0; i < 3; i++) {
       const row =
-        document.createElement(
-          "div"
-        );
+        document.createElement("div");
 
+      const line =
+        document.createElement("div");
 
       row.className =
         "history-skeleton-row";
 
-
-      const line =
-        document.createElement(
-          "div"
-        );
-
-
       line.className =
         "history-skeleton-line";
 
-
-      row.appendChild(
-        line
-      );
-
-      root.appendChild(
-        row
-      );
+      row.appendChild(line);
+      root.appendChild(row);
     }
 
-
-    historyList
-      .replaceChildren(
-        root
-      );
-
-
-    return true;
+    historyList.replaceChildren(root);
   }
 
+  function createHistoryRow(item) {
+    const wrapper =
+      document.createElement("div");
 
-  /* =====================================================
-     EMPTY
-     ===================================================== */
-
-  function renderEmpty() {
-
-    if (!active) {
-      return false;
-    }
-
-
-    historyList
-      .replaceChildren();
-
-
-    return true;
-  }
-
-
-  /* =====================================================
-     HISTORY ROW
-     ===================================================== */
-
-  function createHistoryRow(
-    item
-  ) {
-
-    const row =
-      document.createElement(
-        "div"
-      );
-
-
-    row.className =
-      "history-item-wrapper";
-
-    row.dataset.id =
-      item.id;
-
-
-    /* -------------------------------------------------
-       OPEN BUTTON
-       ------------------------------------------------- */
-
-    const button =
-      document.createElement(
-        "button"
-      );
-
-
-    button.type =
-      "button";
-
-    button.className =
-      "history-item";
-
-    button.dataset
-      .conversationId =
-      item.id;
-
-    button.title =
-      item.title;
-
-
-    button.classList
-      .toggle(
-        "active",
-        item.id ===
-        activeConversationId
-      );
-
+    const openButton =
+      document.createElement("button");
 
     const title =
-      document.createElement(
-        "span"
-      );
+      document.createElement("span");
 
+    const menuButton =
+      document.createElement("button");
+
+    wrapper.className =
+      "history-item-wrapper";
+
+    wrapper.dataset.id =
+      item.id;
+
+    openButton.type =
+      "button";
+
+    openButton.className =
+      "history-item";
+
+    openButton.dataset.conversationId =
+      item.id;
+
+    openButton.title =
+      item.title;
+
+    openButton.classList.toggle(
+      "active",
+      item.id ===
+        activeConversationId
+    );
+
+    if (
+      item.id ===
+      activeConversationId
+    ) {
+      openButton.setAttribute(
+        "aria-current",
+        "true"
+      );
+    }
 
     title.className =
       "history-item-title";
@@ -397,25 +230,11 @@
     title.textContent =
       item.title;
 
+    openButton.appendChild(title);
 
-    button.appendChild(
-      title
-    );
-
-
-    /* -------------------------------------------------
-       PIN ICON
-       ------------------------------------------------- */
-
-    if (
-      item.is_pinned
-    ) {
-
+    if (item.is_pinned) {
       const pin =
-        document.createElement(
-          "span"
-        );
-
+        document.createElement("span");
 
       pin.className =
         "history-pin-icon";
@@ -425,43 +244,20 @@
         "Pinned"
       );
 
+      pin.innerHTML =
+        '<i data-lucide="pin" width="12" height="12" aria-hidden="true"></i>';
 
-      pin.innerHTML = `
-        <i
-          data-lucide="pin"
-          width="12"
-          height="12"
-          aria-hidden="true"
-        ></i>
-      `;
-
-
-      button.appendChild(
-        pin
-      );
+      openButton.appendChild(pin);
     }
 
-
-    button.addEventListener(
+    openButton.addEventListener(
       "click",
       () => {
-
         void openConversation(
           item.id
-        );
+        ).catch(handleError);
       }
     );
-
-
-    /* -------------------------------------------------
-       THREE-DOT MENU
-       ------------------------------------------------- */
-
-    const menuButton =
-      document.createElement(
-        "button"
-      );
-
 
     menuButton.type =
       "button";
@@ -469,30 +265,19 @@
     menuButton.className =
       "history-three-dot";
 
-
     menuButton.setAttribute(
       "aria-label",
       "Conversation options"
     );
 
-
-    menuButton.innerHTML = `
-      <i
-        data-lucide="more-vertical"
-        width="16"
-        height="16"
-        aria-hidden="true"
-      ></i>
-    `;
-
+    menuButton.innerHTML =
+      '<i data-lucide="more-vertical" width="16" height="16" aria-hidden="true"></i>';
 
     menuButton.addEventListener(
       "click",
       event => {
-
         event.preventDefault();
         event.stopPropagation();
-
 
         emit(
           "neyo:history-menu-request",
@@ -513,18 +298,11 @@
       }
     );
 
-
-    /* -------------------------------------------------
-       RIGHT CLICK
-       ------------------------------------------------- */
-
-    row.addEventListener(
+    wrapper.addEventListener(
       "contextmenu",
       event => {
-
         event.preventDefault();
         event.stopPropagation();
-
 
         emit(
           "neyo:history-menu-request",
@@ -548,133 +326,62 @@
       }
     );
 
-
-    row.append(
-      button,
+    wrapper.append(
+      openButton,
       menuButton
     );
 
-
-    return row;
+    return wrapper;
   }
 
+  function render() {
+    historyList.replaceChildren();
 
-  /* =====================================================
-     RENDER HISTORY
-     ===================================================== */
-
-  function renderHistory() {
-
-    if (!active) {
-      return false;
-    }
-
-
-    historyList
-      .replaceChildren();
-
-
-    if (
-      !conversations.length
-    ) {
-
+    if (!conversations.length) {
       emit(
         "neyo:history-rendered",
         {
-          conversations:
-            [],
-
-          count:
-            0
+          conversations: [],
+          count: 0
         }
       );
-
 
       return true;
     }
 
-
     const fragment =
       document.createDocumentFragment();
 
+    for (const item of conversations) {
+      fragment.appendChild(
+        createHistoryRow(item)
+      );
+    }
 
-    conversations.forEach(
-      item => {
-
-        fragment.appendChild(
-          createHistoryRow(
-            item
-          )
-        );
-      }
-    );
-
-
-    historyList.appendChild(
-      fragment
-    );
-
+    historyList.appendChild(fragment);
 
     refreshIcons();
-
 
     emit(
       "neyo:history-rendered",
       {
         conversations:
-          conversations.map(
-            item => ({
-              ...item
-            })
-          ),
+          cloneConversations(),
 
         count:
           conversations.length
       }
     );
 
-
     return true;
   }
 
-
-  /* =====================================================
-     LOAD HISTORY
-     ===================================================== */
-
-  async function performLoadHistory() {
-
+  async function performLoad() {
     renderLoading();
 
-
     try {
-
-      const response =
-        await fetch(
-          "/api/history",
-          {
-            method:
-              "GET",
-
-            credentials:
-              "include",
-
-            cache:
-              "no-store",
-
-            headers: {
-              Accept:
-                "application/json"
-            }
-          }
-        );
-
-
       const data =
-        await readJson(
-          response
-        );
-
+        await request();
 
       conversations =
         Array.isArray(
@@ -684,162 +391,69 @@
               .map(
                 normalizeConversation
               )
-              .filter(
-                Boolean
-              )
+              .filter(Boolean)
           : [];
 
-
-      renderHistory();
-
+      render();
 
       emit(
         "neyo:history-loaded",
         {
           conversations:
-            conversations.map(
-              item => ({
-                ...item
-              })
-            )
+            cloneConversations()
         }
       );
 
+      return cloneConversations();
 
-      return conversations.map(
-        item => ({
-          ...item
-        })
-      );
+    } catch (error) {
+      conversations = [];
 
-    } catch (
-      error
-    ) {
-
-      renderEmpty();
-
+      render();
 
       emit(
         "neyo:history-error",
-        {
-          error
-        }
+        { error }
       );
-
 
       throw error;
     }
   }
 
-
-  async function loadHistory() {
-
-    if (!active) {
-      return [];
-    }
-
-
-    /*
-     * Prevent duplicate simultaneous
-     * GET /api/history requests.
-     */
-
-    if (
-      loadingPromise
-    ) {
+  async function load() {
+    if (loadingPromise) {
       return loadingPromise;
     }
 
-
     loadingPromise =
-      performLoadHistory();
-
+      performLoad();
 
     try {
-
       return await loadingPromise;
-
     } finally {
-
-      loadingPromise =
-        null;
+      loadingPromise = null;
     }
   }
-
-
-  /* =====================================================
-     FETCH ONE CONVERSATION
-     ===================================================== */
 
   async function fetchConversation(
     conversationId
   ) {
-
-    if (!active) {
-      return null;
-    }
-
-
     const id =
       clean(
         conversationId,
         128
       );
 
-
-    if (!id) {
-      return null;
-    }
-
-
-    const response =
-      await fetch(
-        "/api/history",
-        {
-          method:
-            "POST",
-
-          credentials:
-            "include",
-
-          cache:
-            "no-store",
-
-          headers: {
-            "Content-Type":
-              "application/json",
-
-            Accept:
-              "application/json"
-          },
-
-          body:
-            JSON.stringify({
-              action:
-                "get",
-
-              conversationId:
-                id
-            })
-        }
-      );
-
+    if (!id) return null;
 
     const data =
-      await readJson(
-        response
-      );
-
+      await request({
+        action: "get",
+        conversationId: id
+      });
 
     return {
       id,
-
-      /*
-       * IMPORTANT:
-       * Do not strip attachments,
-       * sources or future message fields.
-       */
-
       messages:
         Array.isArray(
           data?.messages
@@ -849,43 +463,19 @@
     };
   }
 
-
-  /* =====================================================
-     OPEN CONVERSATION
-     ===================================================== */
-
   async function openConversation(
     conversationId
   ) {
-
-    if (!active) {
-      return null;
-    }
-
-
     const id =
       clean(
         conversationId,
         128
       );
 
-
-    if (!id) {
-      return null;
-    }
-
-
-    /*
-     * Prevent stale history click:
-     *
-     * A clicked
-     * then B clicked quickly
-     * → slow A response cannot replace B.
-     */
+    if (!id) return null;
 
     const serial =
       ++openSerial;
-
 
     emit(
       "neyo:history-opening",
@@ -895,35 +485,21 @@
       }
     );
 
-
     try {
-
       const conversation =
-        await fetchConversation(
-          id
-        );
-
+        await fetchConversation(id);
 
       if (
-        serial !==
-          openSerial ||
+        serial !== openSerial ||
         !conversation
       ) {
         return null;
       }
 
-
       activeConversationId =
         id;
 
-
-      renderHistory();
-
-
-      /*
-       * chat.js receives this event.
-       * messages.js remains the DOM owner.
-       */
+      render();
 
       emit(
         "neyo:conversation-loaded",
@@ -936,150 +512,102 @@
         }
       );
 
+      emit(
+        "neyo:history-opened",
+        {
+          conversationId:
+            id
+        }
+      );
 
       return conversation;
 
-    } catch (
-      error
-    ) {
-
-      if (
-        serial ===
-        openSerial
-      ) {
-
+    } catch (error) {
+      if (serial === openSerial) {
         emit(
           "neyo:history-error",
           {
             error,
-
             conversationId:
               id
           }
         );
       }
 
-
       throw error;
     }
   }
 
-
-  /* =====================================================
-     ACTION REQUEST
-     ===================================================== */
-
-  async function performAction(
-    action,
+  async function action(
+    actionName,
     conversationId,
     payload = {}
   ) {
-
-    if (!active) {
-      return null;
-    }
-
-
     const id =
       clean(
         conversationId,
         128
       );
 
+    if (!id) return null;
 
-    if (!id) {
-      return null;
-    }
+    return request({
+      action:
+        actionName,
 
+      conversationId:
+        id,
 
-    const response =
-      await fetch(
-        "/api/history",
-        {
-          method:
-            "POST",
-
-          credentials:
-            "include",
-
-          cache:
-            "no-store",
-
-          headers: {
-            "Content-Type":
-              "application/json",
-
-            Accept:
-              "application/json"
-          },
-
-          body:
-            JSON.stringify({
-              action,
-
-              conversationId:
-                id,
-
-              ...payload
-            })
-        }
-      );
-
-
-    return readJson(
-      response
-    );
+      ...payload
+    });
   }
-
-
-  /* =====================================================
-     RENAME
-     ===================================================== */
 
   async function renameConversation(
     conversationId,
     title
   ) {
-
-    if (!active) {
-      return false;
-    }
-
-
     const id =
       clean(
         conversationId,
         128
       );
 
-
-    const cleanTitle =
+    const nextTitle =
       clean(
         title,
         100
       );
 
-
     if (
       !id ||
-      !cleanTitle
+      !nextTitle
     ) {
       return false;
     }
 
-
-    await performAction(
+    await action(
       "rename",
       id,
       {
         title:
-          cleanTitle
+          nextTitle
       }
     );
 
+    const item =
+      conversations.find(
+        conversation =>
+          conversation.id === id
+      );
 
-    await loadHistory();
+    if (item) {
+      item.title =
+        nextTitle;
 
+      render();
+    } else {
+      await load();
+    }
 
     emit(
       "neyo:history-renamed",
@@ -1088,76 +616,51 @@
           id,
 
         title:
-          cleanTitle
+          nextTitle
       }
     );
-
 
     return true;
   }
 
-
-  /* =====================================================
-     DELETE
-     ===================================================== */
-
   async function deleteConversation(
     conversationId
   ) {
-
-    if (!active) {
-      return false;
-    }
-
-
     const id =
       clean(
         conversationId,
         128
       );
 
+    if (!id) return false;
 
-    if (!id) {
-      return false;
-    }
-
-
-    await performAction(
+    await action(
       "delete",
       id
     );
 
-
-    if (
+    const wasActive =
       activeConversationId ===
-      id
-    ) {
+      id;
 
+    conversations =
+      conversations.filter(
+        item =>
+          item.id !== id
+      );
+
+    if (wasActive) {
       activeConversationId =
         null;
 
-
-      /*
-       * Invalidate any conversation
-       * currently being opened.
-       */
-
-      openSerial +=
-        1;
-
+      openSerial++;
 
       emit(
-        "neyo:active-conversation-deleted",
-        {
-          conversationId:
-            id
-        }
+        "neyo:chat-new-request"
       );
     }
 
-
-    await loadHistory();
-
+    render();
 
     emit(
       "neyo:history-deleted",
@@ -1167,53 +670,45 @@
       }
     );
 
-
     return true;
   }
-
-
-  /* =====================================================
-     PIN / UNPIN
-     ===================================================== */
 
   async function setPinned(
     conversationId,
     pinned
   ) {
-
-    if (!active) {
-      return false;
-    }
-
-
     const id =
       clean(
         conversationId,
         128
       );
 
-
-    if (!id) {
-      return false;
-    }
-
+    if (!id) return false;
 
     const value =
-      Boolean(
-        pinned
-      );
+      Boolean(pinned);
 
-
-    await performAction(
+    await action(
       value
         ? "pin"
         : "unpin",
       id
     );
 
+    const item =
+      conversations.find(
+        conversation =>
+          conversation.id === id
+      );
 
-    await loadHistory();
+    if (item) {
+      item.is_pinned =
+        value;
 
+      render();
+    } else {
+      await load();
+    }
 
     emit(
       "neyo:history-pin-change",
@@ -1226,24 +721,12 @@
       }
     );
 
-
     return true;
   }
 
-
-  /* =====================================================
-     ACTIVE CONVERSATION
-     ===================================================== */
-
-  function setActiveConversation(
+  function setActive(
     conversationId
   ) {
-
-    if (!active) {
-      return false;
-    }
-
-
     activeConversationId =
       clean(
         conversationId,
@@ -1251,22 +734,19 @@
       ) ||
       null;
 
-
-    renderHistory();
-
+    render();
 
     return true;
   }
-
-
-  /* =====================================================
-     ERROR BRIDGE
-     ===================================================== */
 
   function handleError(
     error,
     detail = {}
   ) {
+    console.warn(
+      "[NEYO History]",
+      error
+    );
 
     emit(
       "neyo:history-error",
@@ -1277,258 +757,188 @@
     );
   }
 
+  window.addEventListener(
+    "neyo:history-load-request",
+    () => {
+      void load().catch(
+        handleError
+      );
+    }
+  );
 
-  /* =====================================================
-     EVENTS
+  window.addEventListener(
+    "neyo:history-refresh-request",
+    () => {
+      void load().catch(
+        handleError
+      );
+    }
+  );
 
-     Critical:
-     No history listeners are registered
-     while neo.js is the active owner.
-     ===================================================== */
+  window.addEventListener(
+    "neyo:conversation-open-request",
+    event => {
+      void openConversation(
+        event.detail
+          ?.conversationId
+      ).catch(handleError);
+    }
+  );
 
-  if (active) {
+  window.addEventListener(
+    "neyo:history-rename-request",
+    event => {
+      void renameConversation(
+        event.detail
+          ?.conversationId,
 
-    window.addEventListener(
-      "neyo:history-rename-request",
-      event => {
+        event.detail
+          ?.title
+      ).catch(handleError);
+    }
+  );
 
-        void renameConversation(
-          event.detail
-            ?.conversationId,
+  window.addEventListener(
+    "neyo:history-delete-request",
+    event => {
+      void deleteConversation(
+        event.detail
+          ?.conversationId
+      ).catch(handleError);
+    }
+  );
 
-          event.detail
-            ?.title
-        )
-          .catch(
-            error =>
-              handleError(
-                error
-              )
-          );
-      }
-    );
+  window.addEventListener(
+    "neyo:history-pin-request",
+    event => {
+      void setPinned(
+        event.detail
+          ?.conversationId,
 
+        event.detail
+          ?.pinned
+      ).catch(handleError);
+    }
+  );
 
-    window.addEventListener(
-      "neyo:history-delete-request",
-      event => {
+  window.addEventListener(
+    "neyo:history-active-set",
+    event => {
+      setActive(
+        event.detail
+          ?.conversationId
+      );
+    }
+  );
 
-        void deleteConversation(
-          event.detail
-            ?.conversationId
-        )
-          .catch(
-            error =>
-              handleError(
-                error
-              )
-          );
-      }
-    );
+  window.addEventListener(
+    "neyo:chat-state-loaded",
+    event => {
+      setActive(
+        event.detail
+          ?.conversationId
+      );
+    }
+  );
 
+  window.addEventListener(
+    "neyo:chat-new",
+    () => {
+      activeConversationId =
+        null;
 
-    window.addEventListener(
-      "neyo:history-pin-request",
-      event => {
+      openSerial++;
 
-        void setPinned(
-          event.detail
-            ?.conversationId,
+      render();
+    }
+  );
 
-          event.detail
-            ?.pinned
-        )
-          .catch(
-            error =>
-              handleError(
-                error
-              )
-          );
-      }
-    );
+  const api = Object.freeze({
+    __controller: true,
+    version: VERSION,
+    active: true,
 
+    load,
+    render,
+    open: openConversation,
+    fetchConversation,
 
-    window.addEventListener(
-      "neyo:history-load-request",
-      () => {
+    rename:
+      renameConversation,
 
-        void loadHistory()
-          .catch(
-            error => {
+    delete:
+      deleteConversation,
 
-              console.warn(
-                "[NEYO History] Load failed:",
-                error
-              );
-            }
-          );
-      }
-    );
+    setPinned,
+    setActive,
 
+    getActive() {
+      return activeConversationId;
+    },
 
-    window.addEventListener(
-      "neyo:conversation-open-request",
-      event => {
+    getConversations() {
+      return cloneConversations();
+    },
 
-        void openConversation(
-          event.detail
-            ?.conversationId
-        )
-          .catch(
-            error =>
-              handleError(
-                error
-              )
-          );
-      }
-    );
-
-
-    window.addEventListener(
-      "neyo:history-active-set",
-      event => {
-
-        setActiveConversation(
-          event.detail
-            ?.conversationId
+    getById(id) {
+      const value =
+        clean(
+          id,
+          128
         );
-      }
-    );
-  }
 
+      const item =
+        conversations.find(
+          conversation =>
+            conversation.id ===
+            value
+        );
 
-  /* =====================================================
-     PUBLIC API
-     ===================================================== */
+      return cloneConversation(item);
+    },
 
-  const api =
-    Object.freeze({
-
-      __controller:
-        true,
-
-      version:
-        VERSION,
-
-      active,
-
-      legacyOwnerActive:
-        legacy,
-
-      load:
-        loadHistory,
-
-      render:
-        renderHistory,
-
-      open:
-        openConversation,
-
-      fetchConversation,
-
-      rename:
-        renameConversation,
-
-      delete:
-        deleteConversation,
-
-      setPinned,
-
-      setActive:
-        setActiveConversation,
-
-      getActive:
-        () =>
-          activeConversationId,
-
-      getConversations:
-        () =>
-          conversations.map(
-            item => ({
-              ...item
-            })
+    getState() {
+      return {
+        version: VERSION,
+        active: true,
+        activeConversationId,
+        count:
+          conversations.length,
+        loading:
+          Boolean(
+            loadingPromise
           ),
-
-      getById(
-        id
-      ) {
-
-        const value =
-          clean(
-            id,
-            128
-          );
-
-
-        const item =
-          conversations.find(
-            conversation =>
-              conversation.id ===
-              value
-          );
-
-
-        return item
-          ? {
-              ...item
-            }
-          : null;
-      },
-
-      getState:
-        () => ({
-
-          version:
-            VERSION,
-
-          active,
-
-          legacyOwnerActive:
-            legacy,
-
-          activeConversationId,
-
-          count:
-            conversations.length,
-
-          loading:
-            Boolean(
-              loadingPromise
-            )
-        })
-    });
-
+        opening:
+          openSerial
+      };
+    }
+  });
 
   Object.defineProperty(
     window,
     "NeyoHistory",
     {
-      value:
-        api,
-
-      writable:
-        false,
-
-      configurable:
-        true,
-
-      enumerable:
-        true
+      value: api,
+      writable: false,
+      configurable: true,
+      enumerable: true
     }
   );
-
 
   emit(
     "neyo:history-ready",
     {
-      version:
-        VERSION,
-
-      active,
-
-      legacyOwnerActive:
-        legacy
+      version: VERSION,
+      active: true
     }
   );
 
+  void load().catch(
+    error => {
+      console.warn(
+        "[NEYO History] Initial load failed:",
+        error
+      );
+    }
+  );
 })();

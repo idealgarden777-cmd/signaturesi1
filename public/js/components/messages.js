@@ -1,1084 +1,355 @@
-/*
-=========================================================
-NEYO — MESSAGES CORE
-SAFE HYBRID PRODUCTION v2
-
-FILE:
-public/js/components/messages.js
-
-OWNS
----------------------------------------------------------
-✅ Modular message DOM shells
-✅ User attachment cards
-✅ Image attachment previews
-✅ File name / type / size
-✅ Source pills
-✅ Thinking state
-✅ Message updates
-✅ Message removal
-✅ History-loaded messages
-✅ Clear messages
-✅ Auto-scroll
-✅ Hero visibility
-✅ Compatibility replace()
-
-DOES NOT OWN
----------------------------------------------------------
-❌ /api/chat
-❌ Conversation state
-❌ Attachment upload
-❌ Markdown parser
-❌ Send button
-❌ Enter key
-❌ History persistence
-❌ Copy/edit/regenerate/share business logic
-❌ neo.js internals
-
-IMPORTANT
----------------------------------------------------------
-neo.js remains loaded and untouched.
-
-Modular chat-runtime intercepts chat actions.
-Therefore this module may safely render modular chat
-events even while neo.js is physically present.
-
-PIPELINE
----------------------------------------------------------
-NeyoChat
-   ↓
-neyo:chat-message-added
-   ↓
-NeyoMessages
-   ↓
-NeyoMessageRenderer
-
-=========================================================
-*/
-
 (() => {
   "use strict";
 
+  const VERSION = "neyo-messages-v3";
+  if (window.NeyoMessages?.__controller === true) return;
 
-  /* =====================================================
-     VERSION / DUPLICATE GUARD
-     ===================================================== */
+  const chatMessages = document.getElementById("chatMessages");
+  const scrollArea = document.getElementById("scrollArea");
+  const heroSection = document.getElementById("heroSection");
 
-  const VERSION =
-    "neyo-messages-safe-hybrid-v2";
-
-
-  if (
-    window.NeyoMessages
-      ?.__controller ===
-    true
-  ) {
-    console.warn(
-      "[NEYO Messages] Already initialized."
-    );
-
+  if (!chatMessages) {
+    console.warn("[NEYO Messages] #chatMessages missing.");
     return;
   }
 
+  let nearBottom = true;
+  let thinkingElement = null;
 
-  /* =====================================================
-     DOM
-     ===================================================== */
-
-  const chatMessages =
-    document.getElementById(
-      "chatMessages"
-    );
-
-
-  const scrollArea =
-    document.getElementById(
-      "scrollArea"
-    );
-
-
-  const heroSection =
-    document.getElementById(
-      "heroSection"
-    );
-
-
-  /* =====================================================
-     RUNTIME MODE
-     ===================================================== */
-
-  const legacyPresent =
-    Array
-      .from(
-        document.scripts ||
-        []
-      )
-      .some(
-        script =>
-          /(?:^|\/)neo\.js(?:\?|$)/
-            .test(
-              script.src ||
-              ""
-            )
-      );
-
-
-  /*
-  -------------------------------------------------------
-  CRITICAL FIX
-
-  OLD:
-      active = chatMessages && !legacyPresent
-
-  That disabled modular message rendering whenever
-  neo.js was physically loaded.
-
-  NEW:
-      neo.js may remain loaded, but modular chat-runtime
-      is authoritative for chat actions.
-
-  Therefore messages.js renders modular chat events.
-  -------------------------------------------------------
-  */
-
-  const active =
-    Boolean(
-      chatMessages
-    );
-
-
-  /* =====================================================
-     STATE
-     ===================================================== */
-
-  let nearBottom =
-    true;
-
-
-  let thinkingElement =
-    null;
-
-
-  /* =====================================================
-     EVENTS
-     ===================================================== */
-
-  function emit(
-    name,
-    detail = {}
-  ) {
-    window.dispatchEvent(
-      new CustomEvent(
-        name,
-        {
-          detail
-        }
-      )
-    );
+  function emit(name, detail = {}) {
+    window.dispatchEvent(new CustomEvent(name, { detail }));
   }
 
-
-  /* =====================================================
-     CLEAN TEXT
-     ===================================================== */
-
-  function clean(
-    value,
-    max =
-      50_000
-  ) {
-    return String(
-      value ??
-      ""
-    )
-      .replace(
-        /\u0000/g,
-        ""
-      )
-      .replace(
-        /\r\n?/g,
-        "\n"
-      )
-      .slice(
-        0,
-        max
-      );
+  function clean(value, max = 50000) {
+    return String(value ?? "")
+      .replace(/\u0000/g, "")
+      .replace(/\r\n?/g, "\n")
+      .slice(0, max);
   }
 
-
-  /* =====================================================
-     ID
-     ===================================================== */
-
-  function makeId() {
-    if (
-      globalThis.crypto
-        ?.randomUUID
-    ) {
-      return globalThis.crypto
-        .randomUUID();
-    }
-
-
+  function createId() {
     return (
-      `msg_${Date.now()}_` +
-      Math.random()
-        .toString(36)
-        .slice(2)
+      globalThis.crypto?.randomUUID?.() ||
+      `msg_${Date.now()}_${Math.random().toString(36).slice(2)}`
     );
   }
-
-
-  /* =====================================================
-     ICONS
-     ===================================================== */
 
   function refreshIcons() {
     try {
-      window.lucide
-        ?.createIcons
-        ?.();
+      window.lucide?.createIcons?.();
     } catch {}
   }
 
+  function formatBytes(bytes) {
+    let value = Math.max(0, Number(bytes) || 0);
 
-  /* =====================================================
-     FORMAT BYTES
-     ===================================================== */
+    if (value < 1024) return `${value} B`;
 
-  function formatBytes(
-    bytes
-  ) {
-    let value =
-      Math.max(
-        0,
-        Number(
-          bytes
-        ) ||
-        0
-      );
+    const units = ["KB", "MB", "GB"];
+    value /= 1024;
 
+    let index = 0;
 
-    if (
-      value <
-      1024
-    ) {
-      return `${value} B`;
+    while (value >= 1024 && index < units.length - 1) {
+      value /= 1024;
+      index++;
     }
-
-
-    const units =
-      [
-        "KB",
-        "MB",
-        "GB"
-      ];
-
-
-    value /=
-      1024;
-
-
-    let index =
-      0;
-
-
-    while (
-      value >=
-        1024 &&
-      index <
-        units.length -
-          1
-    ) {
-      value /=
-        1024;
-
-      index +=
-        1;
-    }
-
 
     return `${
-      value >= 10
-        ? value.toFixed(0)
-        : value.toFixed(1)
+      value >= 10 ? value.toFixed(0) : value.toFixed(1)
     } ${units[index]}`;
   }
 
-
-  /* =====================================================
-     EXTENSION
-     ===================================================== */
-
-  function extensionOf(
-    name
-  ) {
-    return String(
-      name ||
-      ""
-    )
-      .toLowerCase()
-      .match(
-        /\.([a-z0-9]+)$/
-      )
-      ?.[1] ||
-      "";
+  function extensionOf(name) {
+    return (
+      String(name || "")
+        .toLowerCase()
+        .match(/\.([a-z0-9]+)$/)?.[1] || ""
+    );
   }
 
+  function normalizeAttachments(files) {
+    if (!Array.isArray(files)) return [];
 
-  /* =====================================================
-     FILE LABEL
-     ===================================================== */
-
-  function fileTypeLabel(
-    file
-  ) {
-    const extension =
-      extensionOf(
-        file?.name
-      );
-
-
-    if (
-      extension
-    ) {
-      return extension
-        .toUpperCase();
-    }
-
-
-    const category =
-      clean(
-        file?.category ||
-        "",
-        30
-      )
-        .trim();
-
-
-    if (
-      category &&
-      category !==
-        "unknown"
-    ) {
-      return (
-        category
-          .charAt(0)
-          .toUpperCase() +
-        category.slice(1)
-      );
-    }
-
-
-    return "File";
+    return files
+      .filter(file => file && typeof file === "object")
+      .slice(0, 5)
+      .map(file => ({
+        ...file,
+        name: clean(file.name || "Attached file", 220),
+        size: Math.max(0, Number(file.size) || 0),
+        mimeType: clean(
+          file.mimeType ||
+            file.mime ||
+            file.type ||
+            "application/octet-stream",
+          180
+        ).toLowerCase(),
+        category: clean(
+          file.category || "unknown",
+          40
+        ).toLowerCase()
+      }));
   }
 
+  function fileLabel(file) {
+    const extension = extensionOf(file?.name);
 
-  /* =====================================================
-     FILE ICON
-     ===================================================== */
+    if (extension) return extension.toUpperCase();
 
-  function attachmentIcon(
-    file
-  ) {
-    const category =
-      clean(
-        file?.category ||
-        "",
-        40
-      )
-        .toLowerCase();
+    const category = clean(file?.category || "", 30).trim();
 
+    if (!category || category === "unknown") return "File";
 
-    const mime =
-      clean(
-        file?.mimeType ||
+    return (
+      category.charAt(0).toUpperCase() +
+      category.slice(1)
+    );
+  }
+
+  function fileIcon(file) {
+    const category = String(file?.category || "").toLowerCase();
+    const mime = String(
+      file?.mimeType ||
         file?.mime ||
         file?.type ||
-        "",
-        180
-      )
-        .toLowerCase();
+        ""
+    ).toLowerCase();
 
+    const extension = extensionOf(file?.name);
 
-    const extension =
-      extensionOf(
-        file?.name
-      );
-
-
-    if (
-      category ===
-        "image" ||
-      mime.startsWith(
-        "image/"
-      )
-    ) {
+    if (category === "image" || mime.startsWith("image/")) {
       return "image";
     }
 
-
     if (
-      category ===
-        "spreadsheet" ||
-      [
-        "xls",
-        "xlsx",
-        "xlsm",
-        "xlsb",
-        "csv",
-        "tsv",
-        "ods"
-      ].includes(
+      category === "spreadsheet" ||
+      ["xls", "xlsx", "xlsm", "xlsb", "csv", "tsv", "ods"].includes(
         extension
       )
     ) {
       return "sheet";
     }
 
-
     if (
-      category ===
-        "presentation" ||
-      [
-        "ppt",
-        "pptx",
-        "odp"
-      ].includes(
-        extension
-      )
+      category === "presentation" ||
+      ["ppt", "pptx", "odp"].includes(extension)
     ) {
       return "presentation";
     }
 
+    if (category === "code") return "file-code-2";
+    if (category === "archive") return "archive";
+    if (category === "data") return "database";
 
-    if (
-      category ===
-        "code"
-    ) {
-      return "file-code-2";
-    }
-
-
-    if (
-      category ===
-        "archive"
-    ) {
-      return "archive";
-    }
-
-
-    if (
-      category ===
-        "audio" ||
-      mime.startsWith(
-        "audio/"
-      )
-    ) {
+    if (category === "audio" || mime.startsWith("audio/")) {
       return "audio-lines";
     }
 
-
-    if (
-      category ===
-        "video" ||
-      mime.startsWith(
-        "video/"
-      )
-    ) {
+    if (category === "video" || mime.startsWith("video/")) {
       return "video";
     }
-
-
-    if (
-      category ===
-        "data"
-    ) {
-      return "database";
-    }
-
 
     return "file-text";
   }
 
+  function safePreview(value) {
+    const raw = clean(value, 5000).trim();
 
-  /* =====================================================
-     SAFE PREVIEW
-     ===================================================== */
+    if (!raw) return "";
 
-  function safePreview(
-    value
-  ) {
-    const raw =
-      clean(
-        value,
-        5000
-      )
-        .trim();
-
-
-    if (
-      !raw
-    ) {
-      return "";
-    }
-
-
-    if (
-      /^(blob:|data:image\/)/i
-        .test(
-          raw
-        )
-    ) {
+    if (/^(blob:|data:image\/)/i.test(raw)) {
       return raw;
     }
 
-
     try {
-      const url =
-        new URL(
-          raw,
-          location.origin
-        );
+      const url = new URL(raw, location.origin);
 
-
-      if (
-        ![
-          "http:",
-          "https:"
-        ].includes(
-          url.protocol
-        )
-      ) {
-        return "";
-      }
-
-
-      return url.href;
-
+      return ["http:", "https:"].includes(url.protocol)
+        ? url.href
+        : "";
     } catch {
       return "";
     }
   }
 
+  function findMessage(id) {
+    if (!id) return null;
 
-  /* =====================================================
-     MESSAGE LOOKUP
-     ===================================================== */
-
-  function findMessage(
-    id
-  ) {
-    if (
-      !chatMessages ||
-      !id
-    ) {
-      return null;
-    }
-
-
-    return Array
-      .from(
-        chatMessages
-          .querySelectorAll(
-            "[data-neyo-message-id]"
-          )
-      )
-      .find(
-        node =>
-          node.dataset
-            .neyoMessageId ===
-          String(
-            id
-          )
-      ) ||
-      null;
+    return Array.from(
+      chatMessages.querySelectorAll("[data-neyo-message-id]")
+    ).find(
+      element =>
+        element.dataset.neyoMessageId === String(id)
+    ) || null;
   }
 
-
-  /* =====================================================
-     HERO
-     ===================================================== */
-
   function updateHero() {
-    if (
-      !active ||
-      !heroSection
-    ) {
-      return;
-    }
+    if (!heroSection) return;
 
+    const hasMessages = Boolean(
+      chatMessages.querySelector(
+        '[data-neyo-message-id]:not([data-neyo-message-id="neyo-thinking"])'
+      )
+    );
 
-    const hasMessages =
-      Boolean(
-        chatMessages
-          .querySelector(
-            '[data-neyo-message-id]:not([data-neyo-message-id="neyo-thinking"])'
-          )
-      );
-
-
-    heroSection.style.display =
-      hasMessages
-        ? "none"
-        : "";
-
-
+    heroSection.style.display = hasMessages ? "none" : "";
     heroSection.setAttribute(
       "aria-hidden",
-      String(
-        hasMessages
-      )
+      String(hasMessages)
     );
   }
 
-
-  /* =====================================================
-     SCROLL STATE
-     ===================================================== */
-
-  function atBottom() {
-    if (
-      !scrollArea
-    ) {
-      return true;
-    }
-
+  function isNearBottom() {
+    if (!scrollArea) return true;
 
     return (
       scrollArea.scrollHeight -
-      scrollArea.scrollTop -
-      scrollArea.clientHeight
-    ) <=
-      120;
+        scrollArea.scrollTop -
+        scrollArea.clientHeight <=
+      120
+    );
   }
 
-
-  function scrollToBottom(
-    behavior =
-      "auto",
-    force =
-      false
-  ) {
-    if (
-      !active ||
-      !scrollArea ||
-      (
-        !force &&
-        !nearBottom
-      )
-    ) {
+  function scrollToBottom(behavior = "auto", force = false) {
+    if (!scrollArea || (!force && !nearBottom)) {
       return false;
     }
 
-
     try {
       scrollArea.scrollTo({
-        top:
-          scrollArea.scrollHeight,
-
+        top: scrollArea.scrollHeight,
         behavior
       });
-
     } catch {
-      scrollArea.scrollTop =
-        scrollArea.scrollHeight;
+      scrollArea.scrollTop = scrollArea.scrollHeight;
     }
 
-
-    nearBottom =
-      true;
-
-
+    nearBottom = true;
     return true;
   }
 
-
-  /* =====================================================
-     NORMALIZE ATTACHMENTS
-     ===================================================== */
-
-  function normalizeAttachments(
-    files
-  ) {
-    if (
-      !Array.isArray(
-        files
-      )
-    ) {
-      return [];
-    }
-
-
-    return files
-      .filter(
-        file =>
-          file &&
-          typeof file ===
-            "object"
-      )
-      .slice(
-        0,
-        5
-      )
-      .map(
-        file => ({
-          ...file,
-
-          name:
-            clean(
-              file.name ||
-              "Attached file",
-              220
-            ),
-
-          size:
-            Math.max(
-              0,
-              Number(
-                file.size
-              ) ||
-              0
-            ),
-
-          mimeType:
-            clean(
-              file.mimeType ||
-              file.mime ||
-              file.type ||
-              "application/octet-stream",
-              180
-            ),
-
-          category:
-            clean(
-              file.category ||
-              "unknown",
-              40
-            )
-        })
-      );
-  }
-
-
-  /* =====================================================
-     RENDER SINGLE FILE CARD
-     ===================================================== */
-
-  function createFileCard(
-    file
-  ) {
-    const card =
-      document.createElement(
-        "div"
-      );
-
+  function createFileCard(file) {
+    const card = document.createElement("div");
+    const visual = document.createElement("div");
+    const body = document.createElement("div");
+    const name = document.createElement("div");
+    const meta = document.createElement("div");
 
     card.className =
       "message-file-pill neyo-message-file-card";
 
-
-    card.setAttribute(
-      "role",
-      "group"
-    );
-
-
-    const name =
-      clean(
-        file?.name ||
-        "Attached file",
-        220
-      );
-
-
-    card.title =
-      name;
-
-
-    const preview =
-      safePreview(
-        file?.previewUrl ||
-        file?.url ||
-        ""
-      );
-
-
-    const mime =
-      clean(
-        file?.mimeType ||
-        file?.mime ||
-        file?.type ||
-        "",
-        180
-      )
-        .toLowerCase();
-
-
-    const category =
-      clean(
-        file?.category ||
-        "",
-        40
-      )
-        .toLowerCase();
-
-
-    const isImage =
-      category ===
-        "image" ||
-      mime.startsWith(
-        "image/"
-      );
-
-
-    /* ===============================================
-       VISUAL
-       =============================================== */
-
-    const visual =
-      document.createElement(
-        "div"
-      );
-
-
     visual.className =
       "neyo-message-file-visual";
 
+    body.className =
+      "neyo-message-file-body";
 
-    if (
-      isImage &&
-      preview
-    ) {
-      const image =
-        document.createElement(
-          "img"
-        );
+    name.className =
+      "neyo-message-file-name";
 
+    meta.className =
+      "neyo-message-file-meta";
 
-      image.src =
-        preview;
+    const filename = clean(
+      file?.name || "Attached file",
+      220
+    );
 
+    const mime = String(
+      file?.mimeType ||
+        file?.mime ||
+        file?.type ||
+        ""
+    ).toLowerCase();
 
-      image.alt =
-        name;
+    const category = String(
+      file?.category || ""
+    ).toLowerCase();
 
+    const preview = safePreview(
+      file?.previewUrl ||
+        file?.url ||
+        ""
+    );
 
-      image.loading =
-        "lazy";
+    const isImage =
+      category === "image" ||
+      mime.startsWith("image/");
 
+    if (isImage && preview) {
+      const image = document.createElement("img");
 
-      image.decoding =
-        "async";
+      image.src = preview;
+      image.alt = filename;
+      image.loading = "lazy";
+      image.decoding = "async";
 
-
-      visual.appendChild(
-        image
-      );
-
+      visual.appendChild(image);
     } else {
-      const icon =
-        document.createElement(
-          "i"
-        );
-
+      const icon = document.createElement("i");
 
       icon.setAttribute(
         "data-lucide",
-        attachmentIcon(
-          file
-        )
+        fileIcon(file)
       );
-
 
       icon.setAttribute(
         "aria-hidden",
         "true"
       );
 
-
-      visual.appendChild(
-        icon
-      );
+      visual.appendChild(icon);
     }
 
+    name.textContent = filename;
+    card.title = filename;
 
-    /* ===============================================
-       BODY
-       =============================================== */
+    const metadata = [];
 
-    const body =
-      document.createElement(
-        "div"
-      );
-
-
-    body.className =
-      "neyo-message-file-body";
-
-
-    const nameElement =
-      document.createElement(
-        "div"
-      );
-
-
-    nameElement.className =
-      "neyo-message-file-name";
-
-
-    nameElement.textContent =
-      name;
-
-
-    const meta =
-      document.createElement(
-        "div"
-      );
-
-
-    meta.className =
-      "neyo-message-file-meta";
-
-
-    const parts =
-      [];
-
-
-    if (
-      Number(
-        file?.size
-      ) >
-      0
-    ) {
-      parts.push(
-        formatBytes(
-          file.size
-        )
-      );
+    if (Number(file?.size) > 0) {
+      metadata.push(formatBytes(file.size));
     }
 
+    metadata.push(fileLabel(file));
 
-    const typeLabel =
-      fileTypeLabel(
-        file
-      );
+    meta.textContent = metadata.join(" · ");
 
-
-    if (
-      typeLabel
-    ) {
-      parts.push(
-        typeLabel
-      );
-    }
-
-
-    meta.textContent =
-      parts.join(
-        " · "
-      );
-
-
-    body.appendChild(
-      nameElement
-    );
-
-
-    body.appendChild(
-      meta
-    );
-
-
-    card.appendChild(
-      visual
-    );
-
-
-    card.appendChild(
-      body
-    );
-
+    body.append(name, meta);
+    card.append(visual, body);
 
     return card;
   }
 
+  function renderAttachments(wrapper, files) {
+    const attachments = normalizeAttachments(files);
 
-  /* =====================================================
-     RENDER ATTACHMENTS
-     ===================================================== */
+    if (!attachments.length) return null;
 
-  function renderAttachments(
-    wrapper,
-    files
-  ) {
-    const attachments =
-      normalizeAttachments(
-        files
-      );
-
-
-    if (
-      attachments.length ===
-      0
-    ) {
-      return null;
-    }
-
-
-    const root =
-      document.createElement(
-        "div"
-      );
-
+    const root = document.createElement("div");
 
     root.className =
       "message-media-grid neyo-message-attachments";
 
-
     root.setAttribute(
       "aria-label",
-      attachments.length ===
-        1
+      attachments.length === 1
         ? "1 attached file"
         : `${attachments.length} attached files`
     );
 
-
-    for (
-      const file
-      of attachments
-    ) {
+    for (const file of attachments) {
       root.appendChild(
-        createFileCard(
-          file
-        )
+        createFileCard(file)
       );
     }
 
-
-    /*
-    -------------------------------------------------------
-    ChatGPT-style:
-    attachments are displayed ABOVE user text.
-    -------------------------------------------------------
-    */
-
-    wrapper.prepend(
-      root
-    );
-
+    wrapper.prepend(root);
 
     return root;
   }
 
-
-  /* =====================================================
-     SOURCES
-     ===================================================== */
-
-  function normalizeSource(
-    source
-  ) {
+  function normalizeSource(source) {
     const value =
       source?.url ||
       source?.uri ||
@@ -1086,487 +357,213 @@ NeyoMessageRenderer
       source?.web?.uri ||
       "";
 
-
     try {
-      const url =
-        new URL(
-          value
-        );
+      const url = new URL(value);
 
-
-      if (
-        ![
-          "http:",
-          "https:"
-        ].includes(
-          url.protocol
-        )
-      ) {
+      if (!["http:", "https:"].includes(url.protocol)) {
         return null;
       }
 
-
       return {
-        url:
-          url.href,
-
-        label:
-          clean(
-            source?.title ||
+        url: url.href,
+        label: clean(
+          source?.title ||
             source?.name ||
             source?.web?.title ||
-            url.hostname.replace(
-              /^www\./,
-              ""
-            ),
-            160
-          )
+            url.hostname.replace(/^www\./, ""),
+          160
+        )
       };
-
     } catch {
       return null;
     }
   }
 
+  function renderSources(element, sources) {
+    element
+      .querySelector(".neo-source-pills")
+      ?.remove();
 
-  function renderSources(
-    messageElement,
-    sources
-  ) {
-    if (
-      !Array.isArray(
-        sources
-      ) ||
-      sources.length ===
-        0
-    ) {
-      return;
+    if (!Array.isArray(sources)) return;
+
+    const valid = sources
+      .slice(0, 10)
+      .map(normalizeSource)
+      .filter(Boolean);
+
+    if (!valid.length) return;
+
+    const root = document.createElement("div");
+    const label = document.createElement("span");
+
+    root.className = "neo-source-pills";
+    root.setAttribute("aria-label", "Sources");
+
+    label.className = "neo-source-label";
+    label.textContent = "Sources";
+
+    root.appendChild(label);
+
+    for (const source of valid) {
+      const link = document.createElement("a");
+
+      link.className = "neo-source-pill";
+      link.href = source.url;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.textContent = source.label || "Source";
+      link.title = link.textContent;
+
+      root.appendChild(link);
     }
 
-
-    const valid =
-      sources
-        .slice(
-          0,
-          10
-        )
-        .map(
-          normalizeSource
-        )
-        .filter(
-          Boolean
-        );
-
-
-    if (
-      valid.length ===
-      0
-    ) {
-      return;
-    }
-
-
-    const root =
-      document.createElement(
-        "div"
-      );
-
-
-    root.className =
-      "neo-source-pills";
-
-
-    root.setAttribute(
-      "aria-label",
-      "Sources"
-    );
-
-
-    const title =
-      document.createElement(
-        "span"
-      );
-
-
-    title.className =
-      "neo-source-label";
-
-
-    title.textContent =
-      "Sources";
-
-
-    root.appendChild(
-      title
-    );
-
-
-    for (
-      const source
-      of valid
-    ) {
-      const link =
-        document.createElement(
-          "a"
-        );
-
-
-      link.className =
-        "neo-source-pill";
-
-
-      link.href =
-        source.url;
-
-
-      link.target =
-        "_blank";
-
-
-      link.rel =
-        "noopener noreferrer";
-
-
-      link.textContent =
-        source.label ||
-        "Source";
-
-
-      link.title =
-        link.textContent;
-
-
-      root.appendChild(
-        link
-      );
-    }
-
-
-    messageElement.appendChild(
-      root
-    );
+    element.appendChild(root);
   }
-
-
-  /* =====================================================
-     CONTENT
-     ===================================================== */
 
   function renderContent(
     element,
     message,
-    markdown =
-      true
+    markdown = true
   ) {
-    const content =
-      element.querySelector(
-        ".message-content"
-      );
+    const content = element.querySelector(
+      ".message-content"
+    );
 
+    if (!content) return false;
 
-    if (
-      !content
-    ) {
-      return false;
-    }
+    const text = clean(message?.content);
 
+    if (message?.role === "user") {
+      const attachmentOnly =
+        Array.isArray(message.attachments) &&
+        message.attachments.length > 0 &&
+        [
+          "Please analyze the attached file.",
+          "Please analyze the attached file or files."
+        ].includes(text);
 
-    const text =
-      clean(
-        message?.content
-      );
-
-
-    /* ===============================================
-       USER = PLAIN TEXT
-       =============================================== */
-
-    if (
-      message.role !==
-      "assistant"
-    ) {
       content.textContent =
-        text;
-
-
-      /*
-      Attachment-only messages should not display the
-      internal fallback API prompt if it matches our
-      canonical attachment-only text.
-      */
-
-      if (
-        Array.isArray(
-          message.attachments
-        ) &&
-        message.attachments.length >
-          0 &&
-        (
-          text ===
-            "Please analyze the attached file or files." ||
-          text ===
-            "Please analyze the attached file."
-        )
-      ) {
-        content.textContent =
-          "";
-      }
-
+        attachmentOnly ? "" : text;
 
       content.hidden =
-        content.textContent
-          .trim()
-          .length ===
-        0;
-
+        content.textContent.trim().length === 0;
 
       return true;
     }
 
+    content.hidden = false;
+    content.textContent = text;
 
-    /* ===============================================
-       ASSISTANT FALLBACK
-       =============================================== */
+    const renderer = window.NeyoMessageRenderer;
 
-    content.hidden =
-      false;
-
-
-    content.textContent =
-      text;
-
-
-    if (
-      typeof window
-        .NeyoMessageRenderer
-        ?.render ===
-      "function"
-    ) {
-      try {
-        window
-          .NeyoMessageRenderer
-          .render(
-            element,
-            text,
-            {
-              role:
-                "assistant",
-
-              markdown
-            }
-          );
-
-      } catch (
-        error
-      ) {
-        console.warn(
-          "[NEYO Messages] Renderer failed:",
-          error
-        );
-      }
-
-    } else {
-      emit(
-        "neyo:message-render-request",
-        {
-          message:
-            element,
-
-          content:
-            text,
-
-          options: {
-            role:
-              "assistant",
-
+    try {
+      if (typeof renderer?.render === "function") {
+        renderer.render(
+          element,
+          text,
+          {
+            role: "assistant",
             markdown
           }
-        }
+        );
+
+        return true;
+      }
+
+      if (typeof renderer?.renderInto === "function") {
+        renderer.renderInto(
+          content,
+          text,
+          {
+            role: "assistant",
+            markdown
+          }
+        );
+
+        return true;
+      }
+    } catch (error) {
+      console.warn(
+        "[NEYO Messages] Renderer failed:",
+        error
       );
     }
 
+    emit(
+      "neyo:message-render-request",
+      {
+        message: element,
+        content: text,
+        options: {
+          role: "assistant",
+          markdown
+        }
+      }
+    );
 
     return true;
   }
 
-
-  /* =====================================================
-     CREATE MESSAGE
-     ===================================================== */
-
-  function create(
-    message,
-    options = {}
-  ) {
+  function create(message, options = {}) {
     if (
-      !active ||
       !message ||
-      ![
-        "user",
-        "assistant"
-      ].includes(
-        message.role
-      )
+      !["user", "assistant"].includes(message.role)
     ) {
       return null;
     }
 
-
     const id =
-      clean(
-        message.id,
-        128
-      )
-        .trim() ||
-      makeId();
+      clean(message.id, 128).trim() ||
+      createId();
 
+    const existing = findMessage(id);
 
-    /*
-    Duplicate-event protection.
-    */
+    if (existing) return existing;
 
-    const existing =
-      findMessage(
-        id
-      );
-
-
-    if (
-      existing
-    ) {
-      return existing;
-    }
-
-
-    if (
-      message.role ===
-      "assistant"
-    ) {
+    if (message.role === "assistant") {
       removeThinking();
     }
 
-
-    const element =
-      document.createElement(
-        "div"
-      );
-
+    const element = document.createElement("div");
 
     element.className =
       `message ${message.role}`;
 
+    element.dataset.neyoMessageId = id;
+    element.dataset.messageId = id;
+    element.dataset.role = message.role;
 
-    element.dataset
-      .neyoMessageId =
-      id;
-
-
-    element.dataset
-      .messageId =
-      id;
-
-
-    element.dataset.role =
-      message.role;
-
-
-    if (
-      message.error ===
-      true
-    ) {
-      element.classList.add(
-        "is-error"
-      );
-
-
-      element.dataset.error =
-        "true";
+    if (message.error === true) {
+      element.classList.add("is-error");
+      element.dataset.error = "true";
     }
 
-
-    if (
-      options.historyLoad
-    ) {
-      element.dataset
-        .historyLoad =
-        "true";
+    if (options.historyLoad) {
+      element.dataset.historyLoad = "true";
     }
 
+    if (message.role === "user") {
+      const wrapper = document.createElement("div");
+      const content = document.createElement("div");
 
-    /* =================================================
-       USER
-       ================================================= */
+      wrapper.className = "message-wrapper";
+      content.className = "message-content";
 
-    if (
-      message.role ===
-      "user"
-    ) {
-      const wrapper =
-        document.createElement(
-          "div"
-        );
-
-
-      wrapper.className =
-        "message-wrapper";
-
-
-      const content =
-        document.createElement(
-          "div"
-        );
-
-
-      content.className =
-        "message-content";
-
-
-      wrapper.appendChild(
-        content
-      );
-
-
-      /*
-      Attachments appear above content.
-      */
+      wrapper.appendChild(content);
 
       renderAttachments(
         wrapper,
         message.attachments
       );
 
-
-      element.appendChild(
-        wrapper
-      );
+      element.appendChild(wrapper);
+    } else {
+      const content = document.createElement("div");
+      content.className = "message-content";
+      element.appendChild(content);
     }
 
-
-    /* =================================================
-       ASSISTANT
-       ================================================= */
-
-    else {
-      const content =
-        document.createElement(
-          "div"
-        );
-
-
-      content.className =
-        "message-content";
-
-
-      element.appendChild(
-        content
-      );
-    }
-
-
-    chatMessages.appendChild(
-      element
-    );
-
+    chatMessages.appendChild(element);
 
     renderContent(
       element,
@@ -1574,381 +571,192 @@ NeyoMessageRenderer
       true
     );
 
-
-    if (
-      message.role ===
-      "assistant"
-    ) {
+    if (message.role === "assistant") {
       renderSources(
         element,
         message.sources
       );
     }
 
-
     updateHero();
-
     refreshIcons();
-
 
     emit(
       "neyo:message-shell-created",
       {
         id,
-
         element,
-
         message: {
           ...message,
-
           id
         }
       }
     );
 
-
-    requestAnimationFrame(
-      () => {
-        scrollToBottom(
-          "auto",
-          message.role ===
-            "user" ||
-          Boolean(
-            options.forceScroll
-          )
-        );
-      }
-    );
-
+    requestAnimationFrame(() => {
+      scrollToBottom(
+        "auto",
+        message.role === "user" ||
+          Boolean(options.forceScroll)
+      );
+    });
 
     return element;
   }
-
-
-  /* =====================================================
-     UPDATE ATTACHMENTS ON EXISTING MESSAGE
-     ===================================================== */
-
-  function updateAttachments(
-    element,
-    attachments
-  ) {
-    if (
-      !element ||
-      element.dataset.role !==
-        "user"
-    ) {
-      return false;
-    }
-
-
-    const wrapper =
-      element.querySelector(
-        ".message-wrapper"
-      );
-
-
-    if (
-      !wrapper
-    ) {
-      return false;
-    }
-
-
-    wrapper
-      .querySelector(
-        ".neyo-message-attachments"
-      )
-      ?.remove();
-
-
-    renderAttachments(
-      wrapper,
-      attachments
-    );
-
-
-    refreshIcons();
-
-
-    return true;
-  }
-
-
-  /* =====================================================
-     UPDATE MESSAGE
-     ===================================================== */
 
   function update(
     id,
     content,
     options = {}
   ) {
-    if (
-      !active
-    ) {
-      return false;
-    }
+    const element = findMessage(id);
 
-
-    const element =
-      findMessage(
-        id
-      );
-
-
-    if (
-      !element
-    ) {
-      return false;
-    }
-
+    if (!element) return false;
 
     const role =
       element.dataset.role ||
       "assistant";
 
+    const message = {
+      role,
+      content,
+      attachments:
+        options.attachments
+    };
 
     renderContent(
       element,
-      {
-        role,
-
-        content,
-
-        attachments:
-          options.attachments
-      },
-      options.markdown ??
-        true
+      message,
+      options.markdown ?? true
     );
 
+    if (
+      role === "user" &&
+      Array.isArray(options.attachments)
+    ) {
+      const wrapper = element.querySelector(
+        ".message-wrapper"
+      );
+
+      if (wrapper) {
+        wrapper
+          .querySelector(".neyo-message-attachments")
+          ?.remove();
+
+        renderAttachments(
+          wrapper,
+          options.attachments
+        );
+      }
+    }
 
     if (
-      Array.isArray(
-        options.attachments
-      )
+      role === "assistant" &&
+      Array.isArray(options.sources)
     ) {
-      updateAttachments(
+      renderSources(
         element,
-        options.attachments
+        options.sources
       );
     }
 
-
     element.classList.toggle(
       "is-error",
-      options.error ===
-        true
+      options.error === true
     );
 
-
     element.dataset.error =
-      options.error ===
-        true
+      options.error === true
         ? "true"
         : "false";
 
+    refreshIcons();
 
     emit(
       "neyo:message-updated",
       {
         id,
-
         element,
-
-        content:
-          clean(
-            content
-          )
+        content: clean(content)
       }
     );
 
-
-    requestAnimationFrame(
-      () => {
-        scrollToBottom(
-          "auto",
-          false
-        );
-      }
-    );
-
+    requestAnimationFrame(() => {
+      scrollToBottom("auto");
+    });
 
     return true;
   }
 
+  function remove(id) {
+    const element = findMessage(id);
 
-  /* =====================================================
-     REMOVE MESSAGE
-     ===================================================== */
-
-  function remove(
-    id
-  ) {
-    if (
-      !active
-    ) {
-      return false;
-    }
-
-
-    const element =
-      findMessage(
-        id
-      );
-
-
-    if (
-      !element
-    ) {
-      return false;
-    }
-
+    if (!element) return false;
 
     element.remove();
-
-
     updateHero();
-
 
     emit(
       "neyo:message-removed",
-      {
-        id
-      }
+      { id }
     );
-
 
     return true;
   }
 
-
-  /* =====================================================
-     THINKING
-     ===================================================== */
-
   function showThinking() {
-    if (
-      !active
-    ) {
-      return null;
-    }
-
-
     removeThinking();
 
+    const element = document.createElement("div");
+    const content = document.createElement("div");
+    const shimmer = document.createElement("span");
 
-    const element =
-      document.createElement(
-        "div"
-      );
-
-
-    element.id =
-      "neyoThinkingIndicator";
-
-
+    element.id = "neyoThinkingIndicator";
     element.className =
       "message assistant is-thinking";
 
-
-    element.dataset
-      .neyoMessageId =
+    element.dataset.neyoMessageId =
       "neyo-thinking";
 
-
-    element.dataset
-      .messageId =
+    element.dataset.messageId =
       "neyo-thinking";
-
 
     element.dataset.role =
       "assistant";
-
 
     element.setAttribute(
       "aria-live",
       "polite"
     );
 
-
-    const content =
-      document.createElement(
-        "div"
-      );
-
-
     content.className =
       "message-content";
-
-
-    const shimmer =
-      document.createElement(
-        "span"
-      );
-
 
     shimmer.className =
       "thinking-shimmer";
 
-
     shimmer.textContent =
       "Thinking.";
 
+    content.appendChild(shimmer);
+    element.appendChild(content);
+    chatMessages.appendChild(element);
 
-    content.appendChild(
-      shimmer
-    );
-
-
-    element.appendChild(
-      content
-    );
-
-
-    chatMessages.appendChild(
-      element
-    );
-
-
-    thinkingElement =
-      element;
-
+    thinkingElement = element;
 
     updateHero();
 
-
-    requestAnimationFrame(
-      () => {
-        scrollToBottom(
-          "auto",
-          true
-        );
-      }
-    );
-
-
-    emit(
-      "neyo:thinking-shown",
-      {
-        element
-      }
-    );
-
+    requestAnimationFrame(() => {
+      scrollToBottom(
+        "auto",
+        true
+      );
+    });
 
     return element;
   }
 
-
   function removeThinking() {
-    if (
-      !active
-    ) {
-      return false;
-    }
-
-
     const element =
       thinkingElement ||
       document.getElementById(
@@ -1958,424 +766,193 @@ NeyoMessageRenderer
         "neyo-thinking"
       );
 
+    thinkingElement = null;
 
-    thinkingElement =
-      null;
-
-
-    if (
-      !element
-    ) {
-      return false;
-    }
-
+    if (!element) return false;
 
     element.remove();
-
-
     updateHero();
-
-
-    emit(
-      "neyo:thinking-hidden"
-    );
-
 
     return true;
   }
 
-
-  /* =====================================================
-     CLEAR
-     ===================================================== */
-
   function clear() {
-    if (
-      !active ||
-      !chatMessages
-    ) {
-      return false;
-    }
-
-
-    thinkingElement =
-      null;
-
-
-    chatMessages
-      .replaceChildren();
-
-
-    nearBottom =
-      true;
-
+    thinkingElement = null;
+    chatMessages.replaceChildren();
+    nearBottom = true;
 
     updateHero();
-
 
     emit(
       "neyo:messages-cleared"
     );
 
+    return true;
+  }
+
+  function replace(messages = []) {
+    if (!Array.isArray(messages)) {
+      return false;
+    }
+
+    clear();
+
+    for (const message of messages) {
+      create(
+        message,
+        {
+          historyLoad: true,
+          forceScroll: false
+        }
+      );
+    }
+
+    requestAnimationFrame(() => {
+      scrollToBottom(
+        "auto",
+        true
+      );
+    });
 
     return true;
   }
 
-
-  /* =====================================================
-     REPLACE / HISTORY COMPATIBILITY
-     ===================================================== */
-
-  function replace(
-    messages = [],
-    options = {}
-  ) {
-    if (
-      !active
-    ) {
-      return false;
+  scrollArea?.addEventListener(
+    "scroll",
+    () => {
+      nearBottom =
+        isNearBottom();
+    },
+    {
+      passive: true
     }
+  );
 
+  window.addEventListener(
+    "neyo:chat-message-added",
+    event => {
+      const message =
+        event.detail?.message;
 
-    clear();
+      if (!message) return;
 
-
-    if (
-      !Array.isArray(
-        messages
-      )
-    ) {
-      return false;
-    }
-
-
-    for (
-      const message
-      of messages
-    ) {
       create(
         message,
         {
           historyLoad:
-            true,
-
-          forceScroll:
-            false,
-
-          ...options
+            Boolean(
+              event.detail?.historyLoad
+            )
         }
       );
     }
+  );
 
+  window.addEventListener(
+    "neyo:chat-message-removed",
+    event => {
+      const id =
+        event.detail?.message?.id ||
+        event.detail?.id;
 
-    updateHero();
+      if (id) remove(id);
+    }
+  );
 
+  window.addEventListener(
+    "neyo:chat-send-start",
+    showThinking
+  );
 
-    requestAnimationFrame(
-      () => {
-        scrollToBottom(
-          "auto",
-          true
-        );
-      }
+  [
+    "neyo:chat-response",
+    "neyo:chat-send-end",
+    "neyo:chat-aborted",
+    "neyo:chat-error"
+  ].forEach(name => {
+    window.addEventListener(
+      name,
+      removeThinking
     );
+  });
 
+  window.addEventListener(
+    "neyo:messages-clear",
+    clear
+  );
 
-    return true;
-  }
-
-
-  /* =====================================================
-     EVENT OWNERSHIP
-     ===================================================== */
-
-  if (
-    active
-  ) {
-    scrollArea
-      ?.addEventListener(
-        "scroll",
-        () => {
-          nearBottom =
-            atBottom();
-        },
-        {
-          passive:
-            true
-        }
+  window.addEventListener(
+    "neyo:message-update-request",
+    event => {
+      update(
+        event.detail?.id,
+        event.detail?.content,
+        event.detail?.options || {}
       );
+    }
+  );
 
+  window.addEventListener(
+    "neyo:messages-replace",
+    event => {
+      replace(
+        event.detail?.messages ||
+        event.detail?.conversation ||
+        []
+      );
+    }
+  );
 
-    /* =================================================
-       CHAT MESSAGE ADDED
-       ================================================= */
-
-    window.addEventListener(
-      "neyo:chat-message-added",
-      event => {
-        const message =
-          event.detail
-            ?.message;
-
-
-        if (
-          !message
-        ) {
-          return;
-        }
-
-
-        create(
-          message,
-          {
-            historyLoad:
-              Boolean(
-                event.detail
-                  ?.historyLoad
-              )
-          }
-        );
-      }
-    );
-
-
-    /* =================================================
-       CHAT MESSAGE REMOVED
-       ================================================= */
-
-    window.addEventListener(
-      "neyo:chat-message-removed",
-      event => {
-        const id =
-          event.detail
-            ?.message
-            ?.id ||
-          event.detail
-            ?.id;
-
-
-        if (
-          id
-        ) {
-          remove(
-            id
-          );
-        }
-      }
-    );
-
-
-    /* =================================================
-       GENERATION
-       ================================================= */
-
-    window.addEventListener(
-      "neyo:chat-send-start",
-      showThinking
-    );
-
-
-    window.addEventListener(
-      "neyo:chat-response",
-      removeThinking
-    );
-
-
-    window.addEventListener(
-      "neyo:chat-send-end",
-      removeThinking
-    );
-
-
-    window.addEventListener(
-      "neyo:chat-aborted",
-      removeThinking
-    );
-
-
-    window.addEventListener(
-      "neyo:chat-error",
-      removeThinking
-    );
-
-
-    /* =================================================
-       CLEAR
-       ================================================= */
-
-    window.addEventListener(
-      "neyo:messages-clear",
-      clear
-    );
-
-
-    /* =================================================
-       UPDATE
-       ================================================= */
-
-    window.addEventListener(
-      "neyo:message-update-request",
-      event => {
-        update(
-          event.detail
-            ?.id,
-
-          event.detail
-            ?.content,
-
-          event.detail
-            ?.options ||
-          {}
-        );
-      }
-    );
-
-
-    /* =================================================
-       OPTIONAL REPLACE BRIDGE
-       ================================================= */
-
-    window.addEventListener(
-      "neyo:messages-replace",
-      event => {
-        replace(
-          event.detail
-            ?.messages ||
-          event.detail
-            ?.conversation ||
-          []
-        );
-      }
-    );
-
-
-    updateHero();
-  }
-
-
-  /* =====================================================
-     PUBLIC API
-     ===================================================== */
-
-  const api =
-    Object.freeze({
-      __controller:
-        true,
-
-      version:
-        VERSION,
-
-      active,
-
-      legacyOwnerActive:
-        legacyPresent,
-
-      create,
-
-      update,
-
-      remove,
-
-      clear,
-
-      replace,
-
-      showThinking,
-
-      removeThinking,
-
-      scrollToBottom,
-
-      getElement:
-        findMessage,
-
-      getContainer:
-        () =>
-          chatMessages,
-
-      getState:
-        () => ({
-          version:
-            VERSION,
-
-          active,
-
-          legacyOwnerActive:
-            legacyPresent,
-
-          nearBottom,
-
-          thinking:
-            Boolean(
-              thinkingElement
-            ),
-
-          messageCount:
-            active
-              ? chatMessages
-                  .querySelectorAll(
-                    '[data-neyo-message-id]:not([data-neyo-message-id="neyo-thinking"])'
-                  )
-                  .length
-              : 0
-        })
-    });
-
+  const api = Object.freeze({
+    __controller: true,
+    version: VERSION,
+    active: true,
+    legacyOwnerActive: false,
+    create,
+    update,
+    remove,
+    clear,
+    replace,
+    showThinking,
+    removeThinking,
+    scrollToBottom,
+    getElement: findMessage,
+    getContainer() {
+      return chatMessages;
+    },
+    getState() {
+      return {
+        version: VERSION,
+        active: true,
+        nearBottom,
+        thinking:
+          Boolean(thinkingElement),
+        messageCount:
+          chatMessages.querySelectorAll(
+            '[data-neyo-message-id]:not([data-neyo-message-id="neyo-thinking"])'
+          ).length
+      };
+    }
+  });
 
   Object.defineProperty(
     window,
     "NeyoMessages",
     {
-      value:
-        api,
-
-      writable:
-        false,
-
-      configurable:
-        true,
-
-      enumerable:
-        true
+      value: api,
+      writable: false,
+      configurable: true,
+      enumerable: true
     }
   );
 
-
-  /* =====================================================
-     READY
-     ===================================================== */
+  updateHero();
 
   emit(
     "neyo:messages-ready",
     {
-      version:
-        VERSION,
-
-      active,
-
-      legacyOwnerActive:
-        legacyPresent,
-
-      safeHybrid:
-        true
+      version: VERSION,
+      active: true
     }
   );
-
-
-  console.log(
-    "[NEYO Messages] SAFE HYBRID v2 READY",
-    {
-      active,
-
-      neoPresent:
-        legacyPresent,
-
-      attachmentRendering:
-        true,
-
-      replaceCompatibility:
-        true
-    }
-  );
-
 })();

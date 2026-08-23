@@ -1,27 +1,93 @@
 /*
 =========================================================
-NEYO — CHARACTER PICKER v1
+NEYO — CHARACTER PICKER
+FINAL PRODUCTION MIXER v4
 
-Purpose:
-- Open / close character picker popup
-- Read available characters from window.NeyoCharacters
-- Show only registered characters
-- Highlight active character
-- Select character
-- Sync with mascot engine
-- Prepare architecture for Zadi / Wizi / Tarco / Buddy / Lify
+FILE:
+public/js/components/character-picker.js
 
-Does NOT own:
-- Gemini
-- voice session
-- mascot rendering
-- character profiles
+OWNS
+---------------------------------------------------------
+- Character-picker open / close
+- #characterPickerBtn click
+- #characterPickerCloseBtn click
+- Character list rendering
+- Character selection
+- Selected / active character UI
+- Listbox semantics
+- Keyboard navigation
+- Escape behavior while picker is open
+- Backdrop close
+- Focus entry / restoration
+- Character registry discovery
+- Picker lifecycle events
+- Public picker API
+
+DOES NOT OWN
+---------------------------------------------------------
+- Mascot expression
+- Mascot animation
+- Gemini Live
+- Voice restart
+- Voice shell open / close
+- Character definition objects
+- Camera
+- Chat
+- Settings
+
+EVENT FLOW
+---------------------------------------------------------
+
+#characterPickerBtn
+      ↓
+character-picker.js
+      ↓
+picker open
+      ↓
+select character
+      ↓
+neyo:character-select
+      ↓
+mascot.js
+      ↓
+neyo:character-change
+      ↓
+voice.js
+      ↓
+restart-required if Live is active
+      ↓
+voice-mode.js
+
+IMPORTANT
+---------------------------------------------------------
+Character definitions are discovered dynamically from:
+
+window.NeyoCharacter helper
+window.NeyoCharacters registry
+
+This means future characters can be added without
+rewriting this picker.
+
+MIGRATION RULE
+---------------------------------------------------------
+No dependency on neo.js.
+
+After neo.js removal this file continues unchanged.
 =========================================================
 */
 
 (() => {
   "use strict";
 
+  const VERSION =
+    "neyo-character-picker-final-v4";
+
+  if (
+    window.NeyoCharacterPicker
+      ?.__controller === true
+  ) {
+    return;
+  }
 
   /* =====================================================
      DOM
@@ -42,67 +108,130 @@ Does NOT own:
       ".character-picker-panel"
     );
 
-  const list =
-    document.getElementById(
-      "characterPickerList"
-    );
-
   const closeBtn =
     document.getElementById(
       "characterPickerCloseBtn"
     );
 
+  const list =
+    document.getElementById(
+      "characterPickerList"
+    );
+
+  const active =
+    Boolean(
+      trigger &&
+      shell &&
+      panel &&
+      closeBtn &&
+      list
+    );
 
   if (
-    !shell ||
-    !list
+    !active
   ) {
     console.warn(
-      "[NEYO Character Picker] Required DOM missing."
+      "[NEYO Character Picker] Required DOM is missing."
     );
 
     return;
   }
 
+  /* =====================================================
+     LEGACY TELEMETRY ONLY
+     ===================================================== */
+
+  const legacyScriptPresent =
+    Array
+      .from(
+        document.scripts || []
+      )
+      .some(
+        script =>
+          /(?:^|\/)neo\.js(?:\?|$)/
+            .test(
+              script.src || ""
+            )
+      );
+
+  /* =====================================================
+     CONFIG
+     ===================================================== */
+
+  const CONFIG =
+    Object.freeze({
+      defaultCharacter:
+        "neyo",
+
+      maxCharacters:
+        32,
+
+      maxNameLength:
+        80,
+
+      maxDescriptionLength:
+        220,
+
+      selectionCloseDelayMs:
+        90
+    });
 
   /* =====================================================
      STATE
      ===================================================== */
 
-  const state = {
-    open:
-      false,
+  let opened =
+    false;
 
-    closing:
-      false,
+  let previousFocus =
+    null;
 
-    activeCharacterId:
-      "neyo",
+  let characters =
+    [];
 
-    lastFocusedElement:
-      null
-  };
+  let activeCharacterId =
+    CONFIG.defaultCharacter;
 
+  let highlightedIndex =
+    -1;
+
+  let renderGeneration =
+    0;
 
   let closeTimer =
     0;
 
+  const metrics = {
+    opens:
+      0,
+
+    closes:
+      0,
+
+    renders:
+      0,
+
+    selections:
+      0,
+
+    keyboardMoves:
+      0,
+
+    lastOpenedAt:
+      null,
+
+    lastClosedAt:
+      null,
+
+    lastSelectedAt:
+      null
+  };
 
   /* =====================================================
-     HELPERS
+     EVENTS
      ===================================================== */
 
-  function safeFocus(element) {
-    try {
-      element?.focus?.({
-        preventScroll:
-          true
-      });
-    } catch {}
-  }
-
-
-  function dispatch(
+  function emit(
     name,
     detail = {}
   ) {
@@ -116,201 +245,744 @@ Does NOT own:
     );
   }
 
+  /* =====================================================
+     HELPERS
+     ===================================================== */
 
-  function getRegistry() {
-    return (
-      window.NeyoCharacters ||
-      {}
-    );
+  function cleanId(
+    value
+  ) {
+    return String(
+      value || ""
+    )
+      .trim()
+      .toLowerCase()
+      .replace(
+        /[^a-z0-9_-]/g,
+        ""
+      )
+      .slice(
+        0,
+        60
+      );
   }
 
+  function cleanText(
+    value,
+    max
+  ) {
+    return String(
+      value ?? ""
+    )
+      .replace(
+        /\u0000/g,
+        ""
+      )
+      .replace(
+        /\s+/g,
+        " "
+      )
+      .trim()
+      .slice(
+        0,
+        max
+      );
+  }
 
-  function getCharacter(
+  function cloneValue(
+    value
+  ) {
+    if (
+      value === undefined ||
+      value === null
+    ) {
+      return value;
+    }
+
+    if (
+      typeof structuredClone ===
+      "function"
+    ) {
+      try {
+        return structuredClone(
+          value
+        );
+      } catch {}
+    }
+
+    try {
+      return JSON.parse(
+        JSON.stringify(
+          value
+        )
+      );
+
+    } catch {
+      return value;
+    }
+  }
+
+  /* =====================================================
+     CHARACTER NORMALIZATION
+     ===================================================== */
+
+  function normalizeCharacter(
+    raw,
+    fallbackId = ""
+  ) {
+    if (
+      !raw ||
+      typeof raw !==
+        "object"
+    ) {
+      return null;
+    }
+
+    const id =
+      cleanId(
+        raw.id ||
+        fallbackId
+      );
+
+    if (!id) {
+      return null;
+    }
+
+    /*
+     * Ignore registry metadata entries.
+     */
+
+    if (
+      [
+        "active",
+        "current",
+        "selected"
+      ].includes(
+        id
+      )
+    ) {
+      return null;
+    }
+
+    const name =
+      cleanText(
+        raw.name ||
+        raw.label ||
+        raw.displayName ||
+        id
+          .replace(
+            /[-_]+/g,
+            " "
+          )
+          .replace(
+            /\b\w/g,
+            character =>
+              character
+                .toUpperCase()
+          ),
+        CONFIG
+          .maxNameLength
+      ) ||
+      id;
+
+    const description =
+      cleanText(
+        raw.description ||
+        raw.subtitle ||
+        raw.tagline ||
+        raw.personality
+          ?.description ||
+        raw.personality
+          ?.summary ||
+        "",
+        CONFIG
+          .maxDescriptionLength
+      );
+
+    const visual =
+      raw.visual &&
+      typeof raw.visual ===
+        "object"
+        ? raw.visual
+        : {};
+
+    const expression =
+      raw.defaultExpression &&
+      typeof raw
+        .defaultExpression ===
+        "object"
+        ? raw.defaultExpression
+        : {};
+
+    return {
+      ...raw,
+
+      id,
+
+      name,
+
+      description,
+
+      visual,
+
+      defaultExpression:
+        expression
+    };
+  }
+
+  /* =====================================================
+     DISCOVER VIA HELPER
+     ===================================================== */
+
+  function discoverFromHelper() {
+    const helper =
+      window.NeyoCharacter;
+
+    if (!helper) {
+      return [];
+    }
+
+    const candidates = [
+      "getAll",
+      "list",
+      "all",
+      "values"
+    ];
+
+    for (
+      const methodName
+      of candidates
+    ) {
+      try {
+        const method =
+          helper[
+            methodName
+          ];
+
+        if (
+          typeof method !==
+          "function"
+        ) {
+          continue;
+        }
+
+        const result =
+          method.call(
+            helper
+          );
+
+        if (
+          Array.isArray(
+            result
+          )
+        ) {
+          return result;
+        }
+
+        if (
+          result &&
+          typeof result ===
+            "object"
+        ) {
+          return Object
+            .entries(
+              result
+            )
+            .map(
+              ([id, value]) => ({
+                ...value,
+                id:
+                  value?.id ||
+                  id
+              })
+            );
+        }
+
+      } catch {}
+    }
+
+    return [];
+  }
+
+  /* =====================================================
+     DISCOVER VIA REGISTRY
+     ===================================================== */
+
+  function discoverFromRegistry() {
+    const registry =
+      window.NeyoCharacters;
+
+    if (
+      !registry ||
+      typeof registry !==
+        "object"
+    ) {
+      return [];
+    }
+
+    const result =
+      [];
+
+    for (
+      const [
+        key,
+        value
+      ]
+      of Object.entries(
+        registry
+      )
+    ) {
+      if (
+        typeof value ===
+        "function"
+      ) {
+        continue;
+      }
+
+      if (
+        !value ||
+        typeof value !==
+          "object" ||
+        Array.isArray(
+          value
+        )
+      ) {
+        continue;
+      }
+
+      const character =
+        normalizeCharacter(
+          value,
+          key
+        );
+
+      if (
+        character
+      ) {
+        result.push(
+          character
+        );
+      }
+    }
+
+    return result;
+  }
+
+  /* =====================================================
+     DISCOVER CHARACTERS
+     ===================================================== */
+
+  function discoverCharacters() {
+    const discovered =
+      [
+        ...discoverFromHelper(),
+        ...discoverFromRegistry()
+      ];
+
+    const output =
+      [];
+
+    const seen =
+      new Set();
+
+    for (
+      const candidate
+      of discovered
+    ) {
+      if (
+        output.length >=
+        CONFIG.maxCharacters
+      ) {
+        break;
+      }
+
+      const normalized =
+        normalizeCharacter(
+          candidate,
+          candidate?.id
+        );
+
+      if (
+        !normalized ||
+        seen.has(
+          normalized.id
+        )
+      ) {
+        continue;
+      }
+
+      seen.add(
+        normalized.id
+      );
+
+      output.push(
+        normalized
+      );
+    }
+
+    /*
+     * Ensure NEYO remains available when registry
+     * helper exposes it through .get() only.
+     */
+
+    if (
+      !seen.has(
+        CONFIG
+          .defaultCharacter
+      )
+    ) {
+      try {
+        const fallback =
+          window.NeyoCharacter
+            ?.get
+            ?.(
+              CONFIG
+                .defaultCharacter
+            ) ||
+          window.NeyoCharacters
+            ?.[
+              CONFIG
+                .defaultCharacter
+            ];
+
+        const normalized =
+          normalizeCharacter(
+            fallback,
+            CONFIG
+              .defaultCharacter
+          );
+
+        if (
+          normalized
+        ) {
+          output.unshift(
+            normalized
+          );
+        }
+
+      } catch {}
+    }
+
+    characters =
+      output;
+
+    return getCharacters();
+  }
+
+  /* =====================================================
+     ACTIVE CHARACTER
+     ===================================================== */
+
+  function resolveActiveCharacterId() {
+    /* -------------------------------------------------
+       Mascot = strongest current UI source
+       ------------------------------------------------- */
+
+    try {
+      const mascotId =
+        window.NeyoMascot
+          ?.getCharacterId
+          ?.();
+
+      if (
+        mascotId
+      ) {
+        return cleanId(
+          mascotId
+        );
+      }
+    } catch {}
+
+    try {
+      const mascotCharacter =
+        window.NeyoMascot
+          ?.getCharacter
+          ?.();
+
+      if (
+        mascotCharacter
+          ?.id
+      ) {
+        return cleanId(
+          mascotCharacter.id
+        );
+      }
+    } catch {}
+
+    /* -------------------------------------------------
+       Character helper
+       ------------------------------------------------- */
+
+    try {
+      const helperActive =
+        window.NeyoCharacter
+          ?.getActive
+          ?.();
+
+      if (
+        typeof helperActive ===
+          "string"
+      ) {
+        return cleanId(
+          helperActive
+        );
+      }
+
+      if (
+        helperActive
+          ?.id
+      ) {
+        return cleanId(
+          helperActive.id
+        );
+      }
+    } catch {}
+
+    /* -------------------------------------------------
+       Registry active
+       ------------------------------------------------- */
+
+    try {
+      const registryActive =
+        window.NeyoCharacters
+          ?.active;
+
+      if (
+        typeof registryActive ===
+          "string"
+      ) {
+        return cleanId(
+          registryActive
+        );
+      }
+    } catch {}
+
+    /* -------------------------------------------------
+       Voice selected character
+       ------------------------------------------------- */
+
+    try {
+      const voiceCharacter =
+        window.NeyoVoice
+          ?.getCharacter
+          ?.();
+
+      if (
+        voiceCharacter
+      ) {
+        return cleanId(
+          voiceCharacter
+        );
+      }
+    } catch {}
+
+    return CONFIG
+      .defaultCharacter;
+  }
+
+  /* =====================================================
+     CHARACTER FIND
+     ===================================================== */
+
+  function getCharacterById(
     id
   ) {
-    return (
-      getRegistry()?.[id] ||
-      null
-    );
+    const key =
+      cleanId(
+        id
+      );
+
+    if (!key) {
+      return null;
+    }
+
+    const cached =
+      characters.find(
+        character =>
+          character.id ===
+          key
+      );
+
+    if (
+      cached
+    ) {
+      return cloneValue(
+        cached
+      );
+    }
+
+    try {
+      const direct =
+        window.NeyoCharacter
+          ?.get
+          ?.(key) ||
+        window.NeyoCharacters
+          ?.[key];
+
+      return normalizeCharacter(
+        direct,
+        key
+      );
+
+    } catch {
+      return null;
+    }
   }
 
+  /* =====================================================
+     CARD SELECTOR
+     ===================================================== */
 
-  function getActiveCharacterId() {
-    return (
-      window
-        .NeyoCharacters
-        ?.active ||
-      window
-        .NeyoMascot
-        ?.getState
-        ?.()
-        ?.characterId ||
-      "neyo"
-    );
+  function getCards() {
+    return Array
+      .from(
+        list.querySelectorAll(
+          "[data-character-id]"
+        )
+      );
   }
 
-
   /* =====================================================
-     CHARACTER ORDER
-
-     Only registered characters render.
-     Future additions keep stable order.
+     VISUAL PREVIEW
      ===================================================== */
 
-  const CHARACTER_ORDER =
-    Object.freeze([
-      "neyo",
-      "zadi",
-      "wizi",
-      "tarco",
-      "buddy",
-      "lify"
-    ]);
-
-
-  /* =====================================================
-     CHARACTER META
-     ===================================================== */
-
-  const FALLBACK_META =
-    Object.freeze({
-
-      neyo: {
-        description:
-          "Balanced, thoughtful and intelligent."
-      },
-
-      zadi: {
-        description:
-          "Confident, energetic and expressive."
-      },
-
-      wizi: {
-        description:
-          "Curious, imaginative and clever."
-      },
-
-      tarco: {
-        description:
-          "Focused, precise and technical."
-      },
-
-      buddy: {
-        description:
-          "Casual, friendly and easy-going."
-      },
-
-      lify: {
-        description:
-          "Calm, thoughtful and supportive."
-      }
-    });
-
-
-  /* =====================================================
-     PREVIEW MARKUP
-
-     Uses lightweight face preview.
-     Future characters can override via CSS
-     using data-character attribute.
-     ===================================================== */
-
-  function createPreviewMarkup(
+  function createPreview(
     character
   ) {
-    const id =
-      character?.id ||
-      "neyo";
+    const preview =
+      document.createElement(
+        "div"
+      );
 
+    preview.className =
+      [
+        "character-picker-preview",
+        "character-card-preview"
+      ].join(" ");
 
-    return `
-      <div
-        class="character-picker-preview"
-        data-character="${id}"
-        aria-hidden="true"
-      >
-        <div class="character-picker-face">
+    preview.dataset.character =
+      character.id;
 
-          <div
-            class="character-picker-eye character-picker-eye-left"
-          ></div>
+    preview.dataset.bodyShape =
+      character
+        ?.visual
+        ?.bodyShape ||
+      "rounded-square";
 
-          <div
-            class="character-picker-eye character-picker-eye-right"
-          ></div>
+    preview.dataset.surface =
+      character
+        ?.visual
+        ?.surface ||
+      "light";
 
-          <div class="character-picker-mouth">
-            <span></span>
-            <span></span>
-            <span></span>
-            <span></span>
-            <span></span>
-          </div>
+    /*
+     * Generic preview markup intentionally mirrors
+     * mascot geometry without duplicating mascot logic.
+     *
+     * character-picker.css can style by data-character.
+     */
 
-        </div>
-      </div>
-    `;
+    const face =
+      document.createElement(
+        "div"
+      );
+
+    face.className =
+      "character-picker-preview-face";
+
+    face.dataset.character =
+      character.id;
+
+    const features =
+      document.createElement(
+        "div"
+      );
+
+    features.className =
+      "character-picker-preview-features";
+
+    const leftEye =
+      document.createElement(
+        "span"
+      );
+
+    leftEye.className =
+      "character-picker-preview-eye character-picker-preview-eye-left";
+
+    const rightEye =
+      document.createElement(
+        "span"
+      );
+
+    rightEye.className =
+      "character-picker-preview-eye character-picker-preview-eye-right";
+
+    const mouth =
+      document.createElement(
+        "span"
+      );
+
+    mouth.className =
+      "character-picker-preview-mouth";
+
+    features.append(
+      leftEye,
+      rightEye,
+      mouth
+    );
+
+    face.appendChild(
+      features
+    );
+
+    preview.appendChild(
+      face
+    );
+
+    return preview;
   }
 
-
   /* =====================================================
-     CARD
+     CREATE CHARACTER CARD
      ===================================================== */
 
   function createCard(
-    character
+    character,
+    index
   ) {
-
-    const id =
-      character.id;
-
-
-    const name =
-      character.name ||
-      id;
-
-
-    const description =
-      character.description ||
-      FALLBACK_META[id]
-        ?.description ||
-      "AI character";
-
-
     const selected =
-      id ===
-      state.activeCharacterId;
-
+      character.id ===
+      activeCharacterId;
 
     const button =
       document.createElement(
         "button"
       );
 
-
     button.type =
       "button";
 
+    /*
+     * Preserve broad CSS compatibility naming.
+     */
 
     button.className =
-      "character-picker-card";
+      [
+        "character-picker-item",
+        "character-card"
+      ].join(" ");
 
+    button.dataset
+      .characterId =
+      character.id;
 
     button.dataset.character =
-      id;
-
-
-    button.dataset.selected =
-      String(
-        selected
-      );
-
+      character.id;
 
     button.setAttribute(
       "role",
       "option"
     );
-
 
     button.setAttribute(
       "aria-selected",
@@ -319,209 +991,284 @@ Does NOT own:
       )
     );
 
-
     button.setAttribute(
       "aria-label",
-      `Select ${name}`
+      selected
+        ? `${character.name}, selected`
+        : `Choose ${character.name}`
     );
 
+    button.tabIndex =
+      index ===
+        highlightedIndex
+        ? 0
+        : -1;
 
-    button.innerHTML = `
-      <div class="character-picker-card-preview">
-        ${createPreviewMarkup(character)}
-      </div>
+    button.classList.toggle(
+      "is-selected",
+      selected
+    );
 
-      <div class="character-picker-card-copy">
+    button.classList.toggle(
+      "active",
+      selected
+    );
 
-        <div class="character-picker-card-heading">
+    /* =================================================
+       PREVIEW
+       ================================================= */
 
-          <span class="character-picker-card-name">
-            ${name}
-          </span>
+    button.appendChild(
+      createPreview(
+        character
+      )
+    );
 
-          <span
-            class="character-picker-check"
-            aria-hidden="true"
-          >
-            <svg
-              viewBox="0 0 20 20"
-              fill="none"
-            >
-              <path
-                d="M5 10.3l3.1 3.1L15 6.7"
-                stroke="currentColor"
-                stroke-width="1.8"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-            </svg>
-          </span>
+    /* =================================================
+       CONTENT
+       ================================================= */
 
-        </div>
+    const body =
+      document.createElement(
+        "div"
+      );
 
-        <div class="character-picker-card-description">
-          ${description}
-        </div>
+    body.className =
+      "character-picker-item-body character-card-body";
 
-      </div>
+    const name =
+      document.createElement(
+        "div"
+      );
+
+    name.className =
+      "character-picker-item-name character-card-name";
+
+    name.textContent =
+      character.name;
+
+    body.appendChild(
+      name
+    );
+
+    if (
+      character.description
+    ) {
+      const description =
+        document.createElement(
+          "div"
+        );
+
+      description.className =
+        "character-picker-item-description character-card-description";
+
+      description.textContent =
+        character.description;
+
+      body.appendChild(
+        description
+      );
+    }
+
+    button.appendChild(
+      body
+    );
+
+    /* =================================================
+       SELECTED MARK
+       ================================================= */
+
+    const mark =
+      document.createElement(
+        "span"
+      );
+
+    mark.className =
+      "character-picker-selected-mark";
+
+    mark.setAttribute(
+      "aria-hidden",
+      "true"
+    );
+
+    mark.innerHTML = `
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        aria-hidden="true"
+      >
+        <path
+          d="M6.5 12.5l3.4 3.4 7.6-8"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+      </svg>
     `;
 
+    button.appendChild(
+      mark
+    );
+
+    /* =================================================
+       CLICK
+       ================================================= */
 
     button.addEventListener(
       "click",
-      () => {
+      event => {
+        event.preventDefault();
+        event.stopPropagation();
 
         selectCharacter(
-          id
+          character.id,
+          {
+            source:
+              "picker-click"
+          }
         );
       }
     );
 
-
     return button;
   }
-
 
   /* =====================================================
      RENDER
      ===================================================== */
 
-  function render() {
+  function render({
+    preserveFocus =
+      false
+  } = {}) {
+    renderGeneration +=
+      1;
 
-    state.activeCharacterId =
-      getActiveCharacterId();
+    activeCharacterId =
+      resolveActiveCharacterId();
 
+    discoverCharacters();
 
-    list.innerHTML =
-      "";
-
-
-    const registry =
-      getRegistry();
-
-
-    const available =
-      CHARACTER_ORDER
-        .map(
-          id =>
-            registry[id]
-        )
-        .filter(Boolean);
-
-
-    /*
-    Include any future registered
-    characters not yet in order.
-    */
-
-    for (
-      const [
-        id,
-        character
-      ]
-      of Object.entries(
-        registry
-      )
-    ) {
-
-      if (
-        id === "active" ||
-        !character ||
-        typeof character !==
-          "object"
-      ) {
-        continue;
-      }
-
-
-      if (
-        available.some(
-          item =>
-            item.id ===
-            character.id
-        )
-      ) {
-        continue;
-      }
-
-
-      available.push(
-        character
-      );
-    }
-
+    list.replaceChildren();
 
     if (
-      available.length ===
+      characters.length ===
       0
     ) {
-
       const empty =
         document.createElement(
           "div"
         );
 
-
       empty.className =
         "character-picker-empty";
 
-
       empty.textContent =
         "No characters available.";
-
 
       list.appendChild(
         empty
       );
 
+      highlightedIndex =
+        -1;
 
-      return;
+      return false;
     }
 
-
-    for (
-      const character
-      of available
-    ) {
-
-      list.appendChild(
-        createCard(
-          character
-        )
+    const selectedIndex =
+      characters.findIndex(
+        character =>
+          character.id ===
+          activeCharacterId
       );
+
+    if (
+      !preserveFocus ||
+      highlightedIndex <
+        0 ||
+      highlightedIndex >=
+        characters.length
+    ) {
+      highlightedIndex =
+        selectedIndex >=
+          0
+          ? selectedIndex
+          : 0;
     }
+
+    const fragment =
+      document
+        .createDocumentFragment();
+
+    characters.forEach(
+      (
+        character,
+        index
+      ) => {
+        fragment.appendChild(
+          createCard(
+            character,
+            index
+          )
+        );
+      }
+    );
+
+    list.appendChild(
+      fragment
+    );
+
+    metrics.renders +=
+      1;
+
+    emit(
+      "neyo:character-picker-rendered",
+      {
+        generation:
+          renderGeneration,
+
+        count:
+          characters.length,
+
+        activeCharacterId
+      }
+    );
+
+    return true;
   }
 
-
   /* =====================================================
-     SYNC SELECTION
+     REFRESH SELECTION ONLY
      ===================================================== */
 
-  function syncSelection() {
-
-    state.activeCharacterId =
-      getActiveCharacterId();
-
+  function refreshSelection() {
+    activeCharacterId =
+      resolveActiveCharacterId();
 
     const cards =
-      list.querySelectorAll(
-        ".character-picker-card"
-      );
-
+      getCards();
 
     cards.forEach(
-      card => {
-
+      (
+        card,
+        index
+      ) => {
         const selected =
-          card.dataset.character ===
-          state.activeCharacterId;
+          card.dataset
+            .characterId ===
+          activeCharacterId;
 
+        card.classList.toggle(
+          "is-selected",
+          selected
+        );
 
-        card.dataset.selected =
-          String(
-            selected
-          );
-
+        card.classList.toggle(
+          "active",
+          selected
+        );
 
         card.setAttribute(
           "aria-selected",
@@ -529,362 +1276,689 @@ Does NOT own:
             selected
           )
         );
-      }
-    );
-  }
 
+        const character =
+          getCharacterById(
+            card.dataset
+              .characterId
+          );
 
-  /* =====================================================
-     SELECT CHARACTER
-     ===================================================== */
-
-  function selectCharacter(
-    id
-  ) {
-
-    const character =
-      getCharacter(
-        id
-      );
-
-
-    if (!character) {
-
-      console.warn(
-        "[NEYO Character Picker] Character unavailable:",
-        id
-      );
-
-      return false;
-    }
-
-
-    const previousId =
-      getActiveCharacterId();
-
-
-    /*
-    Main mascot engine becomes
-    the character selection authority.
-    */
-
-    const changed =
-      window
-        .NeyoMascot
-        ?.setCharacter
-        ?.(
-          id
+        card.setAttribute(
+          "aria-label",
+          selected
+            ? `${
+                character?.name ||
+                "Character"
+              }, selected`
+            : `Choose ${
+                character?.name ||
+                "character"
+              }`
         );
 
-
-    /*
-    Fallback if mascot engine
-    isn't loaded for some reason.
-    */
-
-    if (
-      changed === undefined &&
-      window.NeyoCharacters
-    ) {
-
-      window.NeyoCharacters.active =
-        id;
-
-
-      dispatch(
-        "neyo:character-change",
-        {
-          id,
-          character
-        }
-      );
-    }
-
-
-    state.activeCharacterId =
-      id;
-
-
-    syncSelection();
-
-
-    dispatch(
-      "neyo:character-selected",
-      {
-        id,
-        previousId,
-        character
+        card.tabIndex =
+          index ===
+            highlightedIndex
+            ? 0
+            : -1;
       }
     );
 
-
-    /*
-    If voice session is currently running,
-    voice.js will emit its restart-required
-    event because voice identity is fixed
-    per Live session.
-
-    Do NOT auto-reconnect here yet.
-    Keep v1 simple.
-    */
-
-
-    setTimeout(
-      () => {
-        close();
-      },
-      90
-    );
-
-
-    console.log(
-      "[NEYO Character Picker] Selected:",
-      id
-    );
-
-
-    return true;
+    return activeCharacterId;
   }
-
 
   /* =====================================================
      OPEN
      ===================================================== */
 
   function open() {
-
     if (
-      state.open ||
-      state.closing
+      opened
     ) {
-      return;
+      return true;
     }
 
+    previousFocus =
+      document.activeElement
+        instanceof HTMLElement
+        ? document.activeElement
+        : trigger;
 
-    clearTimeout(
-      closeTimer
-    );
-
-
-    state.lastFocusedElement =
-      document.activeElement;
-
-
-    state.open =
-      true;
-
+    activeCharacterId =
+      resolveActiveCharacterId();
 
     render();
 
-
-    shell.classList.add(
-      "is-open"
-    );
-
-
-    shell.classList.remove(
-      "is-closing"
-    );
-
+    opened =
+      true;
 
     shell.setAttribute(
       "aria-hidden",
       "false"
     );
 
+    shell.classList.add(
+      "is-open"
+    );
 
-    document.documentElement
+    trigger.setAttribute(
+      "aria-expanded",
+      "true"
+    );
+
+    document.body
       .classList
       .add(
         "neyo-character-picker-open"
       );
 
+    metrics.opens +=
+      1;
+
+    metrics.lastOpenedAt =
+      Date.now();
 
     requestAnimationFrame(
       () => {
+        const cards =
+          getCards();
 
-        shell.classList.add(
-          "is-visible"
-        );
+        const target =
+          cards[
+            highlightedIndex
+          ] ||
+          cards[0] ||
+          closeBtn;
 
+        try {
+          target.focus({
+            preventScroll:
+              true
+          });
 
-        const selectedCard =
-          list.querySelector(
-            '.character-picker-card[data-selected="true"]'
-          );
-
-
-        safeFocus(
-          selectedCard ||
-          closeBtn ||
-          panel
-        );
+        } catch {
+          try {
+            target.focus();
+          } catch {}
+        }
       }
     );
 
+    emit(
+      "neyo:character-picker-opened",
+      {
+        activeCharacterId,
 
-    dispatch(
-      "neyo:character-picker-open"
+        count:
+          characters.length
+      }
     );
 
-
-    console.log(
-      "[NEYO Character Picker] Open"
-    );
+    return true;
   }
-
 
   /* =====================================================
      CLOSE
      ===================================================== */
 
-  function close() {
-
-    if (
-      !state.open ||
-      state.closing
-    ) {
-      return;
-    }
-
-
-    state.closing =
-      true;
-
-
-    shell.classList.add(
-      "is-closing"
-    );
-
-
-    shell.classList.remove(
-      "is-visible"
-    );
-
-
-    clearTimeout(
+  function close({
+    restoreFocus =
+      true
+  } = {}) {
+    window.clearTimeout(
       closeTimer
     );
 
-
     closeTimer =
-      setTimeout(
-        () => {
+      0;
 
-          shell.classList.remove(
-            "is-open",
-            "is-closing"
-          );
-
-
-          shell.setAttribute(
-            "aria-hidden",
-            "true"
-          );
-
-
-          document.documentElement
-            .classList
-            .remove(
-              "neyo-character-picker-open"
-            );
-
-
-          state.open =
-            false;
-
-          state.closing =
-            false;
-
-
-          safeFocus(
-            state.lastFocusedElement
-          );
-
-
-          state.lastFocusedElement =
-            null;
-
-
-          dispatch(
-            "neyo:character-picker-close"
-          );
-
-        },
-        220
+    if (
+      !opened &&
+      shell.getAttribute(
+        "aria-hidden"
+      ) !==
+      "false"
+    ) {
+      trigger.setAttribute(
+        "aria-expanded",
+        "false"
       );
-  }
 
+      return true;
+    }
+
+    opened =
+      false;
+
+    shell.setAttribute(
+      "aria-hidden",
+      "true"
+    );
+
+    shell.classList.remove(
+      "is-open",
+      "open",
+      "show"
+    );
+
+    trigger.setAttribute(
+      "aria-expanded",
+      "false"
+    );
+
+    document.body
+      .classList
+      .remove(
+        "neyo-character-picker-open"
+      );
+
+    metrics.closes +=
+      1;
+
+    metrics.lastClosedAt =
+      Date.now();
+
+    if (
+      restoreFocus
+    ) {
+      const focusTarget =
+        previousFocus
+          ?.isConnected
+          ? previousFocus
+          : trigger;
+
+      requestAnimationFrame(
+        () => {
+          try {
+            focusTarget
+              ?.focus({
+                preventScroll:
+                  true
+              });
+
+          } catch {
+            try {
+              focusTarget
+                ?.focus();
+            } catch {}
+          }
+        }
+      );
+    }
+
+    previousFocus =
+      null;
+
+    emit(
+      "neyo:character-picker-closed"
+    );
+
+    return true;
+  }
 
   /* =====================================================
      TOGGLE
      ===================================================== */
 
   function toggle() {
+    return isOpen()
+      ? close()
+      : open();
+  }
 
-    if (state.open) {
+  /* =====================================================
+     IS OPEN
+     ===================================================== */
+
+  function isOpen() {
+    return (
+      opened ||
+      shell.getAttribute(
+        "aria-hidden"
+      ) ===
+      "false"
+    );
+  }
+
+  /* =====================================================
+     SELECT
+     ===================================================== */
+
+  function selectCharacter(
+    id,
+    {
+      source =
+        "character-picker",
+      closeAfter =
+        true
+    } = {}
+  ) {
+    const character =
+      getCharacterById(
+        id
+      );
+
+    if (
+      !character
+    ) {
+      console.warn(
+        "[NEYO Character Picker] Unknown character:",
+        id
+      );
+
+      return false;
+    }
+
+    activeCharacterId =
+      character.id;
+
+    const index =
+      characters.findIndex(
+        item =>
+          item.id ===
+          character.id
+      );
+
+    if (
+      index >= 0
+    ) {
+      highlightedIndex =
+        index;
+    }
+
+    refreshSelection();
+
+    metrics.selections +=
+      1;
+
+    metrics.lastSelectedAt =
+      Date.now();
+
+    /*
+     * Picker does NOT call mascot/voice directly.
+     *
+     * Mascot is the canonical visual character owner.
+     */
+
+    emit(
+      "neyo:character-select",
+      {
+        id:
+          character.id,
+
+        character:
+          cloneValue(
+            character
+          ),
+
+        source
+      }
+    );
+
+    emit(
+      "neyo:character-picker-selected",
+      {
+        id:
+          character.id,
+
+        character:
+          cloneValue(
+            character
+          ),
+
+        source
+      }
+    );
+
+    if (
+      closeAfter
+    ) {
+      window.clearTimeout(
+        closeTimer
+      );
+
+      closeTimer =
+        window.setTimeout(
+          () => {
+            close();
+          },
+          CONFIG
+            .selectionCloseDelayMs
+        );
+    }
+
+    return true;
+  }
+
+  /* =====================================================
+     KEYBOARD HIGHLIGHT
+     ===================================================== */
+
+  function focusIndex(
+    index
+  ) {
+    const cards =
+      getCards();
+
+    if (
+      cards.length ===
+      0
+    ) {
+      return false;
+    }
+
+    const normalized =
+      (
+        index %
+          cards.length +
+        cards.length
+      ) %
+      cards.length;
+
+    highlightedIndex =
+      normalized;
+
+    cards.forEach(
+      (
+        card,
+        cardIndex
+      ) => {
+        card.tabIndex =
+          cardIndex ===
+            normalized
+            ? 0
+            : -1;
+      }
+    );
+
+    const target =
+      cards[
+        normalized
+      ];
+
+    try {
+      target.focus({
+        preventScroll:
+          true
+      });
+
+    } catch {
+      target.focus();
+    }
+
+    try {
+      target.scrollIntoView({
+        block:
+          "nearest",
+
+        inline:
+          "nearest"
+      });
+
+    } catch {}
+
+    metrics.keyboardMoves +=
+      1;
+
+    return true;
+  }
+
+  /* =====================================================
+     KEYBOARD
+     ===================================================== */
+
+  function handleKeydown(
+    event
+  ) {
+    if (
+      !isOpen()
+    ) {
+      return;
+    }
+
+    const cards =
+      getCards();
+
+    /* -------------------------------------------------
+       ESCAPE
+
+       voice-mode.js explicitly leaves Escape to picker
+       while picker is open.
+       ------------------------------------------------- */
+
+    if (
+      event.key ===
+      "Escape"
+    ) {
+      event.preventDefault();
+      event.stopPropagation();
 
       close();
 
-    } else {
-
-      open();
+      return;
     }
-  }
 
+    /* -------------------------------------------------
+       ARROWS
+       ------------------------------------------------- */
 
-  /* =====================================================
-     OUTSIDE CLICK
-     ===================================================== */
+    if (
+      event.key ===
+        "ArrowDown" ||
+      event.key ===
+        "ArrowRight"
+    ) {
+      event.preventDefault();
 
-  shell.addEventListener(
-    "pointerdown",
-    event => {
+      focusIndex(
+        highlightedIndex +
+        1
+      );
+
+      return;
+    }
+
+    if (
+      event.key ===
+        "ArrowUp" ||
+      event.key ===
+        "ArrowLeft"
+    ) {
+      event.preventDefault();
+
+      focusIndex(
+        highlightedIndex -
+        1
+      );
+
+      return;
+    }
+
+    /* -------------------------------------------------
+       HOME / END
+       ------------------------------------------------- */
+
+    if (
+      event.key ===
+      "Home"
+    ) {
+      event.preventDefault();
+
+      focusIndex(
+        0
+      );
+
+      return;
+    }
+
+    if (
+      event.key ===
+      "End"
+    ) {
+      event.preventDefault();
+
+      focusIndex(
+        cards.length -
+        1
+      );
+
+      return;
+    }
+
+    /* -------------------------------------------------
+       ENTER / SPACE
+       ------------------------------------------------- */
+
+    if (
+      event.key ===
+        "Enter" ||
+      event.key ===
+        " "
+    ) {
+      const activeElement =
+        document.activeElement;
 
       if (
-        event.target ===
-        shell
+        !(
+          activeElement
+            instanceof
+          HTMLElement
+        )
       ) {
+        return;
+      }
 
-        close();
+      const id =
+        activeElement
+          .dataset
+          ?.characterId;
+
+      if (
+        !id
+      ) {
+        return;
+      }
+
+      event.preventDefault();
+
+      selectCharacter(
+        id,
+        {
+          source:
+            "picker-keyboard"
+        }
+      );
+
+      return;
+    }
+
+    /* -------------------------------------------------
+       TAB FOCUS TRAP
+       ------------------------------------------------- */
+
+    if (
+      event.key ===
+      "Tab"
+    ) {
+      const focusables =
+        [
+          ...getCards(),
+          closeBtn
+        ].filter(
+          item =>
+            item &&
+            !item.disabled
+        );
+
+      if (
+        focusables.length ===
+        0
+      ) {
+        event.preventDefault();
+
+        return;
+      }
+
+      const first =
+        focusables[0];
+
+      const last =
+        focusables[
+          focusables.length -
+          1
+        ];
+
+      if (
+        event.shiftKey &&
+        document.activeElement ===
+          first
+      ) {
+        event.preventDefault();
+
+        last.focus();
+
+        return;
+      }
+
+      if (
+        !event.shiftKey &&
+        document.activeElement ===
+          last
+      ) {
+        event.preventDefault();
+
+        first.focus();
       }
     }
-  );
-
+  }
 
   /* =====================================================
      TRIGGER
      ===================================================== */
 
-  trigger?.addEventListener(
+  trigger.addEventListener(
     "click",
     event => {
-
       event.preventDefault();
-
       event.stopPropagation();
 
       toggle();
     }
   );
 
-
   /* =====================================================
      CLOSE BUTTON
      ===================================================== */
 
-  closeBtn?.addEventListener(
+  closeBtn.addEventListener(
     "click",
     event => {
-
       event.preventDefault();
-
       event.stopPropagation();
 
       close();
     }
   );
 
+  /* =====================================================
+     BACKDROP
+     ===================================================== */
+
+  shell.addEventListener(
+    "pointerdown",
+    event => {
+      if (
+        event.target !==
+        shell
+      ) {
+        return;
+      }
+
+      event.preventDefault();
+
+      close();
+    }
+  );
 
   /* =====================================================
      KEYBOARD
@@ -892,134 +1966,161 @@ Does NOT own:
 
   document.addEventListener(
     "keydown",
-    event => {
-
-      if (!state.open) {
-        return;
-      }
-
-
-      if (
-        event.key ===
-        "Escape"
-      ) {
-
-        event.preventDefault();
-
-        close();
-
-        return;
-      }
-
-
-      /*
-      Simple arrow navigation
-      between available character cards.
-      */
-
-      if (
-        event.key !==
-          "ArrowRight" &&
-        event.key !==
-          "ArrowLeft" &&
-        event.key !==
-          "ArrowDown" &&
-        event.key !==
-          "ArrowUp"
-      ) {
-        return;
-      }
-
-
-      const cards =
-        Array.from(
-          list.querySelectorAll(
-            ".character-picker-card"
-          )
-        );
-
-
-      if (
-        !cards.length
-      ) {
-        return;
-      }
-
-
-      const currentIndex =
-        cards.indexOf(
-          document.activeElement
-        );
-
-
-      const forward =
-        event.key ===
-          "ArrowRight" ||
-        event.key ===
-          "ArrowDown";
-
-
-      let nextIndex =
-        currentIndex;
-
-
-      if (
-        currentIndex === -1
-      ) {
-
-        nextIndex =
-          0;
-
-      } else {
-
-        nextIndex =
-          (
-            currentIndex +
-            (
-              forward
-                ? 1
-                : -1
-            ) +
-            cards.length
-          ) %
-          cards.length;
-      }
-
-
-      event.preventDefault();
-
-
-      safeFocus(
-        cards[nextIndex]
-      );
-    }
+    handleKeydown,
+    true
   );
 
-
   /* =====================================================
-     EXTERNAL CHARACTER CHANGE
+     CHARACTER CHANGED EXTERNALLY
      ===================================================== */
 
   window.addEventListener(
     "neyo:character-change",
-    () => {
+    event => {
+      const id =
+        event.detail
+          ?.id ||
+        event.detail
+          ?.character
+          ?.id;
 
       if (
-        state.open
+        !id
       ) {
+        return;
+      }
 
-        syncSelection();
+      activeCharacterId =
+        cleanId(
+          id
+        );
+
+      const index =
+        characters.findIndex(
+          item =>
+            item.id ===
+            activeCharacterId
+        );
+
+      if (
+        index >= 0
+      ) {
+        highlightedIndex =
+          index;
+      }
+
+      refreshSelection();
+    }
+  );
+
+  /* =====================================================
+     CHARACTER DEFINITIONS CHANGED / REGISTERED
+     ===================================================== */
+
+  for (
+    const eventName
+    of [
+      "neyo:character-registered",
+      "neyo:characters-ready",
+      "neyo:character-registry-change"
+    ]
+  ) {
+    window.addEventListener(
+      eventName,
+      () => {
+        render({
+          preserveFocus:
+            isOpen()
+        });
+      }
+    );
+  }
+
+  /* =====================================================
+     VOICE MODE CLOSED
+
+     Picker cannot remain floating after fullscreen ends.
+     ===================================================== */
+
+  window.addEventListener(
+    "neyo:voice-mode-closed",
+    () => {
+      if (
+        isOpen()
+      ) {
+        close({
+          restoreFocus:
+            false
+        });
       }
     }
   );
 
+  /* =====================================================
+     PAGE HIDE
+     ===================================================== */
+
+  window.addEventListener(
+    "pagehide",
+    () => {
+      window.clearTimeout(
+        closeTimer
+      );
+
+      closeTimer =
+        0;
+    },
+    {
+      once:
+        true
+    }
+  );
+
+  /* =====================================================
+     GETTERS
+     ===================================================== */
+
+  function getCharacters() {
+    return characters.map(
+      item =>
+        cloneValue(
+          item
+        )
+    );
+  }
+
+  function getSelected() {
+    return (
+      getCharacterById(
+        activeCharacterId
+      ) ||
+      null
+    );
+  }
 
   /* =====================================================
      PUBLIC API
      ===================================================== */
 
-  window.NeyoCharacterPicker =
+  const api =
     Object.freeze({
+      __controller:
+        true,
+
+      version:
+        VERSION,
+
+      active:
+        true,
+
+      legacyScriptPresent,
+
+      legacyOwnerActive:
+        false,
+
+      /*
+       * Dialog
+       */
 
       open,
 
@@ -1027,45 +2128,156 @@ Does NOT own:
 
       toggle,
 
+      isOpen,
+
+      /*
+       * Characters
+       */
+
       render,
+
+      refresh:
+        render,
+
+      discoverCharacters,
+
+      getCharacters,
+
+      getById:
+        getCharacterById,
+
+      getSelected,
+
+      getSelectedId() {
+        return activeCharacterId;
+      },
+
+      /*
+       * Selection
+       */
 
       select:
         selectCharacter,
 
-      getState:
-        () => ({
+      selectCharacter,
+
+      /*
+       * Keyboard
+       */
+
+      focusIndex,
+
+      /*
+       * State
+       */
+
+      getState() {
+        return {
+          version:
+            VERSION,
+
+          active:
+            true,
+
+          legacyScriptPresent,
+
+          legacyOwnerActive:
+            false,
+
           open:
-            state.open,
+            isOpen(),
 
-          closing:
-            state.closing,
+          selectedId:
+            activeCharacterId,
 
-          activeCharacterId:
-            state.activeCharacterId
-        })
+          highlightedIndex,
+
+          count:
+            characters.length,
+
+          renderGeneration,
+
+          metrics: {
+            ...metrics
+          }
+        };
+      }
     });
 
+  Object.defineProperty(
+    window,
+    "NeyoCharacterPicker",
+    {
+      value:
+        api,
+
+      writable:
+        false,
+
+      configurable:
+        true,
+
+      enumerable:
+        true
+    }
+  );
 
   /* =====================================================
      INIT
      ===================================================== */
+
+  activeCharacterId =
+    resolveActiveCharacterId();
+
+  discoverCharacters();
+
+  render();
 
   shell.setAttribute(
     "aria-hidden",
     "true"
   );
 
-
-  state.activeCharacterId =
-    getActiveCharacterId();
-
-
-  console.log(
-    "[NEYO Character Picker] Ready",
-    {
-      active:
-        state.activeCharacterId
-    }
+  shell.classList.remove(
+    "is-open",
+    "open",
+    "show"
   );
 
+  trigger.setAttribute(
+    "aria-haspopup",
+    "dialog"
+  );
+
+  trigger.setAttribute(
+    "aria-controls",
+    "characterPicker"
+  );
+
+  trigger.setAttribute(
+    "aria-expanded",
+    "false"
+  );
+
+  emit(
+    "neyo:character-picker-ready",
+    {
+      version:
+        VERSION,
+
+      active:
+        true,
+
+      count:
+        characters.length,
+
+      selectedId:
+        activeCharacterId,
+
+      legacyScriptPresent,
+
+      legacyOwnerActive:
+        false
+    }
+  );
 })();

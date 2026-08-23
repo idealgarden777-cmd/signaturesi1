@@ -1,11 +1,116 @@
+/*
+=========================================================
+NEYO — PREMIUM MASCOT / FACE ENGINE
+FINAL PRODUCTION MIXER v9
+
+FILE:
+public/js/components/mascot.js
+
+OWNS
+---------------------------------------------------------
+- Mascot active/inactive visual lifecycle
+- Active character visual identity
+- Mood / tone
+- Eye expression
+- Mouth expression
+- Phase-aware visual overrides
+- Blink
+- Rare personality-aware wink
+- Micro gaze
+- Pointer-responsive gaze
+- Thinking scan
+- Body float / motion
+- Character-specific motion personality
+- Real microphone energy response
+- Real assistant-output energy response
+- Speech-bar animation
+- Character transition animation
+- Reduced-motion support
+- Visual CSS variables / datasets
+- Mascot public API
+
+READS
+---------------------------------------------------------
+- window.NeyoCharacters
+- window.NeyoCharacter
+- voice.js events
+- voice-mode.js events
+- mascot-intelligence.js events
+- character-picker.js selection events
+
+DOES NOT OWN
+---------------------------------------------------------
+- Gemini transport
+- Microphone acquisition
+- Audio playback
+- Fullscreen voice shell
+- Status text
+- Camera acquisition
+- Mic / speaker buttons
+- Character picker DOM
+- Semantic mood detection
+- Chat transport
+- History
+
+ARCHITECTURE
+---------------------------------------------------------
+
+voice.js
+  ├─ phase
+  ├─ mic level
+  ├─ output level
+  └─ interruption/error
+         ↓
+      mascot.js
+         ↓
+   face / eyes / mouth
+   gaze / body / speech
+
+mascot-intelligence.js
+         ↓
+       mood
+         ↓
+      mascot.js
+
+character-picker.js
+         ↓
+neyo:character-select
+         ↓
+      mascot.js
+         ↓
+neyo:character-change
+         ↓
+       voice.js
+
+MIGRATION RULE
+---------------------------------------------------------
+No neo.js dependency.
+
+After neo.js removal this file continues unchanged.
+=========================================================
+*/
+
 (() => {
   "use strict";
 
-  const VERSION = "neyo-mascot-v5";
-  if (window.NeyoMascot?.__controller === true) return;
+  const VERSION =
+    "neyo-mascot-final-v9";
+
+  if (
+    window.NeyoMascot
+      ?.__controller === true
+  ) {
+    return;
+  }
+
+  /* =====================================================
+     DOM
+     ===================================================== */
 
   const mascot =
-    document.getElementById("neyoMascot");
+    document.getElementById(
+      "neyoMascot"
+    );
 
   const face =
     mascot?.querySelector(
@@ -27,6 +132,11 @@
       "neyoMascotMouth"
     );
 
+  const voiceShell =
+    document.getElementById(
+      "neyoVoiceMode"
+    );
+
   if (
     !mascot ||
     !face ||
@@ -35,213 +145,122 @@
     !mouth
   ) {
     console.warn(
-      "[NEYO Mascot] Required DOM missing."
+      "[NEYO Mascot] Required mascot DOM is missing."
     );
 
     return;
   }
 
-  const mouthBars = Array.from(
-    mouth.querySelectorAll(
-      ".neyo-mouth-bar"
-    )
-  );
+  const mouthBars =
+    Array.from(
+      mouth.querySelectorAll(
+        ".neyo-mouth-bar"
+      )
+    );
 
-  const CONFIG = Object.freeze({
-    defaultCharacter: "neyo",
-    defaultMood: "friendly",
+  /* =====================================================
+     LEGACY TELEMETRY ONLY
+     ===================================================== */
 
-    blinkMinMs: 3900,
-    blinkMaxMs: 7200,
+  const legacyScriptPresent =
+    Array
+      .from(
+        document.scripts || []
+      )
+      .some(
+        script =>
+          /(?:^|\/)neo\.js(?:\?|$)/
+            .test(
+              script.src || ""
+            )
+      );
 
-    listeningBlinkMinMs: 5200,
-    listeningBlinkMaxMs: 8800,
+  /* =====================================================
+     CONFIG
+     ===================================================== */
 
-    blinkDurationMs: 190,
-
-    microGazeMinMs: 1500,
-    microGazeMaxMs: 4000,
-
-    bodySmoothing: 0.065,
-    gazeSmoothing: 0.09,
-    pointerSmoothing: 0.08,
-
-    energyRise: 0.24,
-    energyFall: 0.1
-  });
-
-  const PHASES = new Set([
-    "idle",
-    "listening",
-    "thinking",
-    "speaking",
-    "interrupted",
-    "error"
-  ]);
-
-  const BASE_EXPRESSIONS =
+  const CONFIG =
     Object.freeze({
-      friendly: {
-        eye: "arc",
-        mouth: "smile"
-      },
+      defaultCharacter:
+        "neyo",
 
-      happy: {
-        eye: "soft-arc",
-        mouth: "smile-wide"
-      },
+      defaultMood:
+        "friendly",
 
-      excited: {
-        eye: "round",
-        mouth: "speak-active"
-      },
+      blinkMinMs:
+        3900,
 
-      calm: {
-        eye: "half",
-        mouth: "smile"
-      },
+      blinkMaxMs:
+        7200,
 
-      focused: {
-        eye: "pill",
-        mouth: "neutral"
-      },
+      listeningBlinkMinMs:
+        5200,
 
-      curious: {
-        eye: "asymmetric",
-        mouth: "curious"
-      },
+      listeningBlinkMaxMs:
+        8800,
 
-      surprised: {
-        eye: "round",
-        mouth: "surprise"
-      },
+      blinkCloseMs:
+        72,
 
-      empathetic: {
-        eye: "soft-arc",
-        mouth: "smile"
-      },
+      blinkHoldMs:
+        28,
 
-      serious: {
-        eye: "half",
-        mouth: "serious"
-      },
+      blinkOpenMs:
+        88,
 
-      playful: {
-        eye: "asymmetric",
-        mouth: "smirk"
-      },
+      winkMs:
+        190,
 
-      skeptical: {
-        eye: "half",
-        mouth: "smirk"
-      },
+      microGazeMinMs:
+        1500,
 
-      confused: {
-        eye: "asymmetric",
-        mouth: "error"
-      }
+      microGazeMaxMs:
+        4000,
+
+      bodySmoothing:
+        0.065,
+
+      gazeSmoothing:
+        0.09,
+
+      pointerSmoothing:
+        0.08,
+
+      energyRise:
+        0.24,
+
+      energyFall:
+        0.10,
+
+      /*
+       * Prevent impossible CSS values from
+       * malformed/custom character definitions.
+       */
+
+      minCharacterScale:
+        0.72,
+
+      maxCharacterScale:
+        1.30
     });
 
-  const BASE_MOTION =
-    Object.freeze({
-      idle: {
-        y: 2.8,
-        x: 0.7,
-        rotation: 0.38,
-        scale: 0.006,
-        speed: 0.72
-      },
+  /* =====================================================
+     VALID PHASES
+     ===================================================== */
 
-      listening: {
-        y: 0.8,
-        x: 0.2,
-        rotation: 0.1,
-        scale: 0.0025,
-        speed: 0.65
-      },
+  const PHASES =
+    new Set([
+      "idle",
+      "listening",
+      "thinking",
+      "speaking",
+      "interrupted",
+      "error"
+    ]);
 
-      thinking: {
-        y: 1.3,
-        x: 0.65,
-        rotation: 0.5,
-        scale: 0.003,
-        speed: 0.58
-      },
-
-      speaking: {
-        y: 1.2,
-        x: 0.35,
-        rotation: 0.18,
-        scale: 0.004,
-        speed: 0.94
-      },
-
-      interrupted: {
-        y: 0.4,
-        x: 0.15,
-        rotation: 0.08,
-        scale: 0.002,
-        speed: 0.8
-      },
-
-      error: {
-        y: 0.2,
-        x: 0.1,
-        rotation: 0.05,
-        scale: 0,
-        speed: 0.5
-      }
-    });
-
-  const state = {
-    active: false,
-
-    characterId:
-      CONFIG.defaultCharacter,
-
-    phase: "idle",
-
-    mood:
-      CONFIG.defaultMood,
-
-    muted: false,
-    speakerOn: true,
-    cameraOn: false,
-
-    micTarget: 0,
-    micLevel: 0,
-
-    outputTarget: 0,
-    outputLevel: 0,
-
-    pointerInside: false,
-
-    pointerTargetX: 0,
-    pointerTargetY: 0,
-
-    pointerX: 0,
-    pointerY: 0,
-
-    microTargetX: 0,
-    microTargetY: 0,
-
-    microX: 0,
-    microY: 0,
-
-    nextMicroGazeAt: 0,
-
-    blinking: false
-  };
-
-  const body = {
-    x: 0,
-    y: 0,
-    rotation: 0,
-    scale: 1
-  };
-
-  const speechBars =
-    mouthBars.map(() => 1);
+  /* =====================================================
+     REDUCED MOTION
+     ===================================================== */
 
   const reducedMotionQuery =
     window.matchMedia(
@@ -251,137 +270,670 @@
   let reducedMotion =
     reducedMotionQuery.matches;
 
-  let blinkTimer = 0;
-  let blinkAnimationTimer = 0;
-  let animationFrame = 0;
+  /* =====================================================
+     STATE
+     ===================================================== */
 
-  function emit(name, detail = {}) {
+  const state = {
+    active:
+      false,
+
+    characterId:
+      CONFIG.defaultCharacter,
+
+    phase:
+      "idle",
+
+    mood:
+      CONFIG.defaultMood,
+
+    muted:
+      false,
+
+    speakerOn:
+      true,
+
+    cameraOn:
+      false,
+
+    micTarget:
+      0,
+
+    micLevel:
+      0,
+
+    outputTarget:
+      0,
+
+    outputLevel:
+      0,
+
+    pointerInside:
+      false,
+
+    pointerTargetX:
+      0,
+
+    pointerTargetY:
+      0,
+
+    pointerX:
+      0,
+
+    pointerY:
+      0,
+
+    microTargetX:
+      0,
+
+    microTargetY:
+      0,
+
+    microX:
+      0,
+
+    microY:
+      0,
+
+    nextMicroGazeAt:
+      0,
+
+    blinking:
+      false,
+
+    visible:
+      !document.hidden,
+
+    lastRenderAt:
+      null,
+
+    lastCharacterChangeAt:
+      null,
+
+    lastMoodChangeAt:
+      null
+  };
+
+  const metrics = {
+    renders:
+      0,
+
+    blinks:
+      0,
+
+    winks:
+      0,
+
+    characterChanges:
+      0,
+
+    moodChanges:
+      0,
+
+    phaseChanges:
+      0
+  };
+
+  /* =====================================================
+     BODY STATE
+     ===================================================== */
+
+  const body = {
+    x:
+      0,
+
+    y:
+      0,
+
+    rotation:
+      0,
+
+    scale:
+      1
+  };
+
+  /* =====================================================
+     SPEECH STATE
+     ===================================================== */
+
+  const speechBars =
+    mouthBars.map(
+      () => 1
+    );
+
+  /* =====================================================
+     TIMERS / RAF
+     ===================================================== */
+
+  let blinkTimer =
+    0;
+
+  let blinkHoldTimer =
+    0;
+
+  let blinkAnimationTimer =
+    0;
+
+  let rafId =
+    0;
+
+  let shellObserver =
+    null;
+
+  /* =====================================================
+     EVENTS
+     ===================================================== */
+
+  function emit(
+    name,
+    detail = {}
+  ) {
     window.dispatchEvent(
-      new CustomEvent(name, {
-        detail
-      })
+      new CustomEvent(
+        name,
+        {
+          detail
+        }
+      )
     );
   }
 
-  function clamp(value, min, max) {
+  /* =====================================================
+     HELPERS
+     ===================================================== */
+
+  function clamp(
+    value,
+    min,
+    max
+  ) {
     return Math.max(
       min,
-      Math.min(max, value)
+      Math.min(
+        max,
+        value
+      )
     );
   }
 
-  function lerp(current, target, amount) {
+  function clamp01(
+    value
+  ) {
+    return clamp(
+      Number(value) || 0,
+      0,
+      1
+    );
+  }
+
+  function lerp(
+    current,
+    target,
+    amount
+  ) {
     return (
       current +
-      (target - current) *
-        amount
+      (
+        target -
+        current
+      ) *
+      amount
     );
   }
 
-  function randomBetween(min, max) {
+  function randomBetween(
+    min,
+    max
+  ) {
     return (
       min +
       Math.random() *
-        (max - min)
+      (
+        max -
+        min
+      )
     );
   }
 
-  function cleanId(value) {
-    return (
-      String(value || "")
-        .trim()
-        .toLowerCase()
-        .replace(
-          /[^a-z0-9_-]/g,
-          ""
+  function cleanId(
+    value
+  ) {
+    return String(
+      value || ""
+    )
+      .trim()
+      .toLowerCase()
+      .replace(
+        /[^a-z0-9_-]/g,
+        ""
+      )
+      .slice(
+        0,
+        50
+      );
+  }
+
+  function safeNumber(
+    value,
+    fallback
+  ) {
+    const number =
+      Number(
+        value
+      );
+
+    return Number.isFinite(
+      number
+    )
+      ? number
+      : fallback;
+  }
+
+  /* =====================================================
+     SHELL OPEN
+
+     Supports both old .is-open and final
+     aria-hidden="false" contract.
+     ===================================================== */
+
+  function shellOpen() {
+    if (
+      !voiceShell
+    ) {
+      return false;
+    }
+
+    if (
+      voiceShell
+        .getAttribute(
+          "aria-hidden"
+        ) ===
+      "false"
+    ) {
+      return true;
+    }
+
+    if (
+      voiceShell
+        .classList
+        .contains(
+          "is-open"
         )
-        .slice(0, 40) ||
-      CONFIG.defaultCharacter
+    ) {
+      return true;
+    }
+
+    return (
+      document.body
+        .classList
+        .contains(
+          "neyo-voice-mode-open"
+        )
     );
   }
+
+  /* =====================================================
+     CHARACTER REGISTRY
+     ===================================================== */
 
   function getCharacter(
-    id = state.characterId
+    id =
+      state.characterId
   ) {
+    const key =
+      cleanId(
+        id
+      );
+
     const helper =
       window.NeyoCharacter;
+
+    /*
+     * Preferred registry helper.
+     */
 
     try {
       if (
         typeof helper?.get ===
         "function"
       ) {
-        return (
-          helper.get(id) ||
-          helper.getActive?.() ||
-          null
-        );
+        const result =
+          helper.get(
+            key
+          ) ||
+          helper
+            .getActive
+            ?.();
+
+        if (
+          result
+        ) {
+          return result;
+        }
       }
     } catch {}
 
-    const registry =
-      window.NeyoCharacters;
+    /*
+     * Plain object registry fallback.
+     */
 
-    if (!registry) return null;
+    try {
+      return (
+        window
+          .NeyoCharacters
+          ?.[key] ||
+        window
+          .NeyoCharacters
+          ?.neyo ||
+        null
+      );
 
-    return (
-      registry[id] ||
-      registry.neyo ||
-      null
-    );
+    } catch {
+      return null;
+    }
   }
 
-  function activeCharacter() {
+  /* =====================================================
+     ACTIVE CHARACTER FALLBACK
+     ===================================================== */
+
+  function getActiveCharacter() {
     return (
       getCharacter(
         state.characterId
-      ) || {
+      ) ||
+      {
         id:
-          state.characterId ||
           CONFIG.defaultCharacter,
 
-        name: "NEYO",
+        name:
+          "NEYO",
 
-        visual: {},
-        expressions: {},
-        motion: {},
-        phases: {},
-        personality: {}
+        visual:
+          {},
+
+        expressions:
+          {},
+
+        personality:
+          {},
+
+        motion:
+          {},
+
+        phases:
+          {}
       }
     );
   }
 
-  function expressionForMood(mood) {
+  /* =====================================================
+     REGISTRY ACTIVE ID
+     ===================================================== */
+
+  function registryActiveId() {
+    try {
+      const helper =
+        window.NeyoCharacter;
+
+      if (
+        typeof helper
+          ?.getActive ===
+        "function"
+      ) {
+        const character =
+          helper
+            .getActive();
+
+        if (
+          character?.id
+        ) {
+          return cleanId(
+            character.id
+          );
+        }
+      }
+    } catch {}
+
+    try {
+      const value =
+        window
+          .NeyoCharacters
+          ?.active;
+
+      if (
+        typeof value ===
+        "string"
+      ) {
+        return cleanId(
+          value
+        );
+      }
+
+    } catch {}
+
+    return "";
+  }
+
+  /* =====================================================
+     SET REGISTRY ACTIVE
+     ===================================================== */
+
+  function syncRegistryActive(
+    id
+  ) {
+    const key =
+      cleanId(
+        id
+      );
+
+    if (!key) {
+      return false;
+    }
+
+    const helper =
+      window.NeyoCharacter;
+
+    try {
+      if (
+        typeof helper
+          ?.setActive ===
+        "function"
+      ) {
+        helper.setActive(
+          key
+        );
+
+        return true;
+      }
+    } catch {}
+
+    /*
+     * Compatibility with original mutable registry.
+     */
+
+    try {
+      if (
+        window.NeyoCharacters &&
+        !Object.isFrozen(
+          window.NeyoCharacters
+        )
+      ) {
+        window
+          .NeyoCharacters
+          .active =
+          key;
+
+        return true;
+      }
+    } catch {}
+
+    return false;
+  }
+
+  /* =====================================================
+     BASE EXPRESSIONS
+
+     Preserve premium geometric vocabulary.
+     ===================================================== */
+
+  const BASE_EXPRESSIONS =
+    Object.freeze({
+      friendly: {
+        eye:
+          "arc",
+
+        mouth:
+          "smile"
+      },
+
+      happy: {
+        eye:
+          "soft-arc",
+
+        mouth:
+          "smile-wide"
+      },
+
+      excited: {
+        eye:
+          "round",
+
+        mouth:
+          "speak-active"
+      },
+
+      calm: {
+        eye:
+          "half",
+
+        mouth:
+          "smile"
+      },
+
+      focused: {
+        eye:
+          "pill",
+
+        mouth:
+          "neutral"
+      },
+
+      curious: {
+        eye:
+          "asymmetric",
+
+        mouth:
+          "curious"
+      },
+
+      surprised: {
+        eye:
+          "round",
+
+        mouth:
+          "surprise"
+      },
+
+      empathetic: {
+        eye:
+          "soft-arc",
+
+        mouth:
+          "smile"
+      },
+
+      serious: {
+        eye:
+          "half",
+
+        mouth:
+          "serious"
+      },
+
+      playful: {
+        eye:
+          "asymmetric",
+
+        mouth:
+          "smirk"
+      },
+
+      skeptical: {
+        eye:
+          "half",
+
+        mouth:
+          "smirk"
+      },
+
+      confused: {
+        eye:
+          "asymmetric",
+
+        mouth:
+          "error"
+      }
+    });
+
+  /* =====================================================
+     CHARACTER EXPRESSION
+     ===================================================== */
+
+  function getCharacterExpression(
+    mood =
+      state.mood
+  ) {
     const character =
-      activeCharacter();
+      getActiveCharacter();
 
     return (
       character
         ?.expressions
         ?.[mood] ||
-      BASE_EXPRESSIONS[mood] ||
-      BASE_EXPRESSIONS.friendly
+      BASE_EXPRESSIONS[
+        mood
+      ] ||
+      BASE_EXPRESSIONS
+        .friendly
     );
   }
 
+  /* =====================================================
+     RESOLVE EXPRESSION
+     ===================================================== */
+
   function resolveExpression() {
-    const expression =
-      expressionForMood(
+    const base =
+      getCharacterExpression(
         state.mood
       );
 
     let eye =
-      expression.eye ||
+      base.eye ||
       "arc";
 
     let mouthMode =
-      expression.mouth ||
+      base.mouth ||
       "smile";
 
-    if (state.muted) {
-      eye = "half";
-      mouthMode = "neutral";
+    /* -------------------------------------------------
+       MUTED
+       ------------------------------------------------- */
+
+    if (
+      state.muted
+    ) {
+      eye =
+        "half";
+
+      mouthMode =
+        "neutral";
     }
+
+    /* -------------------------------------------------
+       THINKING
+       ------------------------------------------------- */
 
     if (
       state.phase ===
@@ -391,20 +943,34 @@
         state.mood ===
         "curious"
       ) {
-        eye = "loop";
+        eye =
+          "loop";
+
+        mouthMode =
+          "neutral";
+
       } else if (
         state.mood ===
         "serious"
       ) {
-        eye = "diamond";
+        eye =
+          "diamond";
+
         mouthMode =
           "serious";
+
       } else {
-        eye = "square";
+        eye =
+          "square";
+
         mouthMode =
           "neutral";
       }
     }
+
+    /* -------------------------------------------------
+       LISTENING
+       ------------------------------------------------- */
 
     if (
       state.phase ===
@@ -414,25 +980,36 @@
         state.mood ===
         "friendly"
       ) {
-        eye = "oval";
+        eye =
+          "oval";
+
+        mouthMode =
+          "listening";
       }
 
       if (
         state.mood ===
         "focused"
       ) {
-        eye = "pill";
-      }
+        eye =
+          "pill";
 
-      mouthMode =
-        "listening";
+        mouthMode =
+          "listening";
+      }
     }
+
+    /* -------------------------------------------------
+       SPEAKING
+       ------------------------------------------------- */
 
     if (
       state.phase ===
       "speaking"
     ) {
-      switch (state.mood) {
+      switch (
+        state.mood
+      ) {
         case "excited":
           mouthMode =
             "speak-active";
@@ -461,20 +1038,32 @@
       }
     }
 
+    /* -------------------------------------------------
+       INTERRUPTION
+       ------------------------------------------------- */
+
     if (
       state.phase ===
       "interrupted"
     ) {
-      eye = "round";
+      eye =
+        "round";
+
       mouthMode =
         "neutral";
     }
+
+    /* -------------------------------------------------
+       ERROR
+       ------------------------------------------------- */
 
     if (
       state.phase ===
       "error"
     ) {
-      eye = "asymmetric";
+      eye =
+        "asymmetric";
+
       mouthMode =
         "error";
     }
@@ -486,22 +1075,60 @@
     };
   }
 
+  /* =====================================================
+     CHARACTER SCALE
+     ===================================================== */
+
+  function characterScale(
+    value,
+    fallback =
+      1
+  ) {
+    return clamp(
+      safeNumber(
+        value,
+        fallback
+      ),
+      CONFIG.minCharacterScale,
+      CONFIG.maxCharacterScale
+    );
+  }
+
+  /* =====================================================
+     RENDER
+
+     STATUS TEXT IS INTENTIONALLY NOT TOUCHED.
+     voice-mode.js owns #neyoMascotStatus.
+     ===================================================== */
+
   function render() {
     const character =
-      activeCharacter();
+      getActiveCharacter();
 
     const expression =
       resolveExpression();
 
+    const characterId =
+      cleanId(
+        character?.id ||
+        state.characterId
+      ) ||
+      CONFIG.defaultCharacter;
+
     mascot.dataset.character =
-      character.id ||
-      state.characterId;
+      characterId;
 
     mascot.dataset.phase =
       state.phase;
 
     mascot.dataset.mood =
       state.mood;
+
+    /*
+     * Preserve old CSS contract:
+     * data-tone was used before "mood"
+     * became the preferred terminology.
+     */
 
     mascot.dataset.tone =
       state.mood;
@@ -539,6 +1166,11 @@
         ? "on"
         : "off";
 
+    mascot.dataset.active =
+      String(
+        state.active
+      );
+
     leftEye.dataset.mode =
       expression.eye;
 
@@ -550,39 +1182,49 @@
 
     mascot.style.setProperty(
       "--neyo-mic-level",
-      state.micLevel.toFixed(3)
+      state.micLevel
+        .toFixed(3)
     );
 
     mascot.style.setProperty(
       "--neyo-output-level",
-      state.outputLevel.toFixed(3)
+      state.outputLevel
+        .toFixed(3)
     );
 
     mascot.style.setProperty(
       "--neyo-character-face-scale",
       String(
-        character
-          ?.visual
-          ?.faceScale ??
-        1
+        characterScale(
+          character
+            ?.visual
+            ?.faceScale
+        )
       )
     );
 
     mascot.style.setProperty(
       "--neyo-character-body-scale",
       String(
-        character
-          ?.visual
-          ?.bodyScale ??
-        1
+        characterScale(
+          character
+            ?.visual
+            ?.bodyScale
+        )
       )
     );
+
+    state.lastRenderAt =
+      Date.now();
+
+    metrics.renders +=
+      1;
 
     emit(
       "neyo:mascot-render",
       {
         character:
-          character.id,
+          characterId,
 
         phase:
           state.phase,
@@ -594,39 +1236,139 @@
           expression.eye,
 
         mouth:
-          expression.mouth
+          expression.mouth,
+
+        muted:
+          state.muted,
+
+        speakerOn:
+          state.speakerOn,
+
+        cameraOn:
+          state.cameraOn,
+
+        micLevel:
+          state.micLevel,
+
+        outputLevel:
+          state.outputLevel
       }
     );
+
+    return true;
   }
+
+  /* =====================================================
+     CHARACTER TRANSITION
+     ===================================================== */
+
+  function animateCharacterChange() {
+    if (
+      reducedMotion ||
+      !state.active ||
+      typeof face.animate !==
+        "function"
+    ) {
+      return false;
+    }
+
+    try {
+      face.animate(
+        [
+          {
+            transform:
+              "scale(.97)",
+
+            opacity:
+              0.86
+          },
+
+          {
+            transform:
+              "scale(1.015)",
+
+            opacity:
+              1,
+
+            offset:
+              0.58
+          },
+
+          {
+            transform:
+              "scale(1)",
+
+            opacity:
+              1
+          }
+        ],
+        {
+          duration:
+            420,
+
+          easing:
+            "cubic-bezier(.22,.88,.32,1)"
+        }
+      );
+
+      return true;
+
+    } catch {
+      return false;
+    }
+  }
+
+  /* =====================================================
+     SET CHARACTER
+     ===================================================== */
 
   function setCharacter(
     id,
     options = {}
   ) {
-    const requested =
-      cleanId(id);
+    const key =
+      cleanId(
+        id
+      );
 
-    const character =
-      getCharacter(requested);
-
-    if (!character) {
+    if (!key) {
       return false;
     }
 
-    state.characterId =
-      character.id ||
-      requested;
+    const character =
+      getCharacter(
+        key
+      );
 
-    try {
-      if (
-        window.NeyoCharacters &&
-        typeof window.NeyoCharacters ===
-          "object"
-      ) {
-        window.NeyoCharacters.active =
-          state.characterId;
-      }
-    } catch {}
+    if (!character) {
+      console.warn(
+        "[NEYO Mascot] Unknown character:",
+        key
+      );
+
+      return false;
+    }
+
+    const nextId =
+      cleanId(
+        character.id ||
+        key
+      );
+
+    if (!nextId) {
+      return false;
+    }
+
+    const changed =
+      state.characterId !==
+      nextId;
+
+    state.characterId =
+      nextId;
+
+    syncRegistryActive(
+      nextId
+    );
 
     if (
       options.resetMood !==
@@ -639,40 +1381,28 @@
         CONFIG.defaultMood;
     }
 
+    state.lastCharacterChangeAt =
+      Date.now();
+
     render();
 
     if (
-      !reducedMotion &&
-      state.active &&
-      typeof face.animate ===
-        "function"
+      changed
     ) {
-      face.animate(
-        [
-          {
-            transform:
-              "scale(.97)",
-            opacity: 0.86
-          },
-          {
-            transform:
-              "scale(1.015)",
-            opacity: 1,
-            offset: 0.58
-          },
-          {
-            transform:
-              "scale(1)",
-            opacity: 1
-          }
-        ],
-        {
-          duration: 420,
-          easing:
-            "cubic-bezier(.22,.88,.32,1)"
-        }
-      );
+      metrics.characterChanges +=
+        1;
+
+      animateCharacterChange();
     }
+
+    /*
+     * Canonical character event.
+     *
+     * voice.js listens to this and updates its
+     * session character. During active Live voice,
+     * voice.js emits restart-required and voice-mode
+     * coordinates clean restart.
+     */
 
     if (
       options.emitChange !==
@@ -682,9 +1412,94 @@
         "neyo:character-change",
         {
           id:
-            state.characterId,
+            nextId,
 
-          character
+          character,
+
+          source:
+            options.source ||
+            "mascot"
+        }
+      );
+    }
+
+    emit(
+      "neyo:mascot-character-change",
+      {
+        id:
+          nextId,
+
+        character,
+
+        changed
+      }
+    );
+
+    return true;
+  }
+
+  /* =====================================================
+     SET MOOD
+     ===================================================== */
+
+  function setMood(
+    mood,
+    options = {}
+  ) {
+    const value =
+      cleanId(
+        mood
+      );
+
+    if (!value) {
+      return false;
+    }
+
+    const character =
+      getActiveCharacter();
+
+    if (
+      !BASE_EXPRESSIONS[
+        value
+      ] &&
+      !character
+        ?.expressions
+        ?.[value]
+    ) {
+      return false;
+    }
+
+    const changed =
+      state.mood !==
+      value;
+
+    state.mood =
+      value;
+
+    state.lastMoodChangeAt =
+      Date.now();
+
+    if (
+      changed
+    ) {
+      metrics.moodChanges +=
+        1;
+    }
+
+    render();
+
+    if (
+      options.emit !==
+      false
+    ) {
+      emit(
+        "neyo:mascot-mood-change",
+        {
+          mood:
+            value,
+
+          character:
+            state.characterId
         }
       );
     }
@@ -692,73 +1507,66 @@
     return true;
   }
 
-  function setMood(mood) {
+  /* =====================================================
+     SET PHASE
+     ===================================================== */
+
+  function setPhase(
+    phase
+  ) {
     const value =
-      String(mood || "")
-        .trim()
-        .toLowerCase();
-
-    if (!value) {
-      return false;
-    }
-
-    if (
-      !BASE_EXPRESSIONS[value] &&
-      !activeCharacter()
-        ?.expressions
-        ?.[value]
-    ) {
-      return false;
-    }
-
-    state.mood =
-      value;
-
-    render();
-
-    return true;
-  }
-
-  function setPhase(value) {
-    const next =
-      PHASES.has(value)
-        ? value
+      PHASES.has(
+        phase
+      )
+        ? phase
         : "idle";
 
+    const changed =
+      state.phase !==
+      value;
+
     state.phase =
-      next;
+      value;
 
     if (
-      next !== "speaking"
+      changed
     ) {
-      state.outputTarget =
-        0;
-    }
-
-    if (
-      next === "idle"
-    ) {
-      state.micTarget = 0;
-      state.outputTarget = 0;
+      metrics.phaseChanges +=
+        1;
     }
 
     render();
+
     scheduleBlink();
 
-    return next;
+    return state.phase;
   }
 
+  /* =====================================================
+     CLEAR BLINK
+     ===================================================== */
+
   function clearBlink() {
-    clearTimeout(
+    window.clearTimeout(
       blinkTimer
     );
 
-    clearTimeout(
+    window.clearTimeout(
+      blinkHoldTimer
+    );
+
+    window.clearTimeout(
       blinkAnimationTimer
     );
 
-    blinkTimer = 0;
-    blinkAnimationTimer = 0;
+    blinkTimer =
+      0;
+
+    blinkHoldTimer =
+      0;
+
+    blinkAnimationTimer =
+      0;
 
     state.blinking =
       false;
@@ -771,26 +1579,41 @@
     );
   }
 
+  /* =====================================================
+     SCHEDULE BLINK
+     ===================================================== */
+
   function scheduleBlink() {
-    clearTimeout(
+    window.clearTimeout(
       blinkTimer
     );
 
+    blinkTimer =
+      0;
+
     if (
       !state.active ||
+      !state.visible ||
       reducedMotion ||
-      state.phase === "error"
+      state.phase ===
+        "error" ||
+      state.phase ===
+        "interrupted"
     ) {
-      return;
+      return false;
     }
 
     const delay =
       state.phase ===
-      "listening"
+        "listening"
+
         ? randomBetween(
-            CONFIG.listeningBlinkMinMs,
-            CONFIG.listeningBlinkMaxMs
+            CONFIG
+              .listeningBlinkMinMs,
+            CONFIG
+              .listeningBlinkMaxMs
           )
+
         : randomBetween(
             CONFIG.blinkMinMs,
             CONFIG.blinkMaxMs
@@ -801,48 +1624,71 @@
         blink,
         delay
       );
+
+    return true;
   }
+
+  /* =====================================================
+     BLINK
+     ===================================================== */
 
   function blink() {
     if (
       state.blinking ||
       !state.active ||
+      !state.visible ||
       reducedMotion
     ) {
       scheduleBlink();
+
       return false;
     }
 
     state.blinking =
       true;
 
+    metrics.blinks +=
+      1;
+
     const character =
-      activeCharacter();
+      getActiveCharacter();
 
     const playfulness =
-      Number(
+      safeNumber(
         character
           ?.personality
-          ?.playfulness ??
+          ?.playfulness,
         0
       );
 
-    const canWink =
-      playfulness > 0.55 &&
+    const allowWink =
+      playfulness >
+        0.55 &&
       [
         "happy",
         "playful"
       ].includes(
         state.mood
-      ) &&
-      Math.random() >
-        0.965;
+      );
 
-    if (canWink) {
+    /*
+     * Rare enough to feel intentional,
+     * not like a broken eye.
+     */
+
+    if (
+      allowWink &&
+      Math.random() >
+        0.965
+    ) {
       const className =
-        Math.random() > 0.5
+        Math.random() >
+          0.5
           ? "is-wink-left"
           : "is-wink-right";
+
+      metrics.winks +=
+        1;
 
       mascot.classList.add(
         className
@@ -860,7 +1706,7 @@
 
             scheduleBlink();
           },
-          CONFIG.blinkDurationMs
+          CONFIG.winkMs
         );
 
       return true;
@@ -869,6 +1715,22 @@
     mascot.classList.add(
       "is-blinking"
     );
+
+    blinkHoldTimer =
+      window.setTimeout(
+        () => {
+          if (
+            !state.blinking
+          ) {
+            return;
+          }
+
+          mascot.classList.add(
+            "is-blink-hold"
+          );
+        },
+        CONFIG.blinkCloseMs
+      );
 
     blinkAnimationTimer =
       window.setTimeout(
@@ -883,39 +1745,53 @@
 
           scheduleBlink();
         },
-        CONFIG.blinkDurationMs
+        CONFIG.blinkCloseMs +
+        CONFIG.blinkHoldMs +
+        CONFIG.blinkOpenMs
       );
 
     return true;
   }
 
-  function updateMicroGaze(now) {
+  /* =====================================================
+     MICRO GAZE
+     ===================================================== */
+
+  function updateMicroGaze(
+    now
+  ) {
     if (
       reducedMotion ||
       !state.active ||
-      state.pointerInside ||
+      !state.visible ||
+      state.pointerInside
+    ) {
+      return;
+    }
+
+    if (
       now <
-        state.nextMicroGazeAt
+      state.nextMicroGazeAt
     ) {
       return;
     }
 
     const character =
-      activeCharacter();
+      getActiveCharacter();
 
-    const strength =
-      Number(
+    const gazeStrength =
+      safeNumber(
         character
           ?.motion
-          ?.gazeMovement ??
+          ?.gazeMovement,
         0.5
       );
 
     const thinkingStrength =
-      Number(
+      safeNumber(
         character
           ?.motion
-          ?.thinkingScan ??
+          ?.thinkingScan,
         0.5
       );
 
@@ -926,46 +1802,58 @@
         CONFIG.microGazeMaxMs
       );
 
-    let multiplier = 1;
+    let phaseMultiplier =
+      1;
 
     if (
       state.phase ===
       "listening"
     ) {
-      multiplier = 0.34;
+      phaseMultiplier =
+        0.34;
     }
 
     if (
       state.phase ===
       "speaking"
     ) {
-      multiplier = 0.25;
+      phaseMultiplier =
+        0.25;
     }
 
     if (
       state.phase ===
       "thinking"
     ) {
-      multiplier =
+      phaseMultiplier =
         0.8 +
         thinkingStrength;
     }
 
     state.microTargetX =
-      randomBetween(-2, 2) *
-      strength *
-      multiplier;
+      randomBetween(
+        -2,
+        2
+      ) *
+      gazeStrength *
+      phaseMultiplier;
 
     state.microTargetY =
       randomBetween(
         -1.2,
         1.2
       ) *
-      strength *
-      multiplier;
+      gazeStrength *
+      phaseMultiplier;
   }
 
-  function pointerMove(event) {
+  /* =====================================================
+     POINTER
+     ===================================================== */
+
+  function pointerMove(
+    event
+  ) {
     if (
       !state.active ||
       reducedMotion
@@ -974,7 +1862,8 @@
     }
 
     const rect =
-      mascot.getBoundingClientRect();
+      mascot
+        .getBoundingClientRect();
 
     if (
       !rect.width ||
@@ -985,11 +1874,13 @@
 
     const centerX =
       rect.left +
-      rect.width / 2;
+      rect.width /
+      2;
 
     const centerY =
       rect.top +
-      rect.height / 2;
+      rect.height /
+      2;
 
     state.pointerTargetX =
       clamp(
@@ -1034,6 +1925,30 @@
       0;
   }
 
+  voiceShell
+    ?.addEventListener(
+      "pointermove",
+      pointerMove,
+      {
+        passive:
+          true
+      }
+    );
+
+  voiceShell
+    ?.addEventListener(
+      "pointerleave",
+      pointerLeave,
+      {
+        passive:
+          true
+      }
+    );
+
+  /* =====================================================
+     ENERGY
+     ===================================================== */
+
   function updateEnergy() {
     const micSpeed =
       state.micTarget >
@@ -1061,20 +1976,157 @@
         outputSpeed
       );
 
+    /*
+     * Avoid infinitely tiny residual values.
+     */
+
+    if (
+      state.micLevel <
+      0.0005
+    ) {
+      state.micLevel =
+        0;
+    }
+
+    if (
+      state.outputLevel <
+      0.0005
+    ) {
+      state.outputLevel =
+        0;
+    }
+
     mascot.style.setProperty(
       "--neyo-mic-level",
-      state.micLevel.toFixed(3)
+      state.micLevel
+        .toFixed(3)
     );
 
     mascot.style.setProperty(
       "--neyo-output-level",
-      state.outputLevel.toFixed(3)
+      state.outputLevel
+        .toFixed(3)
     );
   }
 
-  function updateBody(now) {
+  /* =====================================================
+     BASE MOTION
+     ===================================================== */
+
+  const BASE_MOTION =
+    Object.freeze({
+      idle: {
+        y:
+          2.8,
+
+        x:
+          0.7,
+
+        rotation:
+          0.38,
+
+        scale:
+          0.006,
+
+        speed:
+          0.72
+      },
+
+      listening: {
+        y:
+          0.8,
+
+        x:
+          0.20,
+
+        rotation:
+          0.10,
+
+        scale:
+          0.0025,
+
+        speed:
+          0.65
+      },
+
+      thinking: {
+        y:
+          1.3,
+
+        x:
+          0.65,
+
+        rotation:
+          0.50,
+
+        scale:
+          0.003,
+
+        speed:
+          0.58
+      },
+
+      speaking: {
+        y:
+          1.2,
+
+        x:
+          0.35,
+
+        rotation:
+          0.18,
+
+        scale:
+          0.004,
+
+        speed:
+          0.94
+      },
+
+      interrupted: {
+        y:
+          0.55,
+
+        x:
+          0.20,
+
+        rotation:
+          0.10,
+
+        scale:
+          0.002,
+
+        speed:
+          0.88
+      },
+
+      error: {
+        y:
+          0.20,
+
+        x:
+          0.10,
+
+        rotation:
+          0.08,
+
+        scale:
+          0.001,
+
+        speed:
+          0.40
+      }
+    });
+
+  /* =====================================================
+     BODY MOTION
+     ===================================================== */
+
+  function updateBody(
+    now
+  ) {
     const character =
-      activeCharacter();
+      getActiveCharacter();
 
     const profile =
       BASE_MOTION[
@@ -1082,7 +2134,7 @@
       ] ||
       BASE_MOTION.idle;
 
-    const motion =
+    const motionProfile =
       character.motion ||
       {};
 
@@ -1092,57 +2144,64 @@
         ?.[state.phase] ||
       {};
 
-    const energy =
-      Number(
+    const generalEnergy =
+      safeNumber(
         phaseProfile.energy ??
         character
           ?.personality
-          ?.energy ??
+          ?.energy,
         0.5
       );
 
     const idleMotion =
-      Number(
-        motion.idleFloat ??
+      safeNumber(
+        motionProfile
+          .idleFloat,
         0.5
       );
 
-    const speechMovement =
-      Number(
-        motion.speechMovement ??
+    const speechMotion =
+      safeNumber(
+        motionProfile
+          .speechMovement,
         0.5
       );
 
     const asymmetry =
-      Number(
-        motion.asymmetry ??
+      safeNumber(
+        motionProfile
+          .asymmetry,
         0.15
       );
 
     const time =
-      now / 1000;
+      now /
+      1000;
 
-    const strength =
-      0.6 +
-      energy * 0.75;
+    const baseStrength =
+      0.60 +
+      generalEnergy *
+      0.75;
 
     let y =
-      Math.sin(
-        time *
-        profile.speed *
-        1.2
-      ) *
-      profile.y;
-
-    y +=
-      Math.sin(
-        time *
-        profile.speed *
-        0.51 +
-        0.7
-      ) *
-      profile.y *
-      asymmetry;
+      (
+        Math.sin(
+          time *
+          profile.speed *
+          1.20
+        ) *
+        profile.y
+      ) +
+      (
+        Math.sin(
+          time *
+          profile.speed *
+          0.51 +
+          0.7
+        ) *
+        profile.y *
+        asymmetry
+      );
 
     let x =
       Math.sin(
@@ -1170,6 +2229,10 @@
       ) *
       profile.scale;
 
+    /* -------------------------------------------------
+       IDLE PERSONALITY
+       ------------------------------------------------- */
+
     if (
       state.phase ===
       "idle"
@@ -1183,9 +2246,20 @@
         idleMotion;
     }
 
-    y *= strength;
-    x *= strength;
-    rotation *= strength;
+    y *=
+      baseStrength;
+
+    x *=
+      baseStrength;
+
+    rotation *=
+      baseStrength;
+
+    /* -------------------------------------------------
+       LISTENING
+
+       More mic energy = more visual attention/stillness.
+       ------------------------------------------------- */
 
     if (
       state.phase ===
@@ -1196,14 +2270,23 @@
         state.micLevel *
         0.68;
 
-      y *= stillness;
-      x *= stillness;
-      rotation *= stillness;
+      y *=
+        stillness;
+
+      x *=
+        stillness;
+
+      rotation *=
+        stillness;
 
       scale +=
         state.micLevel *
         0.0025;
     }
+
+    /* -------------------------------------------------
+       SPEAKING
+       ------------------------------------------------- */
 
     if (
       state.phase ===
@@ -1213,7 +2296,7 @@
         state.outputLevel *
         (
           0.5 +
-          speechMovement *
+          speechMotion *
           0.8
         );
 
@@ -1221,18 +2304,23 @@
         state.outputLevel *
         (
           0.003 +
-          speechMovement *
+          speechMotion *
           0.006
         );
 
       rotation +=
         Math.sin(
-          time * 4
+          time *
+          4
         ) *
         state.outputLevel *
-        speechMovement *
+        speechMotion *
         0.18;
     }
+
+    /* -------------------------------------------------
+       MOOD POSTURE
+       ------------------------------------------------- */
 
     if (
       state.mood ===
@@ -1240,13 +2328,13 @@
     ) {
       rotation +=
         0.25 +
-        Number(
+        safeNumber(
           character
             ?.personality
-            ?.curiosity ??
+            ?.curiosity,
           0
         ) *
-        0.3;
+        0.30;
     }
 
     if (
@@ -1254,15 +2342,20 @@
       "skeptical"
     ) {
       rotation -=
-        0.3;
+        0.30;
     }
+
+    /* -------------------------------------------------
+       POINTER RESPONSE
+       ------------------------------------------------- */
 
     if (
       state.pointerInside
     ) {
       const response =
-        Number(
-          motion.pointerResponse ??
+        safeNumber(
+          motionProfile
+            .pointerResponse,
           0.3
         );
 
@@ -1326,8 +2419,16 @@
     );
   }
 
-  function updateGaze(now) {
-    updateMicroGaze(now);
+  /* =====================================================
+     GAZE
+     ===================================================== */
+
+  function updateGaze(
+    now
+  ) {
+    updateMicroGaze(
+      now
+    );
 
     state.pointerX =
       lerp(
@@ -1358,13 +2459,13 @@
       );
 
     const character =
-      activeCharacter();
+      getActiveCharacter();
 
     const pointerResponse =
-      Number(
+      safeNumber(
         character
           ?.motion
-          ?.pointerResponse ??
+          ?.pointerResponse,
         0.3
       );
 
@@ -1374,6 +2475,10 @@
     let y =
       state.microY;
 
+    /* -------------------------------------------------
+       POINTER GAZE
+       ------------------------------------------------- */
+
     if (
       state.pointerInside
     ) {
@@ -1381,45 +2486,56 @@
         state.pointerX *
         (
           1.5 +
-          pointerResponse * 3
+          pointerResponse *
+          3
         );
 
       y +=
         state.pointerY *
         (
           1 +
-          pointerResponse * 2
+          pointerResponse *
+          2
         );
     }
+
+    /* -------------------------------------------------
+       THINKING SCAN
+
+       Gives geometric "searching" eye behavior.
+       ------------------------------------------------- */
 
     if (
       state.phase ===
         "thinking" &&
       !state.pointerInside
     ) {
-      const scan =
-        Number(
+      const thinking =
+        safeNumber(
           character
             ?.motion
-            ?.thinkingScan ??
+            ?.thinkingScan,
           0.5
         );
 
       const time =
-        now / 1000;
+        now /
+        1000;
 
       x +=
         Math.sin(
-          time * 1.05
+          time *
+          1.05
         ) *
-        scan *
+        thinking *
         3;
 
       y +=
         Math.sin(
-          time * 0.68
+          time *
+          0.68
         ) *
-        scan *
+        thinking *
         1.2;
     }
 
@@ -1434,18 +2550,33 @@
     );
   }
 
-  function updateSpeechBars(now) {
-    if (!mouthBars.length) {
+  /* =====================================================
+     SPEECH BARS
+     ===================================================== */
+
+  function updateSpeechBars(
+    now
+  ) {
+    if (
+      !mouthBars.length
+    ) {
       return;
     }
 
-    const movement =
-      Number(
-        activeCharacter()
+    const character =
+      getActiveCharacter();
+
+    const speechEnergy =
+      safeNumber(
+        character
           ?.motion
-          ?.speechMovement ??
+          ?.speechMovement,
         0.5
       );
+
+    /* -------------------------------------------------
+       RESET WHEN NOT SPEAKING
+       ------------------------------------------------- */
 
     if (
       state.phase !==
@@ -1453,25 +2584,36 @@
     ) {
       for (
         let index = 0;
-        index < mouthBars.length;
-        index++
+        index <
+        speechBars.length;
+        index += 1
       ) {
-        speechBars[index] =
+        speechBars[
+          index
+        ] =
           lerp(
-            speechBars[index],
+            speechBars[
+              index
+            ],
             1,
             0.18
           );
 
-        mouthBars[index]
+        mouthBars[
+          index
+        ]
           .style
           .setProperty(
             "--neyo-speech-scale",
-            speechBars[index]
+            speechBars[
+              index
+            ]
               .toFixed(3)
           );
 
-        mouthBars[index]
+        mouthBars[
+          index
+        ]
           .style
           .setProperty(
             "--neyo-speech-y",
@@ -1482,25 +2624,55 @@
       return;
     }
 
-    const weights = [
+    const defaultWeights = [
       0.45,
       0.78,
       1,
       0.74,
-      0.5
+      0.50
     ];
 
     const time =
-      now / 1000;
+      now /
+      1000;
 
     for (
       let index = 0;
-      index < mouthBars.length;
-      index++
+      index <
+      mouthBars.length;
+      index += 1
     ) {
+      /*
+       * Supports any future mouth-bar count.
+       */
+
+      const normalized =
+        mouthBars.length <=
+          1
+          ? 1
+          : index /
+            (
+              mouthBars.length -
+              1
+            );
+
+      const centerWeight =
+        1 -
+        Math.abs(
+          normalized -
+          0.5
+        ) *
+        1.1;
+
       const weight =
-        weights[index] ??
-        0.7;
+        defaultWeights[
+          index
+        ] ??
+        clamp(
+          centerWeight,
+          0.42,
+          1
+        );
 
       const irregular =
         0.86 +
@@ -1508,7 +2680,8 @@
           time *
           (
             5.8 +
-            index * 0.71
+            index *
+            0.71
           ) +
           index
         ) *
@@ -1517,7 +2690,8 @@
           time *
           (
             9.7 +
-            index * 0.37
+            index *
+            0.37
           )
         ) *
         0.05;
@@ -1529,39 +2703,55 @@
         irregular *
         (
           0.4 +
-          movement * 0.75
+          speechEnergy *
+          0.75
         );
 
-      speechBars[index] =
+      speechBars[
+        index
+      ] =
         lerp(
-          speechBars[index],
+          speechBars[
+            index
+          ],
           target,
           target >
-            speechBars[index]
-            ? 0.3
+            speechBars[
+              index
+            ]
+            ? 0.30
             : 0.17
         );
 
       const y =
         Math.sin(
-          time * 3.4 +
-          index * 0.78
+          time *
+          3.4 +
+          index *
+          0.78
         ) *
         state.outputLevel *
         (
           0.25 +
-          movement * 0.55
+          speechEnergy *
+          0.55
         );
 
-      mouthBars[index]
+      mouthBars[
+        index
+      ]
         .style
         .setProperty(
           "--neyo-speech-scale",
-          speechBars[index]
+          speechBars[
+            index
+          ]
             .toFixed(3)
         );
 
-      mouthBars[index]
+      mouthBars[
+        index
+      ]
         .style
         .setProperty(
           "--neyo-speech-y",
@@ -1570,26 +2760,49 @@
     }
   }
 
-  function resetMotion() {
-    body.x = 0;
-    body.y = 0;
-    body.rotation = 0;
-    body.scale = 1;
+  /* =====================================================
+     RESET PHYSICAL MOTION
+     ===================================================== */
+
+  function resetPhysicalMotion() {
+    body.x =
+      0;
+
+    body.y =
+      0;
+
+    body.rotation =
+      0;
+
+    body.scale =
+      1;
 
     state.pointerInside =
       false;
 
-    state.pointerTargetX = 0;
-    state.pointerTargetY = 0;
+    state.pointerTargetX =
+      0;
 
-    state.pointerX = 0;
-    state.pointerY = 0;
+    state.pointerTargetY =
+      0;
 
-    state.microTargetX = 0;
-    state.microTargetY = 0;
+    state.pointerX =
+      0;
 
-    state.microX = 0;
-    state.microY = 0;
+    state.pointerY =
+      0;
+
+    state.microTargetX =
+      0;
+
+    state.microTargetY =
+      0;
+
+    state.microX =
+      0;
+
+    state.microY =
+      0;
 
     mascot.style.setProperty(
       "--neyo-body-x",
@@ -1620,173 +2833,273 @@
       "--neyo-gaze-y",
       "0px"
     );
+
+    for (
+      let index = 0;
+      index <
+      mouthBars.length;
+      index += 1
+    ) {
+      speechBars[
+        index
+      ] =
+        1;
+
+      mouthBars[
+        index
+      ]
+        .style
+        .setProperty(
+          "--neyo-speech-scale",
+          "1"
+        );
+
+      mouthBars[
+        index
+      ]
+        .style
+        .setProperty(
+          "--neyo-speech-y",
+          "0px"
+        );
+    }
   }
 
-  function open() {
-    state.active = true;
+  /* =====================================================
+     OPEN VISUAL ENGINE
+     ===================================================== */
 
-    const registryCharacter =
-      window.NeyoCharacters
-        ?.active;
+  function open({
+    resetMood =
+      false
+  } = {}) {
+    if (
+      state.active
+    ) {
+      return true;
+    }
+
+    state.active =
+      true;
+
+    const registryId =
+      registryActiveId();
 
     if (
-      registryCharacter &&
+      registryId &&
       getCharacter(
-        registryCharacter
+        registryId
       )
     ) {
       state.characterId =
-        registryCharacter;
+        registryId;
     }
 
     const character =
-      activeCharacter();
+      getActiveCharacter();
 
-    state.phase = "idle";
+    /*
+     * Do NOT blindly reset phase to idle if voice.js
+     * already emitted connecting/thinking before shell
+     * became visible.
+     */
 
-    state.mood =
-      character
-        ?.defaultExpression
-        ?.mood ||
-      CONFIG.defaultMood;
+    if (
+      !PHASES.has(
+        state.phase
+      )
+    ) {
+      state.phase =
+        "idle";
+    }
+
+    if (
+      resetMood
+    ) {
+      state.mood =
+        character
+          ?.defaultExpression
+          ?.mood ||
+        CONFIG.defaultMood;
+    }
 
     state.nextMicroGazeAt =
       performance.now() +
       800;
 
     render();
+
     scheduleBlink();
+
+    emit(
+      "neyo:mascot-opened",
+      {
+        character:
+          state.characterId
+      }
+    );
 
     return true;
   }
 
+  /* =====================================================
+     CLOSE VISUAL ENGINE
+     ===================================================== */
+
   function close() {
-    state.active = false;
+    if (
+      !state.active
+    ) {
+      return true;
+    }
+
+    state.active =
+      false;
 
     clearBlink();
 
-    state.phase = "idle";
+    state.phase =
+      "idle";
 
-    state.micTarget = 0;
-    state.outputTarget = 0;
+    state.micTarget =
+      0;
 
-    state.micLevel = 0;
-    state.outputLevel = 0;
+    state.outputTarget =
+      0;
 
-    resetMotion();
+    state.micLevel =
+      0;
+
+    state.outputLevel =
+      0;
+
+    resetPhysicalMotion();
+
     render();
+
+    emit(
+      "neyo:mascot-closed"
+    );
 
     return true;
   }
 
-  function animate(now) {
-    animationFrame =
+  /* =====================================================
+     MAIN LOOP
+     ===================================================== */
+
+  function animate(
+    now
+  ) {
+    rafId =
       requestAnimationFrame(
         animate
       );
 
     if (
       !state.active ||
+      !state.visible
+    ) {
+      return;
+    }
+
+    /*
+     * Even reduced-motion users still get
+     * energy CSS state updated without movement.
+     */
+
+    updateEnergy();
+
+    if (
       reducedMotion
     ) {
       return;
     }
 
-    updateEnergy();
-    updateBody(now);
-    updateGaze(now);
-    updateSpeechBars(now);
-  }
-
-  reducedMotionQuery
-    .addEventListener?.(
-      "change",
-      event => {
-        reducedMotion =
-          event.matches;
-
-        if (reducedMotion) {
-          clearBlink();
-          resetMotion();
-        } else if (
-          state.active
-        ) {
-          scheduleBlink();
-        }
-      }
+    updateBody(
+      now
     );
 
-  mascot.addEventListener(
-    "pointermove",
-    pointerMove,
-    {
-      passive: true
-    }
-  );
+    updateGaze(
+      now
+    );
 
-  mascot.addEventListener(
-    "pointerleave",
-    pointerLeave,
-    {
-      passive: true
-    }
-  );
+    updateSpeechBars(
+      now
+    );
+  }
 
-  window.addEventListener(
-    "neyo:voice-mode-opened",
-    open
-  );
-
-  window.addEventListener(
-    "neyo:voice-mode-closed",
-    close
-  );
+  /* =====================================================
+     VOICE PHASE EVENTS
+     ===================================================== */
 
   window.addEventListener(
     "neyo:voice-idle",
     () => {
-      setPhase("idle");
+      setPhase(
+        "idle"
+      );
     }
   );
 
   window.addEventListener(
     "neyo:voice-listening",
     () => {
-      setPhase("listening");
+      setPhase(
+        "listening"
+      );
     }
   );
 
   window.addEventListener(
     "neyo:voice-thinking",
     () => {
-      setPhase("thinking");
+      setPhase(
+        "thinking"
+      );
     }
   );
 
   window.addEventListener(
     "neyo:voice-speaking",
     () => {
-      setPhase("speaking");
+      setPhase(
+        "speaking"
+      );
     }
   );
+
+  /* =====================================================
+     INTERRUPTION
+     ===================================================== */
 
   window.addEventListener(
     "neyo:voice-interrupted",
     () => {
-      state.outputTarget = 0;
+      state.outputTarget =
+        0;
+
       state.mood =
         "surprised";
 
       setPhase(
         "interrupted"
       );
+
+      /*
+       * voice.js follows with listening state.
+       * No timer needed here.
+       */
     }
   );
+
+  /* =====================================================
+     ERROR
+     ===================================================== */
 
   window.addEventListener(
     "neyo:voice-error",
     () => {
-      state.outputTarget = 0;
       state.mood =
         "confused";
 
@@ -1796,147 +3109,620 @@
     }
   );
 
+  /* =====================================================
+     MIC ENERGY
+     ===================================================== */
+
   window.addEventListener(
     "neyo:voice-mic-level",
     event => {
       state.micTarget =
-        clamp(
-          Number(
-            event.detail?.level
-          ) || 0,
-          0,
-          1
+        clamp01(
+          event.detail
+            ?.level
         );
     }
   );
+
+  /* =====================================================
+     OUTPUT ENERGY
+     ===================================================== */
 
   window.addEventListener(
     "neyo:voice-output-level",
     event => {
       state.outputTarget =
-        clamp(
-          Number(
-            event.detail?.level
-          ) || 0,
-          0,
-          1
+        clamp01(
+          event.detail
+            ?.level
         );
     }
   );
+
+  /* =====================================================
+     MUTED STATE
+     ===================================================== */
 
   window.addEventListener(
     "neyo:voice-muted",
     event => {
       state.muted =
         Boolean(
-          event.detail?.muted
+          event.detail
+            ?.muted
         );
+
+      if (
+        state.muted
+      ) {
+        state.micTarget =
+          0;
+      }
 
       render();
     }
   );
+
+  /* =====================================================
+     SPEAKER STATE
+     ===================================================== */
 
   window.addEventListener(
     "neyo:voice-speaker",
     event => {
       state.speakerOn =
-        event.detail?.enabled !==
+        event.detail
+          ?.enabled !==
         false;
+
+      if (
+        !state.speakerOn
+      ) {
+        state.outputTarget =
+          0;
+      }
 
       render();
     }
+  );
+
+  /* =====================================================
+     CAMERA STATE
+
+     mascot only reflects state visually.
+     voice-mode.js owns actual camera.
+     ===================================================== */
+
+  function syncCameraEvent(
+    event
+  ) {
+    state.cameraOn =
+      Boolean(
+        event.detail
+          ?.enabled
+      );
+
+    render();
+  }
+
+  window.addEventListener(
+    "neyo:voice-camera",
+    syncCameraEvent
   );
 
   window.addEventListener(
     "neyo:voice-camera-change",
-    event => {
-      state.cameraOn =
-        Boolean(
-          event.detail?.enabled
-        );
-
-      render();
-    }
+    syncCameraEvent
   );
+
+  /* =====================================================
+     MASCOT INTELLIGENCE
+
+     Semantic decision remains external.
+     ===================================================== */
 
   window.addEventListener(
     "neyo:mascot-intelligence",
     event => {
       const mood =
-        event.detail?.mood;
+        event.detail
+          ?.mood;
 
-      if (mood) {
-        setMood(mood);
+      if (
+        mood
+      ) {
+        setMood(
+          mood,
+          {
+            emit:
+              false
+          }
+        );
       }
     }
   );
+
+  /* =====================================================
+     CHARACTER PICKER SELECTION
+
+     Mascot turns picker selection into canonical
+     neyo:character-change used by voice.js.
+     ===================================================== */
 
   window.addEventListener(
     "neyo:character-select",
     event => {
       const id =
-        event.detail?.id ||
+        event.detail
+          ?.id ||
         event.detail
           ?.character;
 
-      if (id) {
-        setCharacter(id);
+      if (!id) {
+        return;
+      }
+
+      setCharacter(
+        id,
+        {
+          source:
+            "character-picker"
+        }
+      );
+    }
+  );
+
+  /* =====================================================
+     EXTERNAL CHARACTER CHANGE
+
+     Support another module setting canonical character
+     directly, without creating a character-change loop.
+     ===================================================== */
+
+  window.addEventListener(
+    "neyo:character-change",
+    event => {
+      const id =
+        event.detail
+          ?.id ||
+        event.detail
+          ?.character
+          ?.id;
+
+      if (
+        !id ||
+        event.detail
+          ?.source ===
+        "mascot"
+      ) {
+        return;
+      }
+
+      const key =
+        cleanId(
+          id
+        );
+
+      if (
+        !key ||
+        key ===
+        state.characterId
+      ) {
+        return;
+      }
+
+      setCharacter(
+        key,
+        {
+          emitChange:
+            false,
+
+          source:
+            event.detail
+              ?.source ||
+            "external"
+        }
+      );
+    }
+  );
+
+  /* =====================================================
+     VOICE-MODE OPEN / CLOSE
+
+     Final canonical shell lifecycle.
+     ===================================================== */
+
+  window.addEventListener(
+    "neyo:voice-mode-opened",
+    () => {
+      open();
+    }
+  );
+
+  window.addEventListener(
+    "neyo:voice-mode-closed",
+    () => {
+      close();
+    }
+  );
+
+  /* =====================================================
+     LEGACY VOICE OPEN / CLOSE COMPATIBILITY
+     ===================================================== */
+
+  window.addEventListener(
+    "neyo:voice-open",
+    open
+  );
+
+  window.addEventListener(
+    "neyo:voice-close",
+    close
+  );
+
+  /* =====================================================
+     SHELL FALLBACK OBSERVER
+
+     Protects against loader order or external UI code.
+     ===================================================== */
+
+  if (
+    voiceShell
+  ) {
+    shellObserver =
+      new MutationObserver(
+        () => {
+          const openState =
+            shellOpen();
+
+          if (
+            openState &&
+            !state.active
+          ) {
+            open();
+          }
+
+          if (
+            !openState &&
+            state.active
+          ) {
+            close();
+          }
+        }
+      );
+
+    shellObserver.observe(
+      voiceShell,
+      {
+        attributes:
+          true,
+
+        attributeFilter: [
+          "class",
+          "aria-hidden",
+          "style"
+        ]
+      }
+    );
+  }
+
+  /* =====================================================
+     DOCUMENT VISIBILITY
+
+     Avoid wasting animation work in background tabs.
+     ===================================================== */
+
+  document.addEventListener(
+    "visibilitychange",
+    () => {
+      state.visible =
+        !document.hidden;
+
+      if (
+        !state.visible
+      ) {
+        clearBlink();
+
+        state.micTarget =
+          0;
+
+        state.outputTarget =
+          0;
+
+        return;
+      }
+
+      if (
+        state.active
+      ) {
+        state.nextMicroGazeAt =
+          performance.now() +
+          800;
+
+        scheduleBlink();
       }
     }
   );
 
-  const initialCharacter =
-    window.NeyoCharacters
-      ?.active;
+  /* =====================================================
+     REDUCED MOTION CHANGE
+     ===================================================== */
 
-  if (
-    initialCharacter &&
-    getCharacter(
-      initialCharacter
-    )
+  reducedMotionQuery
+    .addEventListener
+    ?.(
+      "change",
+      event => {
+        reducedMotion =
+          event.matches;
+
+        if (
+          reducedMotion
+        ) {
+          clearBlink();
+
+          resetPhysicalMotion();
+
+        } else if (
+          state.active
+        ) {
+          scheduleBlink();
+        }
+
+        render();
+      }
+    );
+
+  /* =====================================================
+     EXPLICIT ENERGY APIs
+     ===================================================== */
+
+  function setMicLevel(
+    value
   ) {
-    state.characterId =
-      initialCharacter;
+    state.micTarget =
+      clamp01(
+        value
+      );
+
+    return state.micTarget;
   }
 
-  render();
+  function setOutputLevel(
+    value
+  ) {
+    state.outputTarget =
+      clamp01(
+        value
+      );
 
-  animationFrame =
-    requestAnimationFrame(
-      animate
-    );
+    return state.outputTarget;
+  }
+
+  /* =====================================================
+     FORCE EXPRESSION
+
+     Useful for controlled UI/tests without changing
+     semantic mood intelligence.
+     ===================================================== */
+
+  function setExpression({
+    mood,
+    phase
+  } = {}) {
+    if (
+      mood
+    ) {
+      setMood(
+        mood
+      );
+    }
+
+    if (
+      phase
+    ) {
+      setPhase(
+        phase
+      );
+    }
+
+    return {
+      mood:
+        state.mood,
+
+      phase:
+        state.phase
+    };
+  }
+
+  /* =====================================================
+     SYNC FROM VOICE
+     ===================================================== */
+
+  function hydrateFromVoice() {
+    const voice =
+      window.NeyoVoice;
+
+    if (!voice) {
+      return false;
+    }
+
+    let snapshot =
+      {};
+
+    try {
+      snapshot =
+        voice.getState?.() ||
+        voice.getSessionInfo?.() ||
+        {};
+    } catch {}
+
+    if (
+      snapshot
+        .selectedCharacter ||
+      snapshot
+        .sessionCharacter ||
+      snapshot
+        .character
+    ) {
+      const id =
+        snapshot
+          .selectedCharacter ||
+        snapshot
+          .sessionCharacter ||
+        snapshot.character;
+
+      if (
+        getCharacter(
+          id
+        )
+      ) {
+        state.characterId =
+          cleanId(
+            id
+          );
+      }
+    }
+
+    if (
+      PHASES.has(
+        snapshot.phase
+      )
+    ) {
+      state.phase =
+        snapshot.phase;
+    }
+
+    state.muted =
+      Boolean(
+        snapshot.muted
+      );
+
+    state.speakerOn =
+      snapshot
+        .speakerEnabled !==
+      false;
+
+    return true;
+  }
+
+  /* =====================================================
+     PUBLIC API
+     ===================================================== */
 
   const api =
     Object.freeze({
-      __controller: true,
-      version: VERSION,
+      __controller:
+        true,
+
+      version:
+        VERSION,
+
+      active:
+        true,
+
+      legacyScriptPresent,
+
+      legacyOwnerActive:
+        false,
+
+      /*
+       * Lifecycle
+       */
 
       open,
+
       close,
 
+      isActive() {
+        return state.active;
+      },
+
+      /*
+       * Character
+       */
+
       setCharacter,
+
+      getCharacter() {
+        return getActiveCharacter();
+      },
+
+      getCharacterId() {
+        return state.characterId;
+      },
+
+      /*
+       * Expression
+       */
+
       setMood,
+
+      /*
+       * Old terminology compatibility.
+       */
 
       setTone:
         setMood,
 
       setPhase,
 
+      setExpression,
+
+      resolveExpression,
+
+      /*
+       * Physical behavior
+       */
+
       blink,
 
-      getCharacter() {
-        return activeCharacter();
-      },
+      resetPhysicalMotion,
+
+      /*
+       * Energy
+       */
+
+      setMicLevel,
+
+      setOutputLevel,
+
+      /*
+       * Render
+       */
+
+      render,
+
+      /*
+       * State
+       */
 
       getState() {
+        const expression =
+          resolveExpression();
+
         return {
-          version: VERSION,
+          version:
+            VERSION,
 
           active:
             state.active,
 
+          visible:
+            state.visible,
+
+          reducedMotion,
+
+          legacyScriptPresent,
+
+          legacyOwnerActive:
+            false,
+
           characterId:
             state.characterId,
+
+          character:
+            getActiveCharacter(),
 
           phase:
             state.phase,
@@ -1944,8 +3730,20 @@
           mood:
             state.mood,
 
+          eye:
+            expression.eye,
+
+          mouth:
+            expression.mouth,
+
+          micTarget:
+            state.micTarget,
+
           micLevel:
             state.micLevel,
+
+          outputTarget:
+            state.outputTarget,
 
           outputLevel:
             state.outputLevel,
@@ -1959,7 +3757,26 @@
           cameraOn:
             state.cameraOn,
 
-          reducedMotion
+          blinking:
+            state.blinking,
+
+          pointerInside:
+            state.pointerInside,
+
+          lastRenderAt:
+            state.lastRenderAt,
+
+          lastCharacterChangeAt:
+            state
+              .lastCharacterChangeAt,
+
+          lastMoodChangeAt:
+            state
+              .lastMoodChangeAt,
+
+          metrics: {
+            ...metrics
+          }
         };
       }
     });
@@ -1968,19 +3785,74 @@
     window,
     "NeyoMascot",
     {
-      value: api,
-      writable: false,
-      configurable: true,
-      enumerable: true
+      value:
+        api,
+
+      writable:
+        false,
+
+      configurable:
+        true,
+
+      enumerable:
+        true
     }
   );
+
+  /* =====================================================
+     INIT CHARACTER
+     ===================================================== */
+
+  const initialCharacter =
+    registryActiveId();
+
+  if (
+    initialCharacter &&
+    getCharacter(
+      initialCharacter
+    )
+  ) {
+    state.characterId =
+      initialCharacter;
+  }
+
+  hydrateFromVoice();
+
+  render();
+
+  if (
+    shellOpen()
+  ) {
+    open();
+  }
+
+  rafId =
+    requestAnimationFrame(
+      animate
+    );
+
+  /* =====================================================
+     READY
+     ===================================================== */
 
   emit(
     "neyo:mascot-ready",
     {
-      version: VERSION,
+      version:
+        VERSION,
+
+      active:
+        state.active,
+
       character:
-        state.characterId
+        state.characterId,
+
+      reducedMotion,
+
+      legacyScriptPresent,
+
+      legacyOwnerActive:
+        false
     }
   );
 })();

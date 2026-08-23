@@ -1,36 +1,81 @@
 /*
 =========================================================
 NEYO — MESSAGES CORE
+SAFE HYBRID PRODUCTION v2
 
-Owns:
-- Message DOM shells
-- User attachment display
-- Source pills
-- Thinking state
-- Message updates/removal
-- Auto-scroll
-- Clear messages
+FILE:
+public/js/components/messages.js
 
-Does NOT own:
-- /api/chat
-- Markdown parser
-- Copy/edit/regenerate/share
-- Attachments upload
-- History
-- Send / Enter
+OWNS
+---------------------------------------------------------
+✅ Modular message DOM shells
+✅ User attachment cards
+✅ Image attachment previews
+✅ File name / type / size
+✅ Source pills
+✅ Thinking state
+✅ Message updates
+✅ Message removal
+✅ History-loaded messages
+✅ Clear messages
+✅ Auto-scroll
+✅ Hero visibility
+✅ Compatibility replace()
+
+DOES NOT OWN
+---------------------------------------------------------
+❌ /api/chat
+❌ Conversation state
+❌ Attachment upload
+❌ Markdown parser
+❌ Send button
+❌ Enter key
+❌ History persistence
+❌ Copy/edit/regenerate/share business logic
+❌ neo.js internals
+
+IMPORTANT
+---------------------------------------------------------
+neo.js remains loaded and untouched.
+
+Modular chat-runtime intercepts chat actions.
+Therefore this module may safely render modular chat
+events even while neo.js is physically present.
+
+PIPELINE
+---------------------------------------------------------
+NeyoChat
+   ↓
+neyo:chat-message-added
+   ↓
+NeyoMessages
+   ↓
+NeyoMessageRenderer
+
 =========================================================
 */
 
 (() => {
   "use strict";
 
+
+  /* =====================================================
+     VERSION / DUPLICATE GUARD
+     ===================================================== */
+
   const VERSION =
-    "neyo-messages-recovery-v1";
+    "neyo-messages-safe-hybrid-v2";
+
 
   if (
     window.NeyoMessages
-      ?.__controller
+      ?.__controller ===
+    true
   ) {
+    console.warn(
+      "[NEYO Messages] Already initialized."
+    );
+
     return;
   }
 
@@ -44,10 +89,12 @@ Does NOT own:
       "chatMessages"
     );
 
+
   const scrollArea =
     document.getElementById(
       "scrollArea"
     );
+
 
   const heroSection =
     document.getElementById(
@@ -56,14 +103,15 @@ Does NOT own:
 
 
   /* =====================================================
-     RUNTIME OWNERSHIP
+     RUNTIME MODE
      ===================================================== */
 
-  const legacy =
-    Array.from(
-      document.scripts ||
-      []
-    )
+  const legacyPresent =
+    Array
+      .from(
+        document.scripts ||
+        []
+      )
       .some(
         script =>
           /(?:^|\/)neo\.js(?:\?|$)/
@@ -73,16 +121,29 @@ Does NOT own:
             )
       );
 
+
   /*
-   * While neo.js exists it remains
-   * the sole message-DOM owner.
-   */
+  -------------------------------------------------------
+  CRITICAL FIX
+
+  OLD:
+      active = chatMessages && !legacyPresent
+
+  That disabled modular message rendering whenever
+  neo.js was physically loaded.
+
+  NEW:
+      neo.js may remain loaded, but modular chat-runtime
+      is authoritative for chat actions.
+
+  Therefore messages.js renders modular chat events.
+  -------------------------------------------------------
+  */
 
   const active =
     Boolean(
       chatMessages
-    ) &&
-    !legacy;
+    );
 
 
   /* =====================================================
@@ -92,80 +153,412 @@ Does NOT own:
   let nearBottom =
     true;
 
+
   let thinkingElement =
     null;
 
 
   /* =====================================================
-     HELPERS
+     EVENTS
      ===================================================== */
 
-  const emit =
-    (
-      name,
-      detail = {}
-    ) => {
-
-      window.dispatchEvent(
-        new CustomEvent(
-          name,
-          {
-            detail
-          }
-        )
-      );
-    };
+  function emit(
+    name,
+    detail = {}
+  ) {
+    window.dispatchEvent(
+      new CustomEvent(
+        name,
+        {
+          detail
+        }
+      )
+    );
+  }
 
 
-  const clean =
-    (
-      value,
-      max = 50_000
-    ) =>
+  /* =====================================================
+     CLEAN TEXT
+     ===================================================== */
 
-      String(
-        value ??
+  function clean(
+    value,
+    max =
+      50_000
+  ) {
+    return String(
+      value ??
+      ""
+    )
+      .replace(
+        /\u0000/g,
         ""
       )
-        .replace(
-          /\u0000/g,
-          ""
+      .replace(
+        /\r\n?/g,
+        "\n"
+      )
+      .slice(
+        0,
+        max
+      );
+  }
+
+
+  /* =====================================================
+     ID
+     ===================================================== */
+
+  function makeId() {
+    if (
+      globalThis.crypto
+        ?.randomUUID
+    ) {
+      return globalThis.crypto
+        .randomUUID();
+    }
+
+
+    return (
+      `msg_${Date.now()}_` +
+      Math.random()
+        .toString(36)
+        .slice(2)
+    );
+  }
+
+
+  /* =====================================================
+     ICONS
+     ===================================================== */
+
+  function refreshIcons() {
+    try {
+      window.lucide
+        ?.createIcons
+        ?.();
+    } catch {}
+  }
+
+
+  /* =====================================================
+     FORMAT BYTES
+     ===================================================== */
+
+  function formatBytes(
+    bytes
+  ) {
+    let value =
+      Math.max(
+        0,
+        Number(
+          bytes
+        ) ||
+        0
+      );
+
+
+    if (
+      value <
+      1024
+    ) {
+      return `${value} B`;
+    }
+
+
+    const units =
+      [
+        "KB",
+        "MB",
+        "GB"
+      ];
+
+
+    value /=
+      1024;
+
+
+    let index =
+      0;
+
+
+    while (
+      value >=
+        1024 &&
+      index <
+        units.length -
+          1
+    ) {
+      value /=
+        1024;
+
+      index +=
+        1;
+    }
+
+
+    return `${
+      value >= 10
+        ? value.toFixed(0)
+        : value.toFixed(1)
+    } ${units[index]}`;
+  }
+
+
+  /* =====================================================
+     EXTENSION
+     ===================================================== */
+
+  function extensionOf(
+    name
+  ) {
+    return String(
+      name ||
+      ""
+    )
+      .toLowerCase()
+      .match(
+        /\.([a-z0-9]+)$/
+      )
+      ?.[1] ||
+      "";
+  }
+
+
+  /* =====================================================
+     FILE LABEL
+     ===================================================== */
+
+  function fileTypeLabel(
+    file
+  ) {
+    const extension =
+      extensionOf(
+        file?.name
+      );
+
+
+    if (
+      extension
+    ) {
+      return extension
+        .toUpperCase();
+    }
+
+
+    const category =
+      clean(
+        file?.category ||
+        "",
+        30
+      )
+        .trim();
+
+
+    if (
+      category &&
+      category !==
+        "unknown"
+    ) {
+      return (
+        category
+          .charAt(0)
+          .toUpperCase() +
+        category.slice(1)
+      );
+    }
+
+
+    return "File";
+  }
+
+
+  /* =====================================================
+     FILE ICON
+     ===================================================== */
+
+  function attachmentIcon(
+    file
+  ) {
+    const category =
+      clean(
+        file?.category ||
+        "",
+        40
+      )
+        .toLowerCase();
+
+
+    const mime =
+      clean(
+        file?.mimeType ||
+        file?.mime ||
+        file?.type ||
+        "",
+        180
+      )
+        .toLowerCase();
+
+
+    const extension =
+      extensionOf(
+        file?.name
+      );
+
+
+    if (
+      category ===
+        "image" ||
+      mime.startsWith(
+        "image/"
+      )
+    ) {
+      return "image";
+    }
+
+
+    if (
+      category ===
+        "spreadsheet" ||
+      [
+        "xls",
+        "xlsx",
+        "xlsm",
+        "xlsb",
+        "csv",
+        "tsv",
+        "ods"
+      ].includes(
+        extension
+      )
+    ) {
+      return "sheet";
+    }
+
+
+    if (
+      category ===
+        "presentation" ||
+      [
+        "ppt",
+        "pptx",
+        "odp"
+      ].includes(
+        extension
+      )
+    ) {
+      return "presentation";
+    }
+
+
+    if (
+      category ===
+        "code"
+    ) {
+      return "file-code-2";
+    }
+
+
+    if (
+      category ===
+        "archive"
+    ) {
+      return "archive";
+    }
+
+
+    if (
+      category ===
+        "audio" ||
+      mime.startsWith(
+        "audio/"
+      )
+    ) {
+      return "audio-lines";
+    }
+
+
+    if (
+      category ===
+        "video" ||
+      mime.startsWith(
+        "video/"
+      )
+    ) {
+      return "video";
+    }
+
+
+    if (
+      category ===
+        "data"
+    ) {
+      return "database";
+    }
+
+
+    return "file-text";
+  }
+
+
+  /* =====================================================
+     SAFE PREVIEW
+     ===================================================== */
+
+  function safePreview(
+    value
+  ) {
+    const raw =
+      clean(
+        value,
+        5000
+      )
+        .trim();
+
+
+    if (
+      !raw
+    ) {
+      return "";
+    }
+
+
+    if (
+      /^(blob:|data:image\/)/i
+        .test(
+          raw
         )
-        .replace(
-          /\r\n?/g,
-          "\n"
-        )
-        .slice(
-          0,
-          max
+    ) {
+      return raw;
+    }
+
+
+    try {
+      const url =
+        new URL(
+          raw,
+          location.origin
         );
 
 
-  const makeId =
-    () =>
-
-      globalThis.crypto
-        ?.randomUUID
-        ?.() ||
-
-      (
-        `msg_${Date.now()}_` +
-        Math.random()
-          .toString(36)
-          .slice(2)
-      );
+      if (
+        ![
+          "http:",
+          "https:"
+        ].includes(
+          url.protocol
+        )
+      ) {
+        return "";
+      }
 
 
-  const refreshIcons =
-    () => {
+      return url.href;
 
-      try {
-        window.lucide
-          ?.createIcons
-          ?.();
-
-      } catch {}
-    };
+    } catch {
+      return "";
+    }
+  }
 
 
   /* =====================================================
@@ -175,13 +568,13 @@ Does NOT own:
   function findMessage(
     id
   ) {
-
     if (
       !chatMessages ||
       !id
     ) {
       return null;
     }
+
 
     return Array
       .from(
@@ -194,7 +587,9 @@ Does NOT own:
         node =>
           node.dataset
             .neyoMessageId ===
-          String(id)
+          String(
+            id
+          )
       ) ||
       null;
   }
@@ -205,7 +600,6 @@ Does NOT own:
      ===================================================== */
 
   function updateHero() {
-
     if (
       !active ||
       !heroSection
@@ -213,18 +607,21 @@ Does NOT own:
       return;
     }
 
+
     const hasMessages =
       Boolean(
         chatMessages
           .querySelector(
-            "[data-neyo-message-id]"
+            '[data-neyo-message-id]:not([data-neyo-message-id="neyo-thinking"])'
           )
       );
+
 
     heroSection.style.display =
       hasMessages
         ? "none"
         : "";
+
 
     heroSection.setAttribute(
       "aria-hidden",
@@ -236,28 +633,32 @@ Does NOT own:
 
 
   /* =====================================================
-     SCROLL
+     SCROLL STATE
      ===================================================== */
 
   function atBottom() {
-
-    if (!scrollArea) {
+    if (
+      !scrollArea
+    ) {
       return true;
     }
+
 
     return (
       scrollArea.scrollHeight -
       scrollArea.scrollTop -
       scrollArea.clientHeight
-    ) <= 120;
+    ) <=
+      120;
   }
 
 
   function scrollToBottom(
-    behavior = "auto",
-    force = false
+    behavior =
+      "auto",
+    force =
+      false
   ) {
-
     if (
       !active ||
       !scrollArea ||
@@ -269,216 +670,405 @@ Does NOT own:
       return false;
     }
 
-    try {
 
+    try {
       scrollArea.scrollTo({
         top:
-          scrollArea
-            .scrollHeight,
+          scrollArea.scrollHeight,
 
         behavior
       });
 
     } catch {
-
       scrollArea.scrollTop =
-        scrollArea
-          .scrollHeight;
+        scrollArea.scrollHeight;
     }
+
 
     nearBottom =
       true;
+
 
     return true;
   }
 
 
   /* =====================================================
-     ATTACHMENT PREVIEW URL
+     NORMALIZE ATTACHMENTS
      ===================================================== */
 
-  function safePreview(
-    value
+  function normalizeAttachments(
+    files
   ) {
-
-    const raw =
-      clean(
-        value,
-        5000
-      )
-        .trim();
-
-    if (!raw) {
-      return "";
-    }
-
     if (
-      /^(blob:|data:image\/)/i
-        .test(
-          raw
-        )
-    ) {
-      return raw;
-    }
-
-    try {
-
-      const url =
-        new URL(
-          raw,
-          location.origin
-        );
-
-      return [
-        "http:",
-        "https:"
-      ].includes(
-        url.protocol
+      !Array.isArray(
+        files
       )
-        ? url.href
-        : "";
-
-    } catch {
-
-      return "";
+    ) {
+      return [];
     }
+
+
+    return files
+      .filter(
+        file =>
+          file &&
+          typeof file ===
+            "object"
+      )
+      .slice(
+        0,
+        5
+      )
+      .map(
+        file => ({
+          ...file,
+
+          name:
+            clean(
+              file.name ||
+              "Attached file",
+              220
+            ),
+
+          size:
+            Math.max(
+              0,
+              Number(
+                file.size
+              ) ||
+              0
+            ),
+
+          mimeType:
+            clean(
+              file.mimeType ||
+              file.mime ||
+              file.type ||
+              "application/octet-stream",
+              180
+            ),
+
+          category:
+            clean(
+              file.category ||
+              "unknown",
+              40
+            )
+        })
+      );
   }
 
 
   /* =====================================================
-     ATTACHMENTS
+     RENDER SINGLE FILE CARD
+     ===================================================== */
+
+  function createFileCard(
+    file
+  ) {
+    const card =
+      document.createElement(
+        "div"
+      );
+
+
+    card.className =
+      "message-file-pill neyo-message-file-card";
+
+
+    card.setAttribute(
+      "role",
+      "group"
+    );
+
+
+    const name =
+      clean(
+        file?.name ||
+        "Attached file",
+        220
+      );
+
+
+    card.title =
+      name;
+
+
+    const preview =
+      safePreview(
+        file?.previewUrl ||
+        file?.url ||
+        ""
+      );
+
+
+    const mime =
+      clean(
+        file?.mimeType ||
+        file?.mime ||
+        file?.type ||
+        "",
+        180
+      )
+        .toLowerCase();
+
+
+    const category =
+      clean(
+        file?.category ||
+        "",
+        40
+      )
+        .toLowerCase();
+
+
+    const isImage =
+      category ===
+        "image" ||
+      mime.startsWith(
+        "image/"
+      );
+
+
+    /* ===============================================
+       VISUAL
+       =============================================== */
+
+    const visual =
+      document.createElement(
+        "div"
+      );
+
+
+    visual.className =
+      "neyo-message-file-visual";
+
+
+    if (
+      isImage &&
+      preview
+    ) {
+      const image =
+        document.createElement(
+          "img"
+        );
+
+
+      image.src =
+        preview;
+
+
+      image.alt =
+        name;
+
+
+      image.loading =
+        "lazy";
+
+
+      image.decoding =
+        "async";
+
+
+      visual.appendChild(
+        image
+      );
+
+    } else {
+      const icon =
+        document.createElement(
+          "i"
+        );
+
+
+      icon.setAttribute(
+        "data-lucide",
+        attachmentIcon(
+          file
+        )
+      );
+
+
+      icon.setAttribute(
+        "aria-hidden",
+        "true"
+      );
+
+
+      visual.appendChild(
+        icon
+      );
+    }
+
+
+    /* ===============================================
+       BODY
+       =============================================== */
+
+    const body =
+      document.createElement(
+        "div"
+      );
+
+
+    body.className =
+      "neyo-message-file-body";
+
+
+    const nameElement =
+      document.createElement(
+        "div"
+      );
+
+
+    nameElement.className =
+      "neyo-message-file-name";
+
+
+    nameElement.textContent =
+      name;
+
+
+    const meta =
+      document.createElement(
+        "div"
+      );
+
+
+    meta.className =
+      "neyo-message-file-meta";
+
+
+    const parts =
+      [];
+
+
+    if (
+      Number(
+        file?.size
+      ) >
+      0
+    ) {
+      parts.push(
+        formatBytes(
+          file.size
+        )
+      );
+    }
+
+
+    const typeLabel =
+      fileTypeLabel(
+        file
+      );
+
+
+    if (
+      typeLabel
+    ) {
+      parts.push(
+        typeLabel
+      );
+    }
+
+
+    meta.textContent =
+      parts.join(
+        " · "
+      );
+
+
+    body.appendChild(
+      nameElement
+    );
+
+
+    body.appendChild(
+      meta
+    );
+
+
+    card.appendChild(
+      visual
+    );
+
+
+    card.appendChild(
+      body
+    );
+
+
+    return card;
+  }
+
+
+  /* =====================================================
+     RENDER ATTACHMENTS
      ===================================================== */
 
   function renderAttachments(
     wrapper,
     files
   ) {
+    const attachments =
+      normalizeAttachments(
+        files
+      );
+
 
     if (
-      !Array.isArray(
-        files
-      ) ||
-      !files.length
+      attachments.length ===
+      0
     ) {
-      return;
+      return null;
     }
 
-    const grid =
+
+    const root =
       document.createElement(
         "div"
       );
 
-    grid.className =
-      "message-media-grid";
 
-    grid.setAttribute(
+    root.className =
+      "message-media-grid neyo-message-attachments";
+
+
+    root.setAttribute(
       "aria-label",
-      "Message attachments"
+      attachments.length ===
+        1
+        ? "1 attached file"
+        : `${attachments.length} attached files`
     );
 
 
-    files
-      .slice(
-        0,
-        5
-      )
-      .forEach(
-        file => {
-
-          const name =
-            clean(
-              file?.name ||
-              "Attached file",
-              220
-            );
-
-          const mime =
-            clean(
-              file?.mime ||
-              file?.mimeType ||
-              file?.type ||
-              "",
-              180
-            )
-              .toLowerCase();
-
-          const category =
-            clean(
-              file?.category ||
-              "unknown",
-              32
-            )
-              .toLowerCase();
-
-          const preview =
-            safePreview(
-              file?.previewUrl ||
-              file?.url ||
-              ""
-            );
-
-
-          if (
-            (
-              category ===
-                "image" ||
-              mime.startsWith(
-                "image/"
-              )
-            ) &&
-            preview
-          ) {
-
-            const image =
-              document.createElement(
-                "img"
-              );
-
-            image.src =
-              preview;
-
-            image.alt =
-              name ||
-              "Uploaded image";
-
-            image.loading =
-              "lazy";
-
-            image.decoding =
-              "async";
-
-            grid.appendChild(
-              image
-            );
-
-            return;
-          }
-
-
-          const pill =
-            document.createElement(
-              "div"
-            );
-
-          pill.className =
-            "message-file-pill";
-
-          pill.textContent =
-            name;
-
-          pill.title =
-            name;
-
-          grid.appendChild(
-            pill
-          );
-        }
+    for (
+      const file
+      of attachments
+    ) {
+      root.appendChild(
+        createFileCard(
+          file
+        )
       );
+    }
 
 
-    wrapper.appendChild(
-      grid
+    /*
+    -------------------------------------------------------
+    ChatGPT-style:
+    attachments are displayed ABOVE user text.
+    -------------------------------------------------------
+    */
+
+    wrapper.prepend(
+      root
     );
+
+
+    return root;
   }
 
 
@@ -486,10 +1076,9 @@ Does NOT own:
      SOURCES
      ===================================================== */
 
-  function getSource(
+  function normalizeSource(
     source
   ) {
-
     const value =
       source?.url ||
       source?.uri ||
@@ -497,12 +1086,13 @@ Does NOT own:
       source?.web?.uri ||
       "";
 
-    try {
 
+    try {
       const url =
         new URL(
           value
         );
+
 
       if (
         ![
@@ -515,6 +1105,7 @@ Does NOT own:
         return null;
       }
 
+
       return {
         url:
           url.href,
@@ -524,17 +1115,15 @@ Does NOT own:
             source?.title ||
             source?.name ||
             source?.web?.title ||
-            url.hostname
-              .replace(
-                /^www\./,
-                ""
-              ),
+            url.hostname.replace(
+              /^www\./,
+              ""
+            ),
             160
           )
       };
 
     } catch {
-
       return null;
     }
   }
@@ -544,15 +1133,16 @@ Does NOT own:
     messageElement,
     sources
   ) {
-
     if (
       !Array.isArray(
         sources
       ) ||
-      !sources.length
+      sources.length ===
+        0
     ) {
       return;
     }
+
 
     const valid =
       sources
@@ -561,13 +1151,17 @@ Does NOT own:
           10
         )
         .map(
-          getSource
+          normalizeSource
         )
         .filter(
           Boolean
         );
 
-    if (!valid.length) {
+
+    if (
+      valid.length ===
+      0
+    ) {
       return;
     }
 
@@ -577,8 +1171,10 @@ Does NOT own:
         "div"
       );
 
+
     root.className =
       "neo-source-pills";
+
 
     root.setAttribute(
       "aria-label",
@@ -591,55 +1187,64 @@ Does NOT own:
         "span"
       );
 
+
     title.className =
       "neo-source-label";
 
+
     title.textContent =
       "Sources";
+
 
     root.appendChild(
       title
     );
 
 
-    valid.forEach(
-      source => {
-
-        const link =
-          document.createElement(
-            "a"
-          );
-
-        link.className =
-          "neo-source-pill";
-
-        link.href =
-          source.url;
-
-        link.target =
-          "_blank";
-
-        link.rel =
-          "noopener noreferrer";
-
-        link.textContent =
-          source.label ||
-          "Source";
-
-        link.title =
-          link.textContent;
-
-        root.appendChild(
-          link
+    for (
+      const source
+      of valid
+    ) {
+      const link =
+        document.createElement(
+          "a"
         );
-      }
-    );
 
 
-    messageElement
-      .appendChild(
-        root
+      link.className =
+        "neo-source-pill";
+
+
+      link.href =
+        source.url;
+
+
+      link.target =
+        "_blank";
+
+
+      link.rel =
+        "noopener noreferrer";
+
+
+      link.textContent =
+        source.label ||
+        "Source";
+
+
+      link.title =
+        link.textContent;
+
+
+      root.appendChild(
+        link
       );
+    }
+
+
+    messageElement.appendChild(
+      root
+    );
   }
 
 
@@ -650,18 +1255,21 @@ Does NOT own:
   function renderContent(
     element,
     message,
-    markdown = true
+    markdown =
+      true
   ) {
-
     const content =
-      element
-        .querySelector(
-          ".message-content"
-        );
+      element.querySelector(
+        ".message-content"
+      );
 
-    if (!content) {
+
+    if (
+      !content
+    ) {
       return false;
     }
+
 
     const text =
       clean(
@@ -669,28 +1277,60 @@ Does NOT own:
       );
 
 
-    /*
-     * User content is always plain text.
-     */
+    /* ===============================================
+       USER = PLAIN TEXT
+       =============================================== */
 
     if (
       message.role !==
       "assistant"
     ) {
-
       content.textContent =
         text;
+
+
+      /*
+      Attachment-only messages should not display the
+      internal fallback API prompt if it matches our
+      canonical attachment-only text.
+      */
+
+      if (
+        Array.isArray(
+          message.attachments
+        ) &&
+        message.attachments.length >
+          0 &&
+        (
+          text ===
+            "Please analyze the attached file or files." ||
+          text ===
+            "Please analyze the attached file."
+        )
+      ) {
+        content.textContent =
+          "";
+      }
+
+
+      content.hidden =
+        content.textContent
+          .trim()
+          .length ===
+        0;
+
 
       return true;
     }
 
 
-    /*
-     * Safe fallback.
-     *
-     * If renderer exists it upgrades
-     * this content to Markdown.
-     */
+    /* ===============================================
+       ASSISTANT FALLBACK
+       =============================================== */
+
+    content.hidden =
+      false;
+
 
     content.textContent =
       text;
@@ -702,22 +1342,30 @@ Does NOT own:
         ?.render ===
       "function"
     ) {
+      try {
+        window
+          .NeyoMessageRenderer
+          .render(
+            element,
+            text,
+            {
+              role:
+                "assistant",
 
-      window
-        .NeyoMessageRenderer
-        .render(
-          element,
-          text,
-          {
-            role:
-              "assistant",
+              markdown
+            }
+          );
 
-            markdown
-          }
+      } catch (
+        error
+      ) {
+        console.warn(
+          "[NEYO Messages] Renderer failed:",
+          error
         );
+      }
 
     } else {
-
       emit(
         "neyo:message-render-request",
         {
@@ -750,7 +1398,6 @@ Does NOT own:
     message,
     options = {}
   ) {
-
     if (
       !active ||
       !message ||
@@ -769,20 +1416,24 @@ Does NOT own:
       clean(
         message.id,
         128
-      ) ||
+      )
+        .trim() ||
       makeId();
 
 
     /*
-     * Duplicate-event protection.
-     */
+    Duplicate-event protection.
+    */
 
     const existing =
       findMessage(
         id
       );
 
-    if (existing) {
+
+    if (
+      existing
+    ) {
       return existing;
     }
 
@@ -800,19 +1451,22 @@ Does NOT own:
         "div"
       );
 
+
     element.className =
       `message ${message.role}`;
+
 
     element.dataset
       .neyoMessageId =
       id;
 
+
     element.dataset
       .messageId =
       id;
 
-    element.dataset
-      .role =
+
+    element.dataset.role =
       message.role;
 
 
@@ -820,14 +1474,12 @@ Does NOT own:
       message.error ===
       true
     ) {
+      element.classList.add(
+        "is-error"
+      );
 
-      element.classList
-        .add(
-          "is-error"
-        );
 
-      element.dataset
-        .error =
+      element.dataset.error =
         "true";
     }
 
@@ -835,26 +1487,25 @@ Does NOT own:
     if (
       options.historyLoad
     ) {
-
       element.dataset
         .historyLoad =
         "true";
     }
 
 
-    /* -------------------------------------------------
+    /* =================================================
        USER
-       ------------------------------------------------- */
+       ================================================= */
 
     if (
       message.role ===
       "user"
     ) {
-
       const wrapper =
         document.createElement(
           "div"
         );
+
 
       wrapper.className =
         "message-wrapper";
@@ -865,13 +1516,19 @@ Does NOT own:
           "div"
         );
 
+
       content.className =
         "message-content";
+
 
       wrapper.appendChild(
         content
       );
 
+
+      /*
+      Attachments appear above content.
+      */
 
       renderAttachments(
         wrapper,
@@ -882,22 +1539,23 @@ Does NOT own:
       element.appendChild(
         wrapper
       );
-
     }
 
-    /* -------------------------------------------------
+
+    /* =================================================
        ASSISTANT
-       ------------------------------------------------- */
+       ================================================= */
 
     else {
-
       const content =
         document.createElement(
           "div"
         );
 
+
       content.className =
         "message-content";
+
 
       element.appendChild(
         content
@@ -921,7 +1579,6 @@ Does NOT own:
       message.role ===
       "assistant"
     ) {
-
       renderSources(
         element,
         message.sources
@@ -930,6 +1587,7 @@ Does NOT own:
 
 
     updateHero();
+
     refreshIcons();
 
 
@@ -942,6 +1600,7 @@ Does NOT own:
 
         message: {
           ...message,
+
           id
         }
       }
@@ -949,7 +1608,7 @@ Does NOT own:
 
 
     requestAnimationFrame(
-      () =>
+      () => {
         scrollToBottom(
           "auto",
           message.role ===
@@ -957,11 +1616,62 @@ Does NOT own:
           Boolean(
             options.forceScroll
           )
-        )
+        );
+      }
     );
 
 
     return element;
+  }
+
+
+  /* =====================================================
+     UPDATE ATTACHMENTS ON EXISTING MESSAGE
+     ===================================================== */
+
+  function updateAttachments(
+    element,
+    attachments
+  ) {
+    if (
+      !element ||
+      element.dataset.role !==
+        "user"
+    ) {
+      return false;
+    }
+
+
+    const wrapper =
+      element.querySelector(
+        ".message-wrapper"
+      );
+
+
+    if (
+      !wrapper
+    ) {
+      return false;
+    }
+
+
+    wrapper
+      .querySelector(
+        ".neyo-message-attachments"
+      )
+      ?.remove();
+
+
+    renderAttachments(
+      wrapper,
+      attachments
+    );
+
+
+    refreshIcons();
+
+
+    return true;
   }
 
 
@@ -974,8 +1684,9 @@ Does NOT own:
     content,
     options = {}
   ) {
-
-    if (!active) {
+    if (
+      !active
+    ) {
       return false;
     }
 
@@ -985,7 +1696,10 @@ Does NOT own:
         id
       );
 
-    if (!element) {
+
+    if (
+      !element
+    ) {
       return false;
     }
 
@@ -995,30 +1709,38 @@ Does NOT own:
       "assistant";
 
 
-    const text =
-      clean(
-        content
-      );
-
-
     renderContent(
       element,
       {
         role,
-        content:
-          text
+
+        content,
+
+        attachments:
+          options.attachments
       },
       options.markdown ??
-      true
+        true
     );
 
 
-    element.classList
-      .toggle(
-        "is-error",
-        options.error ===
-          true
+    if (
+      Array.isArray(
+        options.attachments
+      )
+    ) {
+      updateAttachments(
+        element,
+        options.attachments
       );
+    }
+
+
+    element.classList.toggle(
+      "is-error",
+      options.error ===
+        true
+    );
 
 
     element.dataset.error =
@@ -1032,19 +1754,24 @@ Does NOT own:
       "neyo:message-updated",
       {
         id,
+
         element,
+
         content:
-          text
+          clean(
+            content
+          )
       }
     );
 
 
     requestAnimationFrame(
-      () =>
+      () => {
         scrollToBottom(
           "auto",
           false
-        )
+        );
+      }
     );
 
 
@@ -1059,8 +1786,9 @@ Does NOT own:
   function remove(
     id
   ) {
-
-    if (!active) {
+    if (
+      !active
+    ) {
       return false;
     }
 
@@ -1070,12 +1798,16 @@ Does NOT own:
         id
       );
 
-    if (!element) {
+
+    if (
+      !element
+    ) {
       return false;
     }
 
 
     element.remove();
+
 
     updateHero();
 
@@ -1097,8 +1829,9 @@ Does NOT own:
      ===================================================== */
 
   function showThinking() {
-
-    if (!active) {
+    if (
+      !active
+    ) {
       return null;
     }
 
@@ -1111,23 +1844,28 @@ Does NOT own:
         "div"
       );
 
+
     element.id =
       "neyoThinkingIndicator";
 
+
     element.className =
       "message assistant is-thinking";
+
 
     element.dataset
       .neyoMessageId =
       "neyo-thinking";
 
+
     element.dataset
       .messageId =
       "neyo-thinking";
 
-    element.dataset
-      .role =
+
+    element.dataset.role =
       "assistant";
+
 
     element.setAttribute(
       "aria-live",
@@ -1140,6 +1878,7 @@ Does NOT own:
         "div"
       );
 
+
     content.className =
       "message-content";
 
@@ -1149,8 +1888,10 @@ Does NOT own:
         "span"
       );
 
+
     shimmer.className =
       "thinking-shimmer";
+
 
     shimmer.textContent =
       "Thinking.";
@@ -1160,9 +1901,11 @@ Does NOT own:
       shimmer
     );
 
+
     element.appendChild(
       content
     );
+
 
     chatMessages.appendChild(
       element
@@ -1177,11 +1920,12 @@ Does NOT own:
 
 
     requestAnimationFrame(
-      () =>
+      () => {
         scrollToBottom(
           "auto",
           true
-        )
+        );
+      }
     );
 
 
@@ -1198,19 +1942,18 @@ Does NOT own:
 
 
   function removeThinking() {
-
-    if (!active) {
+    if (
+      !active
+    ) {
       return false;
     }
 
 
     const element =
       thinkingElement ||
-
       document.getElementById(
         "neyoThinkingIndicator"
       ) ||
-
       findMessage(
         "neyo-thinking"
       );
@@ -1220,12 +1963,15 @@ Does NOT own:
       null;
 
 
-    if (!element) {
+    if (
+      !element
+    ) {
       return false;
     }
 
 
     element.remove();
+
 
     updateHero();
 
@@ -1244,7 +1990,6 @@ Does NOT own:
      ===================================================== */
 
   function clear() {
-
     if (
       !active ||
       !chatMessages
@@ -1255,6 +2000,7 @@ Does NOT own:
 
     thinkingElement =
       null;
+
 
     chatMessages
       .replaceChildren();
@@ -1277,16 +2023,79 @@ Does NOT own:
 
 
   /* =====================================================
+     REPLACE / HISTORY COMPATIBILITY
+     ===================================================== */
+
+  function replace(
+    messages = [],
+    options = {}
+  ) {
+    if (
+      !active
+    ) {
+      return false;
+    }
+
+
+    clear();
+
+
+    if (
+      !Array.isArray(
+        messages
+      )
+    ) {
+      return false;
+    }
+
+
+    for (
+      const message
+      of messages
+    ) {
+      create(
+        message,
+        {
+          historyLoad:
+            true,
+
+          forceScroll:
+            false,
+
+          ...options
+        }
+      );
+    }
+
+
+    updateHero();
+
+
+    requestAnimationFrame(
+      () => {
+        scrollToBottom(
+          "auto",
+          true
+        );
+      }
+    );
+
+
+    return true;
+  }
+
+
+  /* =====================================================
      EVENT OWNERSHIP
      ===================================================== */
 
-  if (active) {
-
+  if (
+    active
+  ) {
     scrollArea
       ?.addEventListener(
         "scroll",
         () => {
-
           nearBottom =
             atBottom();
         },
@@ -1297,19 +2106,21 @@ Does NOT own:
       );
 
 
-    /*
-     * Chat adds a message to state.
-     */
+    /* =================================================
+       CHAT MESSAGE ADDED
+       ================================================= */
 
     window.addEventListener(
       "neyo:chat-message-added",
       event => {
-
         const message =
           event.detail
             ?.message;
 
-        if (!message) {
+
+        if (
+          !message
+        ) {
           return;
         }
 
@@ -1328,24 +2139,24 @@ Does NOT own:
     );
 
 
-    /*
-     * Chat removes message from state.
-     */
+    /* =================================================
+       CHAT MESSAGE REMOVED
+       ================================================= */
 
     window.addEventListener(
       "neyo:chat-message-removed",
       event => {
-
         const id =
           event.detail
             ?.message
             ?.id ||
-
           event.detail
             ?.id;
 
 
-        if (id) {
+        if (
+          id
+        ) {
           remove(
             id
           );
@@ -1354,29 +2165,33 @@ Does NOT own:
     );
 
 
-    /*
-     * Generation lifecycle.
-     */
+    /* =================================================
+       GENERATION
+       ================================================= */
 
     window.addEventListener(
       "neyo:chat-send-start",
       showThinking
     );
 
+
     window.addEventListener(
       "neyo:chat-response",
       removeThinking
     );
+
 
     window.addEventListener(
       "neyo:chat-send-end",
       removeThinking
     );
 
+
     window.addEventListener(
       "neyo:chat-aborted",
       removeThinking
     );
+
 
     window.addEventListener(
       "neyo:chat-error",
@@ -1384,9 +2199,9 @@ Does NOT own:
     );
 
 
-    /*
-     * New chat / history reload.
-     */
+    /* =================================================
+       CLEAR
+       ================================================= */
 
     window.addEventListener(
       "neyo:messages-clear",
@@ -1394,14 +2209,13 @@ Does NOT own:
     );
 
 
-    /*
-     * Streaming/edit/regenerate compatible update hook.
-     */
+    /* =================================================
+       UPDATE
+       ================================================= */
 
     window.addEventListener(
       "neyo:message-update-request",
       event => {
-
         update(
           event.detail
             ?.id,
@@ -1417,6 +2231,24 @@ Does NOT own:
     );
 
 
+    /* =================================================
+       OPTIONAL REPLACE BRIDGE
+       ================================================= */
+
+    window.addEventListener(
+      "neyo:messages-replace",
+      event => {
+        replace(
+          event.detail
+            ?.messages ||
+          event.detail
+            ?.conversation ||
+          []
+        );
+      }
+    );
+
+
     updateHero();
   }
 
@@ -1427,7 +2259,6 @@ Does NOT own:
 
   const api =
     Object.freeze({
-
       __controller:
         true,
 
@@ -1437,14 +2268,20 @@ Does NOT own:
       active,
 
       legacyOwnerActive:
-        legacy,
+        legacyPresent,
 
       create,
+
       update,
+
       remove,
+
       clear,
 
+      replace,
+
       showThinking,
+
       removeThinking,
 
       scrollToBottom,
@@ -1458,14 +2295,13 @@ Does NOT own:
 
       getState:
         () => ({
-
           version:
             VERSION,
 
           active,
 
           legacyOwnerActive:
-            legacy,
+            legacyPresent,
 
           nearBottom,
 
@@ -1476,13 +2312,11 @@ Does NOT own:
 
           messageCount:
             active
-
               ? chatMessages
                   .querySelectorAll(
                     '[data-neyo-message-id]:not([data-neyo-message-id="neyo-thinking"])'
                   )
                   .length
-
               : 0
         })
     });
@@ -1507,6 +2341,10 @@ Does NOT own:
   );
 
 
+  /* =====================================================
+     READY
+     ===================================================== */
+
   emit(
     "neyo:messages-ready",
     {
@@ -1516,7 +2354,27 @@ Does NOT own:
       active,
 
       legacyOwnerActive:
-        legacy
+        legacyPresent,
+
+      safeHybrid:
+        true
+    }
+  );
+
+
+  console.log(
+    "[NEYO Messages] SAFE HYBRID v2 READY",
+    {
+      active,
+
+      neoPresent:
+        legacyPresent,
+
+      attachmentRendering:
+        true,
+
+      replaceCompatibility:
+        true
     }
   );
 

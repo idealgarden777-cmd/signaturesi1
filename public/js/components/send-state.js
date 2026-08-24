@@ -1,143 +1,87 @@
 /*
 =========================================================
-NEYO — SEND / STOP STATE
-FINAL PRODUCTION MIXER v7
+NEO — SEND / STOP STATE
+Production v1
 
-FILE:
-public/js/components/send-state.js
-
-OWNS
----------------------------------------------------------
-- Send button interaction
-- Stop button interaction
+Owns:
+- #sendBtn
 - Enter to send
 - Shift+Enter newline
-- IME-safe keyboard handling
 - Send / Stop visual state
-- Canonical chat-send dispatch
-- Sent attachment cleanup
-- Composer text cleanup after accepted dispatch
-- Composer reset on new chat
+- composer → chat dispatch
+- cleanup of successfully accepted composer payload
 
-DOES NOT OWN
----------------------------------------------------------
+Does NOT own:
 - /api/chat
-- Conversation state
-- Message DOM
-- Attachment upload / processing
-- Markdown
-- History persistence
-- Composer autosize implementation
-- Voice
-
-MIGRATION RULE
----------------------------------------------------------
-This controller is authoritative even while legacy neo.js
-is physically loaded. Capture-phase interception prevents
-legacy send handlers from also executing.
-
-After neo.js is removed this file continues unchanged.
+- conversation state
+- message DOM
+- attachment upload
+- textarea autosize
+- model picker
+- topbar
 =========================================================
 */
 
 (() => {
   "use strict";
 
-  const VERSION =
-    "neyo-send-state-final-v7";
+  const VERSION = "neo-send-state-production-v1";
 
-  if (
-    window.NeyoSendState
-      ?.__controller === true
-  ) {
+  if (window.NeyoSendState?.__controller === true) return;
+
+  /* =====================================================
+     DOM
+     ===================================================== */
+
+  const sendBtn =
+    document.getElementById("sendBtn");
+
+  const chatInput =
+    document.getElementById("chatInput");
+
+  if (!sendBtn || !chatInput) {
+    console.warn(
+      "[NEO Send] Required composer DOM is missing."
+    );
+
     return;
   }
-
-  /* =====================================================
-     CONFIG
-     ===================================================== */
-
-  const CONFIG =
-    Object.freeze({
-      duplicateSendWindowMs:
-        220,
-
-      maxTextLength:
-        50_000
-    });
-
-  /* =====================================================
-     LEGACY TELEMETRY
-
-     IMPORTANT:
-     neo.js presence is informational ONLY.
-
-     It does NOT disable this controller.
-     ===================================================== */
-
-  const legacyScriptPresent =
-    Array
-      .from(
-        document.scripts || []
-      )
-      .some(
-        script =>
-          /(?:^|\/)neo\.js(?:\?|$)/
-            .test(
-              script.src || ""
-            )
-      );
 
   /* =====================================================
      STATE
      ===================================================== */
 
   const state = {
-    active:
-      true,
+    generating: false,
+    sending: false,
+    composing: false,
 
-    generating:
-      false,
+    readyAttachments: 0,
+    pendingAttachments: 0,
+    failedAttachments: 0,
 
-    sending:
-      false,
+    lastSendAt: 0,
 
-    stopRequested:
-      false,
-
-    composing:
-      false,
-
-    readyAttachments:
-      0,
-
-    pendingAttachments:
-      0,
-
-    failedAttachments:
-      0,
-
-    activeRequestId:
-      null,
-
-    lastSendAt:
-      0,
-
-    lastDispatchId:
-      null,
-
-    lastSource:
-      null,
-
-    routedSends:
-      0,
-
-    routedStops:
-      0
+    /*
+     * Payload waiting for chat.js acceptance.
+     *
+     * Composer text/files are cleared only after
+     * neyo:chat-send-start confirms the request.
+     */
+    pendingDispatch: null
   };
 
+  const legacyScriptPresent =
+    Array.from(
+      document.scripts || []
+    ).some(
+      script =>
+        /(?:^|\/)neo\.js(?:\?|$)/
+          .test(script.src || "")
+    );
+
   /* =====================================================
-     EVENTS
+     HELPERS
      ===================================================== */
 
   function emit(
@@ -147,139 +91,34 @@ After neo.js is removed this file continues unchanged.
     window.dispatchEvent(
       new CustomEvent(
         name,
-        {
-          detail
-        }
+        { detail }
       )
     );
-  }
-
-  /* =====================================================
-     DOM — DYNAMIC LOOKUP
-
-     Dynamic lookup means composer DOM may be rebuilt
-     without breaking this controller.
-     ===================================================== */
-
-  function getSendBtn() {
-    return document
-      .getElementById(
-        "sendBtn"
-      );
-  }
-
-  function getChatInput() {
-    return document
-      .getElementById(
-        "chatInput"
-      );
-  }
-
-  function isElement(
-    value
-  ) {
-    return (
-      value instanceof
-      Element
-    );
-  }
-
-  function closest(
-    target,
-    selector
-  ) {
-    if (
-      !isElement(target)
-    ) {
-      return null;
-    }
-
-    try {
-      return target.closest(
-        selector
-      );
-    } catch {
-      return null;
-    }
-  }
-
-  /* =====================================================
-     ID
-     ===================================================== */
-
-  function createId() {
-    return (
-      globalThis.crypto
-        ?.randomUUID
-        ?.() ||
-      (
-        `send_${Date.now()}_` +
-        Math.random()
-          .toString(36)
-          .slice(2)
-      )
-    );
-  }
-
-  /* =====================================================
-     TEXT
-     ===================================================== */
-
-  function normalizeRawText(
-    value
-  ) {
-    return String(
-      value ??
-      ""
-    )
-      .replace(
-        /\u0000/g,
-        ""
-      )
-      .replace(
-        /\r\n?/g,
-        "\n"
-      )
-      .slice(
-        0,
-        CONFIG.maxTextLength
-      );
   }
 
   function getRawText() {
-    const input =
-      getChatInput();
-
-    return normalizeRawText(
-      input?.value ||
-      ""
-    );
+    return String(
+      chatInput.value || ""
+    )
+      .replace(/\r\n?/g, "\n")
+      .replace(/\u0000/g, "");
   }
 
   function getText() {
-    return getRawText()
-      .trim();
+    return getRawText().trim();
   }
 
   function hasText() {
-    return (
-      getText().length >
-      0
-    );
+    return getText().length > 0;
   }
 
-  /* =====================================================
-     ATTACHMENT CONTROLLER
-     ===================================================== */
-
-  function attachmentController() {
+  function attachments() {
     const controller =
       window.NeyoAttachments;
 
     return (
       controller &&
-      typeof controller ===
-        "object"
+      typeof controller === "object"
     )
       ? controller
       : null;
@@ -288,21 +127,15 @@ After neo.js is removed this file continues unchanged.
   function getAllAttachments() {
     try {
       const value =
-        attachmentController()
-          ?.getAll
-          ?.();
+        attachments()?.getAll?.();
 
-      return Array.isArray(
-        value
-      )
+      return Array.isArray(value)
         ? value
         : [];
 
-    } catch (
-      error
-    ) {
+    } catch (error) {
       console.warn(
-        "[NEYO Send] Could not read attachments:",
+        "[NEO Send] Could not read attachments:",
         error
       );
 
@@ -313,41 +146,15 @@ After neo.js is removed this file continues unchanged.
   function getReadyAttachments() {
     try {
       const value =
-        attachmentController()
-          ?.getReady
-          ?.();
+        attachments()?.getReady?.();
 
-      if (
-        !Array.isArray(
-          value
-        )
-      ) {
-        return [];
-      }
+      return Array.isArray(value)
+        ? value
+        : [];
 
-      /*
-       * Defense-in-depth:
-       * getReady() should already enforce this,
-       * but Send validates again.
-       */
-
-      return value.filter(
-        item =>
-          Boolean(
-            item &&
-            item.ready === true &&
-            item.status ===
-              "ready" &&
-            item.bucket &&
-            item.path
-          )
-      );
-
-    } catch (
-      error
-    ) {
+    } catch (error) {
       console.warn(
-        "[NEYO Send] Could not read ready attachments:",
+        "[NEO Send] Could not read ready attachments:",
         error
       );
 
@@ -359,59 +166,37 @@ After neo.js is removed this file continues unchanged.
     const all =
       getAllAttachments();
 
-    state.readyAttachments =
-      0;
+    let ready = 0;
+    let pending = 0;
+    let failed = 0;
 
-    state.pendingAttachments =
-      0;
-
-    state.failedAttachments =
-      0;
-
-    for (
-      const item
-      of all
-    ) {
+    for (const item of all) {
       if (
-        item?.ready ===
-          true &&
-        item?.status ===
-          "ready" &&
-        item?.bucket &&
-        item?.path
+        item?.ready === true &&
+        item?.status === "ready"
       ) {
-        state.readyAttachments +=
-          1;
-
+        ready += 1;
         continue;
       }
 
       if (
-        item?.status ===
-        "error"
+        item?.status === "error"
       ) {
-        state.failedAttachments +=
-          1;
-
+        failed += 1;
         continue;
       }
 
-      state.pendingAttachments +=
-        1;
+      pending += 1;
     }
 
-    return {
-      all,
+    state.readyAttachments =
+      ready;
 
-      ready:
-        state.readyAttachments,
+    state.pendingAttachments =
+      pending;
 
-      pending:
-        state.pendingAttachments,
-
-      failed:
-        state.failedAttachments
-    };
+    state.failedAttachments =
+      failed;
   }
 
   /* =====================================================
@@ -426,188 +211,95 @@ After neo.js is removed this file continues unchanged.
     } catch {}
   }
 
-  /* =====================================================
-     COMPOSER REFRESH
-     ===================================================== */
-
-  function refreshComposer() {
-    try {
-      window.NeyoComposer
-        ?.refresh
-        ?.();
-    } catch {}
-
-    try {
-      window
-        .NeyoComposerScrollbar
-        ?.refresh
-        ?.();
-    } catch {}
-
-    emit(
-      "neyo:composer-layout-request",
-      {
-        source:
-          "send-state"
-      }
-    );
-  }
-
-  /* =====================================================
-     SEND ICON
-     ===================================================== */
-
-  function renderSendIcon(
-    button
-  ) {
-    if (!button) {
-      return;
-    }
-
-    button.innerHTML = `
+  function renderSendIcon() {
+    sendBtn.innerHTML = `
       <i
         data-lucide="arrow-up"
-        width="18"
-        height="18"
+        size="18"
         aria-hidden="true"
       ></i>
     `;
 
-    button.dataset.mode =
-      "send";
+    sendBtn.setAttribute(
+      "aria-label",
+      "Send message"
+    );
 
-    button.dataset.tooltip =
+    sendBtn.setAttribute(
+      "title",
+      "Send message"
+    );
+
+    sendBtn.dataset.tooltip =
       "Send message";
 
-    button.setAttribute(
-      "aria-label",
-      "Send message"
-    );
-
-    button.setAttribute(
-      "title",
-      "Send message"
-    );
-
     refreshIcons();
   }
 
-  /* =====================================================
-     STOP ICON
-     ===================================================== */
-
-  function renderStopIcon(
-    button
-  ) {
-    if (!button) {
-      return;
-    }
-
-    button.innerHTML = `
+  function renderStopIcon() {
+    sendBtn.innerHTML = `
       <i
         data-lucide="square"
-        width="15"
-        height="15"
+        size="15"
         aria-hidden="true"
       ></i>
     `;
 
-    button.dataset.mode =
-      "stop";
-
-    button.dataset.tooltip =
-      state.stopRequested
-        ? "Stopping…"
-        : "Stop generating";
-
-    button.setAttribute(
+    sendBtn.setAttribute(
       "aria-label",
-      state.stopRequested
-        ? "Stopping generation"
-        : "Stop generating"
+      "Stop generating"
     );
 
-    button.setAttribute(
+    sendBtn.setAttribute(
       "title",
-      state.stopRequested
-        ? "Stopping…"
-        : "Stop generating"
+      "Stop generating"
     );
+
+    sendBtn.dataset.tooltip =
+      "Stop generating";
 
     refreshIcons();
   }
 
   /* =====================================================
-     CAN SEND
+     SEND AVAILABILITY
 
-     ChatGPT-standard:
-     -----------------------------------------------------
-     text                       → yes
-     ready attachment           → yes
-     text + pending attachment  → yes
-     text + failed attachment   → yes
-     pending only               → no
-     failed only                → no
-     generating                 → button becomes Stop
+     ChatGPT-standard behavior:
+
+     Text                         → send
+     Ready attachment             → send
+     Text + pending attachment    → send text
+     Text + failed attachment     → send text
+     Only pending attachment      → disabled
+     Only failed attachment       → disabled
+     Generating                   → button = Stop
      ===================================================== */
 
   function canSend() {
     syncAttachments();
 
-    if (
-      !state.active
-    ) {
-      return false;
-    }
-
-    /*
-     * Generating means same button
-     * is currently STOP.
-     */
-
-    if (
-      state.generating
-    ) {
+    if (state.generating) {
       return true;
     }
 
-    if (
-      state.sending
-    ) {
+    if (state.sending) {
       return false;
     }
 
     return (
       hasText() ||
-      state.readyAttachments >
-        0
+      state.readyAttachments > 0
     );
   }
 
   /* =====================================================
-     BUTTON UI
+     BUTTON
      ===================================================== */
 
   function updateButton() {
-    const sendBtn =
-      getSendBtn();
-
     syncAttachments();
 
-    if (!sendBtn) {
-      return false;
-    }
-
-    sendBtn.type =
-      "button";
-
-    /* -------------------------------------------------
-       GENERATING / STOP MODE
-       ------------------------------------------------- */
-
-    if (
-      state.generating
-    ) {
+    if (state.generating) {
       sendBtn.disabled =
         false;
 
@@ -615,55 +307,31 @@ After neo.js is removed this file continues unchanged.
         "is-generating"
       );
 
-      sendBtn.classList.toggle(
-        "is-stopping",
-        state.stopRequested
-      );
-
       sendBtn.classList.remove(
         "is-disabled",
         "is-ready"
       );
 
-      if (
-        state.stopRequested
-      ) {
-        sendBtn.setAttribute(
-          "aria-busy",
-          "true"
-        );
-
-      } else {
-        sendBtn.removeAttribute(
-          "aria-busy"
-        );
-      }
-
-      renderStopIcon(
-        sendBtn
+      sendBtn.removeAttribute(
+        "aria-busy"
       );
+
+      renderStopIcon();
 
       return true;
     }
 
-    /* -------------------------------------------------
-       SEND MODE
-       ------------------------------------------------- */
-
-    renderSendIcon(
-      sendBtn
-    );
-
-    sendBtn.classList.remove(
-      "is-generating",
-      "is-stopping"
-    );
+    renderSendIcon();
 
     const enabled =
       canSend();
 
     sendBtn.disabled =
       !enabled;
+
+    sendBtn.classList.remove(
+      "is-generating"
+    );
 
     sendBtn.classList.toggle(
       "is-disabled",
@@ -675,14 +343,11 @@ After neo.js is removed this file continues unchanged.
       enabled
     );
 
-    if (
-      state.sending
-    ) {
+    if (state.sending) {
       sendBtn.setAttribute(
         "aria-busy",
         "true"
       );
-
     } else {
       sendBtn.removeAttribute(
         "aria-busy"
@@ -693,187 +358,198 @@ After neo.js is removed this file continues unchanged.
   }
 
   /* =====================================================
-     CLEAR COMPOSER TEXT
+     COMPOSER CLEANUP
      ===================================================== */
 
-  function clearText({
-    focus = false
-  } = {}) {
-    const input =
-      getChatInput();
+  function clearText() {
+    chatInput.value = "";
 
-    if (!input) {
-      return false;
-    }
-
-    input.value =
-      "";
-
-    /*
-     * Existing autosize / suggestions /
-     * send-state consumers still receive
-     * normal input lifecycle.
-     */
-
-    input.dispatchEvent(
+    chatInput.dispatchEvent(
       new Event(
         "input",
         {
-          bubbles:
-            true
+          bubbles: true
         }
       )
     );
 
-    refreshComposer();
+    try {
+      window.NeyoComposer
+        ?.refresh
+        ?.();
+    } catch {}
 
-    if (focus) {
+    try {
+      window.NeyoComposerScrollbar
+        ?.refresh
+        ?.();
+    } catch {}
+  }
+
+  function removeAttachments(
+    list
+  ) {
+    const controller =
+      attachments();
+
+    if (
+      !controller ||
+      typeof controller.remove !==
+        "function" ||
+      !Array.isArray(list)
+    ) {
+      return;
+    }
+
+    for (const item of list) {
+      if (!item?.id) continue;
+
       try {
-        input.focus({
-          preventScroll:
-            true
-        });
-
-      } catch {
-        try {
-          input.focus();
-        } catch {}
+        controller.remove(
+          item.id
+        );
+      } catch (error) {
+        console.warn(
+          "[NEO Send] Could not remove sent attachment:",
+          error
+        );
       }
     }
+  }
+
+  /* =====================================================
+     DISPATCH MATCH
+
+     Confirms that chat-send-start belongs to the exact
+     composer request we just dispatched.
+     ===================================================== */
+
+  function dispatchMatches(
+    detail,
+    pending
+  ) {
+    if (!pending) {
+      return false;
+    }
+
+    const acceptedText =
+      String(
+        detail?.text || ""
+      ).trim();
+
+    if (
+      acceptedText !==
+      pending.text
+    ) {
+      return false;
+    }
+
+    const acceptedAttachments =
+      Array.isArray(
+        detail?.attachments
+      )
+        ? detail.attachments
+        : [];
+
+    const acceptedIds =
+      acceptedAttachments
+        .map(item =>
+          String(item?.id || "")
+        )
+        .filter(Boolean)
+        .sort();
+
+    const pendingIds =
+      pending.attachments
+        .map(item =>
+          String(item?.id || "")
+        )
+        .filter(Boolean)
+        .sort();
+
+    if (
+      acceptedIds.length !==
+      pendingIds.length
+    ) {
+      return false;
+    }
+
+    return acceptedIds.every(
+      (id, index) =>
+        id === pendingIds[index]
+    );
+  }
+
+  /* =====================================================
+     COMMIT ACCEPTED SEND
+
+     Composer cleanup occurs only after chat.js confirms
+     generation has actually started.
+     ===================================================== */
+
+  function commitPendingDispatch(
+    detail
+  ) {
+    const pending =
+      state.pendingDispatch;
+
+    if (
+      !dispatchMatches(
+        detail,
+        pending
+      )
+    ) {
+      return false;
+    }
+
+    state.pendingDispatch =
+      null;
+
+    clearText();
+
+    removeAttachments(
+      pending.attachments
+    );
+
+    emit(
+      "neyo:composer-message-dispatched",
+      {
+        text:
+          pending.text,
+
+        attachments:
+          pending.attachments,
+
+        attachmentCount:
+          pending.attachments.length,
+
+        requestId:
+          detail?.requestId ||
+          null
+      }
+    );
 
     return true;
   }
 
   /* =====================================================
-     REMOVE ONLY ATTACHMENTS INCLUDED IN SEND
-
-     Pending and failed files remain in composer.
+     STOP
      ===================================================== */
 
-  function removeSentAttachments(
-    sent
+  function stopGeneration(
+    reason =
+      "send-button"
   ) {
-    const controller =
-      attachmentController();
-
     if (
-      !controller ||
-      !Array.isArray(sent) ||
-      sent.length === 0
+      !state.generating
     ) {
-      return 0;
-    }
-
-    const ids =
-      sent
-        .map(
-          item =>
-            item?.id
-        )
-        .filter(Boolean);
-
-    if (
-      ids.length ===
-      0
-    ) {
-      return 0;
-    }
-
-    /*
-     * Preferred v7 attachment API.
-     */
-
-    try {
-      if (
-        typeof controller
-          .removeMany ===
-        "function"
-      ) {
-        return (
-          Number(
-            controller.removeMany(
-              ids
-            )
-          ) ||
-          0
-        );
-      }
-
-    } catch (
-      error
-    ) {
-      console.warn(
-        "[NEYO Send] removeMany() failed:",
-        error
-      );
-    }
-
-    /*
-     * Backward-compatible fallback.
-     */
-
-    let removed =
-      0;
-
-    for (
-      const id
-      of ids
-    ) {
-      try {
-        if (
-          controller
-            .remove
-            ?.(id)
-        ) {
-          removed +=
-            1;
-        }
-
-      } catch (
-        error
-      ) {
-        console.warn(
-          "[NEYO Send] Could not remove sent attachment:",
-          error
-        );
-      }
-    }
-
-    return removed;
-  }
-
-  /* =====================================================
-     CLEAR ALL ATTACHMENTS
-     Used when a genuinely new chat is created.
-     ===================================================== */
-
-  function clearAllAttachments() {
-    const controller =
-      attachmentController();
-
-    try {
-      if (
-        typeof controller
-          ?.clear ===
-        "function"
-      ) {
-        return Boolean(
-          controller.clear()
-        );
-      }
-
-    } catch (
-      error
-    ) {
-      console.warn(
-        "[NEYO Send] Could not clear attachments:",
-        error
-      );
+      return false;
     }
 
     emit(
-      "neyo:attachments-clear-request",
+      "neyo:chat-stop-request",
       {
+        reason,
         source:
           "send-state"
       }
@@ -883,492 +559,123 @@ After neo.js is removed this file continues unchanged.
   }
 
   /* =====================================================
-     CHAT GENERATING STATE
-
-     Local lifecycle state is authoritative for UI,
-     NeyoChat is a defensive fallback.
-     ===================================================== */
-
-  function chatIsGenerating() {
-    if (
-      state.generating
-    ) {
-      return true;
-    }
-
-    try {
-      if (
-        window.NeyoChat
-          ?.isGenerating
-          ?.() === true
-      ) {
-        return true;
-      }
-    } catch {}
-
-    try {
-      return Boolean(
-        window.NeyoChat
-          ?.getState
-          ?.()
-          ?.generating
-      );
-
-    } catch {
-      return false;
-    }
-  }
-
-  /* =====================================================
-     STOP
-     ===================================================== */
-
-  function stopGeneration(
-    source = "button"
-  ) {
-    if (
-      !state.active ||
-      !chatIsGenerating()
-    ) {
-      return false;
-    }
-
-    /*
-     * Ignore repeated stop clicks while
-     * chat.js is processing AbortController.
-     */
-
-    if (
-      state.stopRequested
-    ) {
-      return true;
-    }
-
-    state.stopRequested =
-      true;
-
-    state.routedStops +=
-      1;
-
-    state.lastSource =
-      source;
-
-    updateButton();
-
-    emit(
-      "neyo:chat-stop-request",
-      {
-        requestId:
-          state.activeRequestId,
-
-        source
-      }
-    );
-
-    emit(
-      "neyo:composer-stop-requested",
-      {
-        requestId:
-          state.activeRequestId,
-
-        source
-      }
-    );
-
-    /*
-     * Do NOT set generating=false here.
-     *
-     * chat.js owns the real AbortController
-     * and will emit aborted/send-end.
-     */
-
-    return true;
-  }
-
-  /* =====================================================
-     PROGRAMMATIC SEND OPTIONS
-     ===================================================== */
-
-  function normalizeSendOptions(
-    value
-  ) {
-    /*
-     * NeyoSendState.send("hello")
-     */
-
-    if (
-      typeof value ===
-      "string"
-    ) {
-      return {
-        text:
-          normalizeRawText(
-            value
-          )
-            .trim(),
-
-        attachments:
-          null,
-
-        source:
-          "api",
-
-        cleanupText:
-          false,
-
-        cleanupAttachments:
-          false,
-
-        focusAfterSend:
-          false
-      };
-    }
-
-    /*
-     * NeyoSendState.send({...})
-     */
-
-    if (
-      value &&
-      typeof value ===
-        "object"
-    ) {
-      return {
-        text:
-          Object.prototype
-            .hasOwnProperty
-            .call(
-              value,
-              "text"
-            )
-
-            ? normalizeRawText(
-                value.text
-              )
-                .trim()
-
-            : null,
-
-        attachments:
-          Array.isArray(
-            value.attachments
-          )
-            ? value.attachments
-            : null,
-
-        source:
-          String(
-            value.source ||
-            "api"
-          ),
-
-        cleanupText:
-          value.cleanupText !==
-          false,
-
-        cleanupAttachments:
-          value
-            .cleanupAttachments !==
-          false,
-
-        focusAfterSend:
-          value.focusAfterSend ===
-          true
-      };
-    }
-
-    /*
-     * Default composer send.
-     */
-
-    return {
-      text:
-        null,
-
-      attachments:
-        null,
-
-      source:
-        "composer",
-
-      cleanupText:
-        true,
-
-      cleanupAttachments:
-        true,
-
-      focusAfterSend:
-        false
-    };
-  }
-
-  /* =====================================================
-     DISPATCH ACCEPTANCE
-
-     chat.js emits neyo:chat-send-start synchronously
-     before its first network await.
-
-     Therefore after CustomEvent dispatch returns,
-     generating=true means canonical chat accepted
-     the message.
-
-     If chat.js did NOT accept it, composer is NOT cleared.
-     ===================================================== */
-
-  function dispatchWasAccepted() {
-    return chatIsGenerating();
-  }
-
-  /* =====================================================
      SEND
      ===================================================== */
 
-  function sendMessage(
-    options = null
-  ) {
-    if (
-      !state.active
-    ) {
-      return false;
-    }
-
-    /*
-     * Same visible button:
-     * while generating it becomes Stop.
-     */
-
-    if (
-      chatIsGenerating()
-    ) {
-      return stopGeneration(
-        options?.source ||
-        "button"
-      );
-    }
-
-    /*
-     * Guard duplicate synchronous sends.
-     */
-
-    if (
-      state.sending
-    ) {
-      return false;
-    }
-
+  function requestSend() {
     syncAttachments();
 
-    const normalized =
-      normalizeSendOptions(
-        options
-      );
+    /*
+     * Same physical button changes to Stop.
+     */
 
-    const composerText =
-      getText();
+    if (state.generating) {
+      return stopGeneration();
+    }
+
+    if (state.sending) {
+      return false;
+    }
 
     const text =
-      normalized.text !==
-        null
-
-        ? normalized.text
-
-        : composerText;
+      getText();
 
     const readyAttachments =
-      normalized.attachments !==
-        null
-
-        ? normalized
-            .attachments
-            .filter(
-              item =>
-                Boolean(
-                  item &&
-                  item.ready ===
-                    true &&
-                  item.status ===
-                    "ready" &&
-                  item.bucket &&
-                  item.path
-                )
-            )
-
-        : getReadyAttachments();
-
-    /* -------------------------------------------------
-       NOTHING USABLE
-       ------------------------------------------------- */
+      getReadyAttachments();
 
     if (
       !text &&
-      readyAttachments.length ===
-        0
+      readyAttachments.length === 0
     ) {
       updateButton();
 
       return false;
     }
 
-    /* -------------------------------------------------
-       DOUBLE CLICK / DOUBLE ENTER PROTECTION
-       ------------------------------------------------- */
+    /*
+     * Protect against duplicate legacy/modular click
+     * handlers firing during migration.
+     */
 
     const now =
       performance.now();
 
     if (
-      now -
-        state.lastSendAt <
-      CONFIG
-        .duplicateSendWindowMs
+      now - state.lastSendAt <
+      180
     ) {
       return false;
     }
 
-    const dispatchId =
-      createId();
-
     state.lastSendAt =
       now;
-
-    state.lastDispatchId =
-      dispatchId;
-
-    state.lastSource =
-      normalized.source;
 
     state.sending =
       true;
 
-    state.stopRequested =
-      false;
+    state.pendingDispatch = {
+      text,
+
+      attachments:
+        readyAttachments.map(
+          item => ({ ...item })
+        ),
+
+      createdAt:
+        Date.now()
+    };
 
     updateButton();
 
-    /* -------------------------------------------------
-       CANONICAL CHAT CONTRACT
-
-       Only READY attachments go to chat.js.
-
-       Pending/error files stay in the composer and
-       never block normal text.
-       ------------------------------------------------- */
+    /*
+     * chat.js is the only consumer that owns transport.
+     */
 
     emit(
       "neyo:chat-send-request",
       {
-        dispatchId,
-
         text,
 
         attachments:
           readyAttachments,
 
         source:
-          normalized.source
+          "send-state"
       }
     );
 
-    /* -------------------------------------------------
-       ACCEPTANCE CHECK
+    /*
+     * chat.js emits neyo:chat-send-start synchronously
+     * when it accepts the request.
+     *
+     * If no start event arrived, restore Send state and
+     * KEEP the user's composer content/files untouched.
+     */
 
-       If chat.js is absent/busy/rejected the event,
-       preserve composer content instead of losing it.
-       ------------------------------------------------- */
-
-    const accepted =
-      dispatchWasAccepted();
-
-    if (
-      !accepted
-    ) {
-      state.sending =
-        false;
-
-      updateButton();
-
-      emit(
-        "neyo:composer-message-rejected",
-        {
-          dispatchId,
-
-          text,
-
-          attachmentCount:
-            readyAttachments
-              .length,
-
-          source:
-            normalized.source,
-
-          reason:
-            "chat-did-not-start"
+    queueMicrotask(
+      () => {
+        if (
+          !state.pendingDispatch
+        ) {
+          return;
         }
-      );
 
-      return false;
-    }
+        state.pendingDispatch =
+          null;
 
-    /* -------------------------------------------------
-       CLEAR COMPOSER TEXT
+        state.sending =
+          false;
 
-       Only clear native composer text when the send
-       actually originated from the composer.
-       ------------------------------------------------- */
+        updateButton();
 
-    if (
-      normalized.cleanupText &&
-      normalized.text ===
-        null
-    ) {
-      clearText({
-        focus:
-          normalized
-            .focusAfterSend
-      });
-    }
-
-    /* -------------------------------------------------
-       REMOVE ONLY SENT ATTACHMENTS
-
-       Pending/error attachments remain.
-       ------------------------------------------------- */
-
-    if (
-      normalized
-        .cleanupAttachments &&
-      normalized.attachments ===
-        null
-    ) {
-      removeSentAttachments(
-        readyAttachments
-      );
-    }
-
-    state.sending =
-      false;
-
-    state.routedSends +=
-      1;
-
-    updateButton();
-
-    emit(
-      "neyo:composer-message-dispatched",
-      {
-        dispatchId,
-
-        requestId:
-          state.activeRequestId,
-
-        text,
-
-        attachmentCount:
-          readyAttachments
-            .length,
-
-        source:
-          normalized.source
+        emit(
+          "neyo:composer-send-not-accepted",
+          {
+            text,
+            attachmentCount:
+              readyAttachments.length
+          }
+        );
       }
     );
 
@@ -1376,108 +683,51 @@ After neo.js is removed this file continues unchanged.
   }
 
   /* =====================================================
-     EVENT CONSUMPTION
+     BUTTON CLICK
 
-     This is what prevents neo.js from executing its
-     own send handlers while it still exists.
+     Capture phase is intentional.
+     It prevents old neo.js listeners from sending the same
+     composer payload a second time.
      ===================================================== */
 
-  function consume(
+  function handleClick(
     event
   ) {
     event.preventDefault();
-
     event.stopPropagation();
+    event.stopImmediatePropagation();
 
-    event
-      .stopImmediatePropagation();
+    requestSend();
   }
 
   /* =====================================================
-     SEND BUTTON — CAPTURE PHASE
-     ===================================================== */
-
-  function handleSendClick(
-    event
-  ) {
-    const button =
-      closest(
-        event.target,
-        "#sendBtn"
-      );
-
-    if (!button) {
-      return;
-    }
-
-    /*
-     * We own this control.
-     * Legacy handler must never run.
-     */
-
-    consume(
-      event
-    );
-
-    if (
-      chatIsGenerating()
-    ) {
-      stopGeneration(
-        "button"
-      );
-
-      return;
-    }
-
-    sendMessage({
-      source:
-        "button",
-
-      cleanupText:
-        true,
-
-      cleanupAttachments:
-        true
-    });
-  }
-
-  /* =====================================================
-     KEYBOARD — ENTER
+     KEYBOARD
      ===================================================== */
 
   function handleKeyDown(
     event
   ) {
-    const input =
-      closest(
-        event.target,
-        "#chatInput"
-      );
-
     if (
-      !input ||
-      event.key !==
-        "Enter"
+      event.key !== "Enter"
     ) {
       return;
     }
 
-    /* -------------------------------------------------
-       IME / EAST-ASIAN COMPOSITION
-       ------------------------------------------------- */
+    /*
+     * IME / composition input.
+     */
 
     if (
       event.isComposing ||
       state.composing ||
-      event.keyCode ===
-        229
+      event.keyCode === 229
     ) {
       return;
     }
 
-    /* -------------------------------------------------
-       SHIFT + ENTER = NEW LINE
-       ------------------------------------------------- */
+    /*
+     * Shift+Enter always creates a newline.
+     */
 
     if (
       event.shiftKey
@@ -1485,10 +735,9 @@ After neo.js is removed this file continues unchanged.
       return;
     }
 
-    /* -------------------------------------------------
-       CTRL / CMD / ALT + ENTER
-       Leave untouched for application/browser shortcuts.
-       ------------------------------------------------- */
+    /*
+     * Preserve OS/browser modifier shortcuts.
+     */
 
     if (
       event.altKey ||
@@ -1498,43 +747,23 @@ After neo.js is removed this file continues unchanged.
       return;
     }
 
-    /* -------------------------------------------------
-       ENTER NEVER ACTS AS STOP
-
-       User must explicitly click Stop.
-       Prevent accidental newline while generating.
-       ------------------------------------------------- */
+    /*
+     * Enter does NOT stop generation.
+     * Stop remains an explicit button action.
+     */
 
     if (
-      chatIsGenerating()
-    ) {
-      consume(
-        event
-      );
-
-      return;
-    }
-
-    if (
+      state.generating ||
       !canSend()
     ) {
       return;
     }
 
-    consume(
-      event
-    );
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation();
 
-    sendMessage({
-      source:
-        "keyboard",
-
-      cleanupText:
-        true,
-
-      cleanupAttachments:
-        true
-    });
+    requestSend();
   }
 
   /* =====================================================
@@ -1544,10 +773,14 @@ After neo.js is removed this file continues unchanged.
   function generationStarted(
     event
   ) {
-    const requestId =
-      event?.detail
-        ?.requestId ??
-      null;
+    /*
+     * Commit composer cleanup only for our own pending
+     * request.
+     */
+
+    commitPendingDispatch(
+      event.detail || {}
+    );
 
     state.generating =
       true;
@@ -1555,208 +788,103 @@ After neo.js is removed this file continues unchanged.
     state.sending =
       false;
 
-    state.stopRequested =
+    updateButton();
+  }
+
+  function generationFinished() {
+    state.generating =
       false;
 
-    state.activeRequestId =
-      requestId;
+    state.sending =
+      false;
+
+    state.pendingDispatch =
+      null;
 
     updateButton();
   }
 
-  function lifecycleMatches(
-    event
+  /* =====================================================
+     CHAT STATE SYNC
+
+     Useful when send-state loads after chat.js or a history
+     conversation is restored.
+     ===================================================== */
+
+  function syncChatState(
+    detail = null
   ) {
-    const eventId =
-      event?.detail
-        ?.requestId;
-
-    /*
-     * Legacy / compatibility events may have no ID.
-     */
-
     if (
-      eventId == null ||
-      state.activeRequestId == null
+      detail &&
+      typeof detail.generating ===
+        "boolean"
     ) {
-      return true;
-    }
+      state.generating =
+        detail.generating;
 
-    return (
-      String(eventId) ===
-      String(
-        state.activeRequestId
-      )
-    );
-  }
+      updateButton();
 
-  function generationFinished(
-    event
-  ) {
-    /*
-     * Ignore stale lifecycle event from
-     * a superseded request.
-     */
-
-    if (
-      !lifecycleMatches(
-        event
-      )
-    ) {
       return;
     }
 
-    state.generating =
-      false;
-
-    state.sending =
-      false;
-
-    state.stopRequested =
-      false;
-
-    state.activeRequestId =
-      null;
-
-    updateButton();
-  }
-
-  /* =====================================================
-     NEW CHAT COMPOSER RESET
-     ===================================================== */
-
-  function resetComposerForNewChat() {
-    state.generating =
-      false;
-
-    state.sending =
-      false;
-
-    state.stopRequested =
-      false;
-
-    state.activeRequestId =
-      null;
-
-    clearText();
-
-    clearAllAttachments();
-
-    updateButton();
-
-    return true;
-  }
-
-  /* =====================================================
-     SET GENERATING
-     Compatibility API
-     ===================================================== */
-
-  function setGenerating(
-    value,
-    options = {}
-  ) {
-    state.generating =
-      Boolean(value);
-
-    if (
-      !state.generating
-    ) {
-      state.stopRequested =
+    try {
+      state.generating =
+        Boolean(
+          window.NeyoChat
+            ?.isGenerating
+            ?.()
+        );
+    } catch {
+      state.generating =
         false;
-
-      state.activeRequestId =
-        null;
-
-    } else if (
-      options.requestId !==
-      undefined
-    ) {
-      state.activeRequestId =
-        options.requestId;
     }
 
     updateButton();
-
-    return state.generating;
   }
 
   /* =====================================================
-     DOCUMENT EVENT OWNERSHIP
-
-     Delegated listeners survive composer DOM replacement.
+     EVENTS
      ===================================================== */
 
-  document.addEventListener(
+  sendBtn.addEventListener(
     "click",
-    handleSendClick,
+    handleClick,
     true
   );
 
-  document.addEventListener(
+  chatInput.addEventListener(
+    "compositionstart",
+    () => {
+      state.composing =
+        true;
+    }
+  );
+
+  chatInput.addEventListener(
+    "compositionend",
+    () => {
+      state.composing =
+        false;
+
+      updateButton();
+    }
+  );
+
+  chatInput.addEventListener(
     "keydown",
     handleKeyDown,
     true
   );
 
-  document.addEventListener(
-    "compositionstart",
-    event => {
-      if (
-        closest(
-          event.target,
-          "#chatInput"
-        )
-      ) {
-        state.composing =
-          true;
-      }
-    },
-    true
-  );
-
-  document.addEventListener(
-    "compositionend",
-    event => {
-      if (
-        closest(
-          event.target,
-          "#chatInput"
-        )
-      ) {
-        state.composing =
-          false;
-
-        updateButton();
-      }
-    },
-    true
-  );
-
-  document.addEventListener(
+  chatInput.addEventListener(
     "input",
-    event => {
-      if (
-        closest(
-          event.target,
-          "#chatInput"
-        )
-      ) {
-        updateButton();
-      }
-    },
-    true
+    updateButton
   );
-
-  /* =====================================================
-     ATTACHMENT EVENTS
-     ===================================================== */
 
   for (
     const eventName
     of [
       "neyo:attachments-change",
-      "neyo:attachment-added",
       "neyo:attachment-ready",
       "neyo:attachment-error",
       "neyo:attachment-removed",
@@ -1769,18 +897,10 @@ After neo.js is removed this file continues unchanged.
     );
   }
 
-  /* =====================================================
-     CHAT START
-     ===================================================== */
-
   window.addEventListener(
     "neyo:chat-send-start",
     generationStarted
   );
-
-  /* =====================================================
-     CHAT FINISH
-     ===================================================== */
 
   for (
     const eventName
@@ -1789,7 +909,9 @@ After neo.js is removed this file continues unchanged.
       "neyo:chat-response",
       "neyo:chat-error",
       "neyo:chat-aborted",
-      "neyo:chat-limit-reached"
+      "neyo:chat-limit-reached",
+      "neyo:chat-new",
+      "neyo:chat-state-loaded"
     ]
   ) {
     window.addEventListener(
@@ -1798,69 +920,18 @@ After neo.js is removed this file continues unchanged.
     );
   }
 
-  /* =====================================================
-     CHAT BUSY SYNC
-     ===================================================== */
-
   window.addEventListener(
-    "neyo:chat-busy",
-    () => {
-      try {
-        state.generating =
-          Boolean(
-            window.NeyoChat
-              ?.isGenerating
-              ?.() ||
-            window.NeyoChat
-              ?.getState
-              ?.()
-              ?.generating
-          );
-
-      } catch {}
-
-      state.sending =
-        false;
-
-      updateButton();
+    "neyo:chat-state",
+    event => {
+      syncChatState(
+        event.detail || {}
+      );
     }
   );
 
-  /* =====================================================
-     NEW CHAT
-     ===================================================== */
-
   window.addEventListener(
-    "neyo:chat-new",
-    resetComposerForNewChat
-  );
-
-  /* =====================================================
-     EXPLICIT UPDATE / RESET EVENTS
-     ===================================================== */
-
-  window.addEventListener(
-    "neyo:send-state-update-request",
+    "neyo:send-state-refresh",
     updateButton
-  );
-
-  window.addEventListener(
-    "neyo:send-state-reset-request",
-    () => {
-      state.generating =
-        false;
-
-      state.sending =
-        false;
-
-      state.stopRequested =
-        false;
-
-      state.activeRequestId =
-        null;
-
-      updateButton();
-    }
   );
 
   /* =====================================================
@@ -1875,27 +946,17 @@ After neo.js is removed this file continues unchanged.
       version:
         VERSION,
 
-      /*
-       * Always authoritative.
-       */
-
       active:
         true,
 
-      directOwner:
-        true,
-
       /*
-       * Telemetry only.
+       * Main operations
        */
 
-      legacyScriptPresent,
-
-      legacyOwnerActive:
-        false,
-
       send:
-        sendMessage,
+        requestSend,
+
+      requestSend,
 
       stop:
         stopGeneration,
@@ -1903,18 +964,39 @@ After neo.js is removed this file continues unchanged.
       update:
         updateButton,
 
+      refresh:
+        updateButton,
+
       canSend,
 
-      clearText,
+      /*
+       * Compatibility / state sync
+       */
 
-      resetComposer:
-        resetComposerForNewChat,
+      setGenerating(
+        value
+      ) {
+        state.generating =
+          Boolean(value);
 
-      setGenerating,
+        if (
+          !state.generating
+        ) {
+          state.sending =
+            false;
 
-      getText,
+          state.pendingDispatch =
+            null;
+        }
 
-      getReadyAttachments,
+        updateButton();
+
+        return state.generating;
+      },
+
+      /*
+       * Diagnostics
+       */
 
       getState() {
         syncAttachments();
@@ -1926,22 +1008,11 @@ After neo.js is removed this file continues unchanged.
           active:
             true,
 
-          directOwner:
-            true,
-
-          legacyScriptPresent,
-
-          legacyOwnerActive:
-            false,
-
           generating:
             state.generating,
 
           sending:
             state.sending,
-
-          stopping:
-            state.stopRequested,
 
           composing:
             state.composing,
@@ -1958,23 +1029,15 @@ After neo.js is removed this file continues unchanged.
           failedAttachments:
             state.failedAttachments,
 
+          pendingDispatch:
+            Boolean(
+              state.pendingDispatch
+            ),
+
           canSend:
             canSend(),
 
-          activeRequestId:
-            state.activeRequestId,
-
-          lastDispatchId:
-            state.lastDispatchId,
-
-          lastSource:
-            state.lastSource,
-
-          routedSends:
-            state.routedSends,
-
-          routedStops:
-            state.routedStops
+          legacyScriptPresent
         };
       }
     });
@@ -2001,7 +1064,7 @@ After neo.js is removed this file continues unchanged.
      INIT
      ===================================================== */
 
-  updateButton();
+  syncChatState();
 
   emit(
     "neyo:send-state-ready",
@@ -2012,13 +1075,10 @@ After neo.js is removed this file continues unchanged.
       active:
         true,
 
-      directOwner:
+      authoritativeOwner:
         true,
 
-      legacyScriptPresent,
-
-      legacyOwnerActive:
-        false
+      legacyScriptPresent
     }
   );
 })();

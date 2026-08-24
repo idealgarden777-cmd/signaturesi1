@@ -1,57 +1,27 @@
 /*
 =========================================================
-NEYO — MESSAGE RENDERER
-FINAL PRODUCTION MIXER v7
+NEO — MESSAGE RENDERER
+Production v1
 
-FILE:
-public/js/components/message-renderer.js
+Owns:
+- assistant Markdown rendering
+- HTML sanitization
+- safe links / images
+- code block enhancement
+- code copy
+- syntax highlighting
+- responsive tables
+- KaTeX auto-render hook
+- plain-text fallback
 
-OWNS
----------------------------------------------------------
-- Assistant Markdown rendering
-- Plain-text rendering
-- DOMPurify sanitization
-- Safe URL handling
-- Safe link hardening
-- Safe Markdown images
-- Inline code
-- Code blocks
-- Code language labels
-- Code copy
-- Syntax highlighting
-- Scrollable table wrappers
-- KaTeX auto-render
-- Rendering lifecycle events
-- Safe fallbacks when libraries are unavailable
-
-DOES NOT OWN
----------------------------------------------------------
-- Message DOM shell
-- Chat API
-- Conversation state
-- Attachments
-- Sources
-- Thinking state
-- Message copy action
-- Edit
-- Regenerate
-- Share
-- History
-- Send / Enter
-
-IMPORTANT
----------------------------------------------------------
-Code-block copy belongs here because it is intrinsic to
-rendered code.
-
-Whole-message Copy/Edit/Regenerate/Share belongs later to
-message-actions.js.
-
-MIGRATION RULE
----------------------------------------------------------
-This renderer stays active regardless of neo.js presence.
-
-After neo.js is removed this file continues unchanged.
+Does NOT own:
+- message shells
+- conversation state
+- /api/chat
+- copy/share message actions
+- edit/regenerate
+- source pills
+- attachments
 =========================================================
 */
 
@@ -59,7 +29,7 @@ After neo.js is removed this file continues unchanged.
   "use strict";
 
   const VERSION =
-    "neyo-message-renderer-final-v7";
+    "neo-message-renderer-production-v1";
 
   if (
     window.NeyoMessageRenderer
@@ -72,85 +42,18 @@ After neo.js is removed this file continues unchanged.
      CONFIG
      ===================================================== */
 
-  const CONFIG =
-    Object.freeze({
-      maxContentLength:
-        500_000,
+  const SAFE_LINK_PROTOCOLS =
+    new Set([
+      "http:",
+      "https:",
+      "mailto:"
+    ]);
 
-      copySuccessMs:
-        1400,
-
-      maxCodeLanguageLength:
-        40,
-
-      safeProtocols:
-        new Set([
-          "http:",
-          "https:",
-          "mailto:"
-        ]),
-
-      safeImageProtocols:
-        new Set([
-          "http:",
-          "https:"
-        ])
-    });
-
-  /* =====================================================
-     LEGACY TELEMETRY
-
-     Informational only.
-     ===================================================== */
-
-  const legacyScriptPresent =
-    Array
-      .from(
-        document.scripts || []
-      )
-      .some(
-        script =>
-          /(?:^|\/)neo\.js(?:\?|$)/
-            .test(
-              script.src || ""
-            )
-      );
-
-  /* =====================================================
-     STATE
-     ===================================================== */
-
-  const state = {
-    rendered:
-      0,
-
-    markdownRendered:
-      0,
-
-    plainRendered:
-      0,
-
-    sanitized:
-      0,
-
-    codeBlocks:
-      0,
-
-    tables:
-      0,
-
-    mathPasses:
-      0,
-
-    copyOperations:
-      0,
-
-    lastRenderedAt:
-      null,
-
-    lastError:
-      null
-  };
+  const SAFE_IMAGE_PROTOCOLS =
+    new Set([
+      "http:",
+      "https:"
+    ]);
 
   /* =====================================================
      EVENTS
@@ -163,9 +66,7 @@ After neo.js is removed this file continues unchanged.
     window.dispatchEvent(
       new CustomEvent(
         name,
-        {
-          detail
-        }
+        { detail }
       )
     );
   }
@@ -174,7 +75,7 @@ After neo.js is removed this file continues unchanged.
      TEXT
      ===================================================== */
 
-  function normalizeText(
+  function text(
     value
   ) {
     return String(
@@ -187,23 +88,13 @@ After neo.js is removed this file continues unchanged.
       .replace(
         /\r\n?/g,
         "\n"
-      )
-      .slice(
-        0,
-        CONFIG.maxContentLength
       );
   }
-
-  /* =====================================================
-     ESCAPE HTML
-     ===================================================== */
 
   function escapeHtml(
     value
   ) {
-    return normalizeText(
-      value
-    )
+    return text(value)
       .replace(
         /&/g,
         "&amp;"
@@ -226,203 +117,151 @@ After neo.js is removed this file continues unchanged.
       );
   }
 
-  /* =====================================================
-     SAFE PLAIN HTML FALLBACK
-     ===================================================== */
-
   function plainTextHtml(
     value
   ) {
     return escapeHtml(
       value
-    )
-      .replace(
-        /\n/g,
-        "<br>"
-      );
+    ).replace(
+      /\n/g,
+      "<br>"
+    );
   }
 
   /* =====================================================
      MARKED
      ===================================================== */
 
+  let markedConfigured =
+    false;
+
   function configureMarked() {
     if (
-      !window.marked
+      markedConfigured
     ) {
+      return true;
+    }
+
+    const marked =
+      window.marked;
+
+    if (!marked) {
       return false;
     }
 
     try {
-      window.marked
-        .setOptions({
-          gfm:
-            true,
+      marked.setOptions?.({
+        gfm: true,
+        breaks: true
+      });
 
-          breaks:
-            true,
-
-          pedantic:
-            false,
-
-          /*
-           * Compatibility with marked versions
-           * where these options still exist.
-           */
-
-          mangle:
-            false,
-
-          headerIds:
-            false
-        });
+      markedConfigured =
+        true;
 
       return true;
 
-    } catch {
-      try {
-        /*
-         * Newer marked versions may reject
-         * removed legacy options.
-         */
+    } catch (error) {
+      console.warn(
+        "[NEO Renderer] Could not configure marked:",
+        error
+      );
 
-        window.marked
-          .setOptions({
-            gfm:
-              true,
-
-            breaks:
-              true,
-
-            pedantic:
-              false
-          });
-
-        return true;
-
-      } catch {
-        return false;
-      }
+      return false;
     }
   }
 
   /* =====================================================
      SANITIZE
+
+     Raw model HTML is never trusted.
      ===================================================== */
 
   function sanitizeHtml(
     html
   ) {
+    const purifier =
+      window.DOMPurify;
+
     /*
-     * SECURITY RULE:
-     *
-     * Never trust Markdown-generated HTML if DOMPurify
-     * is unavailable.
+     * Critical fail-safe:
+     * without DOMPurify we NEVER inject Markdown HTML.
      */
 
     if (
-      !window.DOMPurify
+      !purifier ||
+      typeof purifier.sanitize !==
+        "function"
     ) {
       return null;
     }
 
     try {
-      const output =
-        window.DOMPurify
-          .sanitize(
-            String(
-              html ?? ""
-            ),
-            {
-              USE_PROFILES: {
-                html:
-                  true
-              },
+      return purifier.sanitize(
+        String(
+          html ?? ""
+        ),
+        {
+          USE_PROFILES: {
+            html: true
+          },
 
-              FORBID_TAGS: [
-                "script",
-                "style",
-                "iframe",
-                "frame",
-                "frameset",
-                "object",
-                "embed",
-                "applet",
-                "form",
-                "input",
-                "button",
-                "textarea",
-                "select",
-                "option",
-                "meta",
-                "link",
-                "base"
-              ],
+          FORBID_TAGS: [
+            "script",
+            "style",
+            "iframe",
+            "object",
+            "embed",
+            "form",
+            "input",
+            "button",
+            "textarea",
+            "select",
+            "option",
+            "meta",
+            "link",
+            "base"
+          ],
 
-              FORBID_ATTR: [
-                "style",
-                "srcdoc",
-                "formaction",
-                "autofocus"
-              ],
+          FORBID_ATTR: [
+            "style",
+            "srcdoc",
+            "formaction",
+            "autofocus"
+          ]
+        }
+      );
 
-              /*
-               * Keep language-* classes for
-               * syntax highlighting.
-               */
-
-              ALLOW_DATA_ATTR:
-                false
-            }
-          );
-
-      state.sanitized +=
-        1;
-
-      return output;
-
-    } catch (
-      error
-    ) {
-      state.lastError =
-        error?.message ||
-        "DOM sanitization failed.";
+    } catch (error) {
+      console.warn(
+        "[NEO Renderer] Sanitization failed:",
+        error
+      );
 
       return null;
     }
   }
 
   /* =====================================================
-     MARKDOWN -> SAFE HTML
+     MARKDOWN → SAFE HTML
      ===================================================== */
 
   function markdownToHtml(
     markdown
   ) {
     const input =
-      normalizeText(
+      text(
         markdown
       );
 
+    const marked =
+      window.marked;
+
     /*
-     * No Markdown parser:
-     * safe plain-text rendering.
+     * Safe fallback when either library is unavailable.
      */
 
     if (
-      !window.marked
-    ) {
-      return plainTextHtml(
-        input
-      );
-    }
-
-    /*
-     * Markdown parser exists but sanitizer does not:
-     * DO NOT inject parsed HTML.
-     */
-
-    if (
+      !marked ||
       !window.DOMPurify
     ) {
       return plainTextHtml(
@@ -434,36 +273,35 @@ After neo.js is removed this file continues unchanged.
       configureMarked();
 
       const parsed =
-        window.marked
-          .parse(
-            input
-          );
-
-      const sanitized =
-        sanitizeHtml(
-          parsed
+        marked.parse(
+          input
         );
 
+      /*
+       * Renderer must stay synchronous.
+       */
+
       if (
-        sanitized ===
-        null
+        typeof parsed !==
+        "string"
       ) {
         return plainTextHtml(
           input
         );
       }
 
-      return sanitized;
+      return (
+        sanitizeHtml(
+          parsed
+        ) ||
+        plainTextHtml(
+          input
+        )
+      );
 
-    } catch (
-      error
-    ) {
-      state.lastError =
-        error?.message ||
-        "Markdown rendering failed.";
-
+    } catch (error) {
       console.warn(
-        "[NEYO Renderer] Markdown failed:",
+        "[NEO Renderer] Markdown failed:",
         error
       );
 
@@ -474,40 +312,30 @@ After neo.js is removed this file continues unchanged.
   }
 
   /* =====================================================
-     SAFE URL
+     URL
      ===================================================== */
 
-  function parseSafeUrl(
-    value
+  function safeUrl(
+    value,
+    allowedProtocols
   ) {
-    const raw =
-      String(
-        value || ""
-      )
-        .trim();
-
-    if (!raw) {
+    if (!value) {
       return null;
     }
 
     try {
       const url =
         new URL(
-          raw,
-          window.location.origin
+          value,
+          window.location.href
         );
 
-      if (
-        !CONFIG
-          .safeProtocols
-          .has(
-            url.protocol
-          )
-      ) {
-        return null;
-      }
-
-      return url;
+      return allowedProtocols
+        .has(
+          url.protocol
+        )
+          ? url
+          : null;
 
     } catch {
       return null;
@@ -527,122 +355,99 @@ After neo.js is removed this file continues unchanged.
         HTMLElement
       )
     ) {
-      return 0;
+      return false;
     }
 
-    let count =
-      0;
+    root
+      .querySelectorAll(
+        "a[href]"
+      )
+      .forEach(
+        link => {
+          const url =
+            safeUrl(
+              link.getAttribute(
+                "href"
+              ),
+              SAFE_LINK_PROTOCOLS
+            );
 
-    const links =
-      root.querySelectorAll(
-        "a"
+          /*
+           * Unsafe schemes:
+           * javascript:
+           * data:
+           * file:
+           * etc.
+           */
+
+          if (!url) {
+            link.removeAttribute(
+              "href"
+            );
+
+            link.removeAttribute(
+              "target"
+            );
+
+            link.removeAttribute(
+              "rel"
+            );
+
+            return;
+          }
+
+          link.href =
+            url.href;
+
+          if (
+            url.protocol ===
+            "http:" ||
+            url.protocol ===
+            "https:"
+          ) {
+            /*
+             * External links.
+             */
+
+            if (
+              url.origin !==
+              window.location.origin
+            ) {
+              link.target =
+                "_blank";
+
+              link.rel =
+                "noopener noreferrer nofollow";
+
+            } else {
+              link.removeAttribute(
+                "target"
+              );
+
+              link.rel =
+                "noopener";
+            }
+
+          } else {
+            /*
+             * mailto:
+             */
+
+            link.removeAttribute(
+              "target"
+            );
+
+            link.rel =
+              "noopener";
+          }
+        }
       );
 
-    for (
-      const link
-      of links
-    ) {
-      const href =
-        link.getAttribute(
-          "href"
-        );
-
-      const url =
-        parseSafeUrl(
-          href
-        );
-
-      if (!url) {
-        link.removeAttribute(
-          "href"
-        );
-
-        link.removeAttribute(
-          "target"
-        );
-
-        link.removeAttribute(
-          "rel"
-        );
-
-        link.removeAttribute(
-          "referrerpolicy"
-        );
-
-        link.classList.add(
-          "neyo-unsafe-link"
-        );
-
-        continue;
-      }
-
-      /*
-       * Normalize final safe URL.
-       */
-
-      link.href =
-        url.href;
-
-      /*
-       * mailto should stay normal.
-       */
-
-      if (
-        url.protocol ===
-        "mailto:"
-      ) {
-        link.removeAttribute(
-          "target"
-        );
-
-        link.rel =
-          "nofollow";
-
-        count +=
-          1;
-
-        continue;
-      }
-
-      const external =
-        url.origin !==
-        window.location.origin;
-
-      if (
-        external
-      ) {
-        link.target =
-          "_blank";
-
-        link.rel =
-          "noopener noreferrer nofollow";
-
-        link.referrerPolicy =
-          "no-referrer-when-downgrade";
-
-      } else {
-        /*
-         * Same-origin links should not unnecessarily
-         * create a new tab.
-         */
-
-        link.removeAttribute(
-          "target"
-        );
-
-        link.rel =
-          "noopener";
-      }
-
-      count +=
-        1;
-    }
-
-    return count;
+    return true;
   }
 
   /* =====================================================
-     SAFE MARKDOWN IMAGES
+     MARKDOWN IMAGES
      ===================================================== */
 
   function secureImages(
@@ -654,233 +459,145 @@ After neo.js is removed this file continues unchanged.
         HTMLElement
       )
     ) {
-      return 0;
+      return false;
     }
 
-    let count =
-      0;
-
-    const images =
-      root.querySelectorAll(
-        "img"
-      );
-
-    for (
-      const image
-      of images
-    ) {
-      const raw =
-        image.getAttribute(
-          "src"
-        );
-
-      if (!raw) {
-        image.remove();
-        continue;
-      }
-
-      let safe =
-        false;
-
-      try {
-        const url =
-          new URL(
-            raw,
-            window.location.origin
-          );
-
-        safe =
-          CONFIG
-            .safeImageProtocols
-            .has(
-              url.protocol
+    root
+      .querySelectorAll(
+        "img[src]"
+      )
+      .forEach(
+        image => {
+          const url =
+            safeUrl(
+              image.getAttribute(
+                "src"
+              ),
+              SAFE_IMAGE_PROTOCOLS
             );
 
-        if (safe) {
+          if (!url) {
+            image.remove();
+            return;
+          }
+
           image.src =
             url.href;
+
+          image.loading =
+            "lazy";
+
+          image.decoding =
+            "async";
+
+          image.referrerPolicy =
+            "no-referrer";
+
+          image.draggable =
+            false;
+
+          /*
+           * Avoid a broken-image icon dominating
+           * the answer.
+           */
+
+          image.addEventListener(
+            "error",
+            () => {
+              image.remove();
+            },
+            {
+              once: true
+            }
+          );
         }
+      );
 
-      } catch {
-        safe =
-          false;
-      }
-
-      if (!safe) {
-        image.remove();
-        continue;
-      }
-
-      image.loading =
-        "lazy";
-
-      image.decoding =
-        "async";
-
-      image.referrerPolicy =
-        "no-referrer";
-
-      if (
-        !image.alt
-      ) {
-        image.alt =
-          "";
-      }
-
-      count +=
-        1;
-    }
-
-    return count;
+    return true;
   }
 
   /* =====================================================
-     LANGUAGE
+     INLINE CODE
+
+     Marked already produces <code>.
+     We add only stable CSS hooks.
+     ===================================================== */
+
+  function enhanceInlineCode(
+    root
+  ) {
+    if (
+      !(
+        root instanceof
+        HTMLElement
+      )
+    ) {
+      return false;
+    }
+
+    root
+      .querySelectorAll(
+        "code"
+      )
+      .forEach(
+        code => {
+          if (
+            code.parentElement
+              ?.tagName ===
+            "PRE"
+          ) {
+            return;
+          }
+
+          code.classList.add(
+            "neyo-inline-code"
+          );
+        }
+      );
+
+    return true;
+  }
+
+  /* =====================================================
+     CODE LANGUAGE
      ===================================================== */
 
   function languageOf(
     code
   ) {
-    if (
-      !(code instanceof Element)
-    ) {
-      return "plaintext";
-    }
-
-    const classes =
-      Array.from(
-        code.classList ||
-        []
+    const className =
+      String(
+        code?.className ||
+        ""
       );
 
-    for (
-      const className
-      of classes
-    ) {
-      const match =
-        String(
-          className
-        )
-          .match(
-            /^(?:language|lang)-(.+)$/i
-          );
+    const match =
+      className.match(
+        /(?:language|lang)-([\w#+.-]+)/i
+      );
 
-      if (
-        match?.[1]
-      ) {
-        return String(
-          match[1]
-        )
-          .replace(
-            /[^a-z0-9_+#.-]/gi,
-            ""
-          )
-          .slice(
-            0,
-            CONFIG
-              .maxCodeLanguageLength
-          ) ||
-          "plaintext";
-      }
-    }
-
-    return "plaintext";
+    return (
+      match?.[1] ||
+      "code"
+    )
+      .toLowerCase();
   }
 
   /* =====================================================
-     COPY TEXT FALLBACK
+     CLIPBOARD
      ===================================================== */
 
-  async function fallbackCopy(
+  async function writeClipboard(
     value
-  ) {
-    const textarea =
-      document.createElement(
-        "textarea"
-      );
-
-    textarea.value =
-      value;
-
-    textarea.setAttribute(
-      "readonly",
-      ""
-    );
-
-    textarea.setAttribute(
-      "aria-hidden",
-      "true"
-    );
-
-    Object.assign(
-      textarea.style,
-      {
-        position:
-          "fixed",
-
-        opacity:
-          "0",
-
-        pointerEvents:
-          "none",
-
-        left:
-          "-9999px",
-
-        top:
-          "0"
-      }
-    );
-
-    document.body.appendChild(
-      textarea
-    );
-
-    textarea.select();
-
-    textarea.setSelectionRange(
-      0,
-      textarea.value.length
-    );
-
-    let success =
-      false;
-
-    try {
-      success =
-        document.execCommand(
-          "copy"
-        );
-
-    } catch {
-      success =
-        false;
-    }
-
-    textarea.remove();
-
-    return success;
-  }
-
-  /* =====================================================
-     COPY TEXT
-     ===================================================== */
-
-  async function copyText(
-    value,
-    button = null
   ) {
     const content =
       String(
         value ?? ""
       );
 
-    if (!content) {
-      return false;
-    }
-
-    let copied =
-      false;
+    /*
+     * Preferred modern API.
+     */
 
     try {
       if (
@@ -894,130 +611,131 @@ After neo.js is removed this file continues unchanged.
             content
           );
 
-        copied =
-          true;
-
-      } else {
-        copied =
-          await fallbackCopy(
-            content
-          );
+        return true;
       }
+    } catch {}
 
+    /*
+     * Compatibility fallback.
+     */
+
+    const textarea =
+      document.createElement(
+        "textarea"
+      );
+
+    textarea.value =
+      content;
+
+    textarea.setAttribute(
+      "readonly",
+      ""
+    );
+
+    textarea.style.position =
+      "fixed";
+
+    textarea.style.opacity =
+      "0";
+
+    textarea.style.pointerEvents =
+      "none";
+
+    document.body.appendChild(
+      textarea
+    );
+
+    textarea.select();
+
+    let copied =
+      false;
+
+    try {
+      copied =
+        document.execCommand(
+          "copy"
+        );
     } catch {
       copied =
-        await fallbackCopy(
-          content
-        );
+        false;
     }
 
-    if (
-      copied
-    ) {
-      state.copyOperations +=
-        1;
-    }
-
-    if (
-      button instanceof
-      HTMLElement
-    ) {
-      const originalText =
-        button.textContent;
-
-      const originalLabel =
-        button.getAttribute(
-          "aria-label"
-        );
-
-      button.textContent =
-        copied
-          ? "Copied"
-          : "Copy failed";
-
-      button.setAttribute(
-        "aria-label",
-        copied
-          ? "Code copied"
-          : "Copy failed"
-      );
-
-      button.classList.toggle(
-        "is-copied",
-        copied
-      );
-
-      button.classList.toggle(
-        "is-copy-error",
-        !copied
-      );
-
-      window.setTimeout(
-        () => {
-          if (
-            !button.isConnected
-          ) {
-            return;
-          }
-
-          button.textContent =
-            originalText ||
-            "Copy";
-
-          button.setAttribute(
-            "aria-label",
-            originalLabel ||
-            "Copy code"
-          );
-
-          button.classList.remove(
-            "is-copied",
-            "is-copy-error"
-          );
-        },
-        CONFIG.copySuccessMs
-      );
-    }
-
-    emit(
-      "neyo:code-copy",
-      {
-        success:
-          copied
-      }
-    );
+    textarea.remove();
 
     return copied;
   }
 
-  /* =====================================================
-     SYNTAX HIGHLIGHT
-     ===================================================== */
-
-  function highlight(
-    code
+  async function copyCode(
+    code,
+    button
   ) {
-    if (
-      !(
-        code instanceof
-        HTMLElement
-      )
-    ) {
+    const copied =
+      await writeClipboard(
+        code?.textContent ||
+        ""
+      );
+
+    if (!copied) {
       return false;
     }
 
-    /*
-     * Avoid repeatedly highlighting same node.
-     */
-
-    if (
-      code.dataset
-        .neyoHighlighted ===
-      "true"
-    ) {
+    if (!button) {
       return true;
     }
 
+    const oldLabel =
+      button.getAttribute(
+        "aria-label"
+      ) ||
+      "Copy code";
+
+    const oldText =
+      button.textContent;
+
+    button.setAttribute(
+      "aria-label",
+      "Copied"
+    );
+
+    button.dataset.copied =
+      "true";
+
+    button.textContent =
+      "Copied";
+
+    window.setTimeout(
+      () => {
+        if (
+          !button.isConnected
+        ) {
+          return;
+        }
+
+        button.setAttribute(
+          "aria-label",
+          oldLabel
+        );
+
+        button.textContent =
+          oldText ||
+          "Copy";
+
+        delete button.dataset
+          .copied;
+      },
+      1200
+    );
+
+    return true;
+  }
+
+  /* =====================================================
+     SYNTAX HIGHLIGHTING
+     ===================================================== */
+
+  function highlightCode(
+    code
+  ) {
     try {
       if (
         window.hljs
@@ -1028,10 +746,6 @@ After neo.js is removed this file continues unchanged.
             code
           );
 
-        code.dataset
-          .neyoHighlighted =
-          "true";
-
         return true;
       }
 
@@ -1044,18 +758,12 @@ After neo.js is removed this file continues unchanged.
             code
           );
 
-        code.dataset
-          .neyoHighlighted =
-          "true";
-
         return true;
       }
 
-    } catch (
-      error
-    ) {
+    } catch (error) {
       console.warn(
-        "[NEYO Renderer] Highlight failed:",
+        "[NEO Renderer] Syntax highlighting failed:",
         error
       );
     }
@@ -1064,95 +772,14 @@ After neo.js is removed this file continues unchanged.
   }
 
   /* =====================================================
-     CODE BLOCK
-     ===================================================== */
+     CODE BLOCKS
 
-  function createCodeHeader(
-    code
-  ) {
-    const header =
-      document.createElement(
-        "div"
-      );
-
-    header.className =
-      "neyo-code-header";
-
-    /*
-     * Additional compatibility class from old UI.
-     */
-
-    header.classList.add(
-      "code-header"
-    );
-
-    const label =
-      document.createElement(
-        "span"
-      );
-
-    label.className =
-      "neyo-code-language";
-
-    label.textContent =
-      languageOf(
-        code
-      );
-
-    const copy =
-      document.createElement(
-        "button"
-      );
-
-    copy.type =
-      "button";
-
-    copy.className =
-      "neyo-code-copy";
-
-    /*
-     * Old production CSS may still target .code-copy.
-     */
-
-    copy.classList.add(
-      "code-copy"
-    );
-
-    copy.setAttribute(
-      "aria-label",
-      "Copy code"
-    );
-
-    copy.title =
-      "Copy code";
-
-    copy.textContent =
-      "Copy";
-
-    copy.addEventListener(
-      "click",
-      event => {
-        event.preventDefault();
-        event.stopPropagation();
-
-        void copyText(
-          code.textContent ||
-          "",
-          copy
-        );
-      }
-    );
-
-    header.append(
-      label,
-      copy
-    );
-
-    return header;
-  }
-
-  /* =====================================================
-     ENHANCE CODE BLOCKS
+     Existing CSS contracts preserved:
+     .neyo-code-block
+     .neyo-code-header
+     .neyo-code-language
+     .neyo-code-copy
+     .message-code-block
      ===================================================== */
 
   function enhanceCodeBlocks(
@@ -1164,98 +791,129 @@ After neo.js is removed this file continues unchanged.
         HTMLElement
       )
     ) {
-      return 0;
+      return false;
     }
 
-    let count =
-      0;
+    root
+      .querySelectorAll(
+        "pre > code"
+      )
+      .forEach(
+        code => {
+          const pre =
+            code.parentElement;
 
-    const blocks =
-      Array.from(
-        root.querySelectorAll(
-          "pre > code"
-        )
+          if (!pre) {
+            return;
+          }
+
+          /*
+           * Prevent duplicate wrappers on updates.
+           */
+
+          if (
+            pre.closest(
+              ".neyo-code-block"
+            )
+          ) {
+            return;
+          }
+
+          pre.classList.add(
+            "message-code-block"
+          );
+
+          const language =
+            languageOf(
+              code
+            );
+
+          pre.dataset.language =
+            language;
+
+          const shell =
+            document.createElement(
+              "div"
+            );
+
+          shell.className =
+            "neyo-code-block";
+
+          const header =
+            document.createElement(
+              "div"
+            );
+
+          header.className =
+            "neyo-code-header";
+
+          const label =
+            document.createElement(
+              "span"
+            );
+
+          label.className =
+            "neyo-code-language";
+
+          label.textContent =
+            language;
+
+          const copy =
+            document.createElement(
+              "button"
+            );
+
+          copy.type =
+            "button";
+
+          copy.className =
+            "neyo-code-copy";
+
+          copy.setAttribute(
+            "aria-label",
+            "Copy code"
+          );
+
+          copy.title =
+            "Copy code";
+
+          copy.textContent =
+            "Copy";
+
+          copy.addEventListener(
+            "click",
+            event => {
+              event.preventDefault();
+              event.stopPropagation();
+
+              void copyCode(
+                code,
+                copy
+              );
+            }
+          );
+
+          header.append(
+            label,
+            copy
+          );
+
+          pre.before(
+            shell
+          );
+
+          shell.append(
+            header,
+            pre
+          );
+
+          highlightCode(
+            code
+          );
+        }
       );
 
-    for (
-      const code
-      of blocks
-    ) {
-      const pre =
-        code.parentElement;
-
-      if (!pre) {
-        continue;
-      }
-
-      /*
-       * Already enhanced.
-       */
-
-      const existing =
-        pre.closest(
-          ".neyo-code-block"
-        );
-
-      if (
-        existing
-      ) {
-        highlight(
-          code
-        );
-
-        continue;
-      }
-
-      const shell =
-        document.createElement(
-          "div"
-        );
-
-      shell.className =
-        "neyo-code-block";
-
-      /*
-       * Preserve older production CSS.
-       */
-
-      shell.classList.add(
-        "code-wrapper"
-      );
-
-      shell.setAttribute(
-        "data-language",
-        languageOf(
-          code
-        )
-      );
-
-      const header =
-        createCodeHeader(
-          code
-        );
-
-      pre.before(
-        shell
-      );
-
-      shell.append(
-        header,
-        pre
-      );
-
-      highlight(
-        code
-      );
-
-      count +=
-        1;
-    }
-
-    state.codeBlocks +=
-      count;
-
-    return count;
+    return true;
   }
 
   /* =====================================================
@@ -1271,70 +929,57 @@ After neo.js is removed this file continues unchanged.
         HTMLElement
       )
     ) {
-      return 0;
+      return false;
     }
 
-    let count =
-      0;
+    root
+      .querySelectorAll(
+        "table"
+      )
+      .forEach(
+        table => {
+          if (
+            table.parentElement
+              ?.classList
+              .contains(
+                "neyo-table-wrap"
+              )
+          ) {
+            return;
+          }
 
-    const tables =
-      Array.from(
-        root.querySelectorAll(
-          "table"
-        )
+          const wrapper =
+            document.createElement(
+              "div"
+            );
+
+          wrapper.className =
+            "neyo-table-wrap";
+
+          wrapper.setAttribute(
+            "role",
+            "region"
+          );
+
+          wrapper.setAttribute(
+            "aria-label",
+            "Scrollable table"
+          );
+
+          wrapper.tabIndex =
+            0;
+
+          table.before(
+            wrapper
+          );
+
+          wrapper.appendChild(
+            table
+          );
+        }
       );
 
-    for (
-      const table
-      of tables
-    ) {
-      if (
-        table.parentElement
-          ?.classList
-          .contains(
-            "neyo-table-wrap"
-          )
-      ) {
-        continue;
-      }
-
-      const wrap =
-        document.createElement(
-          "div"
-        );
-
-      wrap.className =
-        "neyo-table-wrap";
-
-      wrap.setAttribute(
-        "role",
-        "region"
-      );
-
-      wrap.setAttribute(
-        "aria-label",
-        "Scrollable table"
-      );
-
-      wrap.tabIndex =
-        0;
-
-      table.before(
-        wrap
-      );
-
-      wrap.appendChild(
-        table
-      );
-
-      count +=
-        1;
-    }
-
-    state.tables +=
-      count;
-
-    return count;
+    return true;
   }
 
   /* =====================================================
@@ -1353,134 +998,65 @@ After neo.js is removed this file continues unchanged.
       return false;
     }
 
+    const renderer =
+      window.renderMathInElement;
+
     if (
-      typeof window
-        .renderMathInElement !==
+      typeof renderer !==
       "function"
     ) {
       return false;
     }
 
     try {
-      window
-        .renderMathInElement(
-          root,
-          {
-            throwOnError:
-              false,
+      renderer(
+        root,
+        {
+          throwOnError:
+            false,
 
-            strict:
-              "ignore",
+          strict:
+            "ignore",
 
-            ignoredTags: [
-              "script",
-              "noscript",
-              "style",
-              "textarea",
-              "pre",
-              "code"
-            ],
+          ignoredTags: [
+            "script",
+            "noscript",
+            "style",
+            "textarea",
+            "pre",
+            "code"
+          ],
 
-            delimiters: [
-              {
-                left:
-                  "$$",
-
-                right:
-                  "$$",
-
-                display:
-                  true
-              },
-
-              {
-                left:
-                  "\\[",
-
-                right:
-                  "\\]",
-
-                display:
-                  true
-              },
-
-              {
-                left:
-                  "\\(",
-
-                right:
-                  "\\)",
-
-                display:
-                  false
-              }
-            ]
-          }
-        );
-
-      state.mathPasses +=
-        1;
+          delimiters: [
+            {
+              left: "$$",
+              right: "$$",
+              display: true
+            },
+            {
+              left: "\\[",
+              right: "\\]",
+              display: true
+            },
+            {
+              left: "\\(",
+              right: "\\)",
+              display: false
+            }
+          ]
+        }
+      );
 
       return true;
 
-    } catch (
-      error
-    ) {
-      state.lastError =
-        error?.message ||
-        "Math rendering failed.";
-
+    } catch (error) {
       console.warn(
-        "[NEYO Renderer] Math failed:",
+        "[NEO Renderer] Math rendering failed:",
         error
       );
 
       return false;
     }
-  }
-
-  /* =====================================================
-     POST PROCESS
-     ===================================================== */
-
-  function postProcess(
-    root
-  ) {
-    if (
-      !(
-        root instanceof
-        HTMLElement
-      )
-    ) {
-      return false;
-    }
-
-    secureLinks(
-      root
-    );
-
-    secureImages(
-      root
-    );
-
-    wrapTables(
-      root
-    );
-
-    /*
-     * Code before KaTeX so KaTeX ignores protected
-     * pre/code nodes.
-     */
-
-    enhanceCodeBlocks(
-      root
-    );
-
-    renderMath(
-      root
-    );
-
-    return true;
   }
 
   /* =====================================================
@@ -1506,11 +1082,11 @@ After neo.js is removed this file continues unchanged.
       "assistant";
 
     /*
-     * Assistant defaults Markdown.
-     * User defaults plain text.
+     * User messages remain plain text by default.
+     * Assistant messages use Markdown by default.
      */
 
-    const useMarkdown =
+    const markdown =
       options.markdown ??
       (
         role ===
@@ -1518,100 +1094,90 @@ After neo.js is removed this file continues unchanged.
       );
 
     const value =
-      normalizeText(
+      text(
         content
       );
 
-    try {
-      /* =================================================
-         PLAIN TEXT
-         ================================================= */
+    /* -----------------------------------------------
+       Plain text
+       ----------------------------------------------- */
 
-      if (
-        !useMarkdown
-      ) {
-        element.textContent =
-          value;
-
-        state.plainRendered +=
-          1;
-      }
-
-      /* =================================================
-         MARKDOWN
-         ================================================= */
-
-      else {
-        element.innerHTML =
-          markdownToHtml(
-            value
-          );
-
-        postProcess(
-          element
-        );
-
-        state.markdownRendered +=
-          1;
-      }
-
-      state.rendered +=
-        1;
-
-      state.lastRenderedAt =
-        Date.now();
-
-      state.lastError =
-        null;
+    if (!markdown) {
+      element.textContent =
+        value;
 
       emit(
         "neyo:message-rendered",
         {
           element,
-
           role,
-
-          markdown:
-            useMarkdown,
-
-          content:
-            value
+          markdown: false,
+          content: value
         }
       );
 
       return true;
+    }
 
-    } catch (
-      error
-    ) {
-      /*
-       * Last-resort safe rendering.
-       */
+    /* -----------------------------------------------
+       Markdown
+       ----------------------------------------------- */
 
-      element.textContent =
-        value;
-
-      state.lastError =
-        error?.message ||
-        "Rendering failed.";
-
-      emit(
-        "neyo:message-render-error",
-        {
-          element,
-
-          error,
-
-          role
-        }
+    const html =
+      markdownToHtml(
+        value
       );
 
-      return false;
-    }
+    element.innerHTML =
+      html;
+
+    /*
+     * Post-processing happens only on sanitized content.
+     */
+
+    secureLinks(
+      element
+    );
+
+    secureImages(
+      element
+    );
+
+    enhanceInlineCode(
+      element
+    );
+
+    wrapTables(
+      element
+    );
+
+    enhanceCodeBlocks(
+      element
+    );
+
+    renderMath(
+      element
+    );
+
+    emit(
+      "neyo:message-rendered",
+      {
+        element,
+        role,
+        markdown: true,
+        content: value
+      }
+    );
+
+    return true;
   }
 
   /* =====================================================
      RENDER MESSAGE SHELL
+
+     messages.js supplies:
+       .message
+          .message-content
      ===================================================== */
 
   function renderMessage(
@@ -1646,100 +1212,7 @@ After neo.js is removed this file continues unchanged.
   }
 
   /* =====================================================
-     REPROCESS EXISTING RENDERED HTML
-
-     Useful after Prism/hljs/KaTeX becomes available.
-     Does NOT parse Markdown again.
-     ===================================================== */
-
-  function enhance(
-    root
-  ) {
-    if (
-      !(
-        root instanceof
-        HTMLElement
-      )
-    ) {
-      return false;
-    }
-
-    return postProcess(
-      root
-    );
-  }
-
-  /* =====================================================
-     RERENDER EXISTING CONVERSATION
-
-     Uses canonical raw content from NeyoChat.
-     ===================================================== */
-
-  function rerenderConversation() {
-    const messages =
-      window.NeyoChat
-        ?.getConversation
-        ?.();
-
-    if (
-      !Array.isArray(
-        messages
-      )
-    ) {
-      return 0;
-    }
-
-    let count =
-      0;
-
-    for (
-      const message
-      of messages
-    ) {
-      if (
-        message.role !==
-        "assistant"
-      ) {
-        continue;
-      }
-
-      const element =
-        window.NeyoMessages
-          ?.getElement
-          ?.(message.id);
-
-      if (
-        !(
-          element instanceof
-          HTMLElement
-        )
-      ) {
-        continue;
-      }
-
-      if (
-        renderMessage(
-          element,
-          message.content,
-          {
-            role:
-              "assistant",
-
-            markdown:
-              true
-          }
-        )
-      ) {
-        count +=
-          1;
-      }
-    }
-
-    return count;
-  }
-
-  /* =====================================================
-     EVENT — MESSAGE RENDER
+     EVENTS
      ===================================================== */
 
   window.addEventListener(
@@ -1759,10 +1232,6 @@ After neo.js is removed this file continues unchanged.
     }
   );
 
-  /* =====================================================
-     EVENT — GENERIC CONTENT RENDER
-     ===================================================== */
-
   window.addEventListener(
     "neyo:content-render-request",
     event => {
@@ -1781,130 +1250,36 @@ After neo.js is removed this file continues unchanged.
   );
 
   /* =====================================================
-     EVENT — ENHANCE EXISTING ELEMENT
-     ===================================================== */
-
-  window.addEventListener(
-    "neyo:content-enhance-request",
-    event => {
-      enhance(
-        event.detail
-          ?.element
-      );
-    }
-  );
-
-  /* =====================================================
-     LIBRARY LATE-LOAD EVENTS
-     Optional compatibility hooks.
-     ===================================================== */
-
-  for (
-    const eventName
-    of [
-      "neyo:markdown-library-ready",
-      "neyo:syntax-highlighter-ready",
-      "neyo:katex-ready"
-    ]
-  ) {
-    window.addEventListener(
-      eventName,
-      () => {
-        rerenderConversation();
-      }
-    );
-  }
-
-  /* =====================================================
      PUBLIC API
      ===================================================== */
 
   const api =
     Object.freeze({
-      __controller:
-        true,
-
-      version:
-        VERSION,
-
-      active:
-        true,
-
-      legacyScriptPresent,
-
-      legacyOwnerActive:
-        false,
-
-      /*
-       * Main rendering
-       */
+      __controller: true,
+      version: VERSION,
+      active: true,
 
       render:
         renderMessage,
 
-      renderMessage,
-
       renderInto,
 
-      /*
-       * Markdown
-       */
-
       markdownToHtml,
-
-      configureMarked,
-
-      /*
-       * Security
-       */
 
       sanitize:
         sanitizeHtml,
 
-      sanitizeHtml,
-
       escape:
         escapeHtml,
 
-      escapeHtml,
-
       secureLinks,
-
       secureImages,
 
-      /*
-       * Code
-       */
-
+      enhanceInlineCode,
       enhanceCodeBlocks,
 
-      highlight,
-
-      languageOf,
-
-      copyText,
-
-      /*
-       * Tables / Math
-       */
-
       wrapTables,
-
       renderMath,
-
-      /*
-       * Enhancement
-       */
-
-      enhance,
-
-      postProcess,
-
-      rerenderConversation,
-
-      /*
-       * State
-       */
 
       getState() {
         return {
@@ -1914,68 +1289,27 @@ After neo.js is removed this file continues unchanged.
           active:
             true,
 
-          legacyScriptPresent,
+          marked:
+            Boolean(
+              window.marked
+            ),
 
-          legacyOwnerActive:
-            false,
+          domPurify:
+            Boolean(
+              window.DOMPurify
+            ),
 
-          libraries: {
-            marked:
-              Boolean(
-                window.marked
-              ),
+          katex:
+            Boolean(
+              window
+                .renderMathInElement
+            ),
 
-            domPurify:
-              Boolean(
-                window.DOMPurify
-              ),
-
-            katex:
-              Boolean(
-                window
-                  .renderMathInElement
-              ),
-
-            highlightJs:
-              Boolean(
-                window.hljs
-              ),
-
-            prism:
-              Boolean(
-                window.Prism
-              )
-          },
-
-          rendered:
-            state.rendered,
-
-          markdownRendered:
-            state.markdownRendered,
-
-          plainRendered:
-            state.plainRendered,
-
-          sanitized:
-            state.sanitized,
-
-          codeBlocks:
-            state.codeBlocks,
-
-          tables:
-            state.tables,
-
-          mathPasses:
-            state.mathPasses,
-
-          copyOperations:
-            state.copyOperations,
-
-          lastRenderedAt:
-            state.lastRenderedAt,
-
-          lastError:
-            state.lastError
+          highlighter:
+            Boolean(
+              window.hljs ||
+              window.Prism
+            )
         };
       }
     });
@@ -1984,22 +1318,15 @@ After neo.js is removed this file continues unchanged.
     window,
     "NeyoMessageRenderer",
     {
-      value:
-        api,
-
-      writable:
-        false,
-
-      configurable:
-        true,
-
-      enumerable:
-        true
+      value: api,
+      writable: false,
+      configurable: true,
+      enumerable: true
     }
   );
 
   /* =====================================================
-     INIT
+     READY
      ===================================================== */
 
   configureMarked();
@@ -2013,11 +1340,6 @@ After neo.js is removed this file continues unchanged.
       active:
         true,
 
-      legacyScriptPresent,
-
-      legacyOwnerActive:
-        false,
-
       marked:
         Boolean(
           window.marked
@@ -2026,18 +1348,6 @@ After neo.js is removed this file continues unchanged.
       domPurify:
         Boolean(
           window.DOMPurify
-        ),
-
-      katex:
-        Boolean(
-          window
-            .renderMathInElement
-        ),
-
-      highlighter:
-        Boolean(
-          window.hljs ||
-          window.Prism
         )
     }
   );

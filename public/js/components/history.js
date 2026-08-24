@@ -1,69 +1,28 @@
 /*
 =========================================================
-NEYO — HISTORY
-FINAL PRODUCTION MIXER v7
+NEO — HISTORY
+Production v1
 
-FILE:
-public/js/components/history.js
-
-OWNS
----------------------------------------------------------
+Owns:
 - /api/history communication
-- History list loading
-- History list rendering
-- Conversation opening
-- Active conversation highlight
-- Stale-open protection
-- Rename persistence
-- Delete persistence
-- Pin / unpin persistence
-- Local history cache
-- Loading / empty / error states
-- History lifecycle events
-- Public history API
+- conversation list state
+- history list rendering
+- open conversation
+- active conversation row
+- rename persistence
+- delete persistence
+- pin / unpin persistence
+- loading / empty / error state
+- history data API
 
-DOES NOT OWN
----------------------------------------------------------
-- Chat messages DOM
-- Conversation message state
+Does NOT own:
+- history popup positioning
+- rename dialog UI
+- delete confirmation UI
+- share implementation
+- chat message DOM
 - /api/chat
-- Send / Enter
-- Rename modal UI
-- Delete confirmation UI
-- Popup positioning
-- Share business logic
-- Sidebar open / close
-- neo.js internals
-
-ARCHITECTURE
----------------------------------------------------------
-
-history row click
-      ↓
-history.js
-      ↓
-POST /api/history { action: "get" }
-      ↓
-neyo:conversation-loaded
-      ↓
-chat.js
-      ↓
-messages.js
-
-Chat response
-      ↓
-neyo:history-refresh-request
-      ↓
-history.js
-      ↓
-GET /api/history
-
-MIGRATION RULE
----------------------------------------------------------
-This controller is authoritative even while neo.js is
-physically loaded.
-
-After neo.js removal this file continues unchanged.
+- New Chat button
 =========================================================
 */
 
@@ -71,7 +30,7 @@ After neo.js removal this file continues unchanged.
   "use strict";
 
   const VERSION =
-    "neyo-history-final-v7";
+    "neo-history-production-v1";
 
   if (
     window.NeyoHistory
@@ -89,25 +48,8 @@ After neo.js removal this file continues unchanged.
       endpoint:
         "/api/history",
 
-      requestTimeoutMs:
-        60_000,
-
       maxTitleLength:
-        100,
-
-      maxIdLength:
-        256,
-
-      skeletonRows:
-        3,
-
-      /*
-       * Prevent accidental duplicate row opens
-       * caused by legacy/delegated listeners.
-       */
-
-      duplicateOpenWindowMs:
-        180
+        80
     });
 
   /* =====================================================
@@ -119,30 +61,13 @@ After neo.js removal this file continues unchanged.
       "historyList"
     );
 
-  const active =
-    Boolean(
-      historyList
+  if (!historyList) {
+    console.warn(
+      "[NEO History] #historyList is missing."
     );
 
-  /* =====================================================
-     LEGACY TELEMETRY
-
-     Informational ONLY.
-     neo.js never disables this controller.
-     ===================================================== */
-
-  const legacyScriptPresent =
-    Array
-      .from(
-        document.scripts || []
-      )
-      .some(
-        script =>
-          /(?:^|\/)neo\.js(?:\?|$)/
-            .test(
-              script.src || ""
-            )
-      );
+    return;
+  }
 
   /* =====================================================
      STATE
@@ -157,58 +82,20 @@ After neo.js removal this file continues unchanged.
   let loadingPromise =
     null;
 
+  let loadController =
+    null;
+
+  let openController =
+    null;
+
   let openSerial =
     0;
 
-  let activeOpenController =
-    null;
-
-  let lastOpenAt =
+  let mutationCount =
     0;
 
-  let lastOpenId =
-    null;
-
-  const state = {
-    loaded:
-      false,
-
-    loading:
-      false,
-
-    opening:
-      false,
-
-    lastLoadedAt:
-      null,
-
-    lastOpenedAt:
-      null,
-
-    lastMutationAt:
-      null,
-
-    loadCount:
-      0,
-
-    openCount:
-      0,
-
-    renameCount:
-      0,
-
-    deleteCount:
-      0,
-
-    pinCount:
-      0,
-
-    lastError:
-      null
-  };
-
   /* =====================================================
-     EVENTS
+     HELPERS
      ===================================================== */
 
   function emit(
@@ -218,21 +105,14 @@ After neo.js removal this file continues unchanged.
     window.dispatchEvent(
       new CustomEvent(
         name,
-        {
-          detail
-        }
+        { detail }
       )
     );
   }
 
-  /* =====================================================
-     BASIC HELPERS
-     ===================================================== */
-
   function clean(
     value,
-    max =
-      CONFIG.maxTitleLength
+    max = 220
   ) {
     return String(
       value ?? ""
@@ -248,54 +128,20 @@ After neo.js removal this file continues unchanged.
       );
   }
 
-  function cleanId(
-    value
-  ) {
-    return clean(
-      value,
-      CONFIG.maxIdLength
-    );
-  }
-
-  function cloneValue(
-    value
-  ) {
-    if (
-      value === null ||
-      value === undefined
-    ) {
-      return value;
-    }
-
-    if (
-      typeof structuredClone ===
-      "function"
-    ) {
-      try {
-        return structuredClone(
-          value
-        );
-      } catch {}
-    }
-
-    try {
-      return JSON.parse(
-        JSON.stringify(
-          value
-        )
-      );
-
-    } catch {
-      return value;
-    }
-  }
-
   function refreshIcons() {
     try {
       window.lucide
         ?.createIcons
         ?.();
     } catch {}
+  }
+
+  function cloneConversation(
+    item
+  ) {
+    return {
+      ...item
+    };
   }
 
   /* =====================================================
@@ -314,32 +160,29 @@ After neo.js removal this file continues unchanged.
     }
 
     const id =
-      cleanId(
+      clean(
         item.id ||
         item.conversationId ||
-        item.conversation_id
+        item.conversation_id,
+        128
       );
 
     if (!id) {
       return null;
     }
 
-    const title =
-      clean(
-        item.title ||
-        "New conversation"
-      ) ||
-      "New conversation";
-
     return {
       ...item,
 
       id,
 
-      conversationId:
-        id,
-
-      title,
+      title:
+        clean(
+          item.title ||
+          "New conversation",
+          CONFIG.maxTitleLength
+        ) ||
+        "New conversation",
 
       is_pinned:
         Boolean(
@@ -348,69 +191,101 @@ After neo.js removal this file continues unchanged.
           item.pinned
         ),
 
-      isPinned:
-        Boolean(
-          item.is_pinned ??
-          item.isPinned ??
-          item.pinned
-        )
+      model:
+        item.model ||
+        item.model_used ||
+        null,
+
+      createdAt:
+        item.createdAt ||
+        item.created_at ||
+        null,
+
+      updatedAt:
+        item.updatedAt ||
+        item.updated_at ||
+        item.createdAt ||
+        item.created_at ||
+        null
     };
   }
 
   /* =====================================================
-     NORMALIZE LIST
+     NORMALIZE MESSAGE
 
-     Backend ordering is preserved.
-
-     We do NOT silently reorder history because backend
-     may already have its own pinned / updated ordering.
+     Preserve future backend fields.
      ===================================================== */
 
-  function normalizeConversationList(
-    values
+  function normalizeMessage(
+    message
   ) {
     if (
-      !Array.isArray(
-        values
-      )
+      !message ||
+      typeof message !==
+        "object"
     ) {
-      return [];
+      return null;
     }
 
-    const result =
-      [];
-
-    const seen =
-      new Set();
-
-    for (
-      const raw
-      of values
+    if (
+      message.role !== "user" &&
+      message.role !== "assistant"
     ) {
-      const item =
-        normalizeConversation(
-          raw
-        );
+      return null;
+    }
 
-      if (
-        !item ||
-        seen.has(
-          item.id
+    return {
+      ...message,
+
+      id:
+        clean(
+          message.id,
+          128
+        ) ||
+        undefined,
+
+      role:
+        message.role,
+
+      content:
+        typeof message.content ===
+          "string"
+          ? message.content
+          : "",
+
+      displayContent:
+        typeof message.displayContent ===
+          "string"
+          ? message.displayContent
+          : undefined,
+
+      attachments:
+        Array.isArray(
+          message.attachments
         )
-      ) {
-        continue;
-      }
+          ? message.attachments.map(
+              item => ({
+                ...item
+              })
+            )
+          : [],
 
-      seen.add(
-        item.id
-      );
+      sources:
+        Array.isArray(
+          message.sources
+        )
+          ? message.sources.map(
+              item => ({
+                ...item
+              })
+            )
+          : undefined,
 
-      result.push(
-        item
-      );
-    }
-
-    return result;
+      createdAt:
+        message.createdAt ||
+        message.created_at ||
+        null
+    };
   }
 
   /* =====================================================
@@ -423,8 +298,7 @@ After neo.js removal this file continues unchanged.
     const raw =
       await response.text();
 
-    let data =
-      {};
+    let data = {};
 
     if (raw) {
       try {
@@ -432,28 +306,19 @@ After neo.js removal this file continues unchanged.
           JSON.parse(
             raw
           );
-
-      } catch {
-        data =
-          {};
-      }
+      } catch {}
     }
 
-    if (
-      !response.ok
-    ) {
-      const message =
-        clean(
-          data?.error ||
-          data?.message ||
-          raw,
-          1500
-        ) ||
-        `Request failed (${response.status}).`;
-
+    if (!response.ok) {
       const error =
         new Error(
-          message
+          clean(
+            data?.error ||
+            data?.message ||
+            raw,
+            1500
+          ) ||
+          `History request failed (${response.status}).`
         );
 
       error.status =
@@ -469,98 +334,15 @@ After neo.js removal this file continues unchanged.
   }
 
   /* =====================================================
-     FETCH WITH TIMEOUT
-     ===================================================== */
-
-  async function fetchWithTimeout(
-    url,
-    options = {},
-    {
-      timeoutMs =
-        CONFIG.requestTimeoutMs,
-
-      controller:
-        externalController =
-        null
-    } = {}
-  ) {
-    const controller =
-      externalController ||
-      new AbortController();
-
-    const timeout =
-      window.setTimeout(
-        () => {
-          try {
-            controller.abort(
-              "timeout"
-            );
-
-          } catch {
-            try {
-              controller.abort();
-            } catch {}
-          }
-        },
-        timeoutMs
-      );
-
-    try {
-      return await fetch(
-        url,
-        {
-          ...options,
-
-          signal:
-            controller.signal
-        }
-      );
-
-    } finally {
-      window.clearTimeout(
-        timeout
-      );
-    }
-  }
-
-  /* =====================================================
-     ERROR
-     ===================================================== */
-
-  function handleError(
-    error,
-    detail = {}
-  ) {
-    state.lastError =
-      error?.message ||
-      "History request failed.";
-
-    emit(
-      "neyo:history-error",
-      {
-        error,
-
-        message:
-          state.lastError,
-
-        ...detail
-      }
-    );
-
-    return error;
-  }
-
-  /* =====================================================
      LOADING UI
+
+     Existing CSS contracts preserved:
+     .history-loading
+     .history-skeleton-row
+     .history-skeleton-line
      ===================================================== */
 
   function renderLoading() {
-    if (
-      !active
-    ) {
-      return false;
-    }
-
     const root =
       document.createElement(
         "div"
@@ -574,15 +356,9 @@ After neo.js removal this file continues unchanged.
       "true"
     );
 
-    root.setAttribute(
-      "aria-busy",
-      "true"
-    );
-
     for (
       let index = 0;
-      index <
-        CONFIG.skeletonRows;
+      index < 3;
       index += 1
     ) {
       const row =
@@ -610,10 +386,9 @@ After neo.js removal this file continues unchanged.
       );
     }
 
-    historyList
-      .replaceChildren(
-        root
-      );
+    historyList.replaceChildren(
+      root
+    );
 
     historyList.setAttribute(
       "aria-busy",
@@ -628,123 +403,93 @@ After neo.js removal this file continues unchanged.
      ===================================================== */
 
   function renderEmpty() {
-    if (
-      !active
-    ) {
-      return false;
-    }
-
-    historyList
-      .replaceChildren();
+    historyList.replaceChildren();
 
     historyList.removeAttribute(
       "aria-busy"
-    );
-
-    emit(
-      "neyo:history-empty"
     );
 
     return true;
   }
 
   /* =====================================================
-     ACTIVE UI
+     ERROR UI
+
+     Keep it minimal.
+     No browser alert().
      ===================================================== */
 
-  function applyActiveState(
-    button,
-    item
-  ) {
-    const isActive =
-      Boolean(
-        activeConversationId &&
-        item.id ===
-          activeConversationId
+  function renderError() {
+    historyList.replaceChildren();
+
+    const root =
+      document.createElement(
+        "div"
       );
 
-    button.classList.toggle(
-      "active",
-      isActive
-    );
+    root.className =
+      "history-error-state";
 
-    button.classList.toggle(
-      "is-active",
-      isActive
-    );
-
-    if (
-      isActive
-    ) {
-      button.setAttribute(
-        "aria-current",
-        "page"
+    const text =
+      document.createElement(
+        "span"
       );
 
-    } else {
-      button.removeAttribute(
-        "aria-current"
+    text.className =
+      "history-error-text";
+
+    text.textContent =
+      "Couldn’t load conversations.";
+
+    const retry =
+      document.createElement(
+        "button"
       );
-    }
-  }
 
-  /* =====================================================
-     OPEN BUTTON CLICK
+    retry.type =
+      "button";
 
-     stopImmediatePropagation protects against legacy
-     delegated click handlers while neo.js still exists.
-     ===================================================== */
+    retry.className =
+      "history-retry-btn";
 
-  function handleOpenButtonClick(
-    event,
-    item
-  ) {
-    event.preventDefault();
-    event.stopPropagation();
-    event.stopImmediatePropagation();
+    retry.textContent =
+      "Retry";
 
-    void openConversation(
-      item.id,
-      {
-        source:
-          "history-row"
+    retry.addEventListener(
+      "click",
+      event => {
+        event.preventDefault();
+        event.stopPropagation();
+
+        void loadHistory({
+          force: true
+        });
       }
     );
-  }
 
-  /* =====================================================
-     HISTORY MENU REQUEST
-     ===================================================== */
+    root.append(
+      text,
+      retry
+    );
 
-  function requestMenu(
-    item,
-    detail = {}
-  ) {
-    emit(
-      "neyo:history-menu-request",
-      {
-        conversationId:
-          item.id,
+    historyList.appendChild(
+      root
+    );
 
-        id:
-          item.id,
-
-        title:
-          item.title,
-
-        isPinned:
-          item.is_pinned,
-
-        pinned:
-          item.is_pinned,
-
-        ...detail
-      }
+    historyList.removeAttribute(
+      "aria-busy"
     );
   }
 
   /* =====================================================
-     CREATE HISTORY ROW
+     HISTORY ROW
+
+     Existing CSS contracts preserved:
+     .history-item-wrapper
+     .history-item
+     .history-item-title
+     .history-pin-icon
+     .history-three-dot
      ===================================================== */
 
   function createHistoryRow(
@@ -765,14 +510,9 @@ After neo.js removal this file continues unchanged.
       .conversationId =
       item.id;
 
-    row.dataset.pinned =
-      String(
-        item.is_pinned
-      );
-
-    /* =================================================
-       MAIN OPEN BUTTON
-       ================================================= */
+    /* -----------------------------------------------
+       OPEN BUTTON
+       ----------------------------------------------- */
 
     const button =
       document.createElement(
@@ -794,12 +534,21 @@ After neo.js removal this file continues unchanged.
 
     button.setAttribute(
       "aria-label",
-      `Open conversation: ${item.title}`
+      `Open ${item.title}`
     );
 
-    applyActiveState(
-      button,
-      item
+    button.classList.toggle(
+      "active",
+      item.id ===
+        activeConversationId
+    );
+
+    button.setAttribute(
+      "aria-current",
+      item.id ===
+        activeConversationId
+        ? "true"
+        : "false"
     );
 
     const title =
@@ -817,13 +566,11 @@ After neo.js removal this file continues unchanged.
       title
     );
 
-    /* =================================================
-       PIN INDICATOR
-       ================================================= */
+    /* -----------------------------------------------
+       PIN ICON
+       ----------------------------------------------- */
 
-    if (
-      item.is_pinned
-    ) {
+    if (item.is_pinned) {
       const pin =
         document.createElement(
           "span"
@@ -837,17 +584,34 @@ After neo.js removal this file continues unchanged.
         "Pinned"
       );
 
-      pin.title =
-        "Pinned";
+      const icon =
+        document.createElement(
+          "i"
+        );
 
-      pin.innerHTML = `
-        <i
-          data-lucide="pin"
-          width="12"
-          height="12"
-          aria-hidden="true"
-        ></i>
-      `;
+      icon.setAttribute(
+        "data-lucide",
+        "pin"
+      );
+
+      icon.setAttribute(
+        "width",
+        "12"
+      );
+
+      icon.setAttribute(
+        "height",
+        "12"
+      );
+
+      icon.setAttribute(
+        "aria-hidden",
+        "true"
+      );
+
+      pin.appendChild(
+        icon
+      );
 
       button.appendChild(
         pin
@@ -856,18 +620,24 @@ After neo.js removal this file continues unchanged.
 
     button.addEventListener(
       "click",
-      event =>
-        handleOpenButtonClick(
-          event,
-          item
-        )
+      event => {
+        /*
+         * Prevent an old delegated neo.js history
+         * handler from opening this conversation again.
+         */
+
+        event.preventDefault();
+        event.stopPropagation();
+
+        void openConversation(
+          item.id
+        );
+      }
     );
 
-    /* =================================================
-       THREE-DOT MENU BUTTON
-
-       Multiple compatibility classes intentionally kept.
-       ================================================= */
+    /* -----------------------------------------------
+       MENU BUTTON
+       ----------------------------------------------- */
 
     const menuButton =
       document.createElement(
@@ -878,22 +648,15 @@ After neo.js removal this file continues unchanged.
       "button";
 
     menuButton.className =
-      [
-        "history-three-dot",
-        "history-action-btn"
-      ].join(" ");
+      "history-three-dot";
 
     menuButton.dataset
       .conversationId =
       item.id;
 
-    menuButton.dataset
-      .historyAction =
-      "menu";
-
     menuButton.setAttribute(
       "aria-label",
-      `Conversation options for ${item.title}`
+      "Conversation options"
     );
 
     menuButton.setAttribute(
@@ -901,22 +664,34 @@ After neo.js removal this file continues unchanged.
       "menu"
     );
 
-    menuButton.setAttribute(
-      "aria-expanded",
-      "false"
+    const menuIcon =
+      document.createElement(
+        "i"
+      );
+
+    menuIcon.setAttribute(
+      "data-lucide",
+      "more-vertical"
     );
 
-    menuButton.title =
-      "Conversation options";
+    menuIcon.setAttribute(
+      "width",
+      "16"
+    );
 
-    menuButton.innerHTML = `
-      <i
-        data-lucide="more-vertical"
-        width="16"
-        height="16"
-        aria-hidden="true"
-      ></i>
-    `;
+    menuIcon.setAttribute(
+      "height",
+      "16"
+    );
+
+    menuIcon.setAttribute(
+      "aria-hidden",
+      "true"
+    );
+
+    menuButton.appendChild(
+      menuIcon
+    );
 
     menuButton.addEventListener(
       "click",
@@ -925,41 +700,53 @@ After neo.js removal this file continues unchanged.
         event.stopPropagation();
         event.stopImmediatePropagation();
 
-        requestMenu(
-          item,
+        emit(
+          "neyo:history-menu-request",
           {
-            anchorElement:
-              menuButton,
+            conversationId:
+              item.id,
 
-            source:
-              "button"
+            title:
+              item.title,
+
+            isPinned:
+              item.is_pinned,
+
+            anchorElement:
+              menuButton
           }
         );
-      }
+      },
+      true
     );
 
-    /* =================================================
-       CONTEXT MENU
-       ================================================= */
+    /* -----------------------------------------------
+       RIGHT CLICK / CONTEXT MENU
+       ----------------------------------------------- */
 
     row.addEventListener(
       "contextmenu",
       event => {
         event.preventDefault();
         event.stopPropagation();
-        event.stopImmediatePropagation();
 
-        requestMenu(
-          item,
+        emit(
+          "neyo:history-menu-request",
           {
+            conversationId:
+              item.id,
+
+            title:
+              item.title,
+
+            isPinned:
+              item.is_pinned,
+
             clientX:
               event.clientX,
 
             clientY:
-              event.clientY,
-
-            source:
-              "contextmenu"
+              event.clientY
           }
         );
       }
@@ -978,32 +765,20 @@ After neo.js removal this file continues unchanged.
      ===================================================== */
 
   function renderHistory() {
-    if (
-      !active
-    ) {
-      return false;
-    }
-
-    historyList
-      .replaceChildren();
+    historyList.replaceChildren();
 
     historyList.removeAttribute(
       "aria-busy"
     );
 
     if (
-      conversations.length ===
-      0
+      conversations.length === 0
     ) {
       emit(
         "neyo:history-rendered",
         {
-          conversations:
-            [],
-
-          count:
-            0,
-
+          conversations: [],
+          count: 0,
           activeConversationId
         }
       );
@@ -1012,8 +787,7 @@ After neo.js removal this file continues unchanged.
     }
 
     const fragment =
-      document
-        .createDocumentFragment();
+      document.createDocumentFragment();
 
     for (
       const item
@@ -1036,7 +810,9 @@ After neo.js removal this file continues unchanged.
       "neyo:history-rendered",
       {
         conversations:
-          getConversations(),
+          conversations.map(
+            cloneConversation
+          ),
 
         count:
           conversations.length,
@@ -1049,257 +825,189 @@ After neo.js removal this file continues unchanged.
   }
 
   /* =====================================================
-     UPDATE ONE LOCAL ITEM
+     LIST REQUEST
      ===================================================== */
 
-  function updateLocalConversation(
-    id,
-    values
+  async function performLoadHistory(
+    signal
   ) {
-    const index =
-      conversations.findIndex(
-        item =>
-          item.id === id
+    const response =
+      await fetch(
+        CONFIG.endpoint,
+        {
+          method:
+            "GET",
+
+          credentials:
+            "include",
+
+          cache:
+            "no-store",
+
+          headers: {
+            Accept:
+              "application/json",
+
+            "X-Neyo-History-Client":
+              VERSION
+          },
+
+          signal
+        }
       );
 
-    if (
-      index < 0
-    ) {
-      return false;
-    }
-
-    conversations[index] =
-      normalizeConversation({
-        ...conversations[index],
-        ...values,
-        id
-      }) ||
-      conversations[index];
-
-    return true;
-  }
-
-  /* =====================================================
-     REMOVE LOCAL ITEM
-     ===================================================== */
-
-  function removeLocalConversation(
-    id
-  ) {
-    const before =
-      conversations.length;
+    const data =
+      await readJson(
+        response
+      );
 
     conversations =
-      conversations.filter(
-        item =>
-          item.id !== id
+      Array.isArray(
+        data?.conversations
+      )
+        ? data.conversations
+            .map(
+              normalizeConversation
+            )
+            .filter(Boolean)
+        : [];
+
+    renderHistory();
+
+    const result =
+      conversations.map(
+        cloneConversation
       );
 
-    return (
-      conversations.length !==
-      before
+    emit(
+      "neyo:history-loaded",
+      {
+        conversations:
+          result,
+
+        count:
+          result.length,
+
+        activeConversationId
+      }
     );
+
+    return result;
   }
 
   /* =====================================================
      LOAD HISTORY
+
+     Simultaneous normal load calls share one promise.
+
+     force:true aborts the stale list request.
      ===================================================== */
 
-  async function performLoadHistory({
-    showLoading =
-      true
+  async function loadHistory({
+    force = false,
+    showLoading = true
   } = {}) {
     if (
-      !active
+      loadingPromise &&
+      !force
     ) {
-      return [];
+      return loadingPromise;
     }
 
-    state.loading =
-      true;
-
-    state.lastError =
-      null;
-
     if (
-      showLoading &&
-      !state.loaded
+      force &&
+      loadController
     ) {
+      try {
+        loadController.abort();
+      } catch {}
+    }
+
+    const controller =
+      new AbortController();
+
+    loadController =
+      controller;
+
+    if (showLoading) {
       renderLoading();
     }
 
-    emit(
-      "neyo:history-loading",
-      {
-        showLoading
-      }
-    );
-
-    try {
-      const response =
-        await fetchWithTimeout(
-          CONFIG.endpoint,
-          {
-            method:
-              "GET",
-
-            credentials:
-              "include",
-
-            cache:
-              "no-store",
-
-            headers: {
-              Accept:
-                "application/json",
-
-              "X-Neyo-History-Client":
-                VERSION
-            }
-          }
-        );
-
-      const data =
-        await readJson(
-          response
-        );
-
-      conversations =
-        normalizeConversationList(
-          data?.conversations
-        );
-
-      state.loaded =
-        true;
-
-      state.loading =
-        false;
-
-      state.lastLoadedAt =
-        Date.now();
-
-      state.loadCount +=
-        1;
-
-      renderHistory();
-
-      emit(
-        "neyo:history-loaded",
-        {
-          conversations:
-            getConversations(),
-
-          count:
-            conversations.length,
-
-          activeConversationId
-        }
+    const promise =
+      performLoadHistory(
+        controller.signal
       );
 
-      return getConversations();
+    loadingPromise =
+      promise;
 
-    } catch (
-      error
-    ) {
-      state.loading =
-        false;
+    try {
+      return await promise;
 
-      handleError(
-        error,
+    } catch (error) {
+      if (
+        error?.name ===
+        "AbortError"
+      ) {
+        return conversations.map(
+          cloneConversation
+        );
+      }
+
+      renderError();
+
+      emit(
+        "neyo:history-error",
         {
+          error,
           operation:
             "load"
         }
       );
 
-      /*
-       * First load failed:
-       * remove the permanent skeleton.
-
-       * Later refresh failed:
-       * retain currently usable history DOM/cache.
-       */
-
-      if (
-        !state.loaded
-      ) {
-        renderEmpty();
-      }
-
       throw error;
-    }
-  }
-
-  async function loadHistory(
-    options = {}
-  ) {
-    if (
-      !active
-    ) {
-      return [];
-    }
-
-    /*
-     * Deduplicate simultaneous refresh events.
-     *
-     * chat.js currently emits both modern
-     * neyo:history-refresh-request and compatibility
-     * neyo:history-load-request. They resolve to one GET.
-     */
-
-    if (
-      loadingPromise
-    ) {
-      return loadingPromise;
-    }
-
-    loadingPromise =
-      performLoadHistory(
-        options
-      );
-
-    try {
-      return await loadingPromise;
 
     } finally {
-      loadingPromise =
-        null;
+      if (
+        loadingPromise ===
+        promise
+      ) {
+        loadingPromise =
+          null;
+      }
+
+      if (
+        loadController ===
+        controller
+      ) {
+        loadController =
+          null;
+      }
     }
   }
 
   /* =====================================================
-     FETCH ONE CONVERSATION
+     FETCH CONVERSATION
      ===================================================== */
 
   async function fetchConversation(
     conversationId,
     {
-      signal =
-        null
+      signal
     } = {}
   ) {
-    if (
-      !active
-    ) {
-      return null;
-    }
-
     const id =
-      cleanId(
-        conversationId
+      clean(
+        conversationId,
+        128
       );
 
     if (!id) {
       return null;
     }
 
-    const controller =
-      signal
-        ? null
-        : new AbortController();
-
     const response =
-      await fetchWithTimeout(
+      await fetch(
         CONFIG.endpoint,
         {
           method:
@@ -1331,16 +1039,7 @@ After neo.js removal this file continues unchanged.
                 id
             }),
 
-          ...(signal
-            ? {
-                signal
-              }
-            : {})
-        },
-        {
-          controller:
-            controller ||
-            undefined
+          signal
         }
       );
 
@@ -1349,170 +1048,101 @@ After neo.js removal this file continues unchanged.
         response
       );
 
-    /*
-     * CRITICAL:
-     *
-     * Do not strip attachment/source/future message
-     * metadata. chat.js performs canonical normalization.
-     */
+    const messages =
+      Array.isArray(
+        data?.messages
+      )
+        ? data.messages
+            .map(
+              normalizeMessage
+            )
+            .filter(Boolean)
+        : [];
 
     return {
       id,
 
-      conversationId:
-        id,
+      conversation:
+        data?.conversation &&
+        typeof data.conversation ===
+          "object"
+          ? {
+              ...data.conversation
+            }
+          : null,
 
-      title:
-        clean(
-          data?.title ||
-          getById(id)?.title ||
-          "New conversation"
-        ) ||
-        "New conversation",
-
-      messages:
-        Array.isArray(
-          data?.messages
-        )
-          ? cloneValue(
-              data.messages
-            )
-          : []
+      messages
     };
   }
 
   /* =====================================================
-     CANCEL CURRENT OPEN
-     ===================================================== */
-
-  function cancelPendingOpen(
-    reason =
-      "superseded"
-  ) {
-    openSerial +=
-      1;
-
-    const controller =
-      activeOpenController;
-
-    activeOpenController =
-      null;
-
-    state.opening =
-      false;
-
-    if (
-      controller
-    ) {
-      try {
-        controller.abort(
-          reason
-        );
-
-      } catch {
-        try {
-          controller.abort();
-        } catch {}
-      }
-    }
-
-    return true;
-  }
-
-  /* =====================================================
      OPEN CONVERSATION
+
+     Important:
+     A clicked, then B clicked quickly:
+     slow A response can NEVER replace B.
      ===================================================== */
 
   async function openConversation(
-    conversationId,
-    {
-      source =
-        "history"
-    } = {}
+    conversationId
   ) {
-    if (
-      !active
-    ) {
-      return null;
-    }
-
     const id =
-      cleanId(
-        conversationId
+      clean(
+        conversationId,
+        128
       );
 
     if (!id) {
       return null;
     }
 
-    const now =
-      performance.now();
-
-    if (
-      lastOpenId === id &&
-      now -
-        lastOpenAt <
-      CONFIG
-        .duplicateOpenWindowMs
-    ) {
-      return null;
-    }
-
-    lastOpenId =
-      id;
-
-    lastOpenAt =
-      now;
-
     /*
-     * Cancel actual previous fetch in addition to
-     * serial stale-result protection.
+     * Clicking currently active conversation should not
+     * issue a second network request while chat state
+     * already owns it.
      */
 
     if (
-      activeOpenController
+      id ===
+        activeConversationId &&
+      window.NeyoChat
+        ?.getConversationId
+        ?.() === id
     ) {
-      try {
-        activeOpenController
-          .abort(
-            "superseded"
-          );
-
-      } catch {
-        try {
-          activeOpenController
-            .abort();
-        } catch {}
-      }
+      return {
+        id,
+        messages:
+          window.NeyoChat
+            ?.getConversation
+            ?.() ||
+          []
+      };
     }
-
-    const controller =
-      new AbortController();
-
-    activeOpenController =
-      controller;
 
     const serial =
       ++openSerial;
 
-    state.opening =
-      true;
+    try {
+      openController
+        ?.abort();
+    } catch {}
 
-    state.lastError =
-      null;
+    const controller =
+      new AbortController();
+
+    openController =
+      controller;
 
     emit(
       "neyo:history-opening",
       {
         conversationId:
-          id,
-
-        source
+          id
       }
     );
 
     try {
-      const conversation =
+      const result =
         await fetchConversation(
           id,
           {
@@ -1521,17 +1151,10 @@ After neo.js removal this file continues unchanged.
           }
         );
 
-      /*
-       * User clicked A then B:
-       * late A must never replace B.
-       */
-
       if (
         serial !==
           openSerial ||
-        controller.signal
-          .aborted ||
-        !conversation
+        !result
       ) {
         return null;
       }
@@ -1539,20 +1162,11 @@ After neo.js removal this file continues unchanged.
       activeConversationId =
         id;
 
-      state.opening =
-        false;
-
-      state.lastOpenedAt =
-        Date.now();
-
-      state.openCount +=
-        1;
-
       renderHistory();
 
       /*
-       * chat.js owns canonical conversation state.
-       * messages.js owns actual message DOM.
+       * chat.js is canonical conversation owner.
+       * It receives the data and then messages.js renders.
        */
 
       emit(
@@ -1562,9 +1176,10 @@ After neo.js removal this file continues unchanged.
             id,
 
           messages:
-            conversation.messages,
+            result.messages,
 
-          source
+          conversation:
+            result.conversation
         }
       );
 
@@ -1572,64 +1187,47 @@ After neo.js removal this file continues unchanged.
         "neyo:history-opened",
         {
           conversationId:
-            id,
-
-          conversation:
-            cloneValue(
-              conversation
-            ),
-
-          source
+            id
         }
       );
 
-      return conversation;
+      return result;
 
-    } catch (
-      error
-    ) {
-      /*
-       * Superseded/aborted history opens are expected
-       * and should not surface as user-facing errors.
-       */
-
+    } catch (error) {
       if (
         error?.name ===
-          "AbortError" ||
-        controller.signal
-          .aborted ||
-        serial !==
-          openSerial
+        "AbortError"
       ) {
         return null;
       }
 
-      state.opening =
-        false;
+      if (
+        serial ===
+        openSerial
+      ) {
+        emit(
+          "neyo:history-error",
+          {
+            error,
 
-      handleError(
-        error,
-        {
-          operation:
-            "open",
+            conversationId:
+              id,
 
-          conversationId:
-            id
-        }
-      );
+            operation:
+              "open"
+          }
+        );
+      }
 
       throw error;
 
     } finally {
       if (
-        activeOpenController ===
+        openController ===
         controller
       ) {
-        activeOpenController =
+        openController =
           null;
-
-        state.opening =
-          false;
       }
     }
   }
@@ -1643,15 +1241,10 @@ After neo.js removal this file continues unchanged.
     conversationId,
     payload = {}
   ) {
-    if (
-      !active
-    ) {
-      return null;
-    }
-
     const id =
-      cleanId(
-        conversationId
+      clean(
+        conversationId,
+        128
       );
 
     if (!id) {
@@ -1659,7 +1252,7 @@ After neo.js removal this file continues unchanged.
     }
 
     const response =
-      await fetchWithTimeout(
+      await fetch(
         CONFIG.endpoint,
         {
           method:
@@ -1700,46 +1293,53 @@ After neo.js removal this file continues unchanged.
   }
 
   /* =====================================================
+     LOCAL UPDATE HELPERS
+     ===================================================== */
+
+  function findLocalIndex(
+    conversationId
+  ) {
+    const id =
+      clean(
+        conversationId,
+        128
+      );
+
+    return conversations
+      .findIndex(
+        item =>
+          item.id === id
+      );
+  }
+
+  /* =====================================================
      RENAME
+
+     Optimistic local update after server success.
+     Avoid an unnecessary second GET.
      ===================================================== */
 
   async function renameConversation(
     conversationId,
     title
   ) {
-    if (
-      !active
-    ) {
-      return false;
-    }
-
     const id =
-      cleanId(
-        conversationId
+      clean(
+        conversationId,
+        128
       );
 
-    const cleanTitle =
+    const nextTitle =
       clean(
-        title
+        title,
+        CONFIG.maxTitleLength
       );
 
     if (
       !id ||
-      !cleanTitle
+      !nextTitle
     ) {
       return false;
-    }
-
-    const existing =
-      getById(
-        id
-      );
-
-    if (
-      existing?.title ===
-      cleanTitle
-    ) {
-      return true;
     }
 
     await performAction(
@@ -1747,30 +1347,32 @@ After neo.js removal this file continues unchanged.
       id,
       {
         title:
-          cleanTitle
+          nextTitle
       }
     );
 
-    /*
-     * Update immediately after server success.
-     * No visual flicker while background refresh runs.
-     */
+    const index =
+      findLocalIndex(
+        id
+      );
 
-    updateLocalConversation(
-      id,
-      {
+    if (index >= 0) {
+      conversations[index] = {
+        ...conversations[index],
+
         title:
-          cleanTitle
-      }
-    );
+          nextTitle,
 
-    state.renameCount +=
+        updatedAt:
+          new Date()
+            .toISOString()
+      };
+
+      renderHistory();
+    }
+
+    mutationCount +=
       1;
-
-    state.lastMutationAt =
-      Date.now();
-
-    renderHistory();
 
     emit(
       "neyo:history-renamed",
@@ -1779,24 +1381,7 @@ After neo.js removal this file continues unchanged.
           id,
 
         title:
-          cleanTitle
-      }
-    );
-
-    /*
-     * Server remains authoritative.
-     * Refresh quietly.
-     */
-
-    void loadHistory({
-      showLoading:
-        false
-    }).catch(
-      error => {
-        console.warn(
-          "[NEYO History] Post-rename refresh failed:",
-          error
-        );
+          nextTitle
       }
     );
 
@@ -1810,15 +1395,10 @@ After neo.js removal this file continues unchanged.
   async function deleteConversation(
     conversationId
   ) {
-    if (
-      !active
-    ) {
-      return false;
-    }
-
     const id =
-      cleanId(
-        conversationId
+      clean(
+        conversationId,
+        128
       );
 
     if (!id) {
@@ -1830,39 +1410,31 @@ After neo.js removal this file continues unchanged.
       id
     );
 
-    const wasActive =
+    conversations =
+      conversations.filter(
+        item =>
+          item.id !== id
+      );
+
+    const deletedActive =
       activeConversationId ===
-      id;
+        id;
 
-    removeLocalConversation(
-      id
-    );
-
-    state.deleteCount +=
-      1;
-
-    state.lastMutationAt =
-      Date.now();
-
-    if (
-      wasActive
-    ) {
+    if (deletedActive) {
       activeConversationId =
         null;
 
       /*
-       * Any history fetch still trying to open this
-       * conversation is now stale.
+       * Invalidate any open still in flight.
        */
 
-      cancelPendingOpen(
-        "conversation-deleted"
-      );
+      openSerial +=
+        1;
 
-      /*
-       * Existing runtime listens to this and routes
-       * canonical neyo:chat-new-request.
-       */
+      try {
+        openController
+          ?.abort();
+      } catch {}
 
       emit(
         "neyo:active-conversation-deleted",
@@ -1875,25 +1447,17 @@ After neo.js removal this file continues unchanged.
 
     renderHistory();
 
+    mutationCount +=
+      1;
+
     emit(
       "neyo:history-deleted",
       {
         conversationId:
           id,
 
-        wasActive
-      }
-    );
-
-    void loadHistory({
-      showLoading:
-        false
-    }).catch(
-      error => {
-        console.warn(
-          "[NEYO History] Post-delete refresh failed:",
-          error
-        );
+        wasActive:
+          deletedActive
       }
     );
 
@@ -1908,15 +1472,10 @@ After neo.js removal this file continues unchanged.
     conversationId,
     pinned
   ) {
-    if (
-      !active
-    ) {
-      return false;
-    }
-
     const id =
-      cleanId(
-        conversationId
+      clean(
+        conversationId,
+        128
       );
 
     if (!id) {
@@ -1928,21 +1487,6 @@ After neo.js removal this file continues unchanged.
         pinned
       );
 
-    const existing =
-      getById(
-        id
-      );
-
-    if (
-      existing &&
-      Boolean(
-        existing.is_pinned
-      ) ===
-      value
-    ) {
-      return true;
-    }
-
     await performAction(
       value
         ? "pin"
@@ -1950,27 +1494,65 @@ After neo.js removal this file continues unchanged.
       id
     );
 
-    updateLocalConversation(
-      id,
-      {
+    const index =
+      findLocalIndex(
+        id
+      );
+
+    if (index >= 0) {
+      conversations[index] = {
+        ...conversations[index],
+
         is_pinned:
-          value,
-
-        isPinned:
-          value,
-
-        pinned:
           value
-      }
-    );
+      };
 
-    state.pinCount +=
+      /*
+       * Pinned conversations stay above normal history
+       * without waiting for another server fetch.
+       */
+
+      conversations.sort(
+        (a, b) => {
+          if (
+            a.is_pinned !==
+            b.is_pinned
+          ) {
+            return a.is_pinned
+              ? -1
+              : 1;
+          }
+
+          const aTime =
+            Date.parse(
+              a.updatedAt ||
+              a.updated_at ||
+              a.createdAt ||
+              a.created_at ||
+              0
+            ) || 0;
+
+          const bTime =
+            Date.parse(
+              b.updatedAt ||
+              b.updated_at ||
+              b.createdAt ||
+              b.created_at ||
+              0
+            ) || 0;
+
+          return (
+            bTime -
+            aTime
+          );
+        }
+      );
+
+      renderHistory();
+    }
+
+    mutationCount +=
       1;
-
-    state.lastMutationAt =
-      Date.now();
-
-    renderHistory();
 
     emit(
       "neyo:history-pin-change",
@@ -1979,27 +1561,7 @@ After neo.js removal this file continues unchanged.
           id,
 
         pinned:
-          value,
-
-        isPinned:
           value
-      }
-    );
-
-    /*
-     * Backend may reorder pinned items.
-     * Quiet refresh gets canonical ordering.
-     */
-
-    void loadHistory({
-      showLoading:
-        false
-    }).catch(
-      error => {
-        console.warn(
-          "[NEYO History] Post-pin refresh failed:",
-          error
-        );
       }
     );
 
@@ -2007,181 +1569,86 @@ After neo.js removal this file continues unchanged.
   }
 
   /* =====================================================
-     TOGGLE PIN
-     ===================================================== */
-
-  async function togglePinned(
-    conversationId
-  ) {
-    const item =
-      getById(
-        conversationId
-      );
-
-    if (!item) {
-      return false;
-    }
-
-    return setPinned(
-      item.id,
-      !item.is_pinned
-    );
-  }
-
-  /* =====================================================
-     SET ACTIVE
+     ACTIVE CONVERSATION
      ===================================================== */
 
   function setActiveConversation(
-    conversationId,
-    {
-      render =
-        true
-    } = {}
+    conversationId
   ) {
-    if (
-      !active
-    ) {
-      return false;
-    }
-
     const id =
-      cleanId(
-        conversationId
+      clean(
+        conversationId,
+        128
       ) ||
       null;
 
-    const changed =
-      activeConversationId !==
-      id;
+    if (
+      activeConversationId ===
+      id
+    ) {
+      return true;
+    }
 
     activeConversationId =
       id;
 
-    if (
-      render
-    ) {
-      renderHistory();
-    }
+    renderHistory();
 
-    if (
-      changed
-    ) {
-      emit(
-        "neyo:history-active-change",
-        {
-          conversationId:
-            activeConversationId
-        }
-      );
-    }
+    emit(
+      "neyo:history-active-change",
+      {
+        conversationId:
+          id
+      }
+    );
 
     return true;
   }
 
   /* =====================================================
-     GETTERS
+     ERROR BRIDGE
      ===================================================== */
 
-  function getConversations() {
-    return conversations.map(
-      item =>
-        cloneValue(
-          item
-        )
-    );
-  }
-
-  function getById(
-    id
-  ) {
-    const value =
-      cleanId(
-        id
-      );
-
-    if (!value) {
-      return null;
-    }
-
-    const item =
-      conversations.find(
-        conversation =>
-          conversation.id ===
-          value
-      );
-
-    return item
-      ? cloneValue(
-          item
-        )
-      : null;
-  }
-
-  /* =====================================================
-     CHAT STATE SYNC
-
-     chat.js owns actual conversation state.
-     History mirrors only active sidebar selection.
-     ===================================================== */
-
-  function syncFromChatState(
+  function handleError(
+    error,
     detail = {}
   ) {
-    const privateChat =
-      Boolean(
-        detail.preferences
-          ?.privateChat
-      );
+    console.error(
+      "[NEO History]",
+      error
+    );
 
-    if (
-      privateChat
-    ) {
-      setActiveConversation(
-        null
-      );
-
-      return;
-    }
-
-    const id =
-      cleanId(
-        detail.conversationId
-      ) ||
-      null;
-
-    setActiveConversation(
-      id
+    emit(
+      "neyo:history-error",
+      {
+        error,
+        ...detail
+      }
     );
   }
 
   /* =====================================================
-     MENU ACTION EVENTS
+     HISTORY MENU REQUESTS
+
+     history-menu.js owns the dialogs/UI.
      ===================================================== */
 
   window.addEventListener(
     "neyo:history-rename-request",
     event => {
-      const detail =
-        event.detail ||
-        {};
-
       void renameConversation(
-        detail.conversationId ||
-        detail.id,
+        event.detail
+          ?.conversationId,
 
-        detail.title
+        event.detail
+          ?.title
       ).catch(
         error =>
           handleError(
             error,
             {
               operation:
-                "rename",
-
-              conversationId:
-                detail.conversationId ||
-                detail.id
+                "rename"
             }
           )
       );
@@ -2191,24 +1658,16 @@ After neo.js removal this file continues unchanged.
   window.addEventListener(
     "neyo:history-delete-request",
     event => {
-      const detail =
-        event.detail ||
-        {};
-
       void deleteConversation(
-        detail.conversationId ||
-        detail.id
+        event.detail
+          ?.conversationId
       ).catch(
         error =>
           handleError(
             error,
             {
               operation:
-                "delete",
-
-              conversationId:
-                detail.conversationId ||
-                detail.id
+                "delete"
             }
           )
       );
@@ -2218,61 +1677,19 @@ After neo.js removal this file continues unchanged.
   window.addEventListener(
     "neyo:history-pin-request",
     event => {
-      const detail =
-        event.detail ||
-        {};
+      void setPinned(
+        event.detail
+          ?.conversationId,
 
-      const id =
-        detail.conversationId ||
-        detail.id;
-
-      if (
-        !id
-      ) {
-        return;
-      }
-
-      /*
-       * If menu specifies pinned, use it.
-       * Otherwise toggle current state.
-       */
-
-      if (
-        typeof detail.pinned ===
-          "boolean"
-      ) {
-        void setPinned(
-          id,
-          detail.pinned
-        ).catch(
-          error =>
-            handleError(
-              error,
-              {
-                operation:
-                  "pin",
-
-                conversationId:
-                  id
-              }
-            )
-        );
-
-        return;
-      }
-
-      void togglePinned(
-        id
+        event.detail
+          ?.pinned
       ).catch(
         error =>
           handleError(
             error,
             {
               operation:
-                "pin",
-
-              conversationId:
-                id
+                "pin"
             }
           )
       );
@@ -2280,39 +1697,41 @@ After neo.js removal this file continues unchanged.
   );
 
   /* =====================================================
-     LOAD / REFRESH EVENTS
+     LOAD REQUEST
 
-     Both are supported for old + new chat contracts.
-     loadingPromise dedupes simultaneous requests.
+     chat.js emits this after successful non-private chat.
      ===================================================== */
 
   window.addEventListener(
     "neyo:history-load-request",
-    () => {
-      void loadHistory({
-        showLoading:
-          !state.loaded
-      }).catch(
-        error => {
-          console.warn(
-            "[NEYO History] Load failed:",
-            error
-          );
-        }
-      );
-    }
-  );
+    event => {
+      const conversationId =
+        clean(
+          event.detail
+            ?.conversationId,
+          128
+        );
 
-  window.addEventListener(
-    "neyo:history-refresh-request",
-    () => {
+      if (conversationId) {
+        activeConversationId =
+          conversationId;
+      }
+
+      /*
+       * No loading skeleton for background refresh after
+       * a normal chat response.
+       */
+
       void loadHistory({
+        force:
+          true,
+
         showLoading:
           false
       }).catch(
         error => {
           console.warn(
-            "[NEYO History] Refresh failed:",
+            "[NEO History] Background refresh failed:",
             error
           );
         }
@@ -2321,36 +1740,22 @@ After neo.js removal this file continues unchanged.
   );
 
   /* =====================================================
-     OPEN REQUEST EVENT
+     EXTERNAL OPEN REQUEST
      ===================================================== */
 
   window.addEventListener(
     "neyo:conversation-open-request",
     event => {
-      const id =
-        event.detail
-          ?.conversationId ||
-        event.detail
-          ?.id;
-
       void openConversation(
-        id,
-        {
-          source:
-            event.detail
-              ?.source ||
-            "event"
-        }
+        event.detail
+          ?.conversationId
       ).catch(
         error =>
           handleError(
             error,
             {
               operation:
-                "open",
-
-              conversationId:
-                id
+                "open"
             }
           )
       );
@@ -2358,7 +1763,7 @@ After neo.js removal this file continues unchanged.
   );
 
   /* =====================================================
-     EXPLICIT ACTIVE SET
+     ACTIVE STATE REQUEST
      ===================================================== */
 
   window.addEventListener(
@@ -2366,16 +1771,16 @@ After neo.js removal this file continues unchanged.
     event => {
       setActiveConversation(
         event.detail
-          ?.conversationId ||
-        event.detail
-          ?.id ||
-        null
+          ?.conversationId
       );
     }
   );
 
   /* =====================================================
-     CHAT LOADED CONVERSATION
+     CHAT → HISTORY ACTIVE SYNC
+
+     chat.js owns conversation identity.
+     history.js mirrors it visually.
      ===================================================== */
 
   window.addEventListener(
@@ -2383,72 +1788,34 @@ After neo.js removal this file continues unchanged.
     event => {
       setActiveConversation(
         event.detail
-          ?.conversationId ||
-        null
+          ?.conversationId
       );
     }
   );
-
-  /* =====================================================
-     GENERAL CHAT STATE
-     ===================================================== */
 
   window.addEventListener(
     "neyo:chat-state",
     event => {
-      syncFromChatState(
-        event.detail ||
-        {}
-      );
+      const id =
+        event.detail
+          ?.conversationId;
+
+      if (
+        id !== undefined
+      ) {
+        setActiveConversation(
+          id
+        );
+      }
     }
   );
-
-  /* =====================================================
-     NEW CHAT
-     ===================================================== */
 
   window.addEventListener(
     "neyo:chat-new",
     () => {
-      cancelPendingOpen(
-        "new-chat"
-      );
-
       setActiveConversation(
         null
       );
-    }
-  );
-
-  /* =====================================================
-     SUCCESSFUL CHAT RESPONSE
-
-     New conversations receive conversationId only after
-     backend responds. This makes the new sidebar row active.
-     ===================================================== */
-
-  window.addEventListener(
-    "neyo:chat-response",
-    event => {
-      const id =
-        cleanId(
-          event.detail
-            ?.conversationId
-        );
-
-      if (
-        id &&
-        !event.detail
-          ?.privateChat
-      ) {
-        setActiveConversation(
-          id,
-          {
-            render:
-              true
-          }
-        );
-      }
     }
   );
 
@@ -2464,149 +1831,110 @@ After neo.js removal this file continues unchanged.
       version:
         VERSION,
 
-      active,
-
-      legacyScriptPresent,
-
-      legacyOwnerActive:
-        false,
-
-      /*
-       * Load / render
-       */
+      active:
+        true,
 
       load:
         loadHistory,
 
-      loadHistory,
-
-      refresh(
-        options = {}
-      ) {
-        return loadHistory({
-          showLoading:
-            false,
-
-          ...options
-        });
-      },
-
       render:
         renderHistory,
-
-      renderHistory,
-
-      /*
-       * Conversation open
-       */
 
       open:
         openConversation,
 
-      openConversation,
-
       fetchConversation,
-
-      cancelPendingOpen,
-
-      /*
-       * Actions
-       */
 
       rename:
         renameConversation,
 
-      renameConversation,
-
       delete:
         deleteConversation,
 
-      deleteConversation,
-
       setPinned,
-
-      togglePinned,
-
-      /*
-       * Active state
-       */
 
       setActive:
         setActiveConversation,
 
-      setActiveConversation,
-
       getActive() {
-        return activeConversationId;
+        return (
+          activeConversationId ||
+          null
+        );
       },
 
-      /*
-       * Cache
-       */
+      getConversations() {
+        return conversations.map(
+          cloneConversation
+        );
+      },
 
-      getConversations,
+      getById(
+        id
+      ) {
+        const key =
+          clean(
+            id,
+            128
+          );
 
-      getById,
+        const item =
+          conversations.find(
+            conversation =>
+              conversation.id ===
+              key
+          );
 
-      /*
-       * State
-       */
+        return item
+          ? cloneConversation(
+              item
+            )
+          : null;
+      },
+
+      isLoading() {
+        return Boolean(
+          loadingPromise
+        );
+      },
+
+      refresh() {
+        return loadHistory({
+          force:
+            true,
+
+          showLoading:
+            false
+        });
+      },
 
       getState() {
         return {
           version:
             VERSION,
 
-          active,
-
-          legacyScriptPresent,
-
-          legacyOwnerActive:
-            false,
+          active:
+            true,
 
           activeConversationId,
 
           count:
             conversations.length,
 
-          loaded:
-            state.loaded,
-
           loading:
             Boolean(
-              loadingPromise ||
-              state.loading
+              loadingPromise
             ),
 
           opening:
-            state.opening,
+            Boolean(
+              openController
+            ),
 
-          lastLoadedAt:
-            state.lastLoadedAt,
+          openSerial,
 
-          lastOpenedAt:
-            state.lastOpenedAt,
-
-          lastMutationAt:
-            state.lastMutationAt,
-
-          loadCount:
-            state.loadCount,
-
-          openCount:
-            state.openCount,
-
-          renameCount:
-            state.renameCount,
-
-          deleteCount:
-            state.deleteCount,
-
-          pinCount:
-            state.pinCount,
-
-          lastError:
-            state.lastError
+          mutations:
+            mutationCount
         };
       }
     });
@@ -2630,48 +1958,16 @@ After neo.js removal this file continues unchanged.
   );
 
   /* =====================================================
-     INIT
+     READY
+
+     Do not automatically fetch here.
+     app-init / existing bootstrap may issue the first
+     history-load-request.
+
+     This avoids duplicate first-load network calls.
      ===================================================== */
 
-  if (
-    active
-  ) {
-    /*
-     * Read active chat if chat.js loaded first.
-     */
-
-    try {
-      const chatState =
-        window.NeyoChat
-          ?.getState
-          ?.();
-
-      if (
-        chatState
-      ) {
-        syncFromChatState(
-          chatState
-        );
-      }
-    } catch {}
-
-    /*
-     * Production behavior:
-     * history is available immediately on app load.
-     */
-
-    void loadHistory({
-      showLoading:
-        true
-    }).catch(
-      error => {
-        console.warn(
-          "[NEYO History] Initial load failed:",
-          error
-        );
-      }
-    );
-  }
+  renderEmpty();
 
   emit(
     "neyo:history-ready",
@@ -2679,12 +1975,8 @@ After neo.js removal this file continues unchanged.
       version:
         VERSION,
 
-      active,
-
-      legacyScriptPresent,
-
-      legacyOwnerActive:
-        false
+      active:
+        true
     }
   );
 })();

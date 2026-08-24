@@ -1,72 +1,32 @@
 /*
 =========================================================
-NEYO — CHAT CORE
-FINAL PRODUCTION MIXER v10
+NEO — CHAT CORE
+Production v1
 
-FILE:
-public/js/components/chat.js
-
-OWNS
----------------------------------------------------------
-- Single authoritative conversation state
-- /api/chat requests
-- Conversation ID
-- Request lifecycle
+Owns:
+- single conversation state
+- current conversation ID
+- /api/chat
+- request lifecycle
 - Abort / Stop
-- Stale request protection
-- Duplicate generation protection
-- User / assistant message state
-- Attachment metadata in conversation
-- Sources metadata
-- Preferences
-- Private Chat
-- Deep Research
-- Model selection
-- History synchronization events
-- Conversation loading
-- Message mutation primitives
-- Edit / truncate primitives
-- Regeneration primitives
-- Error / limit lifecycle
-- Public chat state events
+- message state
+- edit user message
+- regenerate assistant turn
+- history conversation loading
+- model + preferences payload
+- attachment metadata
+- error / limit lifecycle
+- public chat events
 
-DOES NOT OWN
----------------------------------------------------------
-- Send button
+Does NOT own:
+- message DOM
+- markdown rendering
+- thinking DOM
+- send button
 - Enter key
-- Composer text cleanup
-- Attachment upload / processing
-- Message DOM
-- Markdown
-- Thinking DOM
-- Sidebar/history rendering
-- Copy/share UI
-- Edit UI
-- Regenerate button UI
-- Voice
-
-PIPELINE
----------------------------------------------------------
-
-send-state.js
-     ↓
-neyo:chat-send-request
-     ↓
-chat.js
-     ↓
-neyo:chat-message-added
-     ↓
-messages.js
-     ↓
-message-renderer.js
-
-MIGRATION RULE
----------------------------------------------------------
-This module is authoritative regardless of whether neo.js
-is still physically loaded.
-
-After neo.js is removed, no chat transport migration should
-be required.
+- attachment uploads
+- sidebar/history UI
+- topbar/model-picker UI
 =========================================================
 */
 
@@ -74,7 +34,7 @@ be required.
   "use strict";
 
   const VERSION =
-    "neyo-chat-final-v10";
+    "neo-chat-production-v1";
 
   if (
     window.NeyoChat
@@ -87,77 +47,24 @@ be required.
      CONFIG
      ===================================================== */
 
-  const CONFIG =
-    Object.freeze({
-      endpoint:
-        "/api/chat",
+  const CONFIG = Object.freeze({
+    endpoint: "/api/chat",
 
-      maxHistoryMessages:
-        50,
+    maxHistoryMessages: 50,
+    maxAttachments: 5,
+    maxMessageLength: 50_000,
 
-      maxAttachments:
-        5,
+    requestTimeoutMs: 180_000
+  });
 
-      maxMessageLength:
-        50_000,
-
-      maxTitleLength:
-        80,
-
-      requestTimeoutMs:
-        180_000,
-
-      attachmentOnlyPrompt:
-        "Please analyze the attached file or files."
-    });
-
-  /* =====================================================
-     LEGACY TELEMETRY
-
-     neo.js presence is informational only.
-     ===================================================== */
-
-  const legacyScriptPresent =
-    Array
-      .from(
-        document.scripts || []
-      )
-      .some(
-        script =>
-          /(?:^|\/)neo\.js(?:\?|$)/
-            .test(
-              script.src || ""
-            )
-      );
-
-  /* =====================================================
-     DEFAULT PREFERENCES
-     ===================================================== */
-
-  const DEFAULT_PREFERENCES =
-    Object.freeze({
-      intelligence:
-        "standard",
-
-      language:
-        "auto",
-
-      personality:
-        "neyo",
-
-      privateChat:
-        false,
-
-      isDeepResearch:
-        false
-    });
+  const ATTACHMENT_ONLY_PROMPT =
+    "Please analyze the attached file or files.";
 
   /* =====================================================
      STATE
      ===================================================== */
 
-  let conversation =
-    [];
+  let conversation = [];
 
   let currentConversationId =
     null;
@@ -168,25 +75,17 @@ be required.
   let activeController =
     null;
 
-  let requestSerial =
+  let activeRequestId =
     0;
 
-  let activeRequestId =
-    null;
+  let preferences = {
+    intelligence: "standard",
+    language: "auto",
+    personality: "neyo",
 
-  let activeRequestStartedAt =
-    null;
-
-  let lastCompletedRequestId =
-    null;
-
-  let lastResult =
-    null;
-
-  let preferences =
-    {
-      ...DEFAULT_PREFERENCES
-    };
+    privateChat: false,
+    isDeepResearch: false
+  };
 
   /* =====================================================
      EVENTS
@@ -199,399 +98,205 @@ be required.
     window.dispatchEvent(
       new CustomEvent(
         name,
-        {
-          detail
-        }
+        { detail }
       )
     );
   }
 
   /* =====================================================
-     ID
+     BASIC HELPERS
      ===================================================== */
 
-  function createId(
-    prefix = "msg"
-  ) {
+  function makeId() {
     return (
       globalThis.crypto
         ?.randomUUID
         ?.() ||
-      (
-        `${prefix}_${Date.now()}_` +
-        Math.random()
-          .toString(36)
-          .slice(2)
-      )
+      `msg_${Date.now()}_${Math.random()
+        .toString(36)
+        .slice(2)}`
     );
   }
 
-  /* =====================================================
-     TEXT
-     ===================================================== */
-
-  function cleanText(
+  function clean(
     value,
-    max =
-      CONFIG.maxMessageLength
+    max = CONFIG.maxMessageLength
   ) {
     return String(
       value ?? ""
     )
-      .replace(
-        /\u0000/g,
-        ""
-      )
-      .replace(
-        /\r\n?/g,
-        "\n"
-      )
-      .slice(
-        0,
-        max
-      )
+      .replace(/\u0000/g, "")
+      .replace(/\r\n?/g, "\n")
+      .slice(0, max)
       .trim();
   }
 
-  function cleanIdentifier(
-    value,
-    max = 256
-  ) {
-    return String(
-      value ?? ""
-    )
-      .replace(
-        /\u0000/g,
-        ""
-      )
-      .trim()
-      .slice(
-        0,
-        max
-      );
-  }
-
-  /* =====================================================
-     SAFE CLONE
-     ===================================================== */
-
-  function cloneValue(
-    value
+  function cloneSource(
+    source
   ) {
     if (
-      value === null ||
-      value === undefined
-    ) {
-      return value;
-    }
-
-    if (
-      typeof structuredClone ===
-      "function"
-    ) {
-      try {
-        return structuredClone(
-          value
-        );
-      } catch {}
-    }
-
-    try {
-      return JSON.parse(
-        JSON.stringify(value)
-      );
-    } catch {
-      return value;
-    }
-  }
-
-  /* =====================================================
-     ATTACHMENT NORMALIZATION
-     ===================================================== */
-
-  function normalizeAttachment(
-    attachment
-  ) {
-    if (
-      !attachment ||
-      typeof attachment !==
-        "object"
-    ) {
-      return null;
-    }
-
-    const mime =
-      cleanIdentifier(
-        attachment.mimeType ||
-        attachment.mime ||
-        attachment.type ||
-        "application/octet-stream",
-        200
-      ) ||
-      "application/octet-stream";
-
-    const bucket =
-      cleanIdentifier(
-        attachment.bucket,
-        256
-      );
-
-    const path =
-      cleanIdentifier(
-        attachment.path,
-        2000
-      );
-
-    /*
-     * Chat transport only accepts files
-     * that have real storage identity.
-     */
-
-    if (
-      !bucket ||
-      !path
+      !source ||
+      typeof source !== "object"
     ) {
       return null;
     }
 
     return {
-      id:
-        cleanIdentifier(
-          attachment.id,
-          256
-        ) ||
-        undefined,
-
-      uploadId:
-        cleanIdentifier(
-          attachment.uploadId,
-          256
-        ) ||
-        undefined,
-
-      processId:
-        cleanIdentifier(
-          attachment.processId,
-          256
-        ) ||
-        undefined,
-
-      documentId:
-        cleanIdentifier(
-          attachment.documentId,
-          256
-        ) ||
-        undefined,
-
-      provider:
-        cleanIdentifier(
-          attachment.provider,
-          100
-        ) ||
-        "supabase",
-
-      bucket,
-
-      path,
-
-      name:
-        cleanText(
-          attachment.name,
-          255
-        ) ||
-        "Attached file",
-
-      mime,
-
-      mimeType:
-        mime,
-
-      type:
-        mime,
-
-      extension:
-        cleanIdentifier(
-          attachment.extension ||
-          attachment.ext,
-          30
-        ) ||
-        undefined,
-
-      ext:
-        cleanIdentifier(
-          attachment.extension ||
-          attachment.ext,
-          30
-        ) ||
-        undefined,
-
-      category:
-        cleanIdentifier(
-          attachment.category,
-          100
-        ) ||
-        "unknown",
-
-      size:
-        Math.max(
-          0,
-          Number(
-            attachment.size
-          ) ||
-          0
-        ),
-
-      uploadedSize:
-        Math.max(
-          0,
-          Number(
-            attachment.uploadedSize
-          ) ||
-          Number(
-            attachment.size
-          ) ||
-          0
-        ),
-
-      status:
-        attachment.status ||
-        "ready",
-
-      ready:
-        true,
-
-      document:
-        attachment.document ??
-        undefined,
-
-      chunks:
-        Array.isArray(
-          attachment.chunks
-        )
-          ? cloneValue(
-              attachment.chunks
-            )
-          : undefined,
-
-      stats:
-        attachment.stats ??
-        undefined,
-
-      extraction:
-        attachment.extraction ??
-        undefined,
-
-      warnings:
-        Array.isArray(
-          attachment.warnings
-        )
-          ? [
-              ...attachment.warnings
-            ]
-          : undefined,
-
-      /*
-       * previewUrl is useful for current-session
-       * UI only. Backend can safely ignore it.
-       */
-
-      previewUrl:
-        typeof attachment.previewUrl ===
-          "string"
-          ? attachment.previewUrl
-          : undefined
+      ...source
     };
   }
 
-  function normalizeAttachments(
-    attachments
-  ) {
-    if (
-      !Array.isArray(
-        attachments
-      )
-    ) {
-      return [];
-    }
-
-    const result =
-      [];
-
-    const seen =
-      new Set();
-
-    for (
-      const attachment
-      of attachments
-    ) {
-      if (
-        result.length >=
-        CONFIG.maxAttachments
-      ) {
-        break;
-      }
-
-      const normalized =
-        normalizeAttachment(
-          attachment
-        );
-
-      if (!normalized) {
-        continue;
-      }
-
-      const key =
-        `${normalized.bucket}:${normalized.path}`;
-
-      if (
-        seen.has(key)
-      ) {
-        continue;
-      }
-
-      seen.add(key);
-
-      result.push(
-        normalized
-      );
-    }
-
-    return result;
-  }
-
   /* =====================================================
-     SOURCE NORMALIZATION
-
-     Preserve backend source data while cloning it
-     away from external mutable objects.
+     ATTACHMENTS
      ===================================================== */
 
-  function normalizeSources(
-    sources
+  function normalizeAttachments(
+    value
   ) {
-    if (
-      !Array.isArray(
-        sources
-      )
-    ) {
+    if (!Array.isArray(value)) {
       return [];
     }
 
-    return sources
+    return value
       .filter(
-        source =>
-          source &&
-          typeof source ===
-            "object"
+        item =>
+          item &&
+          typeof item === "object"
       )
       .slice(
         0,
-        50
+        CONFIG.maxAttachments
       )
-      .map(
-        source =>
-          cloneValue(
-            source
+      .map(item => {
+        const mime =
+          clean(
+            item.mimeType ||
+            item.mime ||
+            item.type ||
+            "application/octet-stream",
+            255
+          ) ||
+          "application/octet-stream";
+
+        return {
+          id:
+            clean(
+              item.id,
+              128
+            ) ||
+            undefined,
+
+          uploadId:
+            clean(
+              item.uploadId,
+              128
+            ) ||
+            undefined,
+
+          processId:
+            clean(
+              item.processId,
+              128
+            ) ||
+            undefined,
+
+          documentId:
+            clean(
+              item.documentId,
+              128
+            ) ||
+            undefined,
+
+          provider:
+            clean(
+              item.provider,
+              50
+            ) ||
+            "supabase",
+
+          bucket:
+            clean(
+              item.bucket,
+              255
+            ),
+
+          path:
+            clean(
+              item.path,
+              1000
+            ),
+
+          name:
+            clean(
+              item.name,
+              255
+            ) ||
+            "Attached file",
+
+          mimeType: mime,
+          mime,
+
+          extension:
+            clean(
+              item.extension,
+              30
+            ),
+
+          category:
+            clean(
+              item.category,
+              50
+            ) ||
+            "unknown",
+
+          size:
+            Math.max(
+              0,
+              Number(
+                item.size
+              ) || 0
+            ),
+
+          document:
+            item.document &&
+            typeof item.document ===
+              "object"
+              ? {
+                  ...item.document
+                }
+              : undefined,
+
+          chunks:
+            Array.isArray(
+              item.chunks
+            )
+              ? item.chunks.map(
+                  chunk =>
+                    typeof chunk ===
+                    "object"
+                      ? {
+                          ...chunk
+                        }
+                      : chunk
+                )
+              : undefined,
+
+          stats:
+            item.stats &&
+            typeof item.stats ===
+              "object"
+              ? {
+                  ...item.stats
+                }
+              : undefined
+        };
+      })
+      .filter(
+        item =>
+          Boolean(
+            item.path ||
+            item.documentId ||
+            item.uploadId
           )
       );
   }
@@ -605,92 +310,490 @@ be required.
   ) {
     if (
       !message ||
-      typeof message !==
-        "object"
+      typeof message !== "object"
     ) {
       return null;
     }
-
-    const role =
-      message.role;
 
     if (
-      role !== "user" &&
-      role !== "assistant"
+      message.role !== "user" &&
+      message.role !== "assistant"
     ) {
       return null;
     }
 
-    const normalized =
-      {
-        id:
-          cleanIdentifier(
-            message.id,
-            256
-          ) ||
-          createId(),
+    const content =
+      clean(
+        message.content
+      );
 
-        role,
+    const normalized = {
+      id:
+        clean(
+          message.id,
+          128
+        ) ||
+        makeId(),
 
-        content:
-          cleanText(
-            message.content
-          )
-      };
+      role:
+        message.role,
+
+      content
+    };
+
+    /*
+     * displayContent allows the UI to hide internal
+     * attachment-only prompts while API content stays valid.
+     */
+
+    if (
+      typeof message.displayContent ===
+      "string"
+    ) {
+      normalized.displayContent =
+        clean(
+          message.displayContent
+        );
+    }
 
     const attachments =
       normalizeAttachments(
         message.attachments
       );
 
-    if (
-      attachments.length
-    ) {
+    if (attachments.length) {
       normalized.attachments =
         attachments;
     }
 
-    const sources =
-      normalizeSources(
-        message.sources
-      );
-
     if (
-      sources.length
+      Array.isArray(
+        message.sources
+      )
     ) {
-      normalized.sources =
-        sources;
+      const sources =
+        message.sources
+          .map(cloneSource)
+          .filter(Boolean);
+
+      if (sources.length) {
+        normalized.sources =
+          sources;
+      }
     }
 
-    if (
-      message.error ===
-      true
-    ) {
+    if (message.error === true) {
       normalized.error =
         true;
     }
 
-    /*
-     * Preserve useful metadata used by future
-     * message-actions / analytics without allowing
-     * it to alter transport behavior.
-     */
-
-    if (
-      message.createdAt
-    ) {
+    if (message.createdAt) {
       normalized.createdAt =
         message.createdAt;
     }
 
-    if (
-      message.updatedAt
-    ) {
-      normalized.updatedAt =
-        message.updatedAt;
+    return normalized;
+  }
+
+  /* =====================================================
+     CLONE MESSAGE
+     ===================================================== */
+
+  function cloneMessage(
+    message
+  ) {
+    return {
+      ...message,
+
+      attachments:
+        Array.isArray(
+          message.attachments
+        )
+          ? message.attachments.map(
+              item => ({
+                ...item,
+
+                document:
+                  item.document &&
+                  typeof item.document ===
+                    "object"
+                    ? {
+                        ...item.document
+                      }
+                    : item.document,
+
+                chunks:
+                  Array.isArray(
+                    item.chunks
+                  )
+                    ? item.chunks.map(
+                        chunk =>
+                          typeof chunk ===
+                          "object"
+                            ? {
+                                ...chunk
+                              }
+                            : chunk
+                      )
+                    : item.chunks
+              })
+            )
+          : undefined,
+
+      sources:
+        Array.isArray(
+          message.sources
+        )
+          ? message.sources.map(
+              source => ({
+                ...source
+              })
+            )
+          : undefined
+    };
+  }
+
+  /* =====================================================
+     CONVERSATION
+     ===================================================== */
+
+  function getConversation() {
+    return conversation.map(
+      cloneMessage
+    );
+  }
+
+  function getMessage(
+    id
+  ) {
+    const key =
+      clean(
+        id,
+        128
+      );
+
+    if (!key) {
+      return null;
     }
 
-    return normalized;
+    const message =
+      conversation.find(
+        item =>
+          item.id === key
+      );
+
+    return message
+      ? cloneMessage(message)
+      : null;
+  }
+
+  function boundConversation() {
+    if (
+      conversation.length <=
+      CONFIG.maxHistoryMessages
+    ) {
+      return;
+    }
+
+    conversation =
+      conversation.slice(
+        -CONFIG.maxHistoryMessages
+      );
+  }
+
+  /* =====================================================
+     ADD MESSAGE
+     ===================================================== */
+
+  function addMessage(
+    role,
+    content,
+    options = {}
+  ) {
+    const message =
+      normalizeMessage({
+        id:
+          options.id ||
+          makeId(),
+
+        role,
+
+        content,
+
+        displayContent:
+          options.displayContent,
+
+        attachments:
+          options.attachments,
+
+        sources:
+          options.sources,
+
+        error:
+          options.error,
+
+        createdAt:
+          options.createdAt ||
+          Date.now()
+      });
+
+    if (!message) {
+      return null;
+    }
+
+    conversation.push(
+      message
+    );
+
+    boundConversation();
+
+    emit(
+      "neyo:chat-message-added",
+      {
+        message:
+          cloneMessage(
+            message
+          ),
+
+        conversation:
+          getConversation(),
+
+        historyLoad:
+          Boolean(
+            options.historyLoad
+          )
+      }
+    );
+
+    return message;
+  }
+
+  /* =====================================================
+     UPDATE MESSAGE
+     ===================================================== */
+
+  function updateMessage(
+    id,
+    changes = {}
+  ) {
+    const key =
+      clean(
+        id,
+        128
+      );
+
+    const index =
+      conversation.findIndex(
+        message =>
+          message.id === key
+      );
+
+    if (index < 0) {
+      return null;
+    }
+
+    const current =
+      conversation[index];
+
+    const next = {
+      ...current
+    };
+
+    if (
+      typeof changes.content ===
+      "string"
+    ) {
+      next.content =
+        clean(
+          changes.content
+        );
+    }
+
+    if (
+      typeof changes.displayContent ===
+      "string"
+    ) {
+      next.displayContent =
+        clean(
+          changes.displayContent
+        );
+    }
+
+    if (
+      Array.isArray(
+        changes.attachments
+      )
+    ) {
+      const normalized =
+        normalizeAttachments(
+          changes.attachments
+        );
+
+      if (normalized.length) {
+        next.attachments =
+          normalized;
+      } else {
+        delete next.attachments;
+      }
+    }
+
+    if (
+      Array.isArray(
+        changes.sources
+      )
+    ) {
+      next.sources =
+        changes.sources
+          .map(cloneSource)
+          .filter(Boolean);
+    }
+
+    if (
+      typeof changes.error ===
+      "boolean"
+    ) {
+      next.error =
+        changes.error;
+    }
+
+    conversation[index] =
+      next;
+
+    const publicMessage =
+      cloneMessage(
+        next
+      );
+
+    emit(
+      "neyo:chat-message-updated",
+      {
+        message:
+          publicMessage,
+
+        id:
+          next.id,
+
+        conversation:
+          getConversation()
+      }
+    );
+
+    /*
+     * Compatibility with existing messages.js versions.
+     */
+
+    emit(
+      "neyo:message-update-request",
+      {
+        id:
+          next.id,
+
+        content:
+          next.displayContent ??
+          next.content,
+
+        options: {
+          message:
+            publicMessage
+        }
+      }
+    );
+
+    return publicMessage;
+  }
+
+  /* =====================================================
+     REMOVE MESSAGE
+     ===================================================== */
+
+  function removeMessage(
+    id
+  ) {
+    const key =
+      clean(
+        id,
+        128
+      );
+
+    const index =
+      conversation.findIndex(
+        message =>
+          message.id === key
+      );
+
+    if (index < 0) {
+      return false;
+    }
+
+    const [removed] =
+      conversation.splice(
+        index,
+        1
+      );
+
+    emit(
+      "neyo:chat-message-removed",
+      {
+        id:
+          removed.id,
+
+        message:
+          cloneMessage(
+            removed
+          ),
+
+        conversation:
+          getConversation()
+      }
+    );
+
+    return true;
+  }
+
+  /* =====================================================
+     TRUNCATE
+
+     Used by Edit and Regenerate.
+     ===================================================== */
+
+  function truncateAfterIndex(
+    index
+  ) {
+    if (
+      index < -1 ||
+      index >=
+        conversation.length
+    ) {
+      return false;
+    }
+
+    const removed =
+      conversation.splice(
+        index + 1
+      );
+
+    for (
+      const message
+      of removed
+    ) {
+      emit(
+        "neyo:chat-message-removed",
+        {
+          id:
+            message.id,
+
+          message:
+            cloneMessage(
+              message
+            ),
+
+          conversation:
+            getConversation()
+        }
+      );
+    }
+
+    return true;
   }
 
   /* =====================================================
@@ -700,16 +803,15 @@ be required.
   function toApiMessage(
     message
   ) {
-    const result =
-      {
-        role:
-          message.role,
+    const result = {
+      role:
+        message.role,
 
-        content:
-          cleanText(
-            message.content
-          )
-      };
+      content:
+        clean(
+          message.content
+        )
+    };
 
     if (
       Array.isArray(
@@ -727,515 +829,45 @@ be required.
   }
 
   /* =====================================================
-     CONVERSATION BOUNDS
-     ===================================================== */
-
-  function boundConversation() {
-    if (
-      conversation.length <=
-      CONFIG.maxHistoryMessages
-    ) {
-      return false;
-    }
-
-    conversation =
-      conversation.slice(
-        -CONFIG.maxHistoryMessages
-      );
-
-    return true;
-  }
-
-  /* =====================================================
-     GET CONVERSATION
-     ===================================================== */
-
-  function getConversation() {
-    return conversation.map(
-      message =>
-        cloneValue(
-          message
-        )
-    );
-  }
-
-  /* =====================================================
-     GET MESSAGE
-     ===================================================== */
-
-  function getMessage(
-    id
-  ) {
-    const key =
-      cleanIdentifier(
-        id
-      );
-
-    if (!key) {
-      return null;
-    }
-
-    const message =
-      conversation.find(
-        item =>
-          item.id === key
-      );
-
-    return message
-      ? cloneValue(
-          message
-        )
-      : null;
-  }
-
-  /* =====================================================
-     MESSAGE INDEX
-     ===================================================== */
-
-  function getMessageIndex(
-    id
-  ) {
-    const key =
-      cleanIdentifier(
-        id
-      );
-
-    if (!key) {
-      return -1;
-    }
-
-    return conversation
-      .findIndex(
-        message =>
-          message.id === key
-      );
-  }
-
-  /* =====================================================
-     ADD MESSAGE
-     ===================================================== */
-
-  function addMessage(
-    role,
-    content,
-    options = {}
-  ) {
-    const message =
-      normalizeMessage({
-        id:
-          options.id ||
-          createId(),
-
-        role,
-
-        content,
-
-        attachments:
-          options.attachments,
-
-        sources:
-          options.sources,
-
-        error:
-          options.error,
-
-        createdAt:
-          options.createdAt ||
-          Date.now(),
-
-        updatedAt:
-          options.updatedAt
-      });
-
-    if (!message) {
-      return null;
-    }
-
-    conversation.push(
-      message
-    );
-
-    boundConversation();
-
-    emit(
-      "neyo:chat-message-added",
-      {
-        message:
-          cloneValue(
-            message
-          ),
-
-        conversation:
-          getConversation(),
-
-        historyLoad:
-          options.historyLoad ===
-          true
-      }
-    );
-
-    return cloneValue(
-      message
-    );
-  }
-
-  /* =====================================================
-     UPDATE MESSAGE
-     ===================================================== */
-
-  function updateMessage(
-    id,
-    values = {},
-    options = {}
-  ) {
-    const index =
-      getMessageIndex(
-        id
-      );
-
-    if (
-      index < 0 ||
-      !values ||
-      typeof values !==
-        "object"
-    ) {
-      return null;
-    }
-
-    const current =
-      conversation[index];
-
-    const next =
-      {
-        ...current
-      };
-
-    if (
-      Object.prototype
-        .hasOwnProperty
-        .call(
-          values,
-          "content"
-        )
-    ) {
-      const content =
-        cleanText(
-          values.content
-        );
-
-      /*
-       * User messages cannot become empty
-       * unless they still own an attachment.
-       */
-
-      if (
-        current.role === "user" &&
-        !content &&
-        !(
-          Array.isArray(
-            current.attachments
-          ) &&
-          current.attachments.length
-        )
-      ) {
-        return null;
-      }
-
-      next.content =
-        content;
-    }
-
-    if (
-      Object.prototype
-        .hasOwnProperty
-        .call(
-          values,
-          "attachments"
-        )
-    ) {
-      const attachments =
-        normalizeAttachments(
-          values.attachments
-        );
-
-      if (
-        attachments.length
-      ) {
-        next.attachments =
-          attachments;
-      } else {
-        delete next.attachments;
-      }
-    }
-
-    if (
-      Object.prototype
-        .hasOwnProperty
-        .call(
-          values,
-          "sources"
-        )
-    ) {
-      const sources =
-        normalizeSources(
-          values.sources
-        );
-
-      if (
-        sources.length
-      ) {
-        next.sources =
-          sources;
-      } else {
-        delete next.sources;
-      }
-    }
-
-    if (
-      Object.prototype
-        .hasOwnProperty
-        .call(
-          values,
-          "error"
-        )
-    ) {
-      if (
-        values.error === true
-      ) {
-        next.error =
-          true;
-      } else {
-        delete next.error;
-      }
-    }
-
-    next.updatedAt =
-      Date.now();
-
-    conversation[index] =
-      next;
-
-    emit(
-      "neyo:chat-message-updated",
-      {
-        message:
-          cloneValue(
-            next
-          ),
-
-        index,
-
-        conversation:
-          getConversation()
-      }
-    );
-
-    /*
-     * Existing messages.js contract.
-     */
-
-    emit(
-      "neyo:message-update-request",
-      {
-        id:
-          next.id,
-
-        message:
-          cloneValue(
-            next
-          ),
-
-        content:
-          next.content,
-
-        options: {
-          markdown:
-            next.role ===
-            "assistant"
-        }
-      }
-    );
-
-    if (
-      options.emitState !==
-      false
-    ) {
-      emitState();
-    }
-
-    return cloneValue(
-      next
-    );
-  }
-
-  /* =====================================================
-     REMOVE MESSAGE
-     ===================================================== */
-
-  function removeMessage(
-    id,
-    options = {}
-  ) {
-    const index =
-      getMessageIndex(
-        id
-      );
-
-    if (
-      index < 0
-    ) {
-      return false;
-    }
-
-    const [
-      removed
-    ] =
-      conversation.splice(
-        index,
-        1
-      );
-
-    emit(
-      "neyo:chat-message-removed",
-      {
-        id:
-          removed.id,
-
-        message:
-          cloneValue(
-            removed
-          ),
-
-        index,
-
-        conversation:
-          getConversation()
-      }
-    );
-
-    if (
-      options.emitState !==
-      false
-    ) {
-      emitState();
-    }
-
-    return true;
-  }
-
-  /* =====================================================
-     REMOVE MESSAGES AFTER INDEX
-     ===================================================== */
-
-  function truncateAfterIndex(
-    index,
-    {
-      includeIndex =
-        false
-    } = {}
-  ) {
-    if (
-      !Number.isInteger(
-        index
-      ) ||
-      index < 0 ||
-      index >=
-        conversation.length
-    ) {
-      return [];
-    }
-
-    const start =
-      includeIndex
-        ? index
-        : index + 1;
-
-    const removed =
-      conversation.splice(
-        start
-      );
-
-    for (
-      const message
-      of removed
-    ) {
-      emit(
-        "neyo:chat-message-removed",
-        {
-          id:
-            message.id,
-
-          message:
-            cloneValue(
-              message
-            ),
-
-          conversation:
-            getConversation()
-        }
-      );
-    }
-
-    emitState();
-
-    return removed.map(
-      cloneValue
-    );
-  }
-
-  /* =====================================================
-     TRUNCATE AFTER MESSAGE
-     ===================================================== */
-
-  function truncateAfter(
-    id,
-    options = {}
-  ) {
-    const index =
-      getMessageIndex(
-        id
-      );
-
-    if (
-      index < 0
-    ) {
-      return [];
-    }
-
-    return truncateAfterIndex(
-      index,
-      options
-    );
-  }
-
-  /* =====================================================
      MODEL
+
+     UI itself is NOT changed here.
      ===================================================== */
 
   function getSelectedModel() {
     try {
-      const menu =
-        window.NeyoModelMenu;
+      const selected =
+        window.NeyoModelMenu
+          ?.getSelected
+          ?.();
 
-      const value =
-        menu?.getSelected?.() ??
-        menu?.getValue?.() ??
-        menu?.value;
+      if (
+        typeof selected ===
+        "string" &&
+        selected.trim()
+      ) {
+        return selected.trim();
+      }
 
-      const clean =
-        cleanIdentifier(
-          value,
-          100
+      if (
+        selected &&
+        typeof selected ===
+          "object"
+      ) {
+        return (
+          clean(
+            selected.id ||
+            selected.value ||
+            selected.model,
+            100
+          ) ||
+          "l1.0"
         );
+      }
 
-      return (
-        clean ||
-        "l1.0"
-      );
+    } catch {}
 
-    } catch {
-      return "l1.0";
-    }
+    return "l1.0";
   }
 
   /* =====================================================
@@ -1244,36 +876,29 @@ be required.
 
   function createTitle(
     text,
-    attachments
+    attachments = []
   ) {
-    const clean =
-      cleanText(
-        text
+    const value =
+      clean(
+        text,
+        80
       );
 
-    if (clean) {
-      return clean
-        .replace(
-          /\s+/g,
-          " "
-        )
-        .slice(
-          0,
-          CONFIG.maxTitleLength
-        );
+    if (
+      value &&
+      value !==
+        ATTACHMENT_ONLY_PROMPT
+    ) {
+      return value;
     }
 
-    if (
-      Array.isArray(
-        attachments
-      ) &&
-      attachments.length
-    ) {
-      return cleanText(
-        attachments[0]
-          ?.name ||
-        "New conversation",
-        CONFIG.maxTitleLength
+    const first =
+      attachments[0];
+
+    if (first?.name) {
+      return clean(
+        first.name,
+        80
       );
     }
 
@@ -1281,200 +906,32 @@ be required.
   }
 
   /* =====================================================
-     PREFERENCE NORMALIZATION
-     ===================================================== */
-
-  function normalizePreferences(
-    values = {}
-  ) {
-    const next =
-      {
-        ...preferences
-      };
-
-    if (
-      Object.prototype
-        .hasOwnProperty
-        .call(
-          values,
-          "intelligence"
-        )
-    ) {
-      next.intelligence =
-        cleanIdentifier(
-          values.intelligence,
-          100
-        ) ||
-        DEFAULT_PREFERENCES
-          .intelligence;
-    }
-
-    if (
-      Object.prototype
-        .hasOwnProperty
-        .call(
-          values,
-          "language"
-        )
-    ) {
-      next.language =
-        cleanIdentifier(
-          values.language,
-          100
-        ) ||
-        DEFAULT_PREFERENCES
-          .language;
-    }
-
-    if (
-      Object.prototype
-        .hasOwnProperty
-        .call(
-          values,
-          "personality"
-        )
-    ) {
-      next.personality =
-        cleanIdentifier(
-          values.personality,
-          100
-        ) ||
-        DEFAULT_PREFERENCES
-          .personality;
-    }
-
-    if (
-      Object.prototype
-        .hasOwnProperty
-        .call(
-          values,
-          "privateChat"
-        )
-    ) {
-      next.privateChat =
-        Boolean(
-          values.privateChat
-        );
-    }
-
-    if (
-      Object.prototype
-        .hasOwnProperty
-        .call(
-          values,
-          "isDeepResearch"
-        )
-    ) {
-      next.isDeepResearch =
-        Boolean(
-          values
-            .isDeepResearch
-        );
-    }
-
-    /*
-     * Compatibility alias.
-     */
-
-    if (
-      Object.prototype
-        .hasOwnProperty
-        .call(
-          values,
-          "deepResearch"
-        )
-    ) {
-      next.isDeepResearch =
-        Boolean(
-          values.deepResearch
-        );
-    }
-
-    return next;
-  }
-
-  /* =====================================================
-     SET PREFERENCES
-     ===================================================== */
-
-  function setPreferences(
-    values
-  ) {
-    if (
-      !values ||
-      typeof values !==
-        "object"
-    ) {
-      return false;
-    }
-
-    const previousPrivate =
-      preferences
-        .privateChat;
-
-    preferences =
-      normalizePreferences(
-        values
-      );
-
-    /*
-     * Entering Private Chat disconnects the current
-     * persisted conversation ID so the private turn
-     * cannot accidentally continue a stored thread.
-     */
-
-    if (
-      !previousPrivate &&
-      preferences.privateChat
-    ) {
-      currentConversationId =
-        null;
-    }
-
-    emit(
-      "neyo:chat-preferences-change",
-      {
-        preferences:
-          {
-            ...preferences
-          }
-      }
-    );
-
-    emitState();
-
-    return true;
-  }
-
-  /* =====================================================
-     BUILD PAYLOAD
+     PAYLOAD
      ===================================================== */
 
   function buildPayload({
     prompt,
-    attachments
-  }) {
+    attachments = []
+  } = {}) {
     const privateChat =
       Boolean(
         preferences.privateChat
-      );
-
-    const deepResearch =
-      Boolean(
-        preferences
-          .isDeepResearch
       );
 
     return {
       messages:
         conversation
           .slice(
-            -CONFIG
-              .maxHistoryMessages
+            -CONFIG.maxHistoryMessages
           )
           .map(
             toApiMessage
           ),
+
+      /*
+       * Current-turn compatibility field.
+       * Existing backend already supports it.
+       */
 
       attachments:
         normalizeAttachments(
@@ -1490,32 +947,20 @@ be required.
         getSelectedModel(),
 
       intelligence:
-        preferences
-          .intelligence,
+        preferences.intelligence,
 
       language:
-        preferences
-          .language,
+        preferences.language,
 
       personality:
-        preferences
-          .personality,
+        preferences.personality,
 
       privateChat,
 
-      /*
-       * Current backend contract.
-       */
-
       isDeepResearch:
-        deepResearch,
-
-      /*
-       * Compatibility alias for backend versions
-       * that used deepResearch directly.
-       */
-
-      deepResearch,
+        Boolean(
+          preferences.isDeepResearch
+        ),
 
       title:
         createTitle(
@@ -1526,7 +971,7 @@ be required.
   }
 
   /* =====================================================
-     RESPONSE READER
+     RESPONSE
      ===================================================== */
 
   async function readResponse(
@@ -1535,36 +980,25 @@ be required.
     const raw =
       await response.text();
 
-    let data =
-      {};
+    let data = {};
 
     if (raw) {
       try {
         data =
-          JSON.parse(
-            raw
-          );
-
-      } catch {
-        data =
-          {};
-      }
+          JSON.parse(raw);
+      } catch {}
     }
 
-    if (
-      !response.ok
-    ) {
-      const message =
-        cleanText(
-          data?.message ||
-          data?.error ||
-          raw
-        ) ||
-        `Request failed (${response.status}).`;
-
+    if (!response.ok) {
       const error =
         new Error(
-          message
+          clean(
+            data?.message ||
+            data?.error ||
+            raw,
+            2000
+          ) ||
+          `Request failed (${response.status}).`
         );
 
       error.status =
@@ -1579,10 +1013,6 @@ be required.
     return data;
   }
 
-  /* =====================================================
-     REPLY EXTRACTION
-     ===================================================== */
-
   function extractReply(
     data
   ) {
@@ -1596,87 +1026,10 @@ be required.
       data?.content ??
       data?.text;
 
-    return (
-      typeof value ===
+    return typeof value ===
       "string"
-    )
-      ? cleanText(
-          value
-        )
+      ? value.trim()
       : "";
-  }
-
-  /* =====================================================
-     ERROR MESSAGE
-     ===================================================== */
-
-  function userFacingError(
-    error
-  ) {
-    if (
-      error?.status ===
-      400
-    ) {
-      return (
-        cleanText(
-          error.message
-        ) ||
-        "This request could not be processed."
-      );
-    }
-
-    if (
-      error?.status ===
-      401
-    ) {
-      return "Your session has expired. Please sign in again.";
-    }
-
-    if (
-      error?.status ===
-      403
-    ) {
-      return "You do not have access to this request.";
-    }
-
-    if (
-      error?.status ===
-      413
-    ) {
-      return "This request is too large.";
-    }
-
-    if (
-      error?.status ===
-      429
-    ) {
-      return (
-        cleanText(
-          error?.data
-            ?.message ||
-          error?.message
-        ) ||
-        "You have reached your current message limit."
-      );
-    }
-
-    if (
-      Number(
-        error?.status
-      ) >= 500
-    ) {
-      return "NEYO is temporarily unavailable. Please try again.";
-    }
-
-    if (
-      error?.message
-    ) {
-      return cleanText(
-        error.message
-      );
-    }
-
-    return "Something went wrong. Please try again.";
   }
 
   /* =====================================================
@@ -1687,9 +1040,7 @@ be required.
     reason =
       "user"
   ) {
-    if (
-      !activeController
-    ) {
+    if (!activeController) {
       return false;
     }
 
@@ -1705,7 +1056,6 @@ be required.
         activeController.abort();
 
         return true;
-
       } catch {
         return false;
       }
@@ -1713,22 +1063,86 @@ be required.
   }
 
   /* =====================================================
-     REQUEST CONTEXT
+     USER-FACING ERROR
      ===================================================== */
 
-  function beginRequest({
-    text,
-    attachments,
-    mode = "send"
-  }) {
+  function userFacingError(
+    error
+  ) {
+    if (
+      error?.status === 401
+    ) {
+      return (
+        "Your session has expired. " +
+        "Please sign in again."
+      );
+    }
+
+    if (
+      error?.status === 413
+    ) {
+      return (
+        "This request is too large."
+      );
+    }
+
+    if (
+      error?.status === 429
+    ) {
+      return (
+        "You've reached the current usage limit."
+      );
+    }
+
+    if (
+      Number(error?.status) >=
+      500
+    ) {
+      return (
+        "NEO is temporarily unavailable. Please try again."
+      );
+    }
+
+    return (
+      clean(
+        error?.message,
+        500
+      ) ||
+      "Something went wrong. Please try again."
+    );
+  }
+
+  /* =====================================================
+     GENERATION CORE
+
+     Expects the current user turn to ALREADY exist in
+     conversation.
+
+     Used by:
+     - normal Send
+     - Regenerate
+     - Edit + regenerate
+     ===================================================== */
+
+  async function generate({
+    prompt,
+    attachments = [],
+    reason = "send",
+    userMessageId = null
+  } = {}) {
+    if (generating) {
+      emit(
+        "neyo:chat-busy",
+        {
+          reason
+        }
+      );
+
+      return null;
+    }
+
     const requestId =
-      ++requestSerial;
-
-    activeRequestId =
-      requestId;
-
-    activeRequestStartedAt =
-      Date.now();
+      ++activeRequestId;
 
     generating =
       true;
@@ -1739,153 +1153,50 @@ be required.
     activeController =
       controller;
 
+    const readyAttachments =
+      normalizeAttachments(
+        attachments
+      );
+
     emit(
       "neyo:chat-send-start",
       {
         requestId,
 
-        mode,
-
         text:
-          cleanText(text),
+          clean(
+            prompt
+          ) ===
+          ATTACHMENT_ONLY_PROMPT
+            ? ""
+            : clean(
+                prompt
+              ),
 
         attachments:
-          normalizeAttachments(
-            attachments
-          ),
+          readyAttachments,
 
         conversationId:
           currentConversationId,
 
-        privateChat:
-          Boolean(
-            preferences.privateChat
-          )
+        userMessageId,
+
+        reason
       }
     );
 
-    return {
-      requestId,
-      controller
-    };
-  }
-
-  /* =====================================================
-     REQUEST IS CURRENT
-     ===================================================== */
-
-  function requestIsCurrent(
-    requestId
-  ) {
-    return (
-      requestId ===
-      activeRequestId
-    );
-  }
-
-  /* =====================================================
-     HISTORY REFRESH
-     ===================================================== */
-
-  function requestHistoryRefresh() {
-    if (
-      preferences.privateChat
-    ) {
-      return;
-    }
-
-    const detail =
-      {
-        conversationId:
-          currentConversationId
-      };
-
-    /*
-     * Canonical event.
-     */
-
-    emit(
-      "neyo:history-refresh-request",
-      detail
-    );
-
-    /*
-     * Compatibility event used by older history.js.
-     */
-
-    emit(
-      "neyo:history-load-request",
-      detail
-    );
-  }
-
-  /* =====================================================
-     EXECUTE AI REQUEST
-
-     Conversation must already end in a user message.
-     ===================================================== */
-
-  async function executeRequest({
-    prompt,
-    attachments = [],
-    mode = "send"
-  }) {
-    if (
-      generating
-    ) {
-      emit(
-        "neyo:chat-busy",
-        {
-          requestId:
-            activeRequestId,
-
-          mode
-        }
-      );
-
-      return null;
-    }
-
-    const normalizedAttachments =
-      normalizeAttachments(
-        attachments
-      );
-
-    const {
-      requestId,
-      controller
-    } =
-      beginRequest({
-        text:
-          prompt,
-
-        attachments:
-          normalizedAttachments,
-
-        mode
-      });
-
-    let timeout =
-      null;
+    let timeout = null;
 
     try {
       timeout =
         window.setTimeout(
           () => {
-            if (
-              requestIsCurrent(
-                requestId
-              )
-            ) {
-              try {
-                controller.abort(
-                  "timeout"
-                );
-              } catch {
-                try {
-                  controller.abort();
-                } catch {}
-              }
+            try {
+              controller.abort(
+                "timeout"
+              );
+            } catch {
+              controller.abort();
             }
           },
           CONFIG.requestTimeoutMs
@@ -1894,17 +1205,15 @@ be required.
       const payload =
         buildPayload({
           prompt,
-
           attachments:
-            normalizedAttachments
+            readyAttachments
         });
 
       const response =
         await fetch(
           CONFIG.endpoint,
           {
-            method:
-              "POST",
+            method: "POST",
 
             credentials:
               "include",
@@ -1933,39 +1242,25 @@ be required.
           }
         );
 
-      /* =================================================
+      /* ===============================================
          RATE LIMIT
-         ================================================= */
+         =============================================== */
 
       if (
-        response.status ===
-        429
+        response.status === 429
       ) {
-        let data =
-          {};
-
-        try {
-          data =
-            await response
-              .json();
-
-        } catch {}
-
-        if (
-          !requestIsCurrent(
-            requestId
-          )
-        ) {
-          return null;
-        }
+        const data =
+          await response
+            .json()
+            .catch(
+              () => ({})
+            );
 
         emit(
           "neyo:chat-limit-reached",
           {
             requestId,
-
             data,
-
             conversationId:
               currentConversationId
           }
@@ -1979,14 +1274,13 @@ be required.
           response
         );
 
-      /* =================================================
-         STALE REQUEST
-         ================================================= */
+      /*
+       * New chat/history load may invalidate this request.
+       */
 
       if (
-        !requestIsCurrent(
-          requestId
-        )
+        requestId !==
+        activeRequestId
       ) {
         return null;
       }
@@ -2002,113 +1296,109 @@ be required.
         );
       }
 
-      /* =================================================
+      /* ===============================================
          CONVERSATION ID
-         ================================================= */
+         =============================================== */
 
       if (
-        !preferences
-          .privateChat &&
+        !preferences.privateChat &&
         typeof data
           ?.conversationId ===
           "string" &&
-        data.conversationId
-          .trim()
+        data.conversationId.trim()
       ) {
         currentConversationId =
           data.conversationId
             .trim();
       }
 
-      /* =================================================
-         SOURCES
-         ================================================= */
+      /* ===============================================
+         ASSISTANT
+         =============================================== */
 
       const sources =
-        normalizeSources(
+        Array.isArray(
           data?.sources
-        );
-
-      /* =================================================
-         ASSISTANT MESSAGE
-         ================================================= */
+        )
+          ? data.sources
+              .map(cloneSource)
+              .filter(Boolean)
+          : [];
 
       const assistantMessage =
         addMessage(
           "assistant",
           reply,
           {
+            id:
+              data?.messageId ||
+              data?.assistantMessageId ||
+              undefined,
+
             sources
           }
         );
 
-      const result =
-        {
-          requestId,
+      const result = {
+        requestId,
 
-          mode,
+        reply,
 
-          reply,
+        sources,
 
-          sources,
+        message:
+          assistantMessage
+            ? cloneMessage(
+                assistantMessage
+              )
+            : null,
 
-          message:
-            assistantMessage,
+        userMessageId,
 
-          conversationId:
-            currentConversationId,
+        conversationId:
+          currentConversationId,
 
-          privateChat:
-            Boolean(
-              data?.privateChat ??
-              preferences.privateChat
-            ),
+        privateChat:
+          Boolean(
+            preferences.privateChat ||
+            data?.privateChat
+          ),
 
-          usedUrlContext:
-            Boolean(
-              data
-                ?.usedUrlContext
-            ),
+        usedUrlContext:
+          Boolean(
+            data?.usedUrlContext
+          ),
 
-          creditType:
-            data?.creditType ||
-            null,
+        creditType:
+          data?.creditType ||
+          null,
 
-          usage:
-            data?.usage ??
-            null
-        };
-
-      lastResult =
-        cloneValue(
-          result
-        );
-
-      lastCompletedRequestId =
-        requestId;
+        reason
+      };
 
       emit(
         "neyo:chat-response",
-        cloneValue(
-          result
-        )
+        result
       );
 
-      requestHistoryRefresh();
+      if (
+        !preferences.privateChat
+      ) {
+        emit(
+          "neyo:history-load-request",
+          {
+            conversationId:
+              currentConversationId,
+
+            reason:
+              "chat-response"
+          }
+        );
+      }
 
       return result;
 
-    } catch (
-      error
-    ) {
-      if (
-        !requestIsCurrent(
-          requestId
-        )
-      ) {
-        return null;
-      }
-
+    } catch (error) {
       if (
         error?.name ===
         "AbortError"
@@ -2118,21 +1408,22 @@ be required.
           {
             requestId,
 
-            mode,
-
             conversationId:
               currentConversationId,
 
-            reason:
-              error?.message ||
-              "aborted"
+            reason
           }
         );
 
         return null;
       }
 
-      const readable =
+      console.error(
+        "[NEO Chat] Request failed:",
+        error
+      );
+
+      const text =
         userFacingError(
           error
         );
@@ -2140,10 +1431,9 @@ be required.
       const errorMessage =
         addMessage(
           "assistant",
-          `⚠️ ${readable}`,
+          `⚠️ ${text}`,
           {
-            error:
-              true
+            error: true
           }
         );
 
@@ -2152,37 +1442,38 @@ be required.
         {
           requestId,
 
-          mode,
-
           error,
 
           message:
-            errorMessage,
+            errorMessage
+              ? cloneMessage(
+                  errorMessage
+                )
+              : null,
 
           conversationId:
-            currentConversationId
+            currentConversationId,
+
+          reason
         }
       );
 
       return null;
 
     } finally {
-      if (
-        timeout !== null
-      ) {
+      if (timeout !== null) {
         window.clearTimeout(
           timeout
         );
       }
 
       /*
-       * Only current request may unlock state.
+       * Only currently-valid request may close generation.
        */
 
       if (
-        requestIsCurrent(
-          requestId
-        )
+        requestId ===
+        activeRequestId
       ) {
         generating =
           false;
@@ -2190,21 +1481,15 @@ be required.
         activeController =
           null;
 
-        activeRequestId =
-          null;
-
-        activeRequestStartedAt =
-          null;
-
         emit(
           "neyo:chat-send-end",
           {
             requestId,
 
-            mode,
-
             conversationId:
-              currentConversationId
+              currentConversationId,
+
+            reason
           }
         );
       }
@@ -2219,25 +1504,16 @@ be required.
     text = "",
     attachments = []
   } = {}) {
-    if (
-      generating
-    ) {
+    if (generating) {
       emit(
-        "neyo:chat-busy",
-        {
-          requestId:
-            activeRequestId,
-
-          mode:
-            "send"
-        }
+        "neyo:chat-busy"
       );
 
       return null;
     }
 
-    const clean =
-      cleanText(
+    const visibleText =
+      clean(
         text
       );
 
@@ -2247,22 +1523,18 @@ be required.
       );
 
     if (
-      !clean &&
-      readyAttachments.length ===
-        0
+      !visibleText &&
+      readyAttachments.length === 0
     ) {
       return null;
     }
 
     const apiContent =
-      clean ||
-      CONFIG
-        .attachmentOnlyPrompt;
+      visibleText ||
+      ATTACHMENT_ONLY_PROMPT;
 
     /*
-     * User state is added synchronously before the
-     * first network await. This also allows send-state
-     * to detect that chat accepted the dispatch.
+     * User message enters canonical state before network.
      */
 
     const userMessage =
@@ -2270,6 +1542,9 @@ be required.
         "user",
         apiContent,
         {
+          displayContent:
+            visibleText,
+
           attachments:
             readyAttachments
         }
@@ -2279,26 +1554,91 @@ be required.
       return null;
     }
 
-    return executeRequest({
+    return generate({
       prompt:
         apiContent,
 
       attachments:
         readyAttachments,
 
-      mode:
-        "send"
+      reason:
+        "send",
+
+      userMessageId:
+        userMessage.id
     });
   }
 
   /* =====================================================
-     FIND LAST USER MESSAGE
+     REGENERATE
+
+     Regenerate the clicked assistant turn, not blindly
+     "the last message".
+
+     Conversation becomes:
+       ... preceding context
+       target user message
+
+     Then the canonical generator runs again.
      ===================================================== */
 
-  function findLastUserIndex() {
+  async function regenerate({
+    messageId
+  } = {}) {
+    if (generating) {
+      return null;
+    }
+
+    const assistantId =
+      clean(
+        messageId,
+        128
+      );
+
+    let assistantIndex =
+      assistantId
+        ? conversation.findIndex(
+            message =>
+              message.id ===
+                assistantId &&
+              message.role ===
+                "assistant"
+          )
+        : -1;
+
+    /*
+     * Compatibility fallback.
+     */
+
+    if (assistantIndex < 0) {
+      for (
+        let index =
+          conversation.length - 1;
+        index >= 0;
+        index -= 1
+      ) {
+        if (
+          conversation[index]
+            ?.role ===
+          "assistant"
+        ) {
+          assistantIndex =
+            index;
+
+          break;
+        }
+      }
+    }
+
+    if (assistantIndex < 0) {
+      return null;
+    }
+
+    let userIndex = -1;
+
     for (
       let index =
-        conversation.length - 1;
+        assistantIndex - 1;
       index >= 0;
       index -= 1
     ) {
@@ -2307,90 +1647,24 @@ be required.
           ?.role ===
         "user"
       ) {
-        return index;
+        userIndex =
+          index;
+
+        break;
       }
     }
 
-    return -1;
-  }
-
-  /* =====================================================
-     REGENERATE
-
-     Removes messages after the chosen user message,
-     then asks backend again WITHOUT duplicating user input.
-
-     This replaces the old neo.js regenerate behavior.
-     ===================================================== */
-
-  async function regenerate({
-    messageId = null
-  } = {}) {
-    if (
-      generating
-    ) {
-      return null;
-    }
-
-    let userIndex =
-      -1;
-
-    if (messageId) {
-      const index =
-        getMessageIndex(
-          messageId
-        );
-
-      if (
-        index >= 0
-      ) {
-        if (
-          conversation[index]
-            .role ===
-          "user"
-        ) {
-          userIndex =
-            index;
-
-        } else {
-          for (
-            let cursor =
-              index - 1;
-            cursor >= 0;
-            cursor -= 1
-          ) {
-            if (
-              conversation[cursor]
-                ?.role ===
-              "user"
-            ) {
-              userIndex =
-                cursor;
-
-              break;
-            }
-          }
-        }
-      }
-    }
-
-    if (
-      userIndex < 0
-    ) {
-      userIndex =
-        findLastUserIndex();
-    }
-
-    if (
-      userIndex < 0
-    ) {
+    if (userIndex < 0) {
       return null;
     }
 
     const userMessage =
-      conversation[
-        userIndex
-      ];
+      conversation[userIndex];
+
+    /*
+     * Remove old assistant response and anything after
+     * the target user turn.
+     */
 
     truncateAfterIndex(
       userIndex
@@ -2400,36 +1674,38 @@ be required.
       "neyo:chat-regenerate-start",
       {
         messageId:
-          userMessage.id,
+          assistantId ||
+          null,
 
-        index:
-          userIndex
+        userMessageId:
+          userMessage.id
       }
     );
 
     const result =
-      await executeRequest({
+      await generate({
         prompt:
           userMessage.content,
 
         attachments:
-          userMessage.attachments ||
+          userMessage
+            .attachments ||
           [],
 
-        mode:
-          "regenerate"
+        reason:
+          "regenerate",
+
+        userMessageId:
+          userMessage.id
       });
 
     emit(
       "neyo:chat-regenerate-end",
       {
-        messageId:
+        userMessageId:
           userMessage.id,
 
-        result:
-          cloneValue(
-            result
-          )
+        result
       }
     );
 
@@ -2437,72 +1713,90 @@ be required.
   }
 
   /* =====================================================
-     EDIT USER MESSAGE + REGENERATE
+     EDIT USER MESSAGE
 
-     Core business operation only.
-     UI belongs to message-actions/message-edit.
+     Attachments are preserved unless explicitly supplied.
+
+     This operation owns canonical conversation mutation.
+     message-edit.js owns only the editor UI.
      ===================================================== */
 
   async function editUserMessage(
-    id,
-    newContent,
+    messageId,
+    text,
     {
-      regenerateResponse =
-        true
+      attachments,
+      regenerateResponse = true
     } = {}
   ) {
-    if (
-      generating
-    ) {
+    if (generating) {
       return null;
     }
 
-    const index =
-      getMessageIndex(
-        id
+    const id =
+      clean(
+        messageId,
+        128
       );
 
-    if (
-      index < 0
-    ) {
+    const index =
+      conversation.findIndex(
+        message =>
+          message.id === id &&
+          message.role ===
+            "user"
+      );
+
+    if (index < 0) {
       return null;
     }
 
     const current =
       conversation[index];
 
-    if (
-      current.role !==
-      "user"
-    ) {
-      return null;
-    }
+    const nextAttachments =
+      Array.isArray(
+        attachments
+      )
+        ? normalizeAttachments(
+            attachments
+          )
+        : normalizeAttachments(
+            current.attachments ||
+            []
+          );
 
-    const content =
-      cleanText(
-        newContent
+    const visibleText =
+      clean(
+        text
       );
 
     if (
-      !content &&
-      !(
-        Array.isArray(
-          current.attachments
-        ) &&
-        current.attachments.length
-      )
+      !visibleText &&
+      nextAttachments.length === 0
     ) {
       return null;
     }
+
+    const apiContent =
+      visibleText ||
+      ATTACHMENT_ONLY_PROMPT;
 
     const updated =
       updateMessage(
         id,
         {
           content:
-            content ||
-            CONFIG
-              .attachmentOnlyPrompt
+            apiContent,
+
+          displayContent:
+            visibleText,
+
+          attachments:
+            nextAttachments,
+
+          error:
+            false
         }
       );
 
@@ -2510,113 +1804,73 @@ be required.
       return null;
     }
 
+    /*
+     * Old responses after edited user turn are invalid.
+     */
+
     truncateAfterIndex(
       index
     );
 
     emit(
-      "neyo:chat-user-edited",
+      "neyo:chat-edit-committed",
       {
         message:
-          cloneValue(
-            updated
+          getMessage(
+            id
           ),
 
-        index
+        regenerateResponse
       }
     );
 
-    if (
-      !regenerateResponse
-    ) {
+    if (!regenerateResponse) {
       return {
         message:
-          updated,
+          getMessage(
+            id
+          ),
 
-        result:
-          null
+        conversation:
+          getConversation()
       };
     }
 
-    const result =
-      await executeRequest({
-        prompt:
-          updated.content,
+    return generate({
+      prompt:
+        apiContent,
 
-        attachments:
-          updated.attachments ||
-          [],
+      attachments:
+        nextAttachments,
 
-        mode:
-          "edit-regenerate"
-      });
+      reason:
+        "edit",
 
-    return {
-      message:
-        updated,
-
-      result
-    };
-  }
-
-  /* =====================================================
-     INVALIDATE REQUEST
-     ===================================================== */
-
-  function invalidateRequest(
-    reason =
-      "state-change"
-  ) {
-    const controller =
-      activeController;
-
-    /*
-     * Invalidate first so any late response is stale.
-     */
-
-    requestSerial +=
-      1;
-
-    activeRequestId =
-      null;
-
-    activeRequestStartedAt =
-      null;
-
-    generating =
-      false;
-
-    activeController =
-      null;
-
-    if (
-      controller
-    ) {
-      try {
-        controller.abort(
-          reason
-        );
-      } catch {
-        try {
-          controller.abort();
-        } catch {}
-      }
-    }
-
-    return true;
+      userMessageId:
+        id
+    });
   }
 
   /* =====================================================
      NEW CONVERSATION
      ===================================================== */
 
-  function newConversation({
-    source =
-      "chat"
-  } = {}) {
-    invalidateRequest(
-      "new-conversation"
+  function newConversation() {
+    /*
+     * Invalidate request BEFORE abort.
+     */
+
+    activeRequestId += 1;
+
+    stop(
+      "new-chat"
     );
+
+    activeController =
+      null;
+
+    generating =
+      false;
 
     conversation =
       [];
@@ -2624,52 +1878,76 @@ be required.
     currentConversationId =
       null;
 
-    lastResult =
-      null;
-
     emit(
-      "neyo:messages-clear",
-      {
-        source
-      }
+      "neyo:messages-clear"
     );
 
     emit(
       "neyo:chat-new",
       {
-        conversation:
-          [],
-
-        conversationId:
-          null,
-
-        source
+        conversation: []
       }
     );
 
-    emitState();
+    emit(
+      "neyo:chat-state",
+      {
+        conversationId:
+          null,
+
+        messages: [],
+
+        generating:
+          false,
+
+        preferences: {
+          ...preferences
+        }
+      }
+    );
+
+    emit(
+      "neyo:chat-send-end",
+      {
+        conversationId:
+          null,
+
+        reason:
+          "new-chat"
+      }
+    );
 
     return true;
   }
 
   /* =====================================================
-     LOAD CONVERSATION
+     LOAD HISTORY CONVERSATION
      ===================================================== */
 
   function loadConversation({
     conversationId,
-    messages = [],
-    source =
-      "history"
+    messages = []
   } = {}) {
-    invalidateRequest(
-      "conversation-load"
+    /*
+     * Invalidate old generation.
+     */
+
+    activeRequestId += 1;
+
+    stop(
+      "history-load"
     );
 
+    activeController =
+      null;
+
+    generating =
+      false;
+
     currentConversationId =
-      cleanIdentifier(
+      clean(
         conversationId,
-        256
+        128
       ) ||
       null;
 
@@ -2688,12 +1966,12 @@ be required.
             )
         : [];
 
+    /*
+     * messages.js owns DOM.
+     */
+
     emit(
-      "neyo:messages-clear",
-      {
-        source:
-          "history-load"
-      }
+      "neyo:messages-clear"
     );
 
     for (
@@ -2704,7 +1982,7 @@ be required.
         "neyo:chat-message-added",
         {
           message:
-            cloneValue(
+            cloneMessage(
               message
             ),
 
@@ -2724,91 +2002,122 @@ be required.
           currentConversationId,
 
         messages:
-          getConversation(),
-
-        source
+          getConversation()
       }
     );
 
-    emitState();
+    emit(
+      "neyo:chat-state",
+      {
+        conversationId:
+          currentConversationId,
+
+        messages:
+          getConversation(),
+
+        generating:
+          false,
+
+        preferences: {
+          ...preferences
+        }
+      }
+    );
+
+    emit(
+      "neyo:chat-send-end",
+      {
+        conversationId:
+          currentConversationId,
+
+        reason:
+          "history-load"
+      }
+    );
 
     return true;
   }
 
   /* =====================================================
-     SET CONVERSATION ID
+     PREFERENCES
      ===================================================== */
 
-  function setConversationId(
-    id
+  function setPreferences(
+    values
   ) {
-    const next =
-      cleanIdentifier(
-        id,
-        256
-      ) ||
-      null;
-
     if (
-      preferences.privateChat
+      !values ||
+      typeof values !== "object"
     ) {
-      currentConversationId =
-        null;
-
       return false;
     }
 
-    currentConversationId =
+    const next = {
+      ...preferences
+    };
+
+    if (
+      typeof values.intelligence ===
+      "string"
+    ) {
+      next.intelligence =
+        values.intelligence;
+    }
+
+    if (
+      typeof values.language ===
+      "string"
+    ) {
+      next.language =
+        values.language;
+    }
+
+    if (
+      typeof values.personality ===
+      "string"
+    ) {
+      next.personality =
+        values.personality;
+    }
+
+    if (
+      typeof values.privateChat ===
+      "boolean"
+    ) {
+      next.privateChat =
+        values.privateChat;
+    }
+
+    if (
+      typeof values.isDeepResearch ===
+      "boolean"
+    ) {
+      next.isDeepResearch =
+        values.isDeepResearch;
+    }
+
+    preferences =
       next;
 
-    emitState();
+    emit(
+      "neyo:chat-preferences-change",
+      {
+        preferences: {
+          ...preferences
+        }
+      }
+    );
 
     return true;
   }
 
   /* =====================================================
-     STATE EVENT
+     STATE EMISSION
      ===================================================== */
 
-  function getState() {
-    return {
-      version:
-        VERSION,
-
-      active:
-        true,
-
-      legacyScriptPresent,
-
-      legacyOwnerActive:
-        false,
-
-      generating,
-
-      conversationId:
-        currentConversationId,
-
-      messageCount:
-        conversation.length,
-
-      requestId:
-        activeRequestId,
-
-      requestSerial,
-
-      activeRequestStartedAt,
-
-      lastCompletedRequestId,
-
-      preferences:
-        {
-          ...preferences
-        }
-    };
-  }
-
   function emitState() {
-    const snapshot =
+    emit(
+      "neyo:chat-state",
       {
         conversationId:
           currentConversationId,
@@ -2818,25 +2127,15 @@ be required.
 
         generating,
 
-        requestId:
-          activeRequestId,
-
-        preferences:
-          {
-            ...preferences
-          }
-      };
-
-    emit(
-      "neyo:chat-state",
-      snapshot
+        preferences: {
+          ...preferences
+        }
+      }
     );
-
-    return snapshot;
   }
 
   /* =====================================================
-     SEND EVENT
+     EVENT ROUTING
      ===================================================== */
 
   window.addEventListener(
@@ -2858,38 +2157,28 @@ be required.
     }
   );
 
-  /* =====================================================
-     STOP EVENT
-     ===================================================== */
-
   window.addEventListener(
     "neyo:chat-stop-request",
-    () => {
-      stop();
+    event => {
+      stop(
+        event.detail?.reason ||
+        "event"
+      );
     }
   );
-
-  /* =====================================================
-     NEW CHAT EVENT
-     ===================================================== */
 
   window.addEventListener(
     "neyo:chat-new-request",
-    event => {
-      newConversation({
-        source:
-          event.detail
-            ?.source ||
-          "request"
-      });
+    () => {
+      newConversation();
     }
   );
 
   /* =====================================================
-     HISTORY LOAD
+     HISTORY ROUTING
      ===================================================== */
 
-  function handleConversationLoad(
+  function handleHistoryLoad(
     event
   ) {
     const detail =
@@ -2905,26 +2194,22 @@ be required.
       messages:
         detail.messages ||
         detail.conversation ||
-        [],
-
-      source:
-        detail.source ||
-        "history"
+        []
     });
   }
 
   window.addEventListener(
     "neyo:conversation-loaded",
-    handleConversationLoad
+    handleHistoryLoad
   );
 
   window.addEventListener(
     "neyo:history-conversation-loaded",
-    handleConversationLoad
+    handleHistoryLoad
   );
 
   /* =====================================================
-     PREFERENCES EVENT
+     PREFERENCES ROUTING
      ===================================================== */
 
   window.addEventListener(
@@ -2938,70 +2223,7 @@ be required.
   );
 
   /* =====================================================
-     REGENERATE EVENT
-     ===================================================== */
-
-  window.addEventListener(
-    "neyo:chat-regenerate-request",
-    event => {
-      void regenerate({
-        messageId:
-          event.detail
-            ?.messageId ||
-          event.detail
-            ?.id ||
-          null
-      });
-    }
-  );
-
-  /* =====================================================
-     EDIT EVENT
-     ===================================================== */
-
-  window.addEventListener(
-    "neyo:chat-edit-request",
-    event => {
-      const detail =
-        event.detail ||
-        {};
-
-      void editUserMessage(
-        detail.messageId ||
-        detail.id,
-
-        detail.content ??
-        detail.text ??
-        "",
-
-        {
-          regenerateResponse:
-            detail
-              .regenerateResponse !==
-            false
-        }
-      );
-    }
-  );
-
-  /* =====================================================
-     REMOVE EVENT
-     ===================================================== */
-
-  window.addEventListener(
-    "neyo:chat-message-remove-request",
-    event => {
-      removeMessage(
-        event.detail
-          ?.messageId ||
-        event.detail
-          ?.id
-      );
-    }
-  );
-
-  /* =====================================================
-     STATE REQUEST
+     STATE SYNC REQUEST
      ===================================================== */
 
   window.addEventListener(
@@ -3015,67 +2237,65 @@ be required.
 
   const api =
     Object.freeze({
-      __controller:
-        true,
+      __controller: true,
+      version: VERSION,
 
-      version:
-        VERSION,
+      active: true,
 
-      active:
-        true,
-
-      legacyScriptPresent,
-
-      legacyOwnerActive:
-        false,
-
-      /* -----------------------------------------------
-         Transport
-         ----------------------------------------------- */
+      /*
+       * Generation
+       */
 
       send,
-
       stop,
 
       regenerate,
-
       editUserMessage,
 
-      /* -----------------------------------------------
-         Conversation
-         ----------------------------------------------- */
+      /*
+       * Conversation
+       */
 
       newConversation,
-
       loadConversation,
 
+      /*
+       * Messages
+       */
+
+      addMessage,
+      updateMessage,
+      removeMessage,
+
+      getMessage,
       getConversation,
+
+      /*
+       * Conversation ID
+       */
 
       getConversationId() {
         return currentConversationId;
       },
 
-      setConversationId,
+      setConversationId(
+        id
+      ) {
+        currentConversationId =
+          clean(
+            id,
+            128
+          ) ||
+          null;
 
-      /* -----------------------------------------------
-         Messages
-         ----------------------------------------------- */
+        emitState();
 
-      addMessage,
+        return true;
+      },
 
-      updateMessage,
-
-      removeMessage,
-
-      getMessage,
-
-      getMessageIndex,
-
-      truncateAfter,
-
-      /* -----------------------------------------------
-         Preferences
-         ----------------------------------------------- */
+      /*
+       * Preferences
+       */
 
       setPreferences,
 
@@ -3085,48 +2305,55 @@ be required.
         };
       },
 
-      /* -----------------------------------------------
-         Request state
-         ----------------------------------------------- */
+      /*
+       * Generation state
+       */
 
       isGenerating() {
         return generating;
       },
 
-      getActiveRequestId() {
-        return activeRequestId;
-      },
+      /*
+       * Diagnostics
+       */
 
-      getLastResult() {
-        return cloneValue(
-          lastResult
-        );
-      },
+      getState() {
+        return {
+          version:
+            VERSION,
 
-      /* -----------------------------------------------
-         State
-         ----------------------------------------------- */
+          active:
+            true,
 
-      emitState,
+          generating,
 
-      getState
+          conversationId:
+            currentConversationId,
+
+          messageCount:
+            conversation.length,
+
+          requestId:
+            activeRequestId,
+
+          model:
+            getSelectedModel(),
+
+          preferences: {
+            ...preferences
+          }
+        };
+      }
     });
 
   Object.defineProperty(
     window,
     "NeyoChat",
     {
-      value:
-        api,
-
-      writable:
-        false,
-
-      configurable:
-        true,
-
-      enumerable:
-        true
+      value: api,
+      writable: false,
+      configurable: true,
+      enumerable: true
     }
   );
 
@@ -3137,18 +2364,21 @@ be required.
   emit(
     "neyo:chat-ready",
     {
-      version:
-        VERSION,
+      version: VERSION,
 
-      active:
+      active: true,
+
+      singleConversationOwner:
         true,
 
-      legacyScriptPresent,
+      domRendering:
+        false,
 
-      legacyOwnerActive:
-        false
+      edit:
+        true,
+
+      regenerate:
+        true
     }
   );
-
-  emitState();
 })();

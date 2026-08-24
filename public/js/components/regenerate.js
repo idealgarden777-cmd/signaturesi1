@@ -1,80 +1,22 @@
 /*
 =========================================================
-NEYO — REGENERATE
-FINAL PRODUCTION MIXER v6
+NEO — REGENERATE
+Production v1
 
-FILE:
-public/js/components/regenerate.js
+Owns:
+- regenerate request coordination
+- target assistant validation
+- duplicate request protection
+- temporary busy state
+- compatibility request events
 
-OWNS
----------------------------------------------------------
-- Regenerate request coordination
-- Assistant → preceding user-turn resolution checks
-- Duplicate regenerate protection
-- Generation guard
-- Regenerate button busy state
-- Regenerate lifecycle UI
-- Regenerate lifecycle events
-- Compatibility event routing
-- Public regenerate API
-
-DOES NOT OWN
----------------------------------------------------------
-- Conversation mutation
-- Conversation truncation
+Does NOT own:
+- conversation mutation
+- message removal
 - /api/chat
-- Assistant message rendering
-- Thinking indicator
-- Attachment rendering
-- History persistence
+- response rendering
+- thinking UI
 - Send / Stop
-- Edit UI
-- Share UI
-
-FINAL FLOW
----------------------------------------------------------
-
-message-actions.js
-      ↓
-neyo:message-regenerate-request
-      ↓
-regenerate.js
-      ↓
-NeyoChat.regenerate({
-  messageId: assistantMessageId
-})
-      ↓
-chat.js
-      ↓
-resolve preceding user message
-      ↓
-truncate future conversation
-      ↓
-preserve user attachments
-      ↓
-/api/chat
-      ↓
-new assistant message
-
-IMPORTANT
----------------------------------------------------------
-regenerate.js NEVER splices NeyoChat conversation itself.
-
-chat.js is the sole conversation-state owner.
-
-This prevents the old double-state problem where:
-- neo.js mutated conversation
-- regenerate.js mutated conversation
-- DOM was also manually removed
-
-MIGRATION RULE
----------------------------------------------------------
-Works while neo.js is physically loaded.
-
-message-actions.js capture-phase handler already prevents
-legacy .regen-msg-btn click handling.
-
-After neo.js removal this file continues unchanged.
 =========================================================
 */
 
@@ -82,7 +24,7 @@ After neo.js removal this file continues unchanged.
   "use strict";
 
   const VERSION =
-    "neyo-regenerate-final-v6";
+    "neo-regenerate-production-v1";
 
   if (
     window.NeyoRegenerate
@@ -92,115 +34,25 @@ After neo.js removal this file continues unchanged.
   }
 
   /* =====================================================
-     CONFIG
-     ===================================================== */
-
-  const CONFIG =
-    Object.freeze({
-      duplicateWindowMs:
-        300,
-
-      busyLabel:
-        "Regenerating",
-
-      idleLabel:
-        "Regenerate"
-    });
-
-  /* =====================================================
-     DOM
-     ===================================================== */
-
-  const chatMessages =
-    document.getElementById(
-      "chatMessages"
-    );
-
-  const active =
-    Boolean(
-      chatMessages
-    );
-
-  if (
-    !active
-  ) {
-    console.warn(
-      "[NEYO Regenerate] #chatMessages missing."
-    );
-
-    return;
-  }
-
-  /* =====================================================
-     LEGACY TELEMETRY
-     ===================================================== */
-
-  const legacyScriptPresent =
-    Array
-      .from(
-        document.scripts || []
-      )
-      .some(
-        script =>
-          /(?:^|\/)neo\.js(?:\?|$)/
-            .test(
-              script.src || ""
-            )
-      );
-
-  /* =====================================================
      STATE
      ===================================================== */
 
-  let regenerating =
-    false;
+  const state = {
+    active: false,
 
-  let activeAssistantMessageId =
-    null;
+    messageId: null,
 
-  let activeUserMessageId =
-    null;
+    startedAt: null,
 
-  let requestSerial =
-    0;
+    attempts: 0,
 
-  let lastRequestKey =
-    "";
+    completed: 0,
 
-  let lastRequestAt =
-    0;
-
-  let lastResult =
-    null;
-
-  const metrics = {
-    requests:
-      0,
-
-    completed:
-      0,
-
-    failed:
-      0,
-
-    blockedGenerating:
-      0,
-
-    blockedDuplicate:
-      0,
-
-    invalidRequests:
-      0,
-
-    lastStartedAt:
-      null,
-
-    lastCompletedAt:
-      null
+    failed: 0
   };
 
   /* =====================================================
-     EVENT
+     EVENTS
      ===================================================== */
 
   function emit(
@@ -210,9 +62,7 @@ After neo.js removal this file continues unchanged.
     window.dispatchEvent(
       new CustomEvent(
         name,
-        {
-          detail
-        }
+        { detail }
       )
     );
   }
@@ -226,87 +76,59 @@ After neo.js removal this file continues unchanged.
   ) {
     return String(
       value || ""
-    )
-      .replace(
-        /\u0000/g,
-        ""
-      )
-      .trim()
-      .slice(
-        0,
-        256
-      );
+    ).trim();
   }
 
-  function cloneValue(
-    value
-  ) {
-    if (
-      value === null ||
-      value === undefined
-    ) {
-      return value;
-    }
-
-    if (
-      typeof structuredClone ===
-      "function"
-    ) {
-      try {
-        return structuredClone(
-          value
-        );
-      } catch {}
-    }
-
-    try {
-      return JSON.parse(
-        JSON.stringify(
-          value
-        )
-      );
-
-    } catch {
-      return value;
-    }
-  }
-
-  function refreshIcons() {
-    try {
-      window.lucide
-        ?.createIcons
-        ?.();
-    } catch {}
-  }
-
-  /* =====================================================
-     CHAT
-     ===================================================== */
-
-  function getChat() {
-    const chat =
+  function chat() {
+    const controller =
       window.NeyoChat;
 
     return (
-      chat &&
-      typeof chat ===
-        "object"
+      controller &&
+      controller.__controller === true
     )
-      ? chat
+      ? controller
       : null;
   }
 
-  /* =====================================================
-     GENERATING
-     ===================================================== */
-
-  function chatIsGenerating() {
+  function getMessage(
+    id
+  ) {
     try {
       return (
-        getChat()
+        chat()
+          ?.getMessage
+          ?.(id) ||
+        null
+      );
+
+    } catch {
+      return null;
+    }
+  }
+
+  function getElement(
+    id
+  ) {
+    try {
+      return (
+        window.NeyoMessages
+          ?.getElement
+          ?.(id) ||
+        null
+      );
+
+    } catch {
+      return null;
+    }
+  }
+
+  function isGenerating() {
+    try {
+      return Boolean(
+        chat()
           ?.isGenerating
-          ?.() ===
-        true
+          ?.()
       );
 
     } catch {
@@ -315,601 +137,138 @@ After neo.js removal this file continues unchanged.
   }
 
   /* =====================================================
-     CONVERSATION
+     TARGET
+
+     Regeneration must target a real assistant message.
+     It must never blindly regenerate "whatever is last".
      ===================================================== */
 
-  function getConversation() {
-    try {
-      const value =
-        getChat()
-          ?.getConversation
-          ?.();
-
-      return Array.isArray(
-        value
-      )
-        ? value
-        : [];
-
-    } catch {
-      return [];
-    }
-  }
-
-  /* =====================================================
-     MESSAGE ELEMENT
-     ===================================================== */
-
-  function getMessageElement(
-    messageId
+  function resolveTarget(
+    id
   ) {
-    const id =
+    const key =
       cleanId(
-        messageId
+        id
       );
 
-    if (!id) {
+    if (!key) {
       return null;
     }
 
-    try {
-      const element =
-        window.NeyoMessages
-          ?.getElement
-          ?.(id);
-
-      if (
-        element instanceof
-        HTMLElement
-      ) {
-        return element;
-      }
-    } catch {}
-
-    return Array
-      .from(
-        chatMessages
-          .querySelectorAll(
-            ".message"
-          )
-      )
-      .find(
-        element =>
-          cleanId(
-            element.dataset
-              ?.neyoMessageId ||
-            element.dataset
-              ?.messageId
-          ) ===
-          id
-      ) ||
-      null;
-  }
-
-  /* =====================================================
-     RESOLVE MESSAGE ID
-     ===================================================== */
-
-  function resolveAssistantMessageId(
-    request = {}
-  ) {
-    const direct =
-      cleanId(
-        request.messageId ||
-        request.id ||
-        request.message?.id
+    const message =
+      getMessage(
+        key
       );
-
-    if (direct) {
-      return direct;
-    }
-
-    const element =
-      request.element;
 
     if (
-      element instanceof
-      HTMLElement
-    ) {
-      return cleanId(
-        element.dataset
-          ?.neyoMessageId ||
-        element.dataset
-          ?.messageId
-      );
-    }
-
-    return "";
-  }
-
-  /* =====================================================
-     MESSAGE LOOKUP
-     ===================================================== */
-
-  function findMessageIndex(
-    messageId,
-    conversation =
-      getConversation()
-  ) {
-    const id =
-      cleanId(
-        messageId
-      );
-
-    if (!id) {
-      return -1;
-    }
-
-    return conversation
-      .findIndex(
-        message =>
-          cleanId(
-            message?.id
-          ) ===
-          id
-      );
-  }
-
-  /* =====================================================
-     PRECEDING USER TURN
-
-     Regenerate is anchored to the assistant response the
-     user clicked, NOT blindly to the final user message.
-     ===================================================== */
-
-  function resolveTurn(
-    assistantMessageId
-  ) {
-    const conversation =
-      getConversation();
-
-    if (
-      conversation.length ===
-      0
+      !message ||
+      message.role !==
+        "assistant" ||
+      message.error ===
+        true
     ) {
       return null;
     }
-
-    let assistantIndex =
-      findMessageIndex(
-        assistantMessageId,
-        conversation
-      );
-
-    /*
-     * Compatibility:
-     * if stable assistant ID is absent in old DOM/state,
-     * only allow fallback when the request corresponds to
-     * the current final assistant response.
-     */
-
-    if (
-      assistantIndex < 0
-    ) {
-      for (
-        let index =
-          conversation.length - 1;
-        index >= 0;
-        index -= 1
-      ) {
-        if (
-          conversation[index]
-            ?.role ===
-          "assistant"
-        ) {
-          assistantIndex =
-            index;
-
-          break;
-        }
-      }
-    }
-
-    if (
-      assistantIndex < 0
-    ) {
-      return null;
-    }
-
-    const assistantMessage =
-      conversation[
-        assistantIndex
-      ];
-
-    if (
-      assistantMessage
-        ?.role !==
-      "assistant"
-    ) {
-      return null;
-    }
-
-    let userIndex =
-      -1;
-
-    for (
-      let index =
-        assistantIndex - 1;
-      index >= 0;
-      index -= 1
-    ) {
-      if (
-        conversation[index]
-          ?.role ===
-        "user"
-      ) {
-        userIndex =
-          index;
-
-        break;
-      }
-    }
-
-    if (
-      userIndex < 0
-    ) {
-      return null;
-    }
-
-    const userMessage =
-      conversation[
-        userIndex
-      ];
 
     return {
-      conversation,
+      id:
+        key,
 
-      assistantIndex,
+      message,
 
-      assistantMessage:
-        cloneValue(
-          assistantMessage
-        ),
-
-      userIndex,
-
-      userMessage:
-        cloneValue(
-          userMessage
+      element:
+        getElement(
+          key
         )
     };
   }
 
   /* =====================================================
-     BUTTON
+     UI BUSY STATE
+
+     No new visual design.
+     Existing action button gets temporary state only.
      ===================================================== */
 
-  function getRegenerateButton(
-    messageId
-  ) {
-    const element =
-      getMessageElement(
-        messageId
-      );
-
-    return (
-      element
-        ?.querySelector(
-          ".regen-msg-btn"
-        ) ||
-      null
-    );
-  }
-
-  /* =====================================================
-     BUTTON BUSY
-     ===================================================== */
-
-  function setButtonBusy(
-    messageId,
+  function setTargetBusy(
+    target,
     busy
   ) {
+    const element =
+      target?.element;
+
+    if (!element) {
+      return;
+    }
+
+    element.classList.toggle(
+      "is-regenerating",
+      Boolean(
+        busy
+      )
+    );
+
     const button =
-      getRegenerateButton(
-        messageId
+      element.querySelector(
+        '[data-action="regenerate"], .regen-msg-btn'
       );
 
     if (!button) {
-      return false;
-    }
-
-    if (
-      busy
-    ) {
-      if (
-        !button
-          .dataset
-          .neyoOriginalHtml
-      ) {
-        button.dataset
-          .neyoOriginalHtml =
-          button.innerHTML;
-      }
-
-      button.disabled =
-        true;
-
-      button.setAttribute(
-        "aria-disabled",
-        "true"
-      );
-
-      button.setAttribute(
-        "aria-busy",
-        "true"
-      );
-
-      button.setAttribute(
-        "aria-label",
-        CONFIG.busyLabel
-      );
-
-      button.title =
-        CONFIG.busyLabel;
-
-      button.classList.add(
-        "is-regenerating"
-      );
-
-      button.innerHTML = `
-        <i
-          data-lucide="loader-circle"
-          size="16"
-          aria-hidden="true"
-        ></i>
-      `;
-
-      refreshIcons();
-
-      return true;
+      return;
     }
 
     button.disabled =
-      false;
+      Boolean(
+        busy
+      );
 
     button.setAttribute(
       "aria-disabled",
-      "false"
-    );
-
-    button.removeAttribute(
-      "aria-busy"
+      String(
+        Boolean(
+          busy
+        )
+      )
     );
 
     button.setAttribute(
-      "aria-label",
-      "Regenerate response"
+      "aria-busy",
+      String(
+        Boolean(
+          busy
+        )
+      )
     );
-
-    button.title =
-      CONFIG.idleLabel;
-
-    button.classList.remove(
-      "is-regenerating"
-    );
-
-    button.innerHTML =
-      button.dataset
-        .neyoOriginalHtml ||
-      `
-        <i
-          data-lucide="rotate-cw"
-          size="16"
-          aria-hidden="true"
-        ></i>
-      `;
-
-    delete button.dataset
-      .neyoOriginalHtml;
-
-    refreshIcons();
-
-    return true;
   }
 
   /* =====================================================
-     ALL REGENERATE BUTTONS STATE
+     RESET
      ===================================================== */
 
-  function syncButtons() {
-    const buttons =
-      chatMessages
-        .querySelectorAll(
-          ".regen-msg-btn"
-        );
+  function reset() {
+    const id =
+      state.messageId;
 
-    for (
-      const button
-      of buttons
-    ) {
-      const element =
-        button.closest(
-          ".message"
-        );
-
-      const id =
-        cleanId(
-          element
-            ?.dataset
-            ?.neyoMessageId ||
-          element
-            ?.dataset
-            ?.messageId
-        );
-
-      const isActive =
-        regenerating &&
-        id ===
-          activeAssistantMessageId;
-
-      if (
-        isActive
-      ) {
-        setButtonBusy(
-          id,
-          true
-        );
-
-      } else {
-        button.disabled =
-          regenerating ||
-          chatIsGenerating();
-
-        button.setAttribute(
-          "aria-disabled",
-          String(
-            button.disabled
-          )
-        );
-      }
-    }
-  }
-
-  /* =====================================================
-     DUPLICATE GUARD
-
-     message-actions.js emits both:
-     - neyo:message-regenerate-request
-     - neyo:regenerate-request
-
-     They must result in ONE regeneration only.
-     ===================================================== */
-
-  function isDuplicateRequest(
-    assistantMessageId
-  ) {
-    const now =
-      performance.now();
-
-    const key =
-      cleanId(
-        assistantMessageId
-      ) ||
-      "latest";
-
-    if (
-      lastRequestKey ===
-        key &&
-      now -
-        lastRequestAt <
-        CONFIG
-          .duplicateWindowMs
-    ) {
-      metrics
-        .blockedDuplicate +=
-        1;
-
-      return true;
-    }
-
-    lastRequestKey =
-      key;
-
-    lastRequestAt =
-      now;
-
-    return false;
-  }
-
-  /* =====================================================
-     VALIDATE REQUEST
-     ===================================================== */
-
-  function validateRequest(
-    request = {}
-  ) {
-    const chat =
-      getChat();
-
-    if (
-      typeof chat
-        ?.regenerate !==
-      "function"
-    ) {
-      return {
-        valid:
-          false,
-
-        reason:
-          "Chat regenerate engine is unavailable."
-      };
-    }
-
-    if (
-      regenerating ||
-      chatIsGenerating()
-    ) {
-      metrics
-        .blockedGenerating +=
-        1;
-
-      return {
-        valid:
-          false,
-
-        reason:
-          "A response is already being generated."
-      };
-    }
-
-    const assistantMessageId =
-      resolveAssistantMessageId(
-        request
+    if (id) {
+      setTargetBusy(
+        {
+          element:
+            getElement(
+              id
+            )
+        },
+        false
       );
-
-    if (
-      !assistantMessageId
-    ) {
-      return {
-        valid:
-          false,
-
-        reason:
-          "Assistant message could not be identified."
-      };
     }
 
-    const turn =
-      resolveTurn(
-        assistantMessageId
-      );
+    state.active =
+      false;
 
-    if (!turn) {
-      return {
-        valid:
-          false,
+    state.messageId =
+      null;
 
-        reason:
-          "The user turn for this response could not be found.",
-
-        assistantMessageId
-      };
-    }
-
-    if (
-      turn.assistantMessage
-        ?.error ===
-      true
-    ) {
-      /*
-       * Error messages can still be regenerated as long
-       * as a preceding user turn exists.
-       */
-    }
-
-    return {
-      valid:
-        true,
-
-      assistantMessageId,
-
-      userMessageId:
-        cleanId(
-          turn.userMessage?.id
-        ),
-
-      turn
-    };
+    state.startedAt =
+      null;
   }
 
   /* =====================================================
@@ -917,458 +276,310 @@ After neo.js removal this file continues unchanged.
      ===================================================== */
 
   async function regenerate(
-    request = {}
+    messageId
   ) {
-    const validation =
-      validateRequest(
-        request
-      );
+    const controller =
+      chat();
 
     if (
-      !validation.valid
+      !controller ||
+      typeof controller.regenerate !==
+        "function"
     ) {
-      metrics
-        .invalidRequests +=
-        1;
+      state.failed += 1;
 
       emit(
-        "neyo:regenerate-blocked",
+        "neyo:regenerate-error",
         {
-          reason:
-            validation.reason,
+          messageId:
+            cleanId(
+              messageId
+            ),
 
-          assistantMessageId:
-            validation
-              .assistantMessageId ||
-            null
+          reason:
+            "chat-regenerate-api-unavailable"
         }
       );
 
-      return null;
+      return false;
     }
 
-    const {
-      assistantMessageId,
-      userMessageId,
-      turn
-    } =
-      validation;
+    /*
+     * One generation at a time.
+     */
 
     if (
-      isDuplicateRequest(
-        assistantMessageId
-      )
+      state.active ||
+      isGenerating()
     ) {
-      return null;
+      return false;
     }
 
-    const serial =
-      ++requestSerial;
+    const target =
+      resolveTarget(
+        messageId
+      );
 
-    regenerating =
+    if (!target) {
+      state.failed += 1;
+
+      emit(
+        "neyo:regenerate-error",
+        {
+          messageId:
+            cleanId(
+              messageId
+            ),
+
+          reason:
+            "invalid-assistant-message"
+        }
+      );
+
+      return false;
+    }
+
+    state.active =
       true;
 
-    activeAssistantMessageId =
-      assistantMessageId;
+    state.messageId =
+      target.id;
 
-    activeUserMessageId =
-      userMessageId ||
-      null;
-
-    metrics.requests +=
-      1;
-
-    metrics.lastStartedAt =
+    state.startedAt =
       Date.now();
 
-    lastResult =
-      null;
+    state.attempts +=
+      1;
 
-    setButtonBusy(
-      assistantMessageId,
+    setTargetBusy(
+      target,
       true
     );
-
-    syncButtons();
 
     emit(
       "neyo:regenerate-start",
       {
-        requestSerial:
-          serial,
+        messageId:
+          target.id,
 
-        assistantMessageId,
-
-        userMessageId:
-          activeUserMessageId,
-
-        assistantIndex:
-          turn.assistantIndex,
-
-        userIndex:
-          turn.userIndex,
-
-        userMessage:
-          cloneValue(
-            turn.userMessage
-          ),
-
-        assistantMessage:
-          cloneValue(
-            turn.assistantMessage
-          )
+        message:
+          target.message
       }
     );
 
     try {
       /*
-       * SINGLE CANONICAL OPERATION.
+       * chat.js owns:
        *
-       * chat.js:
-       * - resolves assistant → preceding user
-       * - truncates after user
-       * - preserves user attachments
-       * - performs new /api/chat request
-       * - creates new assistant message
+       * - locating preceding user turn
+       * - truncating stale assistant messages
+       * - preserving attachments
+       * - /api/chat
+       * - lifecycle events
        */
 
       const result =
-        await getChat()
-          .regenerate({
-            messageId:
-              assistantMessageId
-          });
+        await controller.regenerate({
+          messageId:
+            target.id
+        });
 
       /*
-       * A newer regeneration should never be overwritten
-       * by completion bookkeeping from an older request.
+       * null normally means aborted, unavailable,
+       * rate-limited, or no generation result.
+       *
+       * chat.js already emits the precise lifecycle event.
        */
 
-      if (
-        serial !==
-        requestSerial
-      ) {
-        return null;
-      }
-
-      lastResult =
-        cloneValue(
-          result
-        );
-
-      if (
-        result
-      ) {
-        metrics.completed +=
-          1;
-
-        metrics.lastCompletedAt =
-          Date.now();
-
+      if (result === null) {
         emit(
-          "neyo:regenerate-complete",
+          "neyo:regenerate-end",
           {
-            requestSerial:
-              serial,
+            messageId:
+              target.id,
 
-            assistantMessageId,
-
-            userMessageId:
-              activeUserMessageId,
+            success:
+              false,
 
             result:
-              cloneValue(
-                result
-              )
+              null
           }
         );
 
-        return result;
+        return false;
       }
 
-      /*
-       * chat.js returns null for:
-       * - abort
-       * - limit reached
-       * - failed request handled by chat.js
-       * - stale request
-       *
-       * Do not invent a second error message.
-       */
+      state.completed +=
+        1;
 
       emit(
-        "neyo:regenerate-finished",
+        "neyo:regenerate-success",
         {
-          requestSerial:
-            serial,
+          messageId:
+            target.id,
 
-          assistantMessageId,
-
-          userMessageId:
-            activeUserMessageId,
-
-          result:
-            null
+          result
         }
       );
 
-      return null;
+      emit(
+        "neyo:regenerate-end",
+        {
+          messageId:
+            target.id,
 
-    } catch (
-      error
-    ) {
-      if (
-        serial !==
-        requestSerial
-      ) {
-        return null;
-      }
+          success:
+            true,
 
-      metrics.failed +=
+          result
+        }
+      );
+
+      return true;
+
+    } catch (error) {
+      state.failed +=
         1;
 
       console.error(
-        "[NEYO Regenerate] Failed:",
+        "[NEO Regenerate] Failed:",
         error
       );
 
       emit(
         "neyo:regenerate-error",
         {
-          requestSerial:
-            serial,
+          messageId:
+            target.id,
 
-          assistantMessageId,
-
-          userMessageId:
-            activeUserMessageId,
-
-          error,
-
-          message:
-            error?.message ||
-            "Response could not be regenerated."
+          error
         }
       );
 
-      return null;
+      emit(
+        "neyo:regenerate-end",
+        {
+          messageId:
+            target.id,
+
+          success:
+            false,
+
+          error
+        }
+      );
+
+      return false;
 
     } finally {
-      if (
-        serial ===
-        requestSerial
-      ) {
-        const oldAssistantId =
-          activeAssistantMessageId;
-
-        regenerating =
-          false;
-
-        activeAssistantMessageId =
-          null;
-
-        activeUserMessageId =
-          null;
-
-        /*
-         * Old assistant element may already have been
-         * removed by chat.js truncation. Safe either way.
-         */
-
-        setButtonBusy(
-          oldAssistantId,
-          false
-        );
-
-        syncButtons();
-
-        emit(
-          "neyo:regenerate-end",
-          {
-            requestSerial:
-              serial,
-
-            assistantMessageId:
-              oldAssistantId
-          }
-        );
-      }
+      reset();
     }
   }
 
   /* =====================================================
-     CANCEL / STOP
+     MESSAGE ACTION REQUEST
 
-     Regenerate does not own request controller.
-     It delegates to chat.js.
-     ===================================================== */
-
-  function stop(
-    reason =
-      "regenerate-stop"
-  ) {
-    if (
-      !regenerating
-    ) {
-      return false;
-    }
-
-    try {
-      return Boolean(
-        getChat()
-          ?.stop
-          ?.(reason)
-      );
-
-    } catch {
-      return false;
-    }
-  }
-
-  /* =====================================================
-     CAN REGENERATE
-     ===================================================== */
-
-  function canRegenerate(
-    messageId
-  ) {
-    if (
-      regenerating ||
-      chatIsGenerating()
-    ) {
-      return false;
-    }
-
-    const id =
-      cleanId(
-        messageId
-      );
-
-    if (!id) {
-      return false;
-    }
-
-    return Boolean(
-      resolveTurn(
-        id
-      )
-    );
-  }
-
-  /* =====================================================
-     CANONICAL REQUEST EVENT
+     message-actions.js emits this canonical request.
      ===================================================== */
 
   window.addEventListener(
     "neyo:message-regenerate-request",
     event => {
-      void regenerate(
-        event.detail ||
-        {}
-      );
+      const id =
+        event.detail?.id ||
+        event.detail
+          ?.message
+          ?.id;
+
+      if (id) {
+        void regenerate(
+          id
+        );
+      }
     }
   );
 
   /* =====================================================
-     COMPATIBILITY REQUEST EVENT
+     LEGACY / COMPATIBILITY REQUESTS
 
-     message-actions currently emits both events.
-     Duplicate guard ensures one actual request.
+     Old/new experimental modules may use these names.
+     They all converge into ONE implementation.
      ===================================================== */
 
   window.addEventListener(
     "neyo:regenerate-request",
     event => {
-      void regenerate(
-        event.detail ||
-        {}
-      );
-    }
-  );
+      const id =
+        event.detail
+          ?.messageId ||
+        event.detail?.id;
 
-  /* =====================================================
-     CHAT GENERATION STATE
-
-     Keep button availability synchronized even when
-     generation started from Send/Edit rather than regen.
-     ===================================================== */
-
-  window.addEventListener(
-    "neyo:chat-send-start",
-    syncButtons
-  );
-
-  for (
-    const eventName
-    of [
-      "neyo:chat-send-end",
-      "neyo:chat-response",
-      "neyo:chat-error",
-      "neyo:chat-aborted",
-      "neyo:chat-limit-reached"
-    ]
-  ) {
-    window.addEventListener(
-      eventName,
-      () => {
-        requestAnimationFrame(
-          syncButtons
+      if (id) {
+        void regenerate(
+          id
         );
       }
-    );
-  }
-
-  /* =====================================================
-     NEW MESSAGE ACTIONS
-     ===================================================== */
-
-  window.addEventListener(
-    "neyo:message-actions-hydrated",
-    () => {
-      syncButtons();
     }
   );
 
   /* =====================================================
-     NEW CHAT / HISTORY SWITCH
+     CHAT RESET
 
-     A different conversation makes old local regenerate
-     bookkeeping irrelevant.
-
-     chat.js itself owns request invalidation.
+     Navigation/new conversation invalidates coordinator
+     state. chat.js itself owns the real request abort.
      ===================================================== */
 
   for (
     const eventName
     of [
       "neyo:chat-new",
-      "neyo:chat-state-loaded"
+      "neyo:chat-state-loaded",
+      "neyo:messages-cleared"
     ]
   ) {
     window.addEventListener(
       eventName,
-      () => {
-        requestSerial +=
-          1;
-
-        regenerating =
-          false;
-
-        activeAssistantMessageId =
-          null;
-
-        activeUserMessageId =
-          null;
-
-        lastResult =
-          null;
-
-        requestAnimationFrame(
-          syncButtons
-        );
-      }
+      reset
     );
   }
+
+  /* =====================================================
+     MESSAGE REMOVAL
+
+     During a valid regeneration, chat.js removes the old
+     assistant target as part of canonical truncation.
+     We DO NOT interpret that as failure.
+     ===================================================== */
+
+  window.addEventListener(
+    "neyo:chat-message-removed",
+    event => {
+      if (!state.active) {
+        return;
+      }
+
+      const id =
+        cleanId(
+          event.detail?.id ||
+          event.detail
+            ?.message
+            ?.id
+        );
+
+      if (
+        id !==
+        state.messageId
+      ) {
+        return;
+      }
+
+      /*
+       * Old target no longer exists, which is normal.
+       * Keep coordinator active until chat.regenerate()
+       * resolves.
+       */
+    }
+  );
 
   /* =====================================================
      PUBLIC API
@@ -1376,8 +587,7 @@ After neo.js removal this file continues unchanged.
 
   const api =
     Object.freeze({
-      __controller:
-        true,
+      __controller: true,
 
       version:
         VERSION,
@@ -1385,60 +595,21 @@ After neo.js removal this file continues unchanged.
       active:
         true,
 
-      legacyScriptPresent,
-
-      legacyOwnerActive:
-        false,
-
-      /*
-       * Main operation
-       */
-
       regenerate,
-
-      run:
-        regenerate,
 
       request:
         regenerate,
 
-      /*
-       * Stop
-       */
-
-      stop,
-
-      /*
-       * Resolution / diagnostics
-       */
-
-      resolveTurn,
-
-      canRegenerate,
-
-      /*
-       * State
-       */
-
-      isRegenerating() {
-        return regenerating;
+      isRunning() {
+        return state.active;
       },
 
-      getActiveAssistantMessageId() {
-        return activeAssistantMessageId;
-      },
-
-      getActiveUserMessageId() {
-        return activeUserMessageId;
-      },
-
-      getLastResult() {
-        return cloneValue(
-          lastResult
+      getTargetId() {
+        return (
+          state.messageId ||
+          null
         );
       },
-
-      syncButtons,
 
       getState() {
         return {
@@ -1448,29 +619,27 @@ After neo.js removal this file continues unchanged.
           active:
             true,
 
-          legacyScriptPresent,
+          running:
+            state.active,
 
-          legacyOwnerActive:
-            false,
+          messageId:
+            state.messageId,
 
-          regenerating,
+          startedAt:
+            state.startedAt,
 
           chatGenerating:
-            chatIsGenerating(),
-
-          activeAssistantMessageId,
-
-          activeUserMessageId,
-
-          requestSerial,
-
-          lastResult:
-            cloneValue(
-              lastResult
-            ),
+            isGenerating(),
 
           metrics: {
-            ...metrics
+            attempts:
+              state.attempts,
+
+            completed:
+              state.completed,
+
+            failed:
+              state.failed
           }
         };
       }
@@ -1495,10 +664,8 @@ After neo.js removal this file continues unchanged.
   );
 
   /* =====================================================
-     INIT
+     READY
      ===================================================== */
-
-  syncButtons();
 
   emit(
     "neyo:regenerate-ready",
@@ -1509,13 +676,8 @@ After neo.js removal this file continues unchanged.
       active:
         true,
 
-      canonicalChatOwner:
-        true,
-
-      legacyScriptPresent,
-
-      legacyOwnerActive:
-        false
+      canonicalOwner:
+        "NeyoChat.regenerate"
     }
   );
 })();

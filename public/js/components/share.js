@@ -1,23 +1,28 @@
 /*
 =========================================================
 NEO — SHARE
-Production v1
+Production v3 — Baseline Safe
+
+Baseline:
+- Old working neo.js native Web Share behavior
+- Current message-actions.js share routing
+- Current NeyoChat canonical state
 
 Owns:
-- single-message sharing
-- conversation sharing
-- native Web Share API
-- clipboard fallback
-- safe share formatting
-- compatibility share events
+- Message sharing
+- Conversation sharing
+- Native Web Share
+- Clipboard fallback
+- Share formatting
+- Share lifecycle events
 
 Does NOT own:
-- public share links
-- backend share storage
-- conversation mutation
-- history persistence
-- message action buttons
-- message rendering
+- Share button DOM
+- Message action mounting
+- Conversation state
+- Public share-link backend
+- History persistence
+- Notifications UI
 =========================================================
 */
 
@@ -25,7 +30,7 @@ Does NOT own:
   "use strict";
 
   const VERSION =
-    "neo-share-production-v1";
+    "neo-share-production-v3";
 
   if (
     window.NeyoShare
@@ -33,22 +38,6 @@ Does NOT own:
   ) {
     return;
   }
-
-  /* =====================================================
-     CONFIG
-     ===================================================== */
-
-  const CONFIG =
-    Object.freeze({
-      defaultTitle:
-        "NEO",
-
-      conversationTitle:
-        "NEO Conversation",
-
-      maxShareCharacters:
-        100_000
-    });
 
   /* =====================================================
      STATE
@@ -81,7 +70,9 @@ Does NOT own:
     window.dispatchEvent(
       new CustomEvent(
         name,
-        { detail }
+        {
+          detail
+        }
       )
     );
   }
@@ -92,8 +83,7 @@ Does NOT own:
 
   function clean(
     value,
-    max =
-      CONFIG.maxShareCharacters
+    max = 50_000
   ) {
     return String(
       value ?? ""
@@ -113,16 +103,14 @@ Does NOT own:
       .trim();
   }
 
-  function cleanId(
-    value
-  ) {
+  function cleanId(value) {
     return clean(
       value,
-      128
+      160
     );
   }
 
-  function chat() {
+  function chatController() {
     const controller =
       window.NeyoChat;
 
@@ -135,17 +123,27 @@ Does NOT own:
       : null;
   }
 
+  /* =====================================================
+     MESSAGE LOOKUP
+     ===================================================== */
+
   function getMessage(
-    id
+    messageId
   ) {
+    const id =
+      cleanId(messageId);
+
+    if (!id) {
+      return null;
+    }
+
     try {
       return (
-        chat()
+        chatController()
           ?.getMessage
           ?.(id) ||
         null
       );
-
     } catch {
       return null;
     }
@@ -153,15 +151,15 @@ Does NOT own:
 
   function getConversation() {
     try {
-      const messages =
-        chat()
+      const value =
+        chatController()
           ?.getConversation
           ?.();
 
       return Array.isArray(
-        messages
+        value
       )
-        ? messages
+        ? value
         : [];
 
     } catch {
@@ -170,27 +168,64 @@ Does NOT own:
   }
 
   /* =====================================================
-     VISIBLE MESSAGE TEXT
+     ATTACHMENT LABELS
 
-     Never expose attachment-only internal API prompt.
+     Do not expose:
+     - storage paths
+     - signed URLs
+     - bucket names
+     - internal IDs
      ===================================================== */
 
-  function messageText(
-    message
+  function formatAttachmentNames(
+    attachments
   ) {
     if (
-      !message ||
-      typeof message !==
-        "object"
+      !Array.isArray(
+        attachments
+      ) ||
+      attachments.length === 0
     ) {
       return "";
     }
 
+    const names =
+      attachments
+        .map(file =>
+          clean(
+            file?.name ||
+            file?.fileName ||
+            "",
+            255
+          )
+        )
+        .filter(Boolean);
+
+    if (!names.length) {
+      return "";
+    }
+
+    return names
+      .map(name =>
+        `[Attachment: ${name}]`
+      )
+      .join("\n");
+  }
+
+  /* =====================================================
+     MESSAGE CONTENT
+     ===================================================== */
+
+  function getVisibleMessageContent(
+    message
+  ) {
+    if (!message) {
+      return "";
+    }
+
     if (
-      message.role ===
-        "user" &&
-      typeof message
-        .displayContent ===
+      message.role === "user" &&
+      typeof message.displayContent ===
         "string"
     ) {
       return clean(
@@ -198,150 +233,20 @@ Does NOT own:
       );
     }
 
-    const content =
-      clean(
-        message.content
-      );
-
-    if (
-      message.role ===
-        "user" &&
-      Array.isArray(
-        message.attachments
-      ) &&
-      message.attachments.length &&
-      (
-        content ===
-          "Please analyze the attached file or files." ||
-        content ===
-          "Please analyze the attached file."
-      )
-    ) {
-      return "";
-    }
-
-    return content;
+    return clean(
+      message.content || ""
+    );
   }
 
   /* =====================================================
-     ATTACHMENT NAMES
-
-     Share readable filenames only.
-     Never expose:
-     - storage bucket
-     - storage path
-     - signed URL
-     - upload token
-     - process internals
-     ===================================================== */
-
-  function attachmentNames(
-    message
-  ) {
-    if (
-      !Array.isArray(
-        message?.attachments
-      )
-    ) {
-      return [];
-    }
-
-    return message
-      .attachments
-      .map(
-        item =>
-          clean(
-            item?.name,
-            255
-          )
-      )
-      .filter(Boolean)
-      .slice(
-        0,
-        10
-      );
-  }
-
-  /* =====================================================
-     SOURCE FORMAT
-
-     Only public HTTP(S) source URLs are included.
-     ===================================================== */
-
-  function sourceLines(
-    message
-  ) {
-    if (
-      !Array.isArray(
-        message?.sources
-      )
-    ) {
-      return [];
-    }
-
-    const lines = [];
-
-    for (
-      const source
-      of message.sources
-        .slice(
-          0,
-          10
-        )
-    ) {
-      const raw =
-        source?.url ||
-        source?.uri ||
-        source?.link ||
-        source?.web?.uri ||
-        "";
-
-      if (!raw) {
-        continue;
-      }
-
-      try {
-        const url =
-          new URL(
-            raw
-          );
-
-        if (
-          url.protocol !==
-            "https:" &&
-          url.protocol !==
-            "http:"
-        ) {
-          continue;
-        }
-
-        const title =
-          clean(
-            source?.title ||
-            source?.name ||
-            source?.web?.title ||
-            url.hostname,
-            160
-          );
-
-        lines.push(
-          title
-            ? `${title}: ${url.href}`
-            : url.href
-        );
-
-      } catch {}
-    }
-
-    return lines;
-  }
-
-  /* =====================================================
-     MESSAGE FORMAT
+     FORMAT MESSAGE
      ===================================================== */
 
   function formatMessage(
-    message
+    message,
+    {
+      includeRole = false
+    } = {}
   ) {
     if (
       !message ||
@@ -351,181 +256,173 @@ Does NOT own:
       return "";
     }
 
-    const body =
-      messageText(
+    const text =
+      getVisibleMessageContent(
         message
       );
 
-    const files =
-      attachmentNames(
-        message
-      );
-
-    const sources =
-      sourceLines(
-        message
+    const attachments =
+      formatAttachmentNames(
+        message.attachments
       );
 
     const parts = [];
 
-    if (body) {
+    if (includeRole) {
+      if (
+        message.role ===
+        "assistant"
+      ) {
+        parts.push(
+          "NEO:"
+        );
+
+      } else if (
+        message.role ===
+        "user"
+      ) {
+        parts.push(
+          "You:"
+        );
+      }
+    }
+
+    if (text) {
+      parts.push(text);
+    }
+
+    if (attachments) {
       parts.push(
-        body
+        attachments
       );
     }
 
-    if (files.length) {
-      parts.push(
-        [
-          files.length === 1
-            ? "Attachment:"
-            : "Attachments:",
-
-          ...files.map(
-            name =>
-              `• ${name}`
-          )
-        ].join(
-          "\n"
-        )
-      );
-    }
-
-    if (sources.length) {
-      parts.push(
-        [
-          "Sources:",
-
-          ...sources.map(
-            source =>
-              `• ${source}`
-          )
-        ].join(
-          "\n"
-        )
-      );
-    }
-
-    return clean(
-      parts.join(
-        "\n\n"
+    return parts
+      .join(
+        includeRole
+          ? "\n"
+          : "\n\n"
       )
-    );
+      .trim();
   }
 
   /* =====================================================
-     CONVERSATION TITLE
+     FORMAT CONVERSATION
+     ===================================================== */
+
+  function formatConversation(
+    messages
+  ) {
+    if (
+      !Array.isArray(
+        messages
+      )
+    ) {
+      return "";
+    }
+
+    return messages
+      .filter(message => {
+        if (
+          !message ||
+          typeof message !==
+            "object"
+        ) {
+          return false;
+        }
+
+        if (
+          message.error ===
+          true
+        ) {
+          return false;
+        }
+
+        if (
+          message.streaming ===
+          true &&
+          !clean(
+            message.content ||
+            ""
+          )
+        ) {
+          return false;
+        }
+
+        return (
+          message.role ===
+            "user" ||
+          message.role ===
+            "assistant"
+        );
+      })
+      .map(message =>
+        formatMessage(
+          message,
+          {
+            includeRole: true
+          }
+        )
+      )
+      .filter(Boolean)
+      .join(
+        "\n\n"
+      )
+      .trim();
+  }
+
+  /* =====================================================
+     TITLE
      ===================================================== */
 
   function deriveConversationTitle(
     messages
   ) {
+    if (
+      !Array.isArray(
+        messages
+      )
+    ) {
+      return "NEO Conversation";
+    }
+
     const firstUser =
       messages.find(
         message =>
           message?.role ===
-            "user"
-      );
-
-    const firstText =
-      messageText(
-        firstUser
-      );
-
-    if (firstText) {
-      const oneLine =
-        firstText
-          .replace(
-            /\s+/g,
-            " "
-          )
-          .trim();
-
-      if (oneLine.length) {
-        return (
-          oneLine.length >
-          60
-            ? `${oneLine.slice(
-                0,
-                57
-              )}…`
-            : oneLine
-        );
-      }
-    }
-
-    const firstFile =
-      attachmentNames(
-        firstUser
-      )[0];
-
-    return (
-      firstFile ||
-      CONFIG
-        .conversationTitle
-    );
-  }
-
-  /* =====================================================
-     CONVERSATION FORMAT
-     ===================================================== */
-
-  function formatConversation(
-    messages =
-      getConversation()
-  ) {
-    if (
-      !Array.isArray(
-        messages
-      ) ||
-      !messages.length
-    ) {
-      return "";
-    }
-
-    const blocks = [];
-
-    for (
-      const message
-      of messages
-    ) {
-      if (
-        !message ||
-        (
-          message.role !==
-            "user" &&
-          message.role !==
-            "assistant"
-        )
-      ) {
-        continue;
-      }
-
-      const content =
-        formatMessage(
-          message
-        );
-
-      if (!content) {
-        continue;
-      }
-
-      const label =
-        message.role ===
           "user"
-          ? "You"
-          : "NEO";
+      );
 
-      blocks.push(
-        `${label}\n${content}`
+    const text =
+      getVisibleMessageContent(
+        firstUser
+      );
+
+    if (text) {
+      return text
+        .replace(
+          /\s+/g,
+          " "
+        )
+        .slice(
+          0,
+          80
+        );
+    }
+
+    const attachmentName =
+      firstUser
+        ?.attachments?.[0]
+        ?.name;
+
+    if (attachmentName) {
+      return clean(
+        attachmentName,
+        80
       );
     }
 
-    return clean(
-      blocks.join(
-        "\n\n──────────\n\n"
-      )
-    );
+    return "NEO Conversation";
   }
 
   /* =====================================================
@@ -535,35 +432,26 @@ Does NOT own:
   async function writeClipboard(
     value
   ) {
-    const content =
+    const text =
       clean(
         value
       );
 
-    if (!content) {
+    if (!text) {
       return false;
     }
 
     try {
       if (
-        navigator.clipboard
-          ?.writeText &&
+        navigator.clipboard &&
         window.isSecureContext
       ) {
-        await navigator
-          .clipboard
-          .writeText(
-            content
-          );
+        await navigator.clipboard
+          .writeText(text);
 
         return true;
       }
-
     } catch {}
-
-    /*
-     * Browser compatibility fallback.
-     */
 
     const textarea =
       document.createElement(
@@ -571,29 +459,21 @@ Does NOT own:
       );
 
     textarea.value =
-      content;
+      text;
 
     textarea.setAttribute(
       "readonly",
       ""
     );
 
-    textarea.setAttribute(
-      "aria-hidden",
-      "true"
-    );
-
     textarea.style.position =
       "fixed";
 
-    textarea.style.left =
-      "-9999px";
-
-    textarea.style.top =
-      "0";
-
     textarea.style.opacity =
       "0";
+
+    textarea.style.left =
+      "-9999px";
 
     textarea.style.pointerEvents =
       "none";
@@ -602,21 +482,17 @@ Does NOT own:
       textarea
     );
 
-    textarea.focus();
     textarea.select();
 
-    let copied =
-      false;
+    let copied = false;
 
     try {
       copied =
         document.execCommand(
           "copy"
         );
-
     } catch {
-      copied =
-        false;
+      copied = false;
     }
 
     textarea.remove();
@@ -630,9 +506,19 @@ Does NOT own:
 
   function canNativeShare() {
     return (
-      typeof navigator
-        .share ===
+      typeof navigator.share ===
       "function"
+    );
+  }
+
+  function isShareCancel(
+    error
+  ) {
+    return (
+      error?.name ===
+        "AbortError" ||
+      error?.name ===
+        "NotAllowedError"
     );
   }
 
@@ -640,18 +526,15 @@ Does NOT own:
     title,
     text
   }) {
-    if (
-      !canNativeShare()
-    ) {
+    if (!canNativeShare()) {
       return {
-        supported:
-          false,
+        supported: false,
 
-        shared:
-          false,
+        shared: false,
 
-        cancelled:
-          false
+        cancelled: false,
+
+        error: null
       };
     }
 
@@ -662,56 +545,45 @@ Does NOT own:
             title,
             200
           ) ||
-          CONFIG.defaultTitle,
+          undefined,
 
         text:
-          clean(
-            text
-          )
+          clean(text)
       });
 
       return {
-        supported:
-          true,
+        supported: true,
 
-        shared:
-          true,
+        shared: true,
 
-        cancelled:
-          false
+        cancelled: false,
+
+        error: null
       };
 
     } catch (error) {
-      /*
-       * AbortError means the user simply dismissed
-       * the system share sheet.
-       */
-
       if (
-        error?.name ===
-        "AbortError"
+        isShareCancel(
+          error
+        )
       ) {
         return {
-          supported:
-            true,
+          supported: true,
 
-          shared:
-            false,
+          shared: false,
 
-          cancelled:
-            true
+          cancelled: true,
+
+          error
         };
       }
 
       return {
-        supported:
-          true,
+        supported: true,
 
-        shared:
-          false,
+        shared: false,
 
-        cancelled:
-          false,
+        cancelled: false,
 
         error
       };
@@ -721,11 +593,14 @@ Does NOT own:
   /* =====================================================
      SHARE CONTENT
 
-     Native first.
-     Clipboard only when native sharing is unavailable
-     or native sharing fails technically.
+     Old behavior:
+     native navigator.share({ text })
 
-     User-cancelled native share does NOT auto-copy.
+     Improved behavior:
+     native first, clipboard fallback only if native share
+     is unavailable or genuinely fails.
+
+     User cancelling native share NEVER triggers clipboard.
      ===================================================== */
 
   async function shareContent({
@@ -735,9 +610,7 @@ Does NOT own:
     messageId = null
   }) {
     const content =
-      clean(
-        text
-      );
+      clean(text);
 
     if (
       !content ||
@@ -759,7 +632,9 @@ Does NOT own:
       "neyo:share-start",
       {
         type,
+
         title,
+
         messageId
       }
     );
@@ -773,12 +648,10 @@ Does NOT own:
         });
 
       /* -----------------------------------------------
-         Native success
+         NATIVE SUCCESS
          ----------------------------------------------- */
 
-      if (
-        native.shared
-      ) {
+      if (native.shared) {
         state.nativeShares +=
           1;
 
@@ -798,12 +671,13 @@ Does NOT own:
       }
 
       /* -----------------------------------------------
-         User cancelled share sheet
+         USER CANCELLED
+
+         Important:
+         Do not copy anything automatically.
          ----------------------------------------------- */
 
-      if (
-        native.cancelled
-      ) {
+      if (native.cancelled) {
         state.cancelled +=
           1;
 
@@ -823,7 +697,7 @@ Does NOT own:
       }
 
       /* -----------------------------------------------
-         Clipboard fallback
+         CLIPBOARD FALLBACK
          ----------------------------------------------- */
 
       const copied =
@@ -862,10 +736,6 @@ Does NOT own:
         return true;
       }
 
-      /* -----------------------------------------------
-         Failure
-         ----------------------------------------------- */
-
       state.failures +=
         1;
 
@@ -879,17 +749,6 @@ Does NOT own:
           error:
             native.error ||
             null
-        }
-      );
-
-      emit(
-        "neyo:notification-request",
-        {
-          type:
-            "error",
-
-          message:
-            "Couldn't share this content."
         }
       );
 
@@ -908,7 +767,9 @@ Does NOT own:
         "neyo:share-error",
         {
           type,
+
           messageId,
+
           error
         }
       );
@@ -988,7 +849,7 @@ Does NOT own:
   }
 
   /* =====================================================
-     COPY MESSAGE SHARE TEXT
+     COPY MESSAGE
      ===================================================== */
 
   async function copyMessage(
@@ -1013,6 +874,10 @@ Does NOT own:
         message
       );
 
+    if (!content) {
+      return false;
+    }
+
     const copied =
       await writeClipboard(
         content
@@ -1036,9 +901,6 @@ Does NOT own:
 
   /* =====================================================
      SHARE CONVERSATION
-
-     This shares readable text only.
-     It does NOT create a public URL.
      ===================================================== */
 
   async function shareConversation(
@@ -1127,18 +989,17 @@ Does NOT own:
 
   /* =====================================================
      MESSAGE ACTION EVENT
-
-     message-actions.js emits this.
      ===================================================== */
 
   window.addEventListener(
     "neyo:message-share-request",
     event => {
       const id =
+        event.detail
+          ?.messageId ||
         event.detail?.id ||
         event.detail
-          ?.message
-          ?.id;
+          ?.message?.id;
 
       if (id) {
         void shareMessage(
@@ -1150,16 +1011,13 @@ Does NOT own:
 
   /* =====================================================
      CONVERSATION SHARE EVENT
-
-     history-menu.js may use this later.
      ===================================================== */
 
   window.addEventListener(
     "neyo:conversation-share-request",
     event => {
       void shareConversation(
-        event.detail ||
-        {}
+        event.detail || {}
       );
     }
   );
@@ -1174,8 +1032,7 @@ Does NOT own:
       const id =
         event.detail
           ?.messageId ||
-        event.detail
-          ?.id;
+        event.detail?.id;
 
       if (id) {
         void shareMessage(
@@ -1189,8 +1046,7 @@ Does NOT own:
     "neyo:share-conversation-request",
     event => {
       void shareConversation(
-        event.detail ||
-        {}
+        event.detail || {}
       );
     }
   );
@@ -1201,7 +1057,8 @@ Does NOT own:
 
   const api =
     Object.freeze({
-      __controller: true,
+      __controller:
+        true,
 
       version:
         VERSION,

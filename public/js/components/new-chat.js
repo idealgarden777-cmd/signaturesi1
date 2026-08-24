@@ -1,26 +1,53 @@
 /*
 =========================================================
 NEO — NEW CHAT
-Production v1
+Production v3 — Canonical UI Coordinator
 
-Purpose:
-Thin New Chat UI coordinator.
+Baseline:
+- Old working neo.js New Chat behavior
+- Current NeyoChat.newConversation()
+- Current NeyoChatRuntime migration bridge
+- Current NeyoAttachments
+- Current NeyoHistory
+- Current NeyoSendState
+
+Flow:
+#newChatBtn
+    ↓
+NeyoChatRuntime (preferred while legacy neo.js exists)
+    ↓
+neyo:chat-new-request
+    ↓
+NeyoChat.newConversation()
+    ↓
+neyo:chat-new
+    ↓
+NeyoNewChat UI cleanup
+
+Fallback:
+If ChatRuntime is unavailable, this file safely owns
+#newChatBtn and emits the same canonical request.
 
 Owns:
-- fallback #newChatBtn routing when chat-runtime is absent
-- programmatic New Chat request API
-- light composer cleanup after canonical chat reset
-- focus restoration
-- history active reset compatibility
+- New Chat UI coordination
+- Fallback #newChatBtn routing
+- Composer draft cleanup after canonical reset
+- Attachment draft cleanup after canonical reset
+- History active-row reset
+- Transient composer/menu close requests
+- Composer focus restoration
+- New-chat lifecycle diagnostics
 
 Does NOT own:
-- conversation state
-- /api/chat
-- message DOM
-- generation abort
-- history persistence
-- attachment upload
+- Conversation state
+- AbortController
+- Message DOM
+- History persistence
+- Attachment upload
 - Send / Stop
+- Hero rendering
+- Sidebar implementation
+- Search/research/private-chat state
 =========================================================
 */
 
@@ -28,7 +55,7 @@ Does NOT own:
   "use strict";
 
   const VERSION =
-    "neo-new-chat-production-v1";
+    "neo-new-chat-production-v3";
 
   if (
     window.NeyoNewChat
@@ -41,7 +68,7 @@ Does NOT own:
      DOM
      ===================================================== */
 
-  const newChatButton =
+  const newChatBtn =
     document.getElementById(
       "newChatBtn"
     );
@@ -51,22 +78,41 @@ Does NOT own:
       "chatInput"
     );
 
+  const attachPopupMenu =
+    document.getElementById(
+      "attachPopupMenu"
+    );
+
   /* =====================================================
      STATE
      ===================================================== */
 
   const state = {
-    requests: 0,
+    requesting: false,
 
-    completed: 0,
+    cleaning: false,
 
-    fallbackClicks: 0,
+    lastRequestedAt: 0,
 
-    cleanupRuns: 0
+    lastCompletedAt: 0,
+
+    requestCount: 0,
+
+    completionCount: 0
   };
 
   /* =====================================================
-     HELPERS
+     CONFIG
+     ===================================================== */
+
+  const CONFIG =
+    Object.freeze({
+      duplicateWindowMs:
+        180
+    });
+
+  /* =====================================================
+     EVENTS
      ===================================================== */
 
   function emit(
@@ -76,19 +122,96 @@ Does NOT own:
     window.dispatchEvent(
       new CustomEvent(
         name,
-        { detail }
+        {
+          detail
+        }
       )
     );
   }
 
+  /* =====================================================
+     OWNERS
+     ===================================================== */
+
+  function chatController() {
+    const controller =
+      window.NeyoChat;
+
+    return (
+      controller &&
+      controller.__controller ===
+        true
+    )
+      ? controller
+      : null;
+  }
+
+  function runtimeController() {
+    const controller =
+      window.NeyoChatRuntime;
+
+    return (
+      controller &&
+      controller.__controller ===
+        true
+    )
+      ? controller
+      : null;
+  }
+
+  function attachmentsController() {
+    const controller =
+      window.NeyoAttachments;
+
+    return (
+      controller &&
+      controller.__controller ===
+        true
+    )
+      ? controller
+      : null;
+  }
+
+  function sendStateController() {
+    const controller =
+      window.NeyoSendState;
+
+    return (
+      controller &&
+      controller.__controller ===
+        true
+    )
+      ? controller
+      : null;
+  }
+
+  /* =====================================================
+     RUNTIME BUTTON OWNERSHIP
+
+     Current chat-runtime.js owns #newChatBtn while active.
+     Never become a second capture-phase owner.
+     ===================================================== */
+
   function runtimeOwnsButton() {
+    const runtime =
+      runtimeController();
+
+    if (!runtime) {
+      return false;
+    }
+
     try {
+      if (
+        typeof runtime.isActive ===
+          "function"
+      ) {
+        return Boolean(
+          runtime.isActive()
+        );
+      }
+
       return Boolean(
-        window.NeyoChatRuntime
-          ?.__controller === true &&
-        window.NeyoChatRuntime
-          ?.isActive
-          ?.()
+        runtime.active
       );
 
     } catch {
@@ -96,100 +219,8 @@ Does NOT own:
     }
   }
 
-  function chatAvailable() {
-    return Boolean(
-      window.NeyoChat
-        ?.__controller === true
-    );
-  }
-
   /* =====================================================
-     REQUEST NEW CHAT
-     ===================================================== */
-
-  function request(
-    source =
-      "new-chat"
-  ) {
-    if (!chatAvailable()) {
-      emit(
-        "neyo:new-chat-error",
-        {
-          reason:
-            "chat-controller-unavailable",
-
-          source
-        }
-      );
-
-      return false;
-    }
-
-    state.requests +=
-      1;
-
-    emit(
-      "neyo:chat-new-request",
-      {
-        source
-      }
-    );
-
-    emit(
-      "neyo:new-chat-requested",
-      {
-        source
-      }
-    );
-
-    return true;
-  }
-
-  /* =====================================================
-     FALLBACK BUTTON OWNER
-
-     chat-runtime.js owns #newChatBtn while active.
-
-     This fallback exists only when runtime is absent or
-     inactive.
-     ===================================================== */
-
-  function handleButtonClick(
-    event
-  ) {
-    if (
-      runtimeOwnsButton()
-    ) {
-      return;
-    }
-
-    event.preventDefault();
-    event.stopPropagation();
-    event.stopImmediatePropagation();
-
-    state.fallbackClicks +=
-      1;
-
-    request(
-      "new-chat-button-fallback"
-    );
-  }
-
-  if (newChatButton) {
-    newChatButton.addEventListener(
-      "click",
-      handleButtonClick,
-      true
-    );
-  }
-
-  /* =====================================================
-     TEXTAREA CLEANUP
-
-     Canonical conversation reset happens FIRST in chat.js.
-
-     We only reset visible draft state after
-     neyo:chat-new confirms success.
+     CLEAR COMPOSER TEXT
      ===================================================== */
 
   function clearComposerText() {
@@ -197,22 +228,30 @@ Does NOT own:
       return false;
     }
 
-    chatInput.value =
-      "";
-
     /*
-     * Let composer/autosize modules update themselves
-     * through their normal input pipeline.
+     * Avoid unnecessary input event if already empty.
      */
 
-    chatInput.dispatchEvent(
-      new Event(
-        "input",
-        {
-          bubbles: true
-        }
-      )
-    );
+    if (
+      chatInput.value !==
+      ""
+    ) {
+      chatInput.value = "";
+
+      chatInput.dispatchEvent(
+        new Event(
+          "input",
+          {
+            bubbles: true
+          }
+        )
+      );
+    }
+
+    /*
+     * Composer components may need to recalculate height,
+     * scrollbar and layout.
+     */
 
     try {
       window.NeyoComposer
@@ -221,7 +260,8 @@ Does NOT own:
     } catch {}
 
     try {
-      window.NeyoComposerScrollbar
+      window
+        .NeyoComposerScrollbar
         ?.refresh
         ?.();
     } catch {}
@@ -230,21 +270,31 @@ Does NOT own:
   }
 
   /* =====================================================
-     ATTACHMENT CLEANUP
+     CLEAR ATTACHMENTS
 
-     attachments.js remains the attachment owner.
+     New Chat is different from accepted Send.
+
+     Accepted Send:
+     send-state.js removes only attachments actually sent.
+
+     New Chat:
+     entire composer attachment draft must disappear.
      ===================================================== */
 
   function clearAttachments() {
+    const controller =
+      attachmentsController();
+
+    if (!controller) {
+      return false;
+    }
+
     try {
       if (
-        typeof window
-          .NeyoAttachments
-          ?.clear ===
+        typeof controller.clear ===
         "function"
       ) {
-        window.NeyoAttachments
-          .clear();
+        controller.clear();
 
         return true;
       }
@@ -260,38 +310,77 @@ Does NOT own:
   }
 
   /* =====================================================
-     CLOSE TEMPORARY MESSAGE UI
+     CLOSE ATTACHMENT POPUP
+
+     Temporary compatibility until popup ownership is moved
+     to its final dedicated UI component.
      ===================================================== */
 
-  function closeTransientUi() {
-    try {
-      window.NeyoMessageEdit
-        ?.cancel
-        ?.(
-          "new-chat"
-        );
-    } catch {}
+  function closeAttachmentPopup() {
+    if (!attachPopupMenu) {
+      return false;
+    }
 
-    try {
-      window.NeyoHistoryMenu
-        ?.close
-        ?.({
-          restoreFocus:
-            false
-        });
-    } catch {}
+    attachPopupMenu.classList.remove(
+      "active",
+      "open",
+      "show"
+    );
+
+    attachPopupMenu.setAttribute(
+      "aria-hidden",
+      "true"
+    );
+
+    document
+      .getElementById(
+        "attachBtn"
+      )
+      ?.setAttribute(
+        "aria-expanded",
+        "false"
+      );
 
     return true;
   }
 
   /* =====================================================
-     HISTORY ACTIVE RESET
+     CLOSE TRANSIENT UI
 
-     history.js already listens to neyo:chat-new in the
-     production architecture.
+     We emit requests instead of reaching into unrelated
+     components' private state.
+     ===================================================== */
 
-     Event is still emitted for compatibility with older
-     history modules.
+  function closeTransientUI() {
+    closeAttachmentPopup();
+
+    emit(
+      "neyo:history-menu-close-request",
+      {
+        reason:
+          "new-chat"
+      }
+    );
+
+    emit(
+      "neyo:composer-menu-close-request",
+      {
+        reason:
+          "new-chat"
+      }
+    );
+
+    emit(
+      "neyo:transient-ui-close-request",
+      {
+        reason:
+          "new-chat"
+      }
+    );
+  }
+
+  /* =====================================================
+     RESET HISTORY ACTIVE STATE
      ===================================================== */
 
   function resetHistoryActive() {
@@ -305,6 +394,70 @@ Does NOT own:
   }
 
   /* =====================================================
+     CLEAR DRAFT STORAGE THROUGH OWNER EVENT
+
+     Do not directly guess settings.js/localStorage keys.
+     Later composer/settings owner can listen to this event.
+     ===================================================== */
+
+  function clearDraftState() {
+    emit(
+      "neyo:draft-clear-request",
+      {
+        conversationId:
+          null,
+
+        reason:
+          "new-chat"
+      }
+    );
+  }
+
+  /* =====================================================
+     RESET OPTIONAL MODE-SPECIFIC DRAFT UI
+
+     Important:
+     We DO NOT turn off persistent user preferences here.
+
+     These events mean:
+     "discard temporary state belonging to the old turn",
+     not "change the user's settings".
+     ===================================================== */
+
+  function resetTransientDraftState() {
+    emit(
+      "neyo:suggestions-reset-request",
+      {
+        reason:
+          "new-chat"
+      }
+    );
+
+    emit(
+      "neyo:composer-reset-request",
+      {
+        reason:
+          "new-chat"
+      }
+    );
+  }
+
+  /* =====================================================
+     SEND STATE REFRESH
+     ===================================================== */
+
+  function refreshSendState() {
+    const controller =
+      sendStateController();
+
+    try {
+      controller
+        ?.refresh
+        ?.();
+    } catch {}
+  }
+
+  /* =====================================================
      FOCUS
      ===================================================== */
 
@@ -313,13 +466,31 @@ Does NOT own:
       return false;
     }
 
+    /*
+     * Avoid fighting mobile keyboard/navigation if the
+     * document is no longer active.
+     */
+
+    if (
+      document.visibilityState ===
+      "hidden"
+    ) {
+      return false;
+    }
+
     requestAnimationFrame(
       () => {
+        if (
+          !chatInput.isConnected
+        ) {
+          return;
+        }
+
         try {
           chatInput.focus({
-            preventScroll:
-              true
+            preventScroll: true
           });
+
         } catch {
           chatInput.focus();
         }
@@ -330,91 +501,336 @@ Does NOT own:
   }
 
   /* =====================================================
-     CANONICAL COMPLETION
+     CANONICAL REQUEST
 
-     chat.js emits neyo:chat-new only AFTER it has:
-     - invalidated old request
-     - stopped generation
-     - cleared canonical conversation
-     - nulled conversation ID
-     - requested message DOM clear
-
-     Therefore cleanup belongs here, after confirmation.
+     Never mutate chat state directly here.
+     NeyoChat owns the reset.
      ===================================================== */
 
-  function handleCanonicalNewChat(
-    event
+  function requestNewChat(
+    reason = "user"
   ) {
-    state.completed +=
-      1;
+    const now =
+      Date.now();
 
-    closeTransientUi();
+    if (
+      state.requesting &&
+      now -
+        state.lastRequestedAt <
+        CONFIG.duplicateWindowMs
+    ) {
+      return false;
+    }
 
-    clearComposerText();
+    /*
+     * Additional double-click protection.
+     */
 
-    clearAttachments();
+    if (
+      now -
+        state.lastRequestedAt <
+      CONFIG.duplicateWindowMs
+    ) {
+      return false;
+    }
 
-    resetHistoryActive();
+    state.requesting =
+      true;
 
-    focusComposer();
+    state.lastRequestedAt =
+      now;
 
-    state.cleanupRuns +=
+    state.requestCount +=
       1;
 
     emit(
-      "neyo:new-chat-complete",
+      "neyo:new-chat-requested",
       {
-        source:
-          event.detail
-            ?.source ||
-          null,
+        reason,
 
-        conversationId:
-          null
+        requestCount:
+          state.requestCount
       }
+    );
+
+    /*
+     * CustomEvent is synchronous.
+     * chat.js listens to this and immediately calls its
+     * canonical newConversation().
+     */
+
+    emit(
+      "neyo:chat-new-request",
+      {
+        reason
+      }
+    );
+
+    /*
+     * If no chat controller exists, don't pretend New Chat
+     * succeeded.
+     */
+
+    if (!chatController()) {
+      state.requesting =
+        false;
+
+      emit(
+        "neyo:new-chat-error",
+        {
+          reason:
+            "chat-controller-unavailable"
+        }
+      );
+
+      return false;
+    }
+
+    return true;
+  }
+
+  /* =====================================================
+     CANONICAL CLEANUP
+
+     This runs ONLY after NeyoChat emitted neyo:chat-new.
+
+     At this point:
+     - generation has been invalidated/stopped
+     - canonical conversation is empty
+     - canonical conversationId is null
+     - message clear event has been emitted
+
+     Now UI draft state may safely reset.
+     ===================================================== */
+
+  function completeNewChat(
+    eventDetail = {}
+  ) {
+    if (state.cleaning) {
+      return false;
+    }
+
+    state.cleaning =
+      true;
+
+    try {
+      clearComposerText();
+
+      clearAttachments();
+
+      resetHistoryActive();
+
+      clearDraftState();
+
+      resetTransientDraftState();
+
+      closeTransientUI();
+
+      refreshSendState();
+
+      state.requesting =
+        false;
+
+      state.lastCompletedAt =
+        Date.now();
+
+      state.completionCount +=
+        1;
+
+      emit(
+        "neyo:new-chat-complete",
+        {
+          reason:
+            eventDetail.reason ||
+            "canonical-reset",
+
+          completionCount:
+            state.completionCount
+        }
+      );
+
+      focusComposer();
+
+      return true;
+
+    } finally {
+      state.cleaning =
+        false;
+    }
+  }
+
+  /* =====================================================
+     FALLBACK BUTTON OWNER
+
+     chat-runtime.js currently captures #newChatBtn while
+     active because legacy neo.js is still present.
+
+     We register a fallback listener, but immediately ignore
+     the event whenever runtime owns the button.
+     ===================================================== */
+
+  if (newChatBtn) {
+    newChatBtn.addEventListener(
+      "click",
+      event => {
+        if (
+          runtimeOwnsButton()
+        ) {
+          return;
+        }
+
+        event.preventDefault();
+
+        event.stopPropagation();
+
+        event.stopImmediatePropagation();
+
+        requestNewChat(
+          "new-chat-button"
+        );
+      },
+      true
     );
   }
 
-  window.addEventListener(
-    "neyo:chat-new",
-    handleCanonicalNewChat
-  );
-
   /* =====================================================
-     LEGACY / PROGRAMMATIC REQUESTS
+     CANONICAL CHAT NEW
      ===================================================== */
 
   window.addEventListener(
-    "neyo:new-chat-request",
+    "neyo:chat-new",
     event => {
-      request(
-        event.detail
-          ?.source ||
-        "legacy-event"
+      completeNewChat(
+        event.detail || {}
       );
     }
   );
 
   /* =====================================================
-     ACTIVE CONVERSATION DELETED
+     EXTERNAL NEW CHAT REQUEST
 
-     Normally chat-runtime handles this.
-
-     Fallback only when runtime is unavailable.
+     Other future UI may request a fresh chat without
+     needing direct access to NeyoChat.
      ===================================================== */
 
   window.addEventListener(
-    "neyo:active-conversation-deleted",
-    () => {
-      if (
-        runtimeOwnsButton()
-      ) {
-        return;
-      }
-
-      request(
-        "active-conversation-deleted-fallback"
+    "neyo:new-chat-request",
+    event => {
+      requestNewChat(
+        event.detail?.reason ||
+        "external"
       );
+    }
+  );
+
+  /* =====================================================
+     ACTIVE CONVERSATION DELETED — FALLBACK ONLY
+
+     chat-runtime.js already owns recovery while active.
+     Avoid duplicate neyo:chat-new-request events.
+     ===================================================== */
+
+  function recoverDeletedConversation(
+    event
+  ) {
+    if (
+      runtimeOwnsButton()
+    ) {
+      return;
+    }
+
+    const deletedId =
+      String(
+        event.detail
+          ?.conversationId ||
+        event.detail?.id ||
+        ""
+      ).trim();
+
+    let currentId = "";
+
+    try {
+      currentId =
+        String(
+          chatController()
+            ?.getConversationId
+            ?.() ||
+          ""
+        ).trim();
+
+    } catch {}
+
+    /*
+     * If both IDs exist and are different, deletion was for
+     * another history row.
+     */
+
+    if (
+      deletedId &&
+      currentId &&
+      deletedId !==
+        currentId
+    ) {
+      return;
+    }
+
+    /*
+     * If current canonical chat already has no conversation,
+     * another owner already recovered it.
+     */
+
+    if (!currentId) {
+      return;
+    }
+
+    requestNewChat(
+      "active-conversation-deleted"
+    );
+  }
+
+  window.addEventListener(
+    "neyo:active-conversation-deleted",
+    recoverDeletedConversation
+  );
+
+  window.addEventListener(
+    "neyo:history-active-conversation-deleted",
+    recoverDeletedConversation
+  );
+
+  /* =====================================================
+     HISTORY OPEN
+
+     A history conversation becoming active is NOT a new
+     chat. We only ensure stale request flag cannot remain.
+     ===================================================== */
+
+  window.addEventListener(
+    "neyo:chat-state-loaded",
+    () => {
+      state.requesting =
+        false;
+    }
+  );
+
+  /* =====================================================
+     FAILURE SAFETY
+
+     If something reports an error before canonical
+     neyo:chat-new happened, release local request lock.
+     ===================================================== */
+
+  window.addEventListener(
+    "neyo:chat-runtime-error",
+    event => {
+      if (
+        state.requesting &&
+        event.detail?.action ===
+          "new-chat"
+      ) {
+        state.requesting =
+          false;
+      }
     }
   );
 
@@ -433,22 +849,26 @@ Does NOT own:
       active:
         true,
 
-      request,
+      request:
+        requestNewChat,
 
       newChat:
-        request,
+        requestNewChat,
 
-      clearDraft() {
-        clearComposerText();
-        clearAttachments();
+      reset:
+        requestNewChat,
 
-        return true;
-      },
+      complete:
+        completeNewChat,
 
       focus:
         focusComposer,
 
       runtimeOwnsButton,
+
+      isRequesting() {
+        return state.requesting;
+      },
 
       getState() {
         return {
@@ -458,28 +878,26 @@ Does NOT own:
           active:
             true,
 
-          buttonPresent:
-            Boolean(
-              newChatButton
-            ),
+          requesting:
+            state.requesting,
+
+          cleaning:
+            state.cleaning,
 
           runtimeOwnsButton:
             runtimeOwnsButton(),
 
-          chatAvailable:
-            chatAvailable(),
+          requestCount:
+            state.requestCount,
 
-          requests:
-            state.requests,
+          completionCount:
+            state.completionCount,
 
-          completed:
-            state.completed,
+          lastRequestedAt:
+            state.lastRequestedAt,
 
-          fallbackClicks:
-            state.fallbackClicks,
-
-          cleanupRuns:
-            state.cleanupRuns
+          lastCompletedAt:
+            state.lastCompletedAt
         };
       }
     });
@@ -516,7 +934,10 @@ Does NOT own:
         true,
 
       runtimeOwnsButton:
-        runtimeOwnsButton()
+        runtimeOwnsButton(),
+
+      canonicalOwner:
+        "NeyoChat"
     }
   );
 })();

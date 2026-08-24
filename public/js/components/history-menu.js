@@ -1,2224 +1,1139 @@
 /*
 =========================================================
 NEO — HISTORY MENU
-Production v3 — Baseline Safe
+Production v1 — Old neo.js Exact Baseline
 
-Baseline:
-- Existing #historyPopupMenu HTML
-- Old Share / Pin / Rename / Delete behavior
-- Current NeyoHistory controller
-- Current NeyoShare conversation contract
+Baseline preserved:
+- #historyPopupMenu
+- #hpDeleteBtn
+- .history-action-btn
+- .show
+- Popup opens from three-dot history action
+- Popup positioned beside clicked action button
+- Outside click closes popup
+- Escape closes popup
+- Delete uses POST /api/history
+- action: "delete"
+- Active deleted chat → New Chat
+- Other deleted chat → refresh history
 
 Owns:
-- History popup positioning
-- Selected conversation menu state
-- Share selected conversation
-- Pin / Unpin routing
-- Rename dialog UI
-- Delete confirmation dialog UI
-- Menu keyboard navigation
-- Outside-click / Escape closing
-- Busy state
-- Focus restoration
+- History popup open / close
+- Selected history conversation
+- Popup positioning
+- Delete action
+- Outside-click close
+- Escape close
 
 Does NOT own:
-- History persistence
 - History list rendering
-- Conversation opening
-- Chat state
-- Public share backend
+- Conversation loading
+- New Chat state
 - Sidebar
+- Rename
+- Pin
+- Share
 =========================================================
 */
 
 (() => {
-  "use strict";
+    "use strict";
 
-  const VERSION =
-    "neo-history-menu-production-v3";
+    const VERSION =
+        "neo-history-menu-production-v1";
 
-  if (
-    window.NeyoHistoryMenu
-      ?.__controller === true
-  ) {
-    return;
-  }
+    if (
+        window.NeyoHistoryMenu
+            ?.__controller === true
+    ) {
+        return;
+    }
 
-  /* =====================================================
-     DOM
-     ===================================================== */
+    /* =====================================================
+       DOM
+       ===================================================== */
 
-  const menu =
-    document.getElementById(
-      "historyPopupMenu"
-    );
+    const historyPopupMenu =
+        document.getElementById(
+            "historyPopupMenu"
+        );
 
-  const shareButton =
-    document.getElementById(
-      "hpShareBtn"
-    );
+    const hpDeleteBtn =
+        document.getElementById(
+            "hpDeleteBtn"
+        );
 
-  const pinButton =
-    document.getElementById(
-      "hpPinBtn"
-    );
+    if (!historyPopupMenu) {
+        console.warn(
+            "[NEO History Menu] #historyPopupMenu missing."
+        );
 
-  const renameButton =
-    document.getElementById(
-      "hpRenameBtn"
-    );
+        return;
+    }
 
-  const deleteButton =
-    document.getElementById(
-      "hpDeleteBtn"
-    );
+    /* =====================================================
+       CONFIG
+       ===================================================== */
 
-  if (!menu) {
-    console.warn(
-      "[NEO History Menu] #historyPopupMenu is missing."
-    );
+    const CONFIG =
+        Object.freeze({
+            endpoint:
+                "/api/history",
 
-    return;
-  }
+            viewportGap:
+                8,
 
-  /* =====================================================
-     CONFIG
-     ===================================================== */
+            anchorGap:
+                2
+        });
 
-  const CONFIG =
-    Object.freeze({
-      viewportGap:
-        8,
+    /* =====================================================
+       STATE
+       ===================================================== */
 
-      anchorGap:
-        6,
+    const state = {
+        open:
+            false,
 
-      maxTitleLength:
-        100
-    });
+        busy:
+            false,
 
-  /* =====================================================
-     STATE
-     ===================================================== */
+        conversationId:
+            null,
 
-  const state = {
-    open: false,
+        title:
+            "",
 
-    busy: false,
+        anchorElement:
+            null,
 
-    conversationId: null,
+        restoreFocusElement:
+            null
+    };
 
-    title: "",
+    /* =====================================================
+       EVENTS
+       ===================================================== */
 
-    isPinned: false,
-
-    anchorElement: null,
-
-    restoreFocusElement: null,
-
-    clientX: null,
-
-    clientY: null,
-
-    dialog: null
-  };
-
-  /* =====================================================
-     EVENTS
-     ===================================================== */
-
-  function emit(
-    name,
-    detail = {}
-  ) {
-    window.dispatchEvent(
-      new CustomEvent(
+    function emit(
         name,
-        {
-          detail
-        }
-      )
-    );
-  }
+        detail = {}
+    ) {
+        window.dispatchEvent(
+            new CustomEvent(
+                name,
+                {
+                    detail
+                }
+            )
+        );
+    }
 
-  /* =====================================================
-     HELPERS
-     ===================================================== */
+    /* =====================================================
+       HELPERS
+       ===================================================== */
 
-  function clean(
-    value,
-    max = 500
-  ) {
-    return String(
-      value ?? ""
-    )
-      .replace(
-        /\u0000/g,
-        ""
-      )
-      .trim()
-      .slice(
-        0,
+    function clean(
+        value,
+        max = 500
+    ) {
+        return String(
+            value ?? ""
+        )
+            .replace(
+                /\u0000/g,
+                ""
+            )
+            .trim()
+            .slice(
+                0,
+                max
+            );
+    }
+
+    function cleanId(value) {
+        return clean(
+            value,
+            160
+        );
+    }
+
+    function clamp(
+        value,
+        min,
         max
-      );
-  }
+    ) {
+        return Math.min(
+            max,
+            Math.max(
+                min,
+                value
+            )
+        );
+    }
 
-  function cleanId(value) {
-    return clean(
-      value,
-      160
-    );
-  }
+    /* =====================================================
+       OWNERS
+       ===================================================== */
 
-  function refreshIcons() {
-    try {
-      window.lucide
-        ?.createIcons
-        ?.();
-    } catch {}
-  }
+    function historyController() {
+        const controller =
+            window.NeyoHistory;
 
-  function historyController() {
-    const controller =
-      window.NeyoHistory;
+        return (
+            controller &&
+            controller
+                .__controller === true
+        )
+            ? controller
+            : null;
+    }
 
-    return (
-      controller &&
-      controller.__controller ===
-        true
-    )
-      ? controller
-      : null;
-  }
+    function chatController() {
+        const controller =
+            window.NeyoChat;
 
-  /* =====================================================
-     MENU ITEMS
+        return (
+            controller &&
+            controller
+                .__controller === true
+        )
+            ? controller
+            : null;
+    }
 
-     Important:
-     allMenuItems() ALWAYS returns every actual menu item.
+    function newChatController() {
+        const controller =
+            window.NeyoNewChat;
 
-     interactiveMenuItems() returns only currently enabled
-     items for keyboard navigation.
+        return (
+            controller &&
+            controller
+                .__controller === true
+        )
+            ? controller
+            : null;
+    }
 
-     This separation fixes the old permanent-disabled bug:
-     setBusy(true) disabled every item, then the old
-     menuItems() selector could no longer find those items
-     to re-enable them.
-     ===================================================== */
+    /* =====================================================
+       CURRENT CHAT
+       ===================================================== */
 
-  function allMenuItems() {
-    return [
-      shareButton,
-      pinButton,
-      renameButton,
-      deleteButton
-    ].filter(
-      item =>
-        item instanceof
-        HTMLElement
-    );
-  }
+    function getCurrentConversationId() {
+        try {
+            return cleanId(
+                chatController()
+                    ?.getConversationId
+                    ?.() ||
+                historyController()
+                    ?.getActive
+                    ?.() ||
+                ""
+            );
+        } catch {
+            return "";
+        }
+    }
 
-  function interactiveMenuItems() {
-    return allMenuItems()
-      .filter(item => {
-        if (
-          item.hidden ||
-          item.getAttribute(
-            "aria-hidden"
-          ) === "true"
-        ) {
-          return false;
+    /* =====================================================
+       READ JSON
+       ===================================================== */
+
+    async function readJsonResponse(
+        response
+    ) {
+        const raw =
+            await response.text();
+
+        let data = {};
+
+        if (raw) {
+            try {
+                data =
+                    JSON.parse(raw);
+            } catch {
+                data = {};
+            }
         }
 
-        if (
-          item.getAttribute(
-            "aria-disabled"
-          ) === "true"
-        ) {
-          return false;
+        if (!response.ok) {
+            throw new Error(
+                data?.error ||
+                data?.message ||
+                raw ||
+                `Request failed (${response.status})`
+            );
         }
 
-        if (
-          "disabled" in item &&
-          item.disabled === true
-        ) {
-          return false;
+        return data;
+    }
+
+    /* =====================================================
+       BUSY
+       ===================================================== */
+
+    function setBusy(
+        value
+    ) {
+        state.busy =
+            Boolean(value);
+
+        historyPopupMenu
+            .classList
+            .toggle(
+                "is-busy",
+                state.busy
+            );
+
+        if (hpDeleteBtn) {
+            hpDeleteBtn.disabled =
+                state.busy;
+
+            hpDeleteBtn.setAttribute(
+                "aria-disabled",
+                String(
+                    state.busy
+                )
+            );
         }
 
         return true;
-      });
-  }
-
-  /* =====================================================
-     ACCESSIBILITY HYDRATION
-
-     Existing HTML currently uses div.history-popup-item.
-     No HTML rewrite needed.
-     ===================================================== */
-
-  function hydrateMenuAccessibility() {
-    menu.setAttribute(
-      "role",
-      "menu"
-    );
-
-    menu.setAttribute(
-      "aria-hidden",
-      "true"
-    );
-
-    for (
-      const item
-      of allMenuItems()
-    ) {
-      item.setAttribute(
-        "role",
-        "menuitem"
-      );
-
-      item.setAttribute(
-        "tabindex",
-        "-1"
-      );
-
-      /*
-       * Prevent native browser title-style duplication.
-       * Existing tooltip system uses data-tooltip.
-       */
-
-      if (
-        item.hasAttribute(
-          "title"
-        )
-      ) {
-        item.removeAttribute(
-          "title"
-        );
-      }
-    }
-  }
-
-  /* =====================================================
-     LABEL
-     ===================================================== */
-
-  function setItemLabel(
-    item,
-    iconName,
-    label
-  ) {
-    if (!item) {
-      return;
     }
 
-    item.replaceChildren();
-
-    const icon =
-      document.createElement(
-        "i"
-      );
-
-    icon.setAttribute(
-      "data-lucide",
-      iconName
-    );
-
-    icon.setAttribute(
-      "size",
-      "16"
-    );
-
-    icon.setAttribute(
-      "aria-hidden",
-      "true"
-    );
-
-    const text =
-      document.createTextNode(
-        label
-      );
-
-    item.append(
-      icon,
-      text
-    );
-
-    refreshIcons();
-  }
-
-  function refreshLabels() {
-    if (shareButton) {
-      setItemLabel(
-        shareButton,
-        "share-2",
-        "Share conversation"
-      );
-
-      shareButton.setAttribute(
-        "aria-label",
-        "Share conversation"
-      );
-    }
-
-    if (pinButton) {
-      const label =
-        state.isPinned
-          ? "Unpin"
-          : "Pin";
-
-      setItemLabel(
-        pinButton,
-        state.isPinned
-          ? "pin-off"
-          : "pin",
-        label
-      );
-
-      pinButton.setAttribute(
-        "aria-label",
-        `${label} conversation`
-      );
-
-      pinButton.dataset.tooltip =
-        `${label} conversation`;
-    }
-
-    if (renameButton) {
-      setItemLabel(
-        renameButton,
-        "pencil",
-        "Rename"
-      );
-
-      renameButton.setAttribute(
-        "aria-label",
-        "Rename conversation"
-      );
-    }
-
-    if (deleteButton) {
-      setItemLabel(
-        deleteButton,
-        "trash-2",
-        "Delete"
-      );
-
-      deleteButton.setAttribute(
-        "aria-label",
-        "Delete conversation"
-      );
-    }
-  }
-
-  /* =====================================================
-     BUSY
-
-     Uses ALL items, not enabled-only items.
-     ===================================================== */
-
-  function setBusy(value) {
-    state.busy =
-      Boolean(value);
-
-    menu.classList.toggle(
-      "is-busy",
-      state.busy
-    );
-
-    for (
-      const item
-      of allMenuItems()
-    ) {
-      item.setAttribute(
-        "aria-disabled",
-        String(
-          state.busy
-        )
-      );
-
-      item.classList.toggle(
-        "is-disabled",
-        state.busy
-      );
-
-      if (
-        "disabled" in item
-      ) {
-        item.disabled =
-          state.busy;
-      }
-    }
-
-    return true;
-  }
-
-  /* =====================================================
-     POSITION
-     ===================================================== */
-
-  function clamp(
-    value,
-    min,
-    max
-  ) {
-    return Math.min(
-      max,
-      Math.max(
-        min,
-        value
-      )
-    );
-  }
-
-  function positionMenu() {
-    if (!state.open) {
-      return;
-    }
-
-    /*
-     * Temporarily make measurable.
-     */
-
-    menu.style.visibility =
-      "hidden";
-
-    menu.style.display =
-      "block";
-
-    menu.classList.add(
-      "show"
-    );
-
-    const rect =
-      menu.getBoundingClientRect();
-
-    const width =
-      rect.width ||
-      menu.offsetWidth ||
-      190;
-
-    const height =
-      rect.height ||
-      menu.offsetHeight ||
-      160;
-
-    const viewportWidth =
-      window.innerWidth;
-
-    const viewportHeight =
-      window.innerHeight;
-
-    let left = 0;
-    let top = 0;
-
-    /* -----------------------------------------------
-       RIGHT CLICK POSITION
-       ----------------------------------------------- */
-
-    if (
-      Number.isFinite(
-        state.clientX
-      ) &&
-      Number.isFinite(
-        state.clientY
-      )
-    ) {
-      left =
-        state.clientX;
-
-      top =
-        state.clientY;
-    }
-
-    /* -----------------------------------------------
-       BUTTON ANCHOR
-       ----------------------------------------------- */
-
-    else if (
-      state.anchorElement instanceof
-        Element &&
-      state.anchorElement.isConnected
-    ) {
-      const anchor =
-        state.anchorElement
-          .getBoundingClientRect();
-
-      /*
-       * Prefer opening below and right-aligned with the
-       * three-dot button.
-       */
-
-      left =
-        anchor.right -
-        width;
-
-      top =
-        anchor.bottom +
-        CONFIG.anchorGap;
-
-      /*
-       * Not enough room below → open above.
-       */
-
-      if (
-        top +
-          height +
-          CONFIG.viewportGap >
-        viewportHeight
-      ) {
-        top =
-          anchor.top -
-          height -
-          CONFIG.anchorGap;
-      }
-    }
-
-    left =
-      clamp(
-        left,
-        CONFIG.viewportGap,
-        Math.max(
-          CONFIG.viewportGap,
-          viewportWidth -
-            width -
-            CONFIG.viewportGap
-        )
-      );
-
-    top =
-      clamp(
-        top,
-        CONFIG.viewportGap,
-        Math.max(
-          CONFIG.viewportGap,
-          viewportHeight -
-            height -
-            CONFIG.viewportGap
-        )
-      );
-
-    menu.style.left =
-      `${Math.round(left)}px`;
-
-    menu.style.top =
-      `${Math.round(top)}px`;
-
-    menu.style.visibility =
-      "";
-  }
-
-  /* =====================================================
-     FOCUS
-     ===================================================== */
-
-  function focusFirstItem() {
-    const item =
-      interactiveMenuItems()[0];
-
-    item?.focus?.();
-  }
-
-  function focusRelative(
-    direction
-  ) {
-    const items =
-      interactiveMenuItems();
-
-    if (!items.length) {
-      return;
-    }
-
-    const currentIndex =
-      items.indexOf(
-        document.activeElement
-      );
-
-    let nextIndex = 0;
-
-    if (
-      currentIndex >= 0
-    ) {
-      nextIndex =
-        (
-          currentIndex +
-          direction +
-          items.length
-        ) %
-        items.length;
-    }
-
-    items[
-      nextIndex
-    ]?.focus?.();
-  }
-
-  /* =====================================================
-     OPEN
-     ===================================================== */
-
-  function open({
-    conversationId,
-    title = "",
-    isPinned = false,
-    anchorElement = null,
-    clientX = null,
-    clientY = null
-  } = {}) {
-    const id =
-      cleanId(
-        conversationId
-      );
-
-    if (!id) {
-      return false;
-    }
-
-    /*
-     * Close any dialog/menu state first without restoring
-     * stale focus.
-     */
-
-    if (state.dialog) {
-      closeDialog({
-        restoreFocus:
-          false
-      });
-    }
-
-    state.open =
-      true;
-
-    state.busy =
-      false;
-
-    state.conversationId =
-      id;
-
-    state.title =
-      clean(
-        title,
-        CONFIG.maxTitleLength
-      ) ||
-      "New conversation";
-
-    state.isPinned =
-      Boolean(
-        isPinned
-      );
-
-    state.anchorElement =
-      anchorElement instanceof
-        Element
-        ? anchorElement
-        : null;
-
-    state.restoreFocusElement =
-      state.anchorElement;
-
-    state.clientX =
-      Number.isFinite(
-        Number(clientX)
-      )
-        ? Number(clientX)
-        : null;
-
-    state.clientY =
-      Number.isFinite(
-        Number(clientY)
-      )
-        ? Number(clientY)
-        : null;
-
-    refreshLabels();
-
-    setBusy(false);
-
-    menu.classList.add(
-      "show"
-    );
-
-    menu.classList.add(
-      "open"
-    );
-
-    menu.style.display =
-      "block";
-
-    menu.setAttribute(
-      "aria-hidden",
-      "false"
-    );
-
-    positionMenu();
-
-    requestAnimationFrame(
-      focusFirstItem
-    );
-
-    emit(
-      "neyo:history-menu-opened",
-      {
-        conversationId:
-          state.conversationId
-      }
-    );
-
-    return true;
-  }
-
-  /* =====================================================
-     CLOSE
-     ===================================================== */
-
-  function close({
-    restoreFocus = true
-  } = {}) {
-    if (!state.open) {
-      return false;
-    }
-
-    const focusTarget =
-      state.restoreFocusElement;
-
-    const conversationId =
-      state.conversationId;
-
-    state.open =
-      false;
-
-    state.busy =
-      false;
-
-    state.conversationId =
-      null;
-
-    state.title =
-      "";
-
-    state.isPinned =
-      false;
-
-    state.anchorElement =
-      null;
-
-    state.restoreFocusElement =
-      null;
-
-    state.clientX =
-      null;
-
-    state.clientY =
-      null;
-
-    menu.classList.remove(
-      "show",
-      "open",
-      "is-busy"
-    );
-
-    menu.style.display =
-      "none";
-
-    menu.style.visibility =
-      "";
-
-    menu.style.left =
-      "";
-
-    menu.style.top =
-      "";
-
-    menu.setAttribute(
-      "aria-hidden",
-      "true"
-    );
-
-    setBusy(false);
-
-    if (
-      restoreFocus &&
-      focusTarget instanceof
-        HTMLElement &&
-      focusTarget.isConnected
-    ) {
-      requestAnimationFrame(
-        () => {
-          focusTarget.focus();
+    /* =====================================================
+       POSITION
+
+       Old neo.js baseline:
+       top  = rect.bottom
+       left = rect.left
+
+       Improvement:
+       same preferred position, but keep menu inside viewport.
+       ===================================================== */
+
+    function positionMenu() {
+        if (
+            !state.open ||
+            !state.anchorElement ||
+            !state.anchorElement
+                .isConnected
+        ) {
+            return false;
         }
-      );
-    }
 
-    emit(
-      "neyo:history-menu-closed",
-      {
-        conversationId
-      }
-    );
-
-    return true;
-  }
-
-  /* =====================================================
-     DIALOG BASE
-     ===================================================== */
-
-  function createDialog({
-    title,
-    description = ""
-  }) {
-    closeDialog({
-      restoreFocus:
-        false
-    });
-
-    const overlay =
-      document.createElement(
-        "div"
-      );
-
-    overlay.className =
-      "history-dialog-overlay";
-
-    const dialog =
-      document.createElement(
-        "div"
-      );
-
-    dialog.className =
-      "history-dialog";
-
-    dialog.setAttribute(
-      "role",
-      "dialog"
-    );
-
-    dialog.setAttribute(
-      "aria-modal",
-      "true"
-    );
-
-    const heading =
-      document.createElement(
-        "h3"
-      );
-
-    heading.className =
-      "history-dialog-title";
-
-    heading.textContent =
-      title;
-
-    dialog.appendChild(
-      heading
-    );
-
-    if (description) {
-      const text =
-        document.createElement(
-          "p"
-        );
-
-      text.className =
-        "history-dialog-description";
-
-      text.textContent =
-        description;
-
-      dialog.appendChild(
-        text
-      );
-    }
-
-    overlay.appendChild(
-      dialog
-    );
-
-    document.body.appendChild(
-      overlay
-    );
-
-    state.dialog = {
-      overlay,
-      dialog,
-      previousFocus:
-        document.activeElement
-    };
-
-    return {
-      overlay,
-      dialog
-    };
-  }
-
-  /* =====================================================
-     CLOSE DIALOG
-     ===================================================== */
-
-  function closeDialog({
-    restoreFocus = true
-  } = {}) {
-    if (!state.dialog) {
-      return false;
-    }
-
-    const {
-      overlay,
-      previousFocus
-    } =
-      state.dialog;
-
-    state.dialog =
-      null;
-
-    overlay?.remove();
-
-    if (
-      restoreFocus &&
-      previousFocus instanceof
-        HTMLElement &&
-      previousFocus.isConnected
-    ) {
-      requestAnimationFrame(
-        () => {
-          previousFocus.focus();
-        }
-      );
-    }
-
-    return true;
-  }
-
-  /* =====================================================
-     DIALOG KEYBOARD
-     ===================================================== */
-
-  function trapDialogTab(
-    event
-  ) {
-    if (
-      event.key !== "Tab" ||
-      !state.dialog
-    ) {
-      return;
-    }
-
-    const focusables =
-      Array.from(
-        state.dialog.dialog
-          .querySelectorAll(
-            [
-              "button:not([disabled])",
-              "input:not([disabled])",
-              "textarea:not([disabled])",
-              "[tabindex]:not([tabindex='-1'])"
-            ].join(",")
-          )
-      );
-
-    if (!focusables.length) {
-      event.preventDefault();
-
-      return;
-    }
-
-    const first =
-      focusables[0];
-
-    const last =
-      focusables[
-        focusables.length - 1
-      ];
-
-    if (
-      event.shiftKey &&
-      document.activeElement ===
-        first
-    ) {
-      event.preventDefault();
-
-      last.focus();
-
-      return;
-    }
-
-    if (
-      !event.shiftKey &&
-      document.activeElement ===
-        last
-    ) {
-      event.preventDefault();
-
-      first.focus();
-    }
-  }
-
-  /* =====================================================
-     RENAME DIALOG
-     ===================================================== */
-
-  function openRenameDialog() {
-    if (
-      !state.conversationId ||
-      state.busy
-    ) {
-      return false;
-    }
-
-    const conversationId =
-      state.conversationId;
-
-    const originalTitle =
-      state.title;
-
-    /*
-     * Menu closes but dialog takes over focus.
-     */
-
-    close({
-      restoreFocus:
-        false
-    });
-
-    const {
-      overlay,
-      dialog
-    } =
-      createDialog({
-        title:
-          "Rename conversation"
-      });
-
-    const input =
-      document.createElement(
-        "input"
-      );
-
-    input.type =
-      "text";
-
-    input.className =
-      "history-dialog-input";
-
-    input.value =
-      originalTitle;
-
-    input.maxLength =
-      CONFIG.maxTitleLength;
-
-    input.setAttribute(
-      "aria-label",
-      "Conversation name"
-    );
-
-    const actions =
-      document.createElement(
-        "div"
-      );
-
-    actions.className =
-      "history-dialog-actions";
-
-    const cancelButton =
-      document.createElement(
-        "button"
-      );
-
-    cancelButton.type =
-      "button";
-
-    cancelButton.className =
-      "history-dialog-cancel";
-
-    cancelButton.textContent =
-      "Cancel";
-
-    const saveButton =
-      document.createElement(
-        "button"
-      );
-
-    saveButton.type =
-      "button";
-
-    saveButton.className =
-      "history-dialog-confirm";
-
-    saveButton.textContent =
-      "Save";
-
-    actions.append(
-      cancelButton,
-      saveButton
-    );
-
-    dialog.append(
-      input,
-      actions
-    );
-
-    function updateSaveState() {
-      const value =
-        clean(
-          input.value,
-          CONFIG.maxTitleLength
-        );
-
-      saveButton.disabled =
-        !value;
-
-      saveButton.setAttribute(
-        "aria-disabled",
-        String(!value)
-      );
-    }
-
-    async function submit() {
-      const title =
-        clean(
-          input.value,
-          CONFIG.maxTitleLength
-        )
-          .replace(
-            /\s+/g,
-            " "
-          );
-
-      if (!title) {
-        return;
-      }
-
-      input.disabled =
-        true;
-
-      cancelButton.disabled =
-        true;
-
-      saveButton.disabled =
-        true;
-
-      saveButton.classList.add(
-        "is-loading"
-      );
-
-      try {
-        const history =
-          historyController();
+        const anchorRect =
+            state
+                .anchorElement
+                .getBoundingClientRect();
+
+        /*
+         * Make menu measurable.
+         */
+
+        historyPopupMenu
+            .classList
+            .add(
+                "show"
+            );
+
+        const menuRect =
+            historyPopupMenu
+                .getBoundingClientRect();
+
+        const width =
+            menuRect.width ||
+            historyPopupMenu
+                .offsetWidth ||
+            160;
+
+        const height =
+            menuRect.height ||
+            historyPopupMenu
+                .offsetHeight ||
+            48;
+
+        /*
+         * Exact old preferred position.
+         */
+
+        let left =
+            anchorRect.left;
+
+        let top =
+            anchorRect.bottom +
+            CONFIG.anchorGap;
+
+        /*
+         * If menu overflows right edge, align its right side
+         * to the button instead.
+         */
 
         if (
-          history &&
-          typeof history.rename ===
-            "function"
+            left +
+            width +
+            CONFIG.viewportGap >
+            window.innerWidth
         ) {
-          await history.rename(
-            conversationId,
-            title
-          );
-
-        } else {
-          emit(
-            "neyo:history-rename-request",
-            {
-              conversationId,
-              title
-            }
-          );
-        }
-
-        closeDialog({
-          restoreFocus:
-            false
-        });
-
-      } catch (error) {
-        console.error(
-          "[NEO History Menu] Rename failed:",
-          error
-        );
-
-        input.disabled =
-          false;
-
-        cancelButton.disabled =
-          false;
-
-        saveButton.classList.remove(
-          "is-loading"
-        );
-
-        updateSaveState();
-
-        emit(
-          "neyo:history-menu-error",
-          {
-            action:
-              "rename",
-
-            conversationId,
-
-            error
-          }
-        );
-      }
-    }
-
-    input.addEventListener(
-      "input",
-      updateSaveState
-    );
-
-    input.addEventListener(
-      "keydown",
-      event => {
-        if (
-          event.key ===
-          "Enter"
-        ) {
-          event.preventDefault();
-
-          void submit();
-        }
-      }
-    );
-
-    cancelButton.addEventListener(
-      "click",
-      () => {
-        closeDialog();
-      }
-    );
-
-    saveButton.addEventListener(
-      "click",
-      () => {
-        void submit();
-      }
-    );
-
-    overlay.addEventListener(
-      "mousedown",
-      event => {
-        if (
-          event.target ===
-          overlay
-        ) {
-          closeDialog();
-        }
-      }
-    );
-
-    updateSaveState();
-
-    requestAnimationFrame(
-      () => {
-        input.focus();
-
-        input.select();
-      }
-    );
-
-    return true;
-  }
-
-  /* =====================================================
-     DELETE DIALOG
-     ===================================================== */
-
-  function openDeleteDialog() {
-    if (
-      !state.conversationId ||
-      state.busy
-    ) {
-      return false;
-    }
-
-    const conversationId =
-      state.conversationId;
-
-    const conversationTitle =
-      state.title;
-
-    close({
-      restoreFocus:
-        false
-    });
-
-    const {
-      overlay,
-      dialog
-    } =
-      createDialog({
-        title:
-          "Delete conversation?",
-
-        description:
-          conversationTitle
-            ? `"${conversationTitle}" will be permanently deleted.`
-            : "This conversation will be permanently deleted."
-      });
-
-    const actions =
-      document.createElement(
-        "div"
-      );
-
-    actions.className =
-      "history-dialog-actions";
-
-    const cancelButton =
-      document.createElement(
-        "button"
-      );
-
-    cancelButton.type =
-      "button";
-
-    cancelButton.className =
-      "history-dialog-cancel";
-
-    cancelButton.textContent =
-      "Cancel";
-
-    const deleteConfirm =
-      document.createElement(
-        "button"
-      );
-
-    deleteConfirm.type =
-      "button";
-
-    deleteConfirm.className =
-      "history-dialog-confirm danger";
-
-    deleteConfirm.textContent =
-      "Delete";
-
-    actions.append(
-      cancelButton,
-      deleteConfirm
-    );
-
-    dialog.appendChild(
-      actions
-    );
-
-    async function confirmDelete() {
-      cancelButton.disabled =
-        true;
-
-      deleteConfirm.disabled =
-        true;
-
-      deleteConfirm.classList.add(
-        "is-loading"
-      );
-
-      try {
-        const history =
-          historyController();
-
-        if (
-          history &&
-          typeof history.delete ===
-            "function"
-        ) {
-          await history.delete(
-            conversationId
-          );
-
-        } else {
-          emit(
-            "neyo:history-delete-request",
-            {
-              conversationId
-            }
-          );
-        }
-
-        closeDialog({
-          restoreFocus:
-            false
-        });
-
-      } catch (error) {
-        console.error(
-          "[NEO History Menu] Delete failed:",
-          error
-        );
-
-        cancelButton.disabled =
-          false;
-
-        deleteConfirm.disabled =
-          false;
-
-        deleteConfirm.classList.remove(
-          "is-loading"
-        );
-
-        emit(
-          "neyo:history-menu-error",
-          {
-            action:
-              "delete",
-
-            conversationId,
-
-            error
-          }
-        );
-      }
-    }
-
-    cancelButton.addEventListener(
-      "click",
-      () => {
-        closeDialog();
-      }
-    );
-
-    deleteConfirm.addEventListener(
-      "click",
-      () => {
-        void confirmDelete();
-      }
-    );
-
-    overlay.addEventListener(
-      "mousedown",
-      event => {
-        if (
-          event.target ===
-          overlay
-        ) {
-          closeDialog();
-        }
-      }
-    );
-
-    requestAnimationFrame(
-      () => {
-        deleteConfirm.focus();
-      }
-    );
-
-    return true;
-  }
-
-  /* =====================================================
-     SHARE SELECTED CONVERSATION
-
-     Important:
-     A user can share a history row that is NOT currently
-     open.
-
-     Therefore do NOT blindly call shareConversation() on
-     current NeyoChat state.
-
-     Fetch selected conversation first.
-     ===================================================== */
-
-  async function shareSelectedConversation() {
-    if (
-      state.busy ||
-      !state.conversationId
-    ) {
-      return false;
-    }
-
-    const conversationId =
-      state.conversationId;
-
-    const title =
-      state.title;
-
-    setBusy(true);
-
-    try {
-      const history =
-        historyController();
-
-      let messages = null;
-
-      if (
-        history &&
-        typeof history.fetchConversation ===
-          "function"
-      ) {
-        const result =
-          await history.fetchConversation(
-            conversationId
-          );
-
-        messages =
-          Array.isArray(
-            result?.messages
-          )
-            ? result.messages
-            : [];
-      }
-
-      /*
-       * Preferred direct share API.
-       */
-
-      if (
-        window.NeyoShare &&
-        typeof window.NeyoShare
-          .shareConversation ===
-          "function"
-      ) {
-        const result =
-          await window.NeyoShare
-            .shareConversation({
-              messages:
-                messages ||
-                undefined,
-
-              title
-            });
-
-        if (result) {
-          close();
-
-          return true;
+            left =
+                anchorRect.right -
+                width;
         }
 
         /*
-         * User may simply have cancelled native share.
-         * Close menu without turning cancellation into error.
+         * If menu cannot fit below, open above.
          */
 
-        close();
-
-        return false;
-      }
-
-      /*
-       * Event fallback.
-       */
-
-      emit(
-        "neyo:conversation-share-request",
-        {
-          conversationId,
-
-          title,
-
-          messages:
-            messages ||
-            undefined
-        }
-      );
-
-      close();
-
-      return true;
-
-    } catch (error) {
-      console.error(
-        "[NEO History Menu] Share failed:",
-        error
-      );
-
-      setBusy(false);
-
-      emit(
-        "neyo:history-menu-error",
-        {
-          action:
-            "share",
-
-          conversationId,
-
-          error
-        }
-      );
-
-      return false;
-    }
-  }
-
-  /* =====================================================
-     PIN / UNPIN
-     ===================================================== */
-
-  async function togglePinned() {
-    if (
-      state.busy ||
-      !state.conversationId
-    ) {
-      return false;
-    }
-
-    const conversationId =
-      state.conversationId;
-
-    const nextPinned =
-      !state.isPinned;
-
-    setBusy(true);
-
-    try {
-      const history =
-        historyController();
-
-      if (
-        history &&
-        typeof history.setPinned ===
-          "function"
-      ) {
-        await history.setPinned(
-          conversationId,
-          nextPinned
-        );
-
-      } else {
-        emit(
-          "neyo:history-pin-request",
-          {
-            conversationId,
-
-            pinned:
-              nextPinned
-          }
-        );
-      }
-
-      state.isPinned =
-        nextPinned;
-
-      close();
-
-      return true;
-
-    } catch (error) {
-      console.error(
-        "[NEO History Menu] Pin action failed:",
-        error
-      );
-
-      setBusy(false);
-
-      emit(
-        "neyo:history-menu-error",
-        {
-          action:
-            nextPinned
-              ? "pin"
-              : "unpin",
-
-          conversationId,
-
-          error
-        }
-      );
-
-      return false;
-    }
-  }
-
-  /* =====================================================
-     ITEM ACTIVATION
-     ===================================================== */
-
-  function activateItem(
-    item
-  ) {
-    if (
-      !item ||
-      state.busy ||
-      item.getAttribute(
-        "aria-disabled"
-      ) === "true"
-    ) {
-      return false;
-    }
-
-    if (
-      item ===
-      shareButton
-    ) {
-      void shareSelectedConversation();
-
-      return true;
-    }
-
-    if (
-      item ===
-      pinButton
-    ) {
-      void togglePinned();
-
-      return true;
-    }
-
-    if (
-      item ===
-      renameButton
-    ) {
-      openRenameDialog();
-
-      return true;
-    }
-
-    if (
-      item ===
-      deleteButton
-    ) {
-      openDeleteDialog();
-
-      return true;
-    }
-
-    return false;
-  }
-
-  /* =====================================================
-     CLICK
-     ===================================================== */
-
-  menu.addEventListener(
-    "click",
-    event => {
-      const target =
-        event.target;
-
-      if (
-        !(target instanceof
-          Element)
-      ) {
-        return;
-      }
-
-      const item =
-        target.closest(
-          ".history-popup-item"
-        );
-
-      if (
-        !item ||
-        !menu.contains(item)
-      ) {
-        return;
-      }
-
-      event.preventDefault();
-
-      event.stopPropagation();
-
-      activateItem(
-        item
-      );
-    }
-  );
-
-  /* =====================================================
-     KEYBOARD
-     ===================================================== */
-
-  menu.addEventListener(
-    "keydown",
-    event => {
-      if (!state.open) {
-        return;
-      }
-
-      switch (
-        event.key
-      ) {
-        case "ArrowDown":
-          event.preventDefault();
-
-          focusRelative(1);
-
-          break;
-
-        case "ArrowUp":
-          event.preventDefault();
-
-          focusRelative(-1);
-
-          break;
-
-        case "Home":
-          event.preventDefault();
-
-          interactiveMenuItems()[0]
-            ?.focus?.();
-
-          break;
-
-        case "End": {
-          event.preventDefault();
-
-          const items =
-            interactiveMenuItems();
-
-          items[
-            items.length - 1
-          ]?.focus?.();
-
-          break;
-        }
-
-        case "Enter":
-        case " ":
-          event.preventDefault();
-
-          activateItem(
-            document.activeElement
-          );
-
-          break;
-
-        case "Escape":
-          event.preventDefault();
-
-          close();
-
-          break;
-      }
-    }
-  );
-
-  /* =====================================================
-     GLOBAL KEYBOARD
-     ===================================================== */
-
-  document.addEventListener(
-    "keydown",
-    event => {
-      if (
-        state.dialog
-      ) {
         if (
-          event.key ===
-          "Escape"
+            top +
+            height +
+            CONFIG.viewportGap >
+            window.innerHeight
         ) {
-          event.preventDefault();
-
-          closeDialog();
-
-          return;
+            top =
+                anchorRect.top -
+                height -
+                CONFIG.anchorGap;
         }
 
-        trapDialogTab(
-          event
+        left =
+            clamp(
+                left,
+                CONFIG.viewportGap,
+                Math.max(
+                    CONFIG.viewportGap,
+                    window.innerWidth -
+                    width -
+                    CONFIG.viewportGap
+                )
+            );
+
+        top =
+            clamp(
+                top,
+                CONFIG.viewportGap,
+                Math.max(
+                    CONFIG.viewportGap,
+                    window.innerHeight -
+                    height -
+                    CONFIG.viewportGap
+                )
+            );
+
+        historyPopupMenu
+            .style.top =
+            `${Math.round(top)}px`;
+
+        historyPopupMenu
+            .style.left =
+            `${Math.round(left)}px`;
+
+        return true;
+    }
+
+    /* =====================================================
+       OPEN
+       ===================================================== */
+
+    function open({
+        conversationId,
+        title = "",
+        anchorElement = null
+    } = {}) {
+        const id =
+            cleanId(
+                conversationId
+            );
+
+        if (!id) {
+            return false;
+        }
+
+        state.open =
+            true;
+
+        state.busy =
+            false;
+
+        state.conversationId =
+            id;
+
+        state.title =
+            clean(
+                title,
+                100
+            );
+
+        state.anchorElement =
+            anchorElement instanceof
+                Element
+                ? anchorElement
+                : null;
+
+        state.restoreFocusElement =
+            state.anchorElement;
+
+        setBusy(false);
+
+        historyPopupMenu
+            .classList
+            .add(
+                "show"
+            );
+
+        historyPopupMenu
+            .setAttribute(
+                "aria-hidden",
+                "false"
+            );
+
+        positionMenu();
+
+        emit(
+            "neyo:history-menu-opened",
+            {
+                conversationId:
+                    id
+            }
         );
 
-        return;
-      }
-
-      if (
-        state.open &&
-        event.key ===
-          "Escape"
-      ) {
-        event.preventDefault();
-
-        close();
-      }
-    },
-    true
-  );
-
-  /* =====================================================
-     OUTSIDE CLICK
-     ===================================================== */
-
-  document.addEventListener(
-    "pointerdown",
-    event => {
-      if (!state.open) {
-        return;
-      }
-
-      const target =
-        event.target;
-
-      if (
-        target instanceof
-          Node &&
-        menu.contains(
-          target
-        )
-      ) {
-        return;
-      }
-
-      if (
-        state.anchorElement instanceof
-          Node &&
-        state.anchorElement
-          .contains?.(
-            target
-          )
-      ) {
-        return;
-      }
-
-      close({
-        restoreFocus:
-          false
-      });
-    },
-    true
-  );
-
-  /* =====================================================
-     VIEWPORT CHANGES
-     ===================================================== */
-
-  window.addEventListener(
-    "resize",
-    () => {
-      if (state.open) {
-        positionMenu();
-      }
+        return true;
     }
-  );
 
-  window.addEventListener(
-    "scroll",
-    () => {
-      if (state.open) {
-        positionMenu();
-      }
-    },
-    true
-  );
+    /* =====================================================
+       CLOSE
+       ===================================================== */
 
-  /* =====================================================
-     HISTORY MENU REQUEST
-     ===================================================== */
+    function close({
+        restoreFocus = false
+    } = {}) {
+        if (
+            !state.open &&
+            !historyPopupMenu
+                .classList
+                .contains(
+                    "show"
+                )
+        ) {
+            return false;
+        }
 
-  window.addEventListener(
-    "neyo:history-menu-request",
-    event => {
-      open(
-        event.detail ||
-        {}
-      );
+        const previousId =
+            state.conversationId;
+
+        const focusTarget =
+            state
+                .restoreFocusElement;
+
+        state.open =
+            false;
+
+        state.busy =
+            false;
+
+        state.conversationId =
+            null;
+
+        state.title =
+            "";
+
+        state.anchorElement =
+            null;
+
+        state.restoreFocusElement =
+            null;
+
+        historyPopupMenu
+            .classList
+            .remove(
+                "show"
+            );
+
+        historyPopupMenu
+            .style.removeProperty(
+                "top"
+            );
+
+        historyPopupMenu
+            .style.removeProperty(
+                "left"
+            );
+
+        historyPopupMenu
+            .setAttribute(
+                "aria-hidden",
+                "true"
+            );
+
+        setBusy(false);
+
+        if (
+            restoreFocus &&
+            focusTarget instanceof
+                HTMLElement &&
+            focusTarget.isConnected
+        ) {
+            requestAnimationFrame(
+                () => {
+                    focusTarget.focus();
+                }
+            );
+        }
+
+        emit(
+            "neyo:history-menu-closed",
+            {
+                conversationId:
+                    previousId
+            }
+        );
+
+        return true;
     }
-  );
 
-  /* =====================================================
-     HISTORY MUTATION COMPLETION
+    /* =====================================================
+       DELETE REQUEST
 
-     If an external owner changes/deletes selected item,
-     close stale popup.
-     ===================================================== */
+       Exact old backend contract:
+       POST /api/history
+       {
+           action: "delete",
+           conversationId
+       }
+       ===================================================== */
 
-  window.addEventListener(
-    "neyo:history-deleted",
-    event => {
-      if (
-        state.conversationId &&
-        event.detail
-          ?.conversationId ===
-          state.conversationId
-      ) {
-        close({
-          restoreFocus:
-            false
+    async function deleteConversation(
+        conversationId =
+            state.conversationId
+    ) {
+        const id =
+            cleanId(
+                conversationId
+            );
+
+        if (
+            !id ||
+            state.busy
+        ) {
+            return false;
+        }
+
+        setBusy(true);
+
+        emit(
+            "neyo:history-delete-start",
+            {
+                conversationId:
+                    id
+            }
+        );
+
+        try {
+            const response =
+                await fetch(
+                    CONFIG.endpoint,
+                    {
+                        method:
+                            "POST",
+
+                        credentials:
+                            "include",
+
+                        cache:
+                            "no-store",
+
+                        headers: {
+                            "Content-Type":
+                                "application/json",
+
+                            Accept:
+                                "application/json"
+                        },
+
+                        body:
+                            JSON.stringify({
+                                action:
+                                    "delete",
+
+                                conversationId:
+                                    id
+                            })
+                    }
+                );
+
+            await readJsonResponse(
+                response
+            );
+
+            const currentId =
+                getCurrentConversationId();
+
+            /*
+             * Old neo.js behavior:
+             *
+             * Deleted current chat:
+             * startNewConversation()
+             *
+             * Deleted other chat:
+             * refresh history
+             */
+
+            if (
+                currentId &&
+                currentId === id
+            ) {
+                const newChat =
+                    newChatController();
+
+                if (
+                    newChat &&
+                    typeof newChat
+                        .request ===
+                        "function"
+                ) {
+                    newChat.request(
+                        "history-delete"
+                    );
+
+                } else {
+                    emit(
+                        "neyo:chat-new-request",
+                        {
+                            reason:
+                                "history-delete"
+                        }
+                    );
+                }
+
+            } else {
+                const history =
+                    historyController();
+
+                if (
+                    history &&
+                    typeof history
+                        .load ===
+                        "function"
+                ) {
+                    await history.load({
+                        silent:
+                            true
+                    });
+
+                } else {
+                    emit(
+                        "neyo:history-load-request",
+                        {
+                            force:
+                                true
+                        }
+                    );
+                }
+            }
+
+            /*
+             * Let history.js remove/update its state if it
+             * wants to do so without owning persistence.
+             */
+
+            emit(
+                "neyo:history-deleted",
+                {
+                    conversationId:
+                        id
+                }
+            );
+
+            emit(
+                "neyo:history-delete-complete",
+                {
+                    conversationId:
+                        id
+                }
+            );
+
+            close({
+                restoreFocus:
+                    false
+            });
+
+            return true;
+
+        } catch (error) {
+            console.error(
+                "[NEO History Menu] Delete failed:",
+                error
+            );
+
+            setBusy(false);
+
+            emit(
+                "neyo:history-menu-error",
+                {
+                    action:
+                        "delete",
+
+                    conversationId:
+                        id,
+
+                    error
+                }
+            );
+
+            emit(
+                "neyo:notification-request",
+                {
+                    type:
+                        "error",
+
+                    message:
+                        error?.message ||
+                        "Unable to delete conversation"
+                }
+            );
+
+            return false;
+        }
+    }
+
+    /* =====================================================
+       HISTORY.JS MENU REQUEST
+
+       history.js owns three-dot row button.
+       This module owns popup.
+       ===================================================== */
+
+    window.addEventListener(
+        "neyo:history-menu-request",
+        event => {
+            const detail =
+                event.detail ||
+                {};
+
+            open({
+                conversationId:
+                    detail
+                        .conversationId,
+
+                title:
+                    detail.title,
+
+                anchorElement:
+                    detail
+                        .anchorElement
+            });
+        }
+    );
+
+    /* =====================================================
+       DELETE BUTTON
+
+       Capture phase blocks old neo.js hpDeleteBtn handler
+       while neo.js remains physically loaded.
+       ===================================================== */
+
+    hpDeleteBtn?.addEventListener(
+        "click",
+        event => {
+            event.preventDefault();
+
+            event.stopPropagation();
+
+            event.stopImmediatePropagation();
+
+            void deleteConversation();
+        },
+        true
+    );
+
+    /* =====================================================
+       OUTSIDE CLICK
+
+       Exact old concept:
+       if click is outside popup and outside history action
+       button → close menu.
+       ===================================================== */
+
+    document.addEventListener(
+        "click",
+        event => {
+            if (!state.open) {
+                return;
+            }
+
+            const target =
+                event.target;
+
+            if (
+                target instanceof
+                    Node &&
+                historyPopupMenu
+                    .contains(
+                        target
+                    )
+            ) {
+                return;
+            }
+
+            if (
+                target instanceof
+                    Element &&
+                target.closest(
+                    ".history-action-btn"
+                )
+            ) {
+                return;
+            }
+
+            close({
+                restoreFocus:
+                    false
+            });
+        }
+    );
+
+    /* =====================================================
+       ESCAPE
+       ===================================================== */
+
+    document.addEventListener(
+        "keydown",
+        event => {
+            if (
+                !state.open ||
+                event.key !==
+                    "Escape"
+            ) {
+                return;
+            }
+
+            event.preventDefault();
+
+            event.stopPropagation();
+
+            close({
+                restoreFocus:
+                    true
+            });
+        },
+        true
+    );
+
+    /* =====================================================
+       VIEWPORT
+
+       Keep popup attached to its history row when viewport
+       changes.
+       ===================================================== */
+
+    window.addEventListener(
+        "resize",
+        () => {
+            if (
+                state.open
+            ) {
+                positionMenu();
+            }
+        },
+        {
+            passive:
+                true
+        }
+    );
+
+    /* =====================================================
+       SIDEBAR CLOSE
+
+       Popup should never float after drawer closes.
+       ===================================================== */
+
+    window.addEventListener(
+        "neyo:sidebar-close",
+        () => {
+            close({
+                restoreFocus:
+                    false
+            });
+        }
+    );
+
+    window.addEventListener(
+        "neyo:sidebar-state",
+        event => {
+            if (
+                event.detail
+                    ?.collapsed
+            ) {
+                close({
+                    restoreFocus:
+                        false
+                });
+            }
+        }
+    );
+
+    /* =====================================================
+       HISTORY OPEN
+       ===================================================== */
+
+    window.addEventListener(
+        "neyo:history-opened",
+        () => {
+            close({
+                restoreFocus:
+                    false
+            });
+        }
+    );
+
+    /* =====================================================
+       NEW CHAT
+       ===================================================== */
+
+    window.addEventListener(
+        "neyo:chat-new",
+        () => {
+            close({
+                restoreFocus:
+                    false
+            });
+        }
+    );
+
+    /* =====================================================
+       EXTERNAL CLOSE
+       ===================================================== */
+
+    window.addEventListener(
+        "neyo:history-menu-close-request",
+        () => {
+            close({
+                restoreFocus:
+                    false
+            });
+        }
+    );
+
+    /* =====================================================
+       PUBLIC API
+       ===================================================== */
+
+    const api =
+        Object.freeze({
+            __controller:
+                true,
+
+            version:
+                VERSION,
+
+            active:
+                true,
+
+            open,
+
+            close,
+
+            position:
+                positionMenu,
+
+            delete:
+                deleteConversation,
+
+            isOpen() {
+                return (
+                    state.open
+                );
+            },
+
+            isBusy() {
+                return (
+                    state.busy
+                );
+            },
+
+            getConversationId() {
+                return (
+                    state
+                        .conversationId ||
+                    null
+                );
+            },
+
+            getState() {
+                return {
+                    version:
+                        VERSION,
+
+                    active:
+                        true,
+
+                    open:
+                        state.open,
+
+                    busy:
+                        state.busy,
+
+                    conversationId:
+                        state
+                            .conversationId,
+
+                    title:
+                        state.title
+                };
+            }
         });
-      }
-    }
-  );
 
-  window.addEventListener(
-    "neyo:history-renamed",
-    event => {
-      if (
-        event.detail
-          ?.conversationId !==
-        state.conversationId
-      ) {
-        return;
-      }
+    Object.defineProperty(
+        window,
+        "NeyoHistoryMenu",
+        {
+            value:
+                api,
 
-      state.title =
-        clean(
-          event.detail?.title,
-          CONFIG.maxTitleLength
-        ) ||
-        state.title;
-    }
-  );
+            writable:
+                false,
 
-  window.addEventListener(
-    "neyo:history-pin-change",
-    event => {
-      if (
-        event.detail
-          ?.conversationId !==
-        state.conversationId
-      ) {
-        return;
-      }
+            configurable:
+                true,
 
-      state.isPinned =
-        Boolean(
-          event.detail
-            ?.pinned
+            enumerable:
+                true
+        }
+    );
+
+    /* =====================================================
+       INIT
+       ===================================================== */
+
+    historyPopupMenu
+        .classList
+        .remove(
+            "show"
         );
 
-      refreshLabels();
-    }
-  );
-
-  /* =====================================================
-     NEW CHAT / HISTORY OPEN
-
-     Popup should never survive navigation.
-     ===================================================== */
-
-  window.addEventListener(
-    "neyo:chat-new",
-    () => {
-      close({
-        restoreFocus:
-          false
-      });
-
-      closeDialog({
-        restoreFocus:
-          false
-      });
-    }
-  );
-
-  window.addEventListener(
-    "neyo:history-opened",
-    () => {
-      close({
-        restoreFocus:
-          false
-      });
-    }
-  );
-
-  /* =====================================================
-     PUBLIC API
-     ===================================================== */
-
-  const api =
-    Object.freeze({
-      __controller:
-        true,
-
-      version:
-        VERSION,
-
-      active:
-        true,
-
-      open,
-
-      close,
-
-      position:
-        positionMenu,
-
-      setBusy,
-
-      isOpen() {
-        return state.open;
-      },
-
-      isBusy() {
-        return state.busy;
-      },
-
-      getConversationId() {
-        return (
-          state.conversationId ||
-          null
+    historyPopupMenu
+        .setAttribute(
+            "aria-hidden",
+            "true"
         );
-      },
 
-      getState() {
-        return {
-          version:
-            VERSION,
+    setBusy(false);
 
-          active:
-            true,
+    emit(
+        "neyo:history-menu-ready",
+        {
+            version:
+                VERSION,
 
-          open:
-            state.open,
+            active:
+                true,
 
-          busy:
-            state.busy,
+            baseline:
+                "old-neo.js",
 
-          conversationId:
-            state.conversationId,
-
-          title:
-            state.title,
-
-          isPinned:
-            state.isPinned,
-
-          dialogOpen:
-            Boolean(
-              state.dialog
-            )
-        };
-      }
-    });
-
-  Object.defineProperty(
-    window,
-    "NeyoHistoryMenu",
-    {
-      value:
-        api,
-
-      writable:
-        false,
-
-      configurable:
-        true,
-
-      enumerable:
-        true
-    }
-  );
-
-  /* =====================================================
-     INIT
-     ===================================================== */
-
-  hydrateMenuAccessibility();
-
-  menu.classList.remove(
-    "show",
-    "open"
-  );
-
-  menu.style.display =
-    "none";
-
-  refreshLabels();
-
-  setBusy(false);
-
-  emit(
-    "neyo:history-menu-ready",
-    {
-      version:
-        VERSION,
-
-      active:
-        true,
-
-      keyboard:
-        true,
-
-      busyStateSafe:
-        true
-    }
-  );
+            delete:
+                Boolean(
+                    hpDeleteBtn
+                )
+        }
+    );
 })();

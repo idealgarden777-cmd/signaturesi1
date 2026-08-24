@@ -1,32 +1,31 @@
 /*
 =========================================================
 NEO — CHAT CORE
-Production v1
+Production v2 — Streaming Core
 
 Owns:
-- single conversation state
+- canonical conversation state
 - current conversation ID
-- /api/chat
-- request lifecycle
+- /api/chat transport
+- streaming response lifecycle
+- JSON fallback
 - Abort / Stop
-- message state
+- request timeout
+- user + assistant message state
 - edit user message
-- regenerate assistant turn
+- regenerate exact assistant turn
 - history conversation loading
-- model + preferences payload
+- preferences + model payload
 - attachment metadata
-- error / limit lifecycle
-- public chat events
+- rate-limit / error lifecycle
 
 Does NOT own:
 - message DOM
 - markdown rendering
-- thinking DOM
-- send button
-- Enter key
-- attachment uploads
-- sidebar/history UI
-- topbar/model-picker UI
+- Send button / Enter key
+- attachment upload
+- history sidebar UI
+- topbar / model picker UI
 =========================================================
 */
 
@@ -34,7 +33,7 @@ Does NOT own:
   "use strict";
 
   const VERSION =
-    "neo-chat-production-v1";
+    "neo-chat-production-v2-streaming";
 
   if (
     window.NeyoChat
@@ -47,15 +46,23 @@ Does NOT own:
      CONFIG
      ===================================================== */
 
-  const CONFIG = Object.freeze({
-    endpoint: "/api/chat",
+  const CONFIG =
+    Object.freeze({
+      endpoint:
+        "/api/chat",
 
-    maxHistoryMessages: 50,
-    maxAttachments: 5,
-    maxMessageLength: 50_000,
+      maxHistoryMessages:
+        50,
 
-    requestTimeoutMs: 180_000
-  });
+      maxAttachments:
+        5,
+
+      maxMessageLength:
+        50_000,
+
+      requestTimeoutMs:
+        180_000
+    });
 
   const ATTACHMENT_ONLY_PROMPT =
     "Please analyze the attached file or files.";
@@ -79,12 +86,20 @@ Does NOT own:
     0;
 
   let preferences = {
-    intelligence: "standard",
-    language: "auto",
-    personality: "neyo",
+    intelligence:
+      "standard",
 
-    privateChat: false,
-    isDeepResearch: false
+    language:
+      "auto",
+
+    personality:
+      "neyo",
+
+    privateChat:
+      false,
+
+    isDeepResearch:
+      false
   };
 
   /* =====================================================
@@ -120,29 +135,40 @@ Does NOT own:
 
   function clean(
     value,
-    max = CONFIG.maxMessageLength
+    max =
+      CONFIG.maxMessageLength
   ) {
     return String(
       value ?? ""
     )
-      .replace(/\u0000/g, "")
-      .replace(/\r\n?/g, "\n")
-      .slice(0, max)
+      .replace(
+        /\u0000/g,
+        ""
+      )
+      .replace(
+        /\r\n?/g,
+        "\n"
+      )
+      .slice(
+        0,
+        max
+      )
       .trim();
   }
 
-  function cloneSource(
-    source
+  function cloneObject(
+    value
   ) {
     if (
-      !source ||
-      typeof source !== "object"
+      !value ||
+      typeof value !==
+        "object"
     ) {
       return null;
     }
 
     return {
-      ...source
+      ...value
     };
   }
 
@@ -161,7 +187,8 @@ Does NOT own:
       .filter(
         item =>
           item &&
-          typeof item === "object"
+          typeof item ===
+            "object"
       )
       .slice(
         0,
@@ -233,7 +260,9 @@ Does NOT own:
             ) ||
             "Attached file",
 
-          mimeType: mime,
+          mimeType:
+            mime,
+
           mime,
 
           extension:
@@ -273,7 +302,7 @@ Does NOT own:
               ? item.chunks.map(
                   chunk =>
                     typeof chunk ===
-                    "object"
+                      "object"
                       ? {
                           ...chunk
                         }
@@ -310,7 +339,8 @@ Does NOT own:
   ) {
     if (
       !message ||
-      typeof message !== "object"
+      typeof message !==
+        "object"
     ) {
       return null;
     }
@@ -321,11 +351,6 @@ Does NOT own:
     ) {
       return null;
     }
-
-    const content =
-      clean(
-        message.content
-      );
 
     const normalized = {
       id:
@@ -338,16 +363,15 @@ Does NOT own:
       role:
         message.role,
 
-      content
+      content:
+        clean(
+          message.content
+        )
     };
 
-    /*
-     * displayContent allows the UI to hide internal
-     * attachment-only prompts while API content stays valid.
-     */
-
     if (
-      typeof message.displayContent ===
+      typeof message
+        .displayContent ===
       "string"
     ) {
       normalized.displayContent =
@@ -373,7 +397,9 @@ Does NOT own:
     ) {
       const sources =
         message.sources
-          .map(cloneSource)
+          .map(
+            cloneObject
+          )
           .filter(Boolean);
 
       if (sources.length) {
@@ -382,8 +408,17 @@ Does NOT own:
       }
     }
 
-    if (message.error === true) {
+    if (
+      message.error === true
+    ) {
       normalized.error =
+        true;
+    }
+
+    if (
+      message.streaming === true
+    ) {
+      normalized.streaming =
         true;
     }
 
@@ -429,7 +464,7 @@ Does NOT own:
                     ? item.chunks.map(
                         chunk =>
                           typeof chunk ===
-                          "object"
+                            "object"
                             ? {
                                 ...chunk
                               }
@@ -483,7 +518,9 @@ Does NOT own:
       );
 
     return message
-      ? cloneMessage(message)
+      ? cloneMessage(
+          message
+        )
       : null;
   }
 
@@ -531,6 +568,9 @@ Does NOT own:
 
         error:
           options.error,
+
+        streaming:
+          options.streaming,
 
         createdAt:
           options.createdAt ||
@@ -610,7 +650,8 @@ Does NOT own:
     }
 
     if (
-      typeof changes.displayContent ===
+      typeof changes
+        .displayContent ===
       "string"
     ) {
       next.displayContent =
@@ -624,14 +665,14 @@ Does NOT own:
         changes.attachments
       )
     ) {
-      const normalized =
+      const attachments =
         normalizeAttachments(
           changes.attachments
         );
 
-      if (normalized.length) {
+      if (attachments.length) {
         next.attachments =
-          normalized;
+          attachments;
       } else {
         delete next.attachments;
       }
@@ -642,10 +683,19 @@ Does NOT own:
         changes.sources
       )
     ) {
-      next.sources =
+      const sources =
         changes.sources
-          .map(cloneSource)
+          .map(
+            cloneObject
+          )
           .filter(Boolean);
+
+      if (sources.length) {
+        next.sources =
+          sources;
+      } else {
+        delete next.sources;
+      }
     }
 
     if (
@@ -654,6 +704,14 @@ Does NOT own:
     ) {
       next.error =
         changes.error;
+    }
+
+    if (
+      typeof changes.streaming ===
+      "boolean"
+    ) {
+      next.streaming =
+        changes.streaming;
     }
 
     conversation[index] =
@@ -667,11 +725,11 @@ Does NOT own:
     emit(
       "neyo:chat-message-updated",
       {
-        message:
-          publicMessage,
-
         id:
           next.id,
+
+        message:
+          publicMessage,
 
         conversation:
           getConversation()
@@ -679,7 +737,7 @@ Does NOT own:
     );
 
     /*
-     * Compatibility with existing messages.js versions.
+     * Temporary migration compatibility.
      */
 
     emit(
@@ -752,8 +810,6 @@ Does NOT own:
 
   /* =====================================================
      TRUNCATE
-
-     Used by Edit and Regenerate.
      ===================================================== */
 
   function truncateAfterIndex(
@@ -830,8 +886,6 @@ Does NOT own:
 
   /* =====================================================
      MODEL
-
-     UI itself is NOT changed here.
      ===================================================== */
 
   function getSelectedModel() {
@@ -843,7 +897,7 @@ Does NOT own:
 
       if (
         typeof selected ===
-        "string" &&
+          "string" &&
         selected.trim()
       ) {
         return selected.trim();
@@ -928,11 +982,6 @@ Does NOT own:
             toApiMessage
           ),
 
-      /*
-       * Current-turn compatibility field.
-       * Existing backend already supports it.
-       */
-
       attachments:
         normalizeAttachments(
           attachments
@@ -962,6 +1011,13 @@ Does NOT own:
           preferences.isDeepResearch
         ),
 
+      /*
+       * Backend may ignore this safely.
+       */
+
+      stream:
+        true,
+
       title:
         createTitle(
           prompt,
@@ -971,10 +1027,10 @@ Does NOT own:
   }
 
   /* =====================================================
-     RESPONSE
+     RESPONSE HELPERS
      ===================================================== */
 
-  async function readResponse(
+  async function readJsonResponse(
     response
   ) {
     const raw =
@@ -985,7 +1041,9 @@ Does NOT own:
     if (raw) {
       try {
         data =
-          JSON.parse(raw);
+          JSON.parse(
+            raw
+          );
       } catch {}
     }
 
@@ -1028,8 +1086,953 @@ Does NOT own:
 
     return typeof value ===
       "string"
+      ? value
+      : "";
+  }
+
+  function extractConversationId(
+    data
+  ) {
+    const value =
+      data?.conversationId ??
+      data?.conversation_id ??
+      data?.conversation?.id;
+
+    return typeof value ===
+      "string"
       ? value.trim()
       : "";
+  }
+
+  function extractSources(
+    data
+  ) {
+    const value =
+      data?.sources ??
+      data?.citations ??
+      data?.groundingSources ??
+      [];
+
+    return Array.isArray(
+      value
+    )
+      ? value
+          .map(
+            cloneObject
+          )
+          .filter(Boolean)
+      : [];
+  }
+
+  function extractMessageId(
+    data
+  ) {
+    return clean(
+      data?.messageId ||
+      data?.assistantMessageId ||
+      data?.message_id ||
+      "",
+      128
+    );
+  }
+
+  /* =====================================================
+     STREAM DELTA EXTRACTION
+     ===================================================== */
+
+  function extractDelta(
+    data
+  ) {
+    if (
+      typeof data ===
+      "string"
+    ) {
+      return data;
+    }
+
+    if (
+      !data ||
+      typeof data !==
+        "object"
+    ) {
+      return "";
+    }
+
+    const direct =
+      data.delta ??
+      data.token ??
+      data?.message?.delta ??
+      data?.choices?.[0]
+        ?.delta
+        ?.content;
+
+    if (
+      typeof direct ===
+      "string"
+    ) {
+      return direct;
+    }
+
+    const type =
+      String(
+        data.type ||
+        data.event ||
+        ""
+      ).toLowerCase();
+
+    if (
+      [
+        "delta",
+        "token",
+        "content",
+        "message_delta",
+        "text_delta"
+      ].includes(
+        type
+      ) &&
+      typeof data.content ===
+        "string"
+    ) {
+      return data.content;
+    }
+
+    /*
+     * Some SSE backends send one final object containing
+     * the complete reply.
+     */
+
+    const full =
+      extractReply(
+        data
+      );
+
+    return typeof full ===
+      "string"
+      ? full
+      : "";
+  }
+
+  /* =====================================================
+     STREAM WRITER
+
+     Canonical state updates are batched through RAF so
+     token streaming does not re-render Markdown hundreds
+     of times per second.
+     ===================================================== */
+
+  function createStreamWriter({
+    requestId,
+    reason,
+    userMessageId
+  }) {
+    let assistantMessage =
+      null;
+
+    let content =
+      "";
+
+    let renderedContent =
+      "";
+
+    let frame =
+      null;
+
+    let sources = [];
+
+    let started =
+      false;
+
+    function ensureMessage(
+      preferredId = null
+    ) {
+      if (assistantMessage) {
+        return assistantMessage;
+      }
+
+      assistantMessage =
+        addMessage(
+          "assistant",
+          "",
+          {
+            id:
+              preferredId ||
+              makeId(),
+
+            streaming:
+              true
+          }
+        );
+
+      return assistantMessage;
+    }
+
+    function flush() {
+      if (frame !== null) {
+        cancelAnimationFrame(
+          frame
+        );
+
+        frame =
+          null;
+      }
+
+      if (
+        !assistantMessage ||
+        renderedContent ===
+          content
+      ) {
+        return;
+      }
+
+      renderedContent =
+        content;
+
+      updateMessage(
+        assistantMessage.id,
+        {
+          content,
+          streaming:
+            true
+        }
+      );
+    }
+
+    function scheduleFlush() {
+      if (frame !== null) {
+        return;
+      }
+
+      frame =
+        requestAnimationFrame(
+          () => {
+            frame =
+              null;
+
+            flush();
+          }
+        );
+    }
+
+    function start(
+      metadata = {}
+    ) {
+      if (started) {
+        return;
+      }
+
+      started =
+        true;
+
+      emit(
+        "neyo:chat-stream-start",
+        {
+          requestId,
+          reason,
+          userMessageId,
+
+          conversationId:
+            currentConversationId,
+
+          ...metadata
+        }
+      );
+    }
+
+    function append(
+      delta,
+      metadata = {}
+    ) {
+      const value =
+        String(
+          delta ?? ""
+        );
+
+      if (!value) {
+        return;
+      }
+
+      start();
+
+      const message =
+        ensureMessage(
+          extractMessageId(
+            metadata
+          ) ||
+          null
+        );
+
+      content +=
+        value;
+
+      scheduleFlush();
+
+      emit(
+        "neyo:chat-stream-delta",
+        {
+          requestId,
+
+          messageId:
+            message.id,
+
+          delta:
+            value,
+
+          content,
+
+          reason,
+
+          userMessageId
+        }
+      );
+    }
+
+    function setSources(
+      value
+    ) {
+      if (!Array.isArray(value)) {
+        return;
+      }
+
+      sources =
+        value
+          .map(
+            cloneObject
+          )
+          .filter(Boolean);
+    }
+
+    function complete() {
+      flush();
+
+      if (
+        assistantMessage
+      ) {
+        updateMessage(
+          assistantMessage.id,
+          {
+            content,
+
+            sources,
+
+            streaming:
+              false,
+
+            error:
+              false
+          }
+        );
+      }
+
+      emit(
+        "neyo:chat-stream-end",
+        {
+          requestId,
+
+          messageId:
+            assistantMessage
+              ?.id ||
+            null,
+
+          content,
+
+          sources,
+
+          reason,
+
+          userMessageId
+        }
+      );
+
+      return {
+        message:
+          assistantMessage
+            ? getMessage(
+                assistantMessage.id
+              )
+            : null,
+
+        content,
+
+        sources,
+
+        started
+      };
+    }
+
+    function fail(
+      message
+    ) {
+      flush();
+
+      if (
+        assistantMessage
+      ) {
+        updateMessage(
+          assistantMessage.id,
+          {
+            content:
+              message,
+
+            streaming:
+              false,
+
+            error:
+              true
+          }
+        );
+
+        return getMessage(
+          assistantMessage.id
+        );
+      }
+
+      const created =
+        addMessage(
+          "assistant",
+          message,
+          {
+            error:
+              true
+          }
+        );
+
+      return created
+        ? cloneMessage(
+            created
+          )
+        : null;
+    }
+
+    function getState() {
+      return {
+        messageId:
+          assistantMessage
+            ?.id ||
+          null,
+
+        content,
+
+        sources,
+
+        started
+      };
+    }
+
+    return {
+      start,
+      append,
+      setSources,
+      complete,
+      fail,
+      getState
+    };
+  }
+
+  /* =====================================================
+     STREAM METADATA
+     ===================================================== */
+
+  function applyStreamMetadata(
+    data,
+    writer
+  ) {
+    if (
+      !data ||
+      typeof data !==
+        "object"
+    ) {
+      return;
+    }
+
+    const id =
+      extractConversationId(
+        data
+      );
+
+    if (
+      id &&
+      !preferences.privateChat
+    ) {
+      currentConversationId =
+        id;
+    }
+
+    const sources =
+      extractSources(
+        data
+      );
+
+    if (sources.length) {
+      writer.setSources(
+        sources
+      );
+    }
+  }
+
+  /* =====================================================
+     STREAM OBJECT
+     ===================================================== */
+
+  function consumeStreamObject(
+    data,
+    writer
+  ) {
+    if (
+      data === null ||
+      data === undefined
+    ) {
+      return;
+    }
+
+    applyStreamMetadata(
+      data,
+      writer
+    );
+
+    const type =
+      String(
+        data?.type ||
+        data?.event ||
+        ""
+      ).toLowerCase();
+
+    if (
+      [
+        "done",
+        "complete",
+        "completed",
+        "end",
+        "message_end"
+      ].includes(
+        type
+      )
+    ) {
+      return;
+    }
+
+    const delta =
+      extractDelta(
+        data
+      );
+
+    if (delta) {
+      /*
+       * Protect against a backend sending the accumulated
+       * full reply repeatedly rather than true deltas.
+       */
+
+      const current =
+        writer.getState()
+          .content;
+
+      if (
+        current &&
+        delta.startsWith(
+          current
+        )
+      ) {
+        const newPart =
+          delta.slice(
+            current.length
+          );
+
+        if (newPart) {
+          writer.append(
+            newPart,
+            data
+          );
+        }
+
+        return;
+      }
+
+      writer.append(
+        delta,
+        data
+      );
+    }
+  }
+
+  /* =====================================================
+     SSE PARSER
+     ===================================================== */
+
+  async function consumeSSE(
+    response,
+    writer
+  ) {
+    if (!response.body) {
+      return;
+    }
+
+    writer.start({
+      transport:
+        "sse"
+    });
+
+    const reader =
+      response.body
+        .getReader();
+
+    const decoder =
+      new TextDecoder();
+
+    let buffer =
+      "";
+
+    let dataLines = [];
+
+    function processEvent() {
+      if (!dataLines.length) {
+        return;
+      }
+
+      const payload =
+        dataLines.join(
+          "\n"
+        );
+
+      dataLines = [];
+
+      if (
+        payload.trim() ===
+        "[DONE]"
+      ) {
+        return;
+      }
+
+      try {
+        consumeStreamObject(
+          JSON.parse(
+            payload
+          ),
+          writer
+        );
+
+      } catch {
+        writer.append(
+          payload
+        );
+      }
+    }
+
+    while (true) {
+      const {
+        done,
+        value
+      } =
+        await reader.read();
+
+      if (done) {
+        break;
+      }
+
+      buffer +=
+        decoder.decode(
+          value,
+          {
+            stream:
+              true
+          }
+        );
+
+      const lines =
+        buffer.split(
+          /\r?\n/
+        );
+
+      buffer =
+        lines.pop() ||
+        "";
+
+      for (
+        const line
+        of lines
+      ) {
+        if (line === "") {
+          processEvent();
+          continue;
+        }
+
+        if (
+          line.startsWith(
+            ":"
+          )
+        ) {
+          continue;
+        }
+
+        if (
+          line.startsWith(
+            "data:"
+          )
+        ) {
+          dataLines.push(
+            line
+              .slice(5)
+              .trimStart()
+          );
+        }
+      }
+    }
+
+    buffer +=
+      decoder.decode();
+
+    if (buffer) {
+      if (
+        buffer.startsWith(
+          "data:"
+        )
+      ) {
+        dataLines.push(
+          buffer
+            .slice(5)
+            .trimStart()
+        );
+      } else {
+        dataLines.push(
+          buffer
+        );
+      }
+    }
+
+    processEvent();
+  }
+
+  /* =====================================================
+     NDJSON PARSER
+     ===================================================== */
+
+  async function consumeNDJSON(
+    response,
+    writer
+  ) {
+    if (!response.body) {
+      return;
+    }
+
+    writer.start({
+      transport:
+        "ndjson"
+    });
+
+    const reader =
+      response.body
+        .getReader();
+
+    const decoder =
+      new TextDecoder();
+
+    let buffer =
+      "";
+
+    while (true) {
+      const {
+        done,
+        value
+      } =
+        await reader.read();
+
+      if (done) {
+        break;
+      }
+
+      buffer +=
+        decoder.decode(
+          value,
+          {
+            stream:
+              true
+          }
+        );
+
+      const lines =
+        buffer.split(
+          /\r?\n/
+        );
+
+      buffer =
+        lines.pop() ||
+        "";
+
+      for (
+        const line
+        of lines
+      ) {
+        const value =
+          line.trim();
+
+        if (
+          !value ||
+          value ===
+            "[DONE]"
+        ) {
+          continue;
+        }
+
+        try {
+          consumeStreamObject(
+            JSON.parse(
+              value
+            ),
+            writer
+          );
+
+        } catch {
+          writer.append(
+            value
+          );
+        }
+      }
+    }
+
+    buffer +=
+      decoder.decode();
+
+    const finalLine =
+      buffer.trim();
+
+    if (
+      finalLine &&
+      finalLine !==
+        "[DONE]"
+    ) {
+      try {
+        consumeStreamObject(
+          JSON.parse(
+            finalLine
+          ),
+          writer
+        );
+
+      } catch {
+        writer.append(
+          finalLine
+        );
+      }
+    }
+  }
+
+  /* =====================================================
+     TEXT STREAM
+     ===================================================== */
+
+  async function consumeTextStream(
+    response,
+    writer
+  ) {
+    if (!response.body) {
+      return;
+    }
+
+    writer.start({
+      transport:
+        "text"
+    });
+
+    const reader =
+      response.body
+        .getReader();
+
+    const decoder =
+      new TextDecoder();
+
+    while (true) {
+      const {
+        done,
+        value
+      } =
+        await reader.read();
+
+      if (done) {
+        break;
+      }
+
+      const delta =
+        decoder.decode(
+          value,
+          {
+            stream:
+              true
+          }
+        );
+
+      if (delta) {
+        writer.append(
+          delta
+        );
+      }
+    }
+
+    const tail =
+      decoder.decode();
+
+    if (tail) {
+      writer.append(
+        tail
+      );
+    }
+  }
+
+  /* =====================================================
+     TRANSPORT DETECTION
+     ===================================================== */
+
+  function responseType(
+    response
+  ) {
+    const type =
+      String(
+        response.headers
+          .get(
+            "content-type"
+          ) ||
+        ""
+      ).toLowerCase();
+
+    if (
+      type.includes(
+        "text/event-stream"
+      )
+    ) {
+      return "sse";
+    }
+
+    if (
+      type.includes(
+        "application/x-ndjson"
+      ) ||
+      type.includes(
+        "application/ndjson"
+      ) ||
+      type.includes(
+        "jsonlines"
+      )
+    ) {
+      return "ndjson";
+    }
+
+    if (
+      type.includes(
+        "application/json"
+      )
+    ) {
+      return "json";
+    }
+
+    if (
+      type.includes(
+        "text/plain"
+      ) &&
+      response.body
+    ) {
+      return "text";
+    }
+
+    return response.body
+      ? "text"
+      : "json";
   }
 
   /* =====================================================
@@ -1040,7 +2043,12 @@ Does NOT own:
     reason =
       "user"
   ) {
-    if (!activeController) {
+    if (
+      !activeController ||
+      activeController
+        .signal
+        .aborted
+    ) {
       return false;
     }
 
@@ -1056,6 +2064,7 @@ Does NOT own:
         activeController.abort();
 
         return true;
+
       } catch {
         return false;
       }
@@ -1070,16 +2079,17 @@ Does NOT own:
     error
   ) {
     if (
-      error?.status === 401
+      error?.status ===
+      401
     ) {
       return (
-        "Your session has expired. " +
-        "Please sign in again."
+        "Your session has expired. Please sign in again."
       );
     }
 
     if (
-      error?.status === 413
+      error?.status ===
+      413
     ) {
       return (
         "This request is too large."
@@ -1087,7 +2097,8 @@ Does NOT own:
     }
 
     if (
-      error?.status === 429
+      error?.status ===
+      429
     ) {
       return (
         "You've reached the current usage limit."
@@ -1095,8 +2106,9 @@ Does NOT own:
     }
 
     if (
-      Number(error?.status) >=
-      500
+      Number(
+        error?.status
+      ) >= 500
     ) {
       return (
         "NEO is temporarily unavailable. Please try again."
@@ -1114,14 +2126,6 @@ Does NOT own:
 
   /* =====================================================
      GENERATION CORE
-
-     Expects the current user turn to ALREADY exist in
-     conversation.
-
-     Used by:
-     - normal Send
-     - Regenerate
-     - Edit + regenerate
      ===================================================== */
 
   async function generate({
@@ -1158,6 +2162,13 @@ Does NOT own:
         attachments
       );
 
+    const writer =
+      createStreamWriter({
+        requestId,
+        reason,
+        userMessageId
+      });
+
     emit(
       "neyo:chat-send-start",
       {
@@ -1185,18 +2196,25 @@ Does NOT own:
       }
     );
 
-    let timeout = null;
+    let timeout =
+      null;
 
     try {
       timeout =
         window.setTimeout(
           () => {
-            try {
-              controller.abort(
-                "timeout"
-              );
-            } catch {
-              controller.abort();
+            if (
+              !controller
+                .signal
+                .aborted
+            ) {
+              try {
+                controller.abort(
+                  "timeout"
+                );
+              } catch {
+                controller.abort();
+              }
             }
           },
           CONFIG.requestTimeoutMs
@@ -1213,7 +2231,8 @@ Does NOT own:
         await fetch(
           CONFIG.endpoint,
           {
-            method: "POST",
+            method:
+              "POST",
 
             credentials:
               "include",
@@ -1226,7 +2245,7 @@ Does NOT own:
                 "application/json",
 
               Accept:
-                "application/json",
+                "text/event-stream, application/x-ndjson, application/json, text/plain",
 
               "X-Neyo-Chat-Client":
                 VERSION
@@ -1247,20 +2266,23 @@ Does NOT own:
          =============================================== */
 
       if (
-        response.status === 429
+        response.status ===
+        429
       ) {
-        const data =
-          await response
-            .json()
-            .catch(
-              () => ({})
-            );
+        let data = {};
+
+        try {
+          data =
+            await response
+              .json();
+        } catch {}
 
         emit(
           "neyo:chat-limit-reached",
           {
             requestId,
             data,
+
             conversationId:
               currentConversationId
           }
@@ -1269,14 +2291,184 @@ Does NOT own:
         return null;
       }
 
-      const data =
-        await readResponse(
+      /* ===============================================
+         OTHER HTTP ERRORS
+         =============================================== */
+
+      if (!response.ok) {
+        await readJsonResponse(
           response
         );
 
-      /*
-       * New chat/history load may invalidate this request.
-       */
+        return null;
+      }
+
+      const transport =
+        responseType(
+          response
+        );
+
+      let reply =
+        "";
+
+      let sources = [];
+
+      let assistantMessage =
+        null;
+
+      /* ===============================================
+         NORMAL JSON FALLBACK
+         =============================================== */
+
+      if (
+        transport ===
+        "json"
+      ) {
+        const data =
+          await readJsonResponse(
+            response
+          );
+
+        if (
+          requestId !==
+          activeRequestId
+        ) {
+          return null;
+        }
+
+        const id =
+          extractConversationId(
+            data
+          );
+
+        if (
+          id &&
+          !preferences.privateChat
+        ) {
+          currentConversationId =
+            id;
+        }
+
+        reply =
+          extractReply(
+            data
+          );
+
+        sources =
+          extractSources(
+            data
+          );
+
+        if (!reply.trim()) {
+          throw new Error(
+            "The AI response was empty."
+          );
+        }
+
+        const created =
+          addMessage(
+            "assistant",
+            reply,
+            {
+              id:
+                extractMessageId(
+                  data
+                ) ||
+                undefined,
+
+              sources,
+
+              streaming:
+                false
+            }
+          );
+
+        assistantMessage =
+          created
+            ? cloneMessage(
+                created
+              )
+            : null;
+      }
+
+      /* ===============================================
+         SSE
+         =============================================== */
+
+      else if (
+        transport ===
+        "sse"
+      ) {
+        await consumeSSE(
+          response,
+          writer
+        );
+
+        const completed =
+          writer.complete();
+
+        reply =
+          completed.content;
+
+        sources =
+          completed.sources;
+
+        assistantMessage =
+          completed.message;
+      }
+
+      /* ===============================================
+         NDJSON
+         =============================================== */
+
+      else if (
+        transport ===
+        "ndjson"
+      ) {
+        await consumeNDJSON(
+          response,
+          writer
+        );
+
+        const completed =
+          writer.complete();
+
+        reply =
+          completed.content;
+
+        sources =
+          completed.sources;
+
+        assistantMessage =
+          completed.message;
+      }
+
+      /* ===============================================
+         PLAIN TEXT STREAM
+         =============================================== */
+
+      else {
+        await consumeTextStream(
+          response,
+          writer
+        );
+
+        const completed =
+          writer.complete();
+
+        reply =
+          completed.content;
+
+        sources =
+          completed.sources;
+
+        assistantMessage =
+          completed.message;
+      }
+
+      /* ===============================================
+         STALE REQUEST CHECK
+         =============================================== */
 
       if (
         requestId !==
@@ -1285,59 +2477,11 @@ Does NOT own:
         return null;
       }
 
-      const reply =
-        extractReply(
-          data
-        );
-
-      if (!reply) {
+      if (!reply.trim()) {
         throw new Error(
           "The AI response was empty."
         );
       }
-
-      /* ===============================================
-         CONVERSATION ID
-         =============================================== */
-
-      if (
-        !preferences.privateChat &&
-        typeof data
-          ?.conversationId ===
-          "string" &&
-        data.conversationId.trim()
-      ) {
-        currentConversationId =
-          data.conversationId
-            .trim();
-      }
-
-      /* ===============================================
-         ASSISTANT
-         =============================================== */
-
-      const sources =
-        Array.isArray(
-          data?.sources
-        )
-          ? data.sources
-              .map(cloneSource)
-              .filter(Boolean)
-          : [];
-
-      const assistantMessage =
-        addMessage(
-          "assistant",
-          reply,
-          {
-            id:
-              data?.messageId ||
-              data?.assistantMessageId ||
-              undefined,
-
-            sources
-          }
-        );
 
       const result = {
         requestId,
@@ -1347,11 +2491,7 @@ Does NOT own:
         sources,
 
         message:
-          assistantMessage
-            ? cloneMessage(
-                assistantMessage
-              )
-            : null,
+          assistantMessage,
 
         userMessageId,
 
@@ -1360,20 +2500,16 @@ Does NOT own:
 
         privateChat:
           Boolean(
-            preferences.privateChat ||
-            data?.privateChat
+            preferences.privateChat
           ),
 
-        usedUrlContext:
-          Boolean(
-            data?.usedUrlContext
-          ),
+        reason,
 
-        creditType:
-          data?.creditType ||
-          null,
+        streamed:
+          transport !==
+          "json",
 
-        reason
+        transport
       };
 
       emit(
@@ -1399,10 +2535,43 @@ Does NOT own:
       return result;
 
     } catch (error) {
+      /*
+       * Robust abort detection.
+       *
+       * Custom AbortController reasons are not guaranteed
+       * to surface as DOMException("AbortError").
+       */
+
       if (
+        controller.signal.aborted ||
         error?.name ===
-        "AbortError"
+          "AbortError"
       ) {
+        const partial =
+          writer.getState();
+
+        /*
+         * Keep partial response when user presses Stop.
+         */
+
+        if (
+          partial.messageId
+        ) {
+          updateMessage(
+            partial.messageId,
+            {
+              content:
+                partial.content,
+
+              sources:
+                partial.sources,
+
+              streaming:
+                false
+            }
+          );
+        }
+
         emit(
           "neyo:chat-aborted",
           {
@@ -1411,7 +2580,16 @@ Does NOT own:
             conversationId:
               currentConversationId,
 
-            reason
+            reason:
+              controller.signal
+                .reason ||
+              reason,
+
+            partial:
+              partial.content,
+
+            messageId:
+              partial.messageId
           }
         );
 
@@ -1428,13 +2606,12 @@ Does NOT own:
           error
         );
 
+      const errorText =
+        `⚠️ ${text}`;
+
       const errorMessage =
-        addMessage(
-          "assistant",
-          `⚠️ ${text}`,
-          {
-            error: true
-          }
+        writer.fail(
+          errorText
         );
 
       emit(
@@ -1445,11 +2622,7 @@ Does NOT own:
           error,
 
           message:
-            errorMessage
-              ? cloneMessage(
-                  errorMessage
-                )
-              : null,
+            errorMessage,
 
           conversationId:
             currentConversationId,
@@ -1461,15 +2634,14 @@ Does NOT own:
       return null;
 
     } finally {
-      if (timeout !== null) {
+      if (
+        timeout !==
+        null
+      ) {
         window.clearTimeout(
           timeout
         );
       }
-
-      /*
-       * Only currently-valid request may close generation.
-       */
 
       if (
         requestId ===
@@ -1492,6 +2664,8 @@ Does NOT own:
             reason
           }
         );
+
+        emitState();
       }
     }
   }
@@ -1524,7 +2698,8 @@ Does NOT own:
 
     if (
       !visibleText &&
-      readyAttachments.length === 0
+      readyAttachments.length ===
+        0
     ) {
       return null;
     }
@@ -1532,10 +2707,6 @@ Does NOT own:
     const apiContent =
       visibleText ||
       ATTACHMENT_ONLY_PROMPT;
-
-    /*
-     * User message enters canonical state before network.
-     */
 
     const userMessage =
       addMessage(
@@ -1571,15 +2742,6 @@ Does NOT own:
 
   /* =====================================================
      REGENERATE
-
-     Regenerate the clicked assistant turn, not blindly
-     "the last message".
-
-     Conversation becomes:
-       ... preceding context
-       target user message
-
-     Then the canonical generator runs again.
      ===================================================== */
 
   async function regenerate({
@@ -1610,10 +2772,13 @@ Does NOT own:
      * Compatibility fallback.
      */
 
-    if (assistantIndex < 0) {
+    if (
+      assistantIndex < 0
+    ) {
       for (
         let index =
-          conversation.length - 1;
+          conversation.length -
+          1;
         index >= 0;
         index -= 1
       ) {
@@ -1630,11 +2795,14 @@ Does NOT own:
       }
     }
 
-    if (assistantIndex < 0) {
+    if (
+      assistantIndex < 0
+    ) {
       return null;
     }
 
-    let userIndex = -1;
+    let userIndex =
+      -1;
 
     for (
       let index =
@@ -1654,17 +2822,18 @@ Does NOT own:
       }
     }
 
-    if (userIndex < 0) {
+    if (
+      userIndex < 0
+    ) {
       return null;
     }
 
     const userMessage =
-      conversation[userIndex];
-
-    /*
-     * Remove old assistant response and anything after
-     * the target user turn.
-     */
+      cloneMessage(
+        conversation[
+          userIndex
+        ]
+      );
 
     truncateAfterIndex(
       userIndex
@@ -1714,11 +2883,6 @@ Does NOT own:
 
   /* =====================================================
      EDIT USER MESSAGE
-
-     Attachments are preserved unless explicitly supplied.
-
-     This operation owns canonical conversation mutation.
-     message-edit.js owns only the editor UI.
      ===================================================== */
 
   async function editUserMessage(
@@ -1726,7 +2890,8 @@ Does NOT own:
     text,
     {
       attachments,
-      regenerateResponse = true
+      regenerateResponse =
+        true
     } = {}
   ) {
     if (generating) {
@@ -1773,7 +2938,8 @@ Does NOT own:
 
     if (
       !visibleText &&
-      nextAttachments.length === 0
+      nextAttachments.length ===
+        0
     ) {
       return null;
     }
@@ -1803,10 +2969,6 @@ Does NOT own:
     if (!updated) {
       return null;
     }
-
-    /*
-     * Old responses after edited user turn are invalid.
-     */
 
     truncateAfterIndex(
       index
@@ -1857,10 +3019,11 @@ Does NOT own:
 
   function newConversation() {
     /*
-     * Invalidate request BEFORE abort.
+     * Invalidate response BEFORE abort.
      */
 
-    activeRequestId += 1;
+    activeRequestId +=
+      1;
 
     stop(
       "new-chat"
@@ -1885,26 +3048,12 @@ Does NOT own:
     emit(
       "neyo:chat-new",
       {
-        conversation: []
+        conversation:
+          []
       }
     );
 
-    emit(
-      "neyo:chat-state",
-      {
-        conversationId:
-          null,
-
-        messages: [],
-
-        generating:
-          false,
-
-        preferences: {
-          ...preferences
-        }
-      }
-    );
+    emitState();
 
     emit(
       "neyo:chat-send-end",
@@ -1928,11 +3077,8 @@ Does NOT own:
     conversationId,
     messages = []
   } = {}) {
-    /*
-     * Invalidate old generation.
-     */
-
-    activeRequestId += 1;
+    activeRequestId +=
+      1;
 
     stop(
       "history-load"
@@ -1965,10 +3111,6 @@ Does NOT own:
                 .maxHistoryMessages
             )
         : [];
-
-    /*
-     * messages.js owns DOM.
-     */
 
     emit(
       "neyo:messages-clear"
@@ -2006,23 +3148,7 @@ Does NOT own:
       }
     );
 
-    emit(
-      "neyo:chat-state",
-      {
-        conversationId:
-          currentConversationId,
-
-        messages:
-          getConversation(),
-
-        generating:
-          false,
-
-        preferences: {
-          ...preferences
-        }
-      }
-    );
+    emitState();
 
     emit(
       "neyo:chat-send-end",
@@ -2047,7 +3173,8 @@ Does NOT own:
   ) {
     if (
       !values ||
-      typeof values !== "object"
+      typeof values !==
+        "object"
     ) {
       return false;
     }
@@ -2057,7 +3184,8 @@ Does NOT own:
     };
 
     if (
-      typeof values.intelligence ===
+      typeof values
+        .intelligence ===
       "string"
     ) {
       next.intelligence =
@@ -2089,7 +3217,8 @@ Does NOT own:
     }
 
     if (
-      typeof values.isDeepResearch ===
+      typeof values
+        .isDeepResearch ===
       "boolean"
     ) {
       next.isDeepResearch =
@@ -2108,11 +3237,13 @@ Does NOT own:
       }
     );
 
+    emitState();
+
     return true;
   }
 
   /* =====================================================
-     STATE EMISSION
+     STATE
      ===================================================== */
 
   function emitState() {
@@ -2161,7 +3292,8 @@ Does NOT own:
     "neyo:chat-stop-request",
     event => {
       stop(
-        event.detail?.reason ||
+        event.detail
+          ?.reason ||
         "event"
       );
     }
@@ -2223,7 +3355,7 @@ Does NOT own:
   );
 
   /* =====================================================
-     STATE SYNC REQUEST
+     STATE SYNC
      ===================================================== */
 
   window.addEventListener(
@@ -2237,10 +3369,14 @@ Does NOT own:
 
   const api =
     Object.freeze({
-      __controller: true,
-      version: VERSION,
+      __controller:
+        true,
 
-      active: true,
+      version:
+        VERSION,
+
+      active:
+        true,
 
       /*
        * Generation
@@ -2250,6 +3386,7 @@ Does NOT own:
       stop,
 
       regenerate,
+
       editUserMessage,
 
       /*
@@ -2257,6 +3394,7 @@ Does NOT own:
        */
 
       newConversation,
+
       loadConversation,
 
       /*
@@ -2264,10 +3402,13 @@ Does NOT own:
        */
 
       addMessage,
+
       updateMessage,
+
       removeMessage,
 
       getMessage,
+
       getConversation,
 
       /*
@@ -2275,7 +3416,9 @@ Does NOT own:
        */
 
       getConversationId() {
-        return currentConversationId;
+        return (
+          currentConversationId
+        );
       },
 
       setConversationId(
@@ -2306,7 +3449,7 @@ Does NOT own:
       },
 
       /*
-       * Generation state
+       * Generation
        */
 
       isGenerating() {
@@ -2326,6 +3469,9 @@ Does NOT own:
             true,
 
           generating,
+
+          streaming:
+            generating,
 
           conversationId:
             currentConversationId,
@@ -2350,10 +3496,17 @@ Does NOT own:
     window,
     "NeyoChat",
     {
-      value: api,
-      writable: false,
-      configurable: true,
-      enumerable: true
+      value:
+        api,
+
+      writable:
+        false,
+
+      configurable:
+        true,
+
+      enumerable:
+        true
     }
   );
 
@@ -2364,9 +3517,23 @@ Does NOT own:
   emit(
     "neyo:chat-ready",
     {
-      version: VERSION,
+      version:
+        VERSION,
 
-      active: true,
+      active:
+        true,
+
+      streaming:
+        true,
+
+      streamingProtocols: [
+        "text/event-stream",
+        "application/x-ndjson",
+        "text/plain"
+      ],
+
+      jsonFallback:
+        true,
 
       singleConversationOwner:
         true,
@@ -2381,4 +3548,6 @@ Does NOT own:
         true
     }
   );
+
+  emitState();
 })();

@@ -1,7 +1,7 @@
 /*
 =========================================================
 NEO — HISTORY MENU
-Production v1
+Production v2
 
 Owns:
 - history three-dot popup UI
@@ -13,6 +13,7 @@ Owns:
 - Delete confirmation dialog UI
 - focus restoration
 - outside-click / Escape close
+- stable busy-state handling
 
 Does NOT own:
 - /api/history
@@ -29,7 +30,7 @@ Does NOT own:
   "use strict";
 
   const VERSION =
-    "neo-history-menu-production-v1";
+    "neo-history-menu-production-v2";
 
   if (
     window.NeyoHistoryMenu
@@ -87,17 +88,16 @@ Does NOT own:
     pinned: false,
 
     anchorElement: null,
+    lastFocusedElement: null,
 
     renameDialog: null,
     deleteDialog: null,
-
-    lastFocusedElement: null,
 
     busyAction: null
   };
 
   /* =====================================================
-     HELPERS
+     EVENTS
      ===================================================== */
 
   function emit(
@@ -112,6 +112,10 @@ Does NOT own:
     );
   }
 
+  /* =====================================================
+     HELPERS
+     ===================================================== */
+
   function clean(
     value,
     max = 220
@@ -119,10 +123,7 @@ Does NOT own:
     return String(
       value ?? ""
     )
-      .replace(
-        /\u0000/g,
-        ""
-      )
+      .replace(/\u0000/g, "")
       .trim()
       .slice(
         0,
@@ -153,8 +154,7 @@ Does NOT own:
 
     return (
       controller &&
-      controller.__controller ===
-        true
+      controller.__controller === true
     )
       ? controller
       : null;
@@ -166,18 +166,46 @@ Does NOT own:
 
     return (
       controller &&
-      controller.__controller ===
-        true
+      controller.__controller === true
     )
       ? controller
       : null;
   }
 
   /* =====================================================
-     NORMALIZE EXISTING MENU ITEMS
+     MENU ITEMS
 
-     Existing HTML uses divs.
-     Make them keyboard-accessible without redesign.
+     Important:
+     allMenuItems() ALWAYS returns every existing item.
+
+     interactiveMenuItems() returns only items that are
+     currently enabled for keyboard navigation.
+
+     This fixes the old permanent-disabled bug.
+     ===================================================== */
+
+  function allMenuItems() {
+    return [
+      shareButton,
+      pinButton,
+      renameButton,
+      deleteButton
+    ].filter(Boolean);
+  }
+
+  function interactiveMenuItems() {
+    return allMenuItems()
+      .filter(
+        element =>
+          !element.hidden &&
+          element.getAttribute(
+            "aria-disabled"
+          ) !== "true"
+      );
+  }
+
+  /* =====================================================
+     PREPARE EXISTING HTML
      ===================================================== */
 
   function prepareMenuItem(
@@ -196,6 +224,11 @@ Does NOT own:
       "tabindex",
       "-1"
     );
+
+    element.setAttribute(
+      "aria-disabled",
+      "false"
+    );
   }
 
   menu.setAttribute(
@@ -208,39 +241,12 @@ Does NOT own:
     "true"
   );
 
-  prepareMenuItem(
-    shareButton
-  );
-
-  prepareMenuItem(
-    pinButton
-  );
-
-  prepareMenuItem(
-    renameButton
-  );
-
-  prepareMenuItem(
-    deleteButton
-  );
-
-  /* =====================================================
-     MENU ITEMS
-     ===================================================== */
-
-  function menuItems() {
-    return [
-      shareButton,
-      pinButton,
-      renameButton,
-      deleteButton
-    ].filter(
-      element =>
-        element &&
-        !element.hidden &&
-        element.getAttribute(
-          "aria-disabled"
-        ) !== "true"
+  for (
+    const element
+    of allMenuItems()
+  ) {
+    prepareMenuItem(
+      element
     );
   }
 
@@ -267,10 +273,6 @@ Does NOT own:
       "data-tooltip",
       `${label} conversation`
     );
-
-    /*
-     * Preserve existing icon + text structure.
-     */
 
     pinButton.replaceChildren();
 
@@ -314,11 +316,6 @@ Does NOT own:
      ===================================================== */
 
   function menuSize() {
-    /*
-     * Popup may currently be display:none.
-     * Temporarily reveal invisibly for measurement.
-     */
-
     const wasOpen =
       menu.classList.contains(
         "show"
@@ -327,6 +324,9 @@ Does NOT own:
     if (!wasOpen) {
       menu.style.visibility =
         "hidden";
+
+      menu.style.display =
+        "";
 
       menu.classList.add(
         "show"
@@ -343,6 +343,9 @@ Does NOT own:
 
       menu.style.visibility =
         "";
+
+      menu.style.display =
+        "none";
     }
 
     return {
@@ -398,7 +401,7 @@ Does NOT own:
       margin;
 
     /* -----------------------------------------------
-       Right-click coordinates
+       RIGHT CLICK
        ----------------------------------------------- */
 
     if (
@@ -417,7 +420,7 @@ Does NOT own:
     }
 
     /* -----------------------------------------------
-       Three-dot anchor
+       ANCHOR BUTTON
        ----------------------------------------------- */
 
     else if (
@@ -428,11 +431,6 @@ Does NOT own:
         anchorElement
           .getBoundingClientRect();
 
-      /*
-       * Prefer opening to the right/below the button,
-       * then clamp inside viewport.
-       */
-
       left =
         rect.right -
         size.width;
@@ -440,11 +438,6 @@ Does NOT own:
       top =
         rect.bottom +
         gap;
-
-      /*
-       * If bottom space is insufficient,
-       * open above.
-       */
 
       if (
         top +
@@ -478,10 +471,68 @@ Does NOT own:
       );
 
     menu.style.left =
-      `${Math.round(left)}px`;
+      `${Math.round(
+        left
+      )}px`;
 
     menu.style.top =
-      `${Math.round(top)}px`;
+      `${Math.round(
+        top
+      )}px`;
+  }
+
+  /* =====================================================
+     BUSY STATE
+
+     FIXED:
+     We always enable/disable ALL menu items instead of
+     querying only currently-enabled items.
+     ===================================================== */
+
+  function setBusy(
+    action,
+    busy
+  ) {
+    state.busyAction =
+      busy
+        ? action
+        : null;
+
+    for (
+      const element
+      of allMenuItems()
+    ) {
+      const disabled =
+        Boolean(
+          busy
+        );
+
+      element.setAttribute(
+        "aria-disabled",
+        String(
+          disabled
+        )
+      );
+
+      element.classList.toggle(
+        "is-disabled",
+        disabled
+      );
+
+      element.tabIndex =
+        disabled
+          ? -1
+          : -1;
+    }
+
+    menu.classList.toggle(
+      "is-busy",
+      Boolean(
+        busy
+      )
+    );
+
+    return true;
   }
 
   /* =====================================================
@@ -500,6 +551,15 @@ Does NOT own:
     if (!id) {
       return false;
     }
+
+    /*
+     * Ensure menu never re-opens in stale busy state.
+     */
+
+    setBusy(
+      null,
+      false
+    );
 
     const stored =
       history()
@@ -550,12 +610,12 @@ Does NOT own:
         detail.clientY
     });
 
+    menu.style.display =
+      "";
+
     menu.classList.add(
       "show"
     );
-
-    menu.style.display =
-      "";
 
     menu.setAttribute(
       "aria-hidden",
@@ -577,7 +637,7 @@ Does NOT own:
 
     requestAnimationFrame(
       () => {
-        menuItems()[0]
+        interactiveMenuItems()[0]
           ?.focus();
       }
     );
@@ -673,52 +733,7 @@ Does NOT own:
   }
 
   /* =====================================================
-     BUSY
-     ===================================================== */
-
-  function setBusy(
-    action,
-    busy
-  ) {
-    state.busyAction =
-      busy
-        ? action
-        : null;
-
-    const elements =
-      menuItems();
-
-    for (
-      const element
-      of elements
-    ) {
-      const disabled =
-        Boolean(busy);
-
-      element.setAttribute(
-        "aria-disabled",
-        String(
-          disabled
-        )
-      );
-
-      element.classList.toggle(
-        "is-disabled",
-        disabled
-      );
-    }
-
-    menu.classList.toggle(
-      "is-busy",
-      Boolean(busy)
-    );
-  }
-
-  /* =====================================================
      SHARE
-
-     share.js owns actual share behavior.
-     history.js provides conversation data.
      ===================================================== */
 
   async function shareConversation() {
@@ -734,6 +749,9 @@ Does NOT own:
 
     const shareController =
       share();
+
+    const historyController =
+      history();
 
     if (
       !shareController ||
@@ -758,6 +776,24 @@ Does NOT own:
       return false;
     }
 
+    if (!historyController) {
+      emit(
+        "neyo:history-menu-error",
+        {
+          conversationId:
+            id,
+
+          action:
+            "share",
+
+          reason:
+            "history-controller-unavailable"
+        }
+      );
+
+      return false;
+    }
+
     setBusy(
       "share",
       true
@@ -767,13 +803,13 @@ Does NOT own:
       let messages = [];
 
       /*
-       * Active conversation can use current chat state
-       * without another server request.
+       * Active conversation:
+       * use current canonical chat state.
        */
 
       if (
-        history()
-          ?.getActive
+        historyController
+          .getActive
           ?.() === id &&
         window.NeyoChat
           ?.getConversationId
@@ -787,14 +823,14 @@ Does NOT own:
       }
 
       /*
-       * Sharing another conversation from sidebar:
-       * fetch it without opening/mutating current chat.
+       * Non-active conversation:
+       * fetch without opening it.
        */
 
       if (!messages.length) {
         const result =
-          await history()
-            ?.fetchConversation
+          await historyController
+            .fetchConversation
             ?.(id);
 
         messages =
@@ -806,6 +842,20 @@ Does NOT own:
       }
 
       if (!messages.length) {
+        emit(
+          "neyo:history-menu-error",
+          {
+            conversationId:
+              id,
+
+            action:
+              "share",
+
+            reason:
+              "conversation-empty"
+          }
+        );
+
         return false;
       }
 
@@ -839,8 +889,13 @@ Does NOT own:
       return false;
 
     } finally {
+      /*
+       * Critical:
+       * re-enable ALL items before closing.
+       */
+
       setBusy(
-        "share",
+        null,
         false
       );
 
@@ -853,8 +908,6 @@ Does NOT own:
 
   /* =====================================================
      PIN / UNPIN
-
-     Persistence belongs to history.js.
      ===================================================== */
 
   function togglePinned() {
@@ -891,7 +944,7 @@ Does NOT own:
   }
 
   /* =====================================================
-     DIALOG HELPERS
+     DIALOG SHELL
      ===================================================== */
 
   function createDialogShell({
@@ -911,11 +964,6 @@ Does NOT own:
       ariaLabel
     );
 
-    /*
-     * Prevent default Escape closing from bypassing
-     * our cleanup.
-     */
-
     dialog.addEventListener(
       "cancel",
       event => {
@@ -930,11 +978,6 @@ Does NOT own:
     dialog.addEventListener(
       "click",
       event => {
-        /*
-         * Native dialog backdrop click:
-         * click target === dialog.
-         */
-
         if (
           event.target ===
           dialog
@@ -962,7 +1005,8 @@ Does NOT own:
 
     try {
       if (
-        typeof dialog.showModal ===
+        typeof dialog
+          .showModal ===
         "function"
       ) {
         dialog.showModal();
@@ -996,12 +1040,11 @@ Does NOT own:
     try {
       if (
         typeof dialog.close ===
-        "function" &&
+          "function" &&
         dialog.open
       ) {
         dialog.close();
       }
-
     } catch {}
 
     dialog.remove();
@@ -1026,9 +1069,7 @@ Does NOT own:
   }
 
   /* =====================================================
-     RENAME DIALOG
-
-     No prompt().
+     RENAME
      ===================================================== */
 
   function openRenameDialog() {
@@ -1044,6 +1085,10 @@ Does NOT own:
 
     const currentTitle =
       state.title;
+
+    const focusTarget =
+      state.anchorElement ||
+      state.lastFocusedElement;
 
     close({
       restoreFocus:
@@ -1073,15 +1118,15 @@ Does NOT own:
     card.className =
       "history-dialog-card";
 
-    const title =
+    const heading =
       document.createElement(
         "h3"
       );
 
-    title.className =
+    heading.className =
       "history-dialog-title";
 
-    title.textContent =
+    heading.textContent =
       "Rename conversation";
 
     const input =
@@ -1151,7 +1196,7 @@ Does NOT own:
     );
 
     card.append(
-      title,
+      heading,
       input,
       actions
     );
@@ -1160,12 +1205,36 @@ Does NOT own:
       card
     );
 
+    function restoreFocus() {
+      if (
+        focusTarget instanceof
+          HTMLElement &&
+        focusTarget.isConnected
+      ) {
+        requestAnimationFrame(
+          () => {
+            focusTarget.focus();
+          }
+        );
+      }
+    }
+
     function updateSave() {
-      saveButton.disabled =
+      const value =
         clean(
           input.value,
           80
-        ).length === 0;
+        );
+
+      saveButton.disabled =
+        !value;
+
+      saveButton.setAttribute(
+        "aria-disabled",
+        String(
+          !value
+        )
+      );
     }
 
     function cancelRename() {
@@ -1173,8 +1242,7 @@ Does NOT own:
         dialog
       );
 
-      state.lastFocusedElement
-        ?.focus?.();
+      restoreFocus();
     }
 
     function submitRename() {
@@ -1202,6 +1270,8 @@ Does NOT own:
             nextTitle
         }
       );
+
+      restoreFocus();
     }
 
     input.addEventListener(
@@ -1281,9 +1351,7 @@ Does NOT own:
   }
 
   /* =====================================================
-     DELETE DIALOG
-
-     No confirm().
+     DELETE
      ===================================================== */
 
   function openDeleteDialog() {
@@ -1299,6 +1367,10 @@ Does NOT own:
 
     const conversationTitle =
       state.title;
+
+    const focusTarget =
+      state.anchorElement ||
+      state.lastFocusedElement;
 
     close({
       restoreFocus:
@@ -1374,23 +1446,23 @@ Does NOT own:
     cancelButton.textContent =
       "Cancel";
 
-    const deleteConfirm =
+    const deleteButton =
       document.createElement(
         "button"
       );
 
-    deleteConfirm.type =
+    deleteButton.type =
       "button";
 
-    deleteConfirm.className =
+    deleteButton.className =
       "history-dialog-danger";
 
-    deleteConfirm.textContent =
+    deleteButton.textContent =
       "Delete";
 
     actions.append(
       cancelButton,
-      deleteConfirm
+      deleteButton
     );
 
     card.append(
@@ -1403,13 +1475,26 @@ Does NOT own:
       card
     );
 
+    function restoreFocus() {
+      if (
+        focusTarget instanceof
+          HTMLElement &&
+        focusTarget.isConnected
+      ) {
+        requestAnimationFrame(
+          () => {
+            focusTarget.focus();
+          }
+        );
+      }
+    }
+
     function cancelDelete() {
       closeDialog(
         dialog
       );
 
-      state.lastFocusedElement
-        ?.focus?.();
+      restoreFocus();
     }
 
     function submitDelete() {
@@ -1435,7 +1520,7 @@ Does NOT own:
       }
     );
 
-    deleteConfirm.addEventListener(
+    deleteButton.addEventListener(
       "click",
       event => {
         event.preventDefault();
@@ -1480,7 +1565,7 @@ Does NOT own:
   }
 
   /* =====================================================
-     MENU ACTION HANDLER
+     ACTIVATE ITEM
      ===================================================== */
 
   function activateMenuItem(
@@ -1529,12 +1614,12 @@ Does NOT own:
   }
 
   /* =====================================================
-     CLICK EVENTS
+     CLICK HANDLERS
      ===================================================== */
 
   for (
     const element
-    of menuItems()
+    of allMenuItems()
   ) {
     element.addEventListener(
       "click",
@@ -1552,7 +1637,7 @@ Does NOT own:
   }
 
   /* =====================================================
-     KEYBOARD NAVIGATION
+     KEYBOARD
      ===================================================== */
 
   menu.addEventListener(
@@ -1563,9 +1648,18 @@ Does NOT own:
       }
 
       const items =
-        menuItems();
+        interactiveMenuItems();
 
       if (!items.length) {
+        if (
+          event.key ===
+          "Escape"
+        ) {
+          event.preventDefault();
+
+          close();
+        }
+
         return;
       }
 
@@ -1675,9 +1769,7 @@ Does NOT own:
   );
 
   /* =====================================================
-     HISTORY REQUEST EVENT
-
-     history.js emits this from three-dot and right-click.
+     OPEN REQUEST
      ===================================================== */
 
   window.addEventListener(
@@ -1705,7 +1797,8 @@ Does NOT own:
         event.target;
 
       if (
-        target instanceof Node &&
+        target instanceof
+          Node &&
         menu.contains(
           target
         )
@@ -1715,7 +1808,8 @@ Does NOT own:
 
       if (
         state.anchorElement &&
-        target instanceof Node &&
+        target instanceof
+          Node &&
         state.anchorElement
           .contains(
             target
@@ -1754,9 +1848,6 @@ Does NOT own:
 
   /* =====================================================
      RESIZE / SCROLL
-
-     Fixed-position menu should not become detached from
-     its source row.
      ===================================================== */
 
   window.addEventListener(
@@ -1853,10 +1944,12 @@ Does NOT own:
         return;
       }
 
-      close({
-        restoreFocus:
-          false
-      });
+      if (state.open) {
+        close({
+          restoreFocus:
+            false
+        });
+      }
 
       state.conversationId =
         null;
@@ -1866,13 +1959,16 @@ Does NOT own:
 
       state.pinned =
         false;
+
+      setBusy(
+        null,
+        false
+      );
     }
   );
 
   /* =====================================================
      CHAT NAVIGATION
-
-     Any conversation navigation closes stale menu.
      ===================================================== */
 
   for (
@@ -1893,6 +1989,11 @@ Does NOT own:
               false
           });
         }
+
+        setBusy(
+          null,
+          false
+        );
       }
     );
   }
@@ -1969,7 +2070,15 @@ Does NOT own:
           deleteDialogOpen:
             Boolean(
               state.deleteDialog
-            )
+            ),
+
+          interactiveItems:
+            interactiveMenuItems()
+              .length,
+
+          totalItems:
+            allMenuItems()
+              .length
         };
       }
     });
@@ -2002,6 +2111,11 @@ Does NOT own:
 
   menu.style.display =
     "none";
+
+  setBusy(
+    null,
+    false
+  );
 
   renderPinState();
 

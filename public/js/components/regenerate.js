@@ -1,22 +1,28 @@
 /*
 =========================================================
 NEO — REGENERATE
-Production v1
+Production v3 — Exact Turn Coordinator
+
+Baseline:
+- Old working Regenerate button behavior
+- Current message-actions.js routing
+- Current NeyoChat.regenerate()
 
 Owns:
-- regenerate request coordination
-- target assistant validation
-- duplicate request protection
-- temporary busy state
-- compatibility request events
+- Regenerate request coordination
+- Exact assistant target validation
+- Duplicate regenerate protection
+- Temporary target busy state
+- Regenerate lifecycle events
 
 Does NOT own:
-- conversation mutation
-- message removal
 - /api/chat
-- response rendering
-- thinking UI
+- Conversation mutation
+- Message deletion
+- Message rendering
+- Thinking UI
 - Send / Stop
+- Assistant action button creation
 =========================================================
 */
 
@@ -24,7 +30,7 @@ Does NOT own:
   "use strict";
 
   const VERSION =
-    "neo-regenerate-production-v1";
+    "neo-regenerate-production-v3";
 
   if (
     window.NeyoRegenerate
@@ -42,13 +48,11 @@ Does NOT own:
 
     messageId: null,
 
+    element: null,
+
     startedAt: null,
 
-    attempts: 0,
-
-    completed: 0,
-
-    failed: 0
+    lastResult: null
   };
 
   /* =====================================================
@@ -62,7 +66,9 @@ Does NOT own:
     window.dispatchEvent(
       new CustomEvent(
         name,
-        { detail }
+        {
+          detail
+        }
       )
     );
   }
@@ -71,15 +77,13 @@ Does NOT own:
      HELPERS
      ===================================================== */
 
-  function cleanId(
-    value
-  ) {
+  function cleanId(value) {
     return String(
-      value || ""
+      value ?? ""
     ).trim();
   }
 
-  function chat() {
+  function chatController() {
     const controller =
       window.NeyoChat;
 
@@ -91,126 +95,115 @@ Does NOT own:
       : null;
   }
 
+  function messagesController() {
+    const controller =
+      window.NeyoMessages;
+
+    return (
+      controller &&
+      controller.__controller === true
+    )
+      ? controller
+      : null;
+  }
+
+  /* =====================================================
+     MESSAGE LOOKUP
+     ===================================================== */
+
   function getMessage(
-    id
+    messageId
   ) {
+    const id =
+      cleanId(messageId);
+
+    if (!id) {
+      return null;
+    }
+
     try {
       return (
-        chat()
+        chatController()
           ?.getMessage
           ?.(id) ||
         null
       );
-
     } catch {
       return null;
     }
   }
 
   function getElement(
-    id
+    messageId,
+    suppliedElement = null
   ) {
+    if (
+      suppliedElement instanceof
+        HTMLElement
+    ) {
+      return suppliedElement;
+    }
+
     try {
-      return (
-        window.NeyoMessages
+      const element =
+        messagesController()
           ?.getElement
-          ?.(id) ||
-        null
-      );
+          ?.(messageId);
+
+      return (
+        element instanceof
+          HTMLElement
+      )
+        ? element
+        : null;
 
     } catch {
       return null;
     }
   }
 
+  /* =====================================================
+     GENERATION STATE
+     ===================================================== */
+
   function isGenerating() {
     try {
       return Boolean(
-        chat()
+        chatController()
           ?.isGenerating
           ?.()
       );
-
     } catch {
       return false;
     }
   }
 
   /* =====================================================
-     TARGET
+     BUSY TARGET UI
 
-     Regeneration must target a real assistant message.
-     It must never blindly regenerate "whatever is last".
-     ===================================================== */
-
-  function resolveTarget(
-    id
-  ) {
-    const key =
-      cleanId(
-        id
-      );
-
-    if (!key) {
-      return null;
-    }
-
-    const message =
-      getMessage(
-        key
-      );
-
-    if (
-      !message ||
-      message.role !==
-        "assistant" ||
-      message.error ===
-        true
-    ) {
-      return null;
-    }
-
-    return {
-      id:
-        key,
-
-      message,
-
-      element:
-        getElement(
-          key
-        )
-    };
-  }
-
-  /* =====================================================
-     UI BUSY STATE
-
-     No new visual design.
-     Existing action button gets temporary state only.
+     message-actions.js owns actual buttons.
+     We only temporarily mark the clicked target.
      ===================================================== */
 
   function setTargetBusy(
-    target,
+    element,
     busy
   ) {
-    const element =
-      target?.element;
-
-    if (!element) {
+    if (
+      !(element instanceof
+        HTMLElement)
+    ) {
       return;
     }
 
     element.classList.toggle(
       "is-regenerating",
-      Boolean(
-        busy
-      )
+      Boolean(busy)
     );
 
     const button =
       element.querySelector(
-        '[data-action="regenerate"], .regen-msg-btn'
+        ".regen-msg-btn"
       );
 
     if (!button) {
@@ -218,26 +211,18 @@ Does NOT own:
     }
 
     button.disabled =
-      Boolean(
-        busy
-      );
+      Boolean(busy);
 
     button.setAttribute(
       "aria-disabled",
       String(
-        Boolean(
-          busy
-        )
+        Boolean(busy)
       )
     );
 
-    button.setAttribute(
-      "aria-busy",
-      String(
-        Boolean(
-          busy
-        )
-      )
+    button.classList.toggle(
+      "is-loading",
+      Boolean(busy)
     );
   }
 
@@ -246,17 +231,9 @@ Does NOT own:
      ===================================================== */
 
   function reset() {
-    const id =
-      state.messageId;
-
-    if (id) {
+    if (state.element) {
       setTargetBusy(
-        {
-          element:
-            getElement(
-              id
-            )
-        },
+        state.element,
         false
       );
     }
@@ -267,180 +244,224 @@ Does NOT own:
     state.messageId =
       null;
 
+    state.element =
+      null;
+
     state.startedAt =
       null;
+  }
+
+  /* =====================================================
+     VALIDATE TARGET
+     ===================================================== */
+
+  function validateTarget(
+    messageId
+  ) {
+    const id =
+      cleanId(messageId);
+
+    if (!id) {
+      return {
+        valid: false,
+        reason:
+          "missing-message-id"
+      };
+    }
+
+    const message =
+      getMessage(id);
+
+    if (!message) {
+      return {
+        valid: false,
+        reason:
+          "message-not-found"
+      };
+    }
+
+    if (
+      message.role !==
+      "assistant"
+    ) {
+      return {
+        valid: false,
+        reason:
+          "target-not-assistant"
+      };
+    }
+
+    if (
+      message.error === true
+    ) {
+      return {
+        valid: false,
+        reason:
+          "target-is-error"
+      };
+    }
+
+    if (
+      message.streaming === true
+    ) {
+      return {
+        valid: false,
+        reason:
+          "target-still-streaming"
+      };
+    }
+
+    return {
+      valid: true,
+      message
+    };
   }
 
   /* =====================================================
      REGENERATE
      ===================================================== */
 
-  async function regenerate(
-    messageId
-  ) {
-    const controller =
-      chat();
+  async function regenerate({
+    messageId,
+    element = null
+  } = {}) {
+    const id =
+      cleanId(messageId);
+
+    if (state.active) {
+      emit(
+        "neyo:regenerate-blocked",
+        {
+          messageId: id,
+
+          reason:
+            "regenerate-already-active"
+        }
+      );
+
+      return false;
+    }
+
+    if (isGenerating()) {
+      emit(
+        "neyo:regenerate-blocked",
+        {
+          messageId: id,
+
+          reason:
+            "chat-generating"
+        }
+      );
+
+      return false;
+    }
+
+    const validation =
+      validateTarget(id);
+
+    if (!validation.valid) {
+      emit(
+        "neyo:regenerate-error",
+        {
+          messageId: id,
+
+          reason:
+            validation.reason
+        }
+      );
+
+      return false;
+    }
+
+    const chat =
+      chatController();
 
     if (
-      !controller ||
-      typeof controller.regenerate !==
+      !chat ||
+      typeof chat.regenerate !==
         "function"
     ) {
-      state.failed += 1;
-
       emit(
         "neyo:regenerate-error",
         {
-          messageId:
-            cleanId(
-              messageId
-            ),
+          messageId: id,
 
           reason:
-            "chat-regenerate-api-unavailable"
+            "chat-controller-unavailable"
         }
       );
 
       return false;
     }
 
-    /*
-     * One generation at a time.
-     */
-
-    if (
-      state.active ||
-      isGenerating()
-    ) {
-      return false;
-    }
-
-    const target =
-      resolveTarget(
-        messageId
+    const targetElement =
+      getElement(
+        id,
+        element
       );
-
-    if (!target) {
-      state.failed += 1;
-
-      emit(
-        "neyo:regenerate-error",
-        {
-          messageId:
-            cleanId(
-              messageId
-            ),
-
-          reason:
-            "invalid-assistant-message"
-        }
-      );
-
-      return false;
-    }
 
     state.active =
       true;
 
     state.messageId =
-      target.id;
+      id;
+
+    state.element =
+      targetElement;
 
     state.startedAt =
       Date.now();
 
-    state.attempts +=
-      1;
+    state.lastResult =
+      null;
 
     setTargetBusy(
-      target,
+      targetElement,
       true
     );
 
     emit(
       "neyo:regenerate-start",
       {
-        messageId:
-          target.id,
+        messageId: id,
 
         message:
-          target.message
+          validation.message
       }
     );
 
     try {
       /*
-       * chat.js owns:
-       *
-       * - locating preceding user turn
-       * - truncating stale assistant messages
-       * - preserving attachments
-       * - /api/chat
-       * - lifecycle events
+       * NeyoChat owns:
+       * - exact preceding user turn resolution
+       * - truncation
+       * - request
+       * - assistant replacement
        */
 
       const result =
-        await controller.regenerate({
-          messageId:
-            target.id
+        await chat.regenerate({
+          messageId: id
         });
 
-      /*
-       * null normally means aborted, unavailable,
-       * rate-limited, or no generation result.
-       *
-       * chat.js already emits the precise lifecycle event.
-       */
-
-      if (result === null) {
-        emit(
-          "neyo:regenerate-end",
-          {
-            messageId:
-              target.id,
-
-            success:
-              false,
-
-            result:
-              null
-          }
-        );
-
-        return false;
-      }
-
-      state.completed +=
-        1;
+      state.lastResult =
+        result;
 
       emit(
-        "neyo:regenerate-success",
+        "neyo:regenerate-complete",
         {
-          messageId:
-            target.id,
+          messageId: id,
 
           result
         }
       );
 
-      emit(
-        "neyo:regenerate-end",
-        {
-          messageId:
-            target.id,
-
-          success:
-            true,
-
-          result
-        }
+      return (
+        result !== null &&
+        result !== false
       );
-
-      return true;
 
     } catch (error) {
-      state.failed +=
-        1;
-
       console.error(
         "[NEO Regenerate] Failed:",
         error
@@ -449,21 +470,7 @@ Does NOT own:
       emit(
         "neyo:regenerate-error",
         {
-          messageId:
-            target.id,
-
-          error
-        }
-      );
-
-      emit(
-        "neyo:regenerate-end",
-        {
-          messageId:
-            target.id,
-
-          success:
-            false,
+          messageId: id,
 
           error
         }
@@ -477,107 +484,104 @@ Does NOT own:
   }
 
   /* =====================================================
-     MESSAGE ACTION REQUEST
-
-     message-actions.js emits this canonical request.
+     MESSAGE ACTION EVENT
      ===================================================== */
 
   window.addEventListener(
     "neyo:message-regenerate-request",
     event => {
-      const id =
-        event.detail?.id ||
-        event.detail
-          ?.message
-          ?.id;
+      const detail =
+        event.detail || {};
 
-      if (id) {
-        void regenerate(
-          id
-        );
-      }
+      void regenerate({
+        messageId:
+          detail.messageId ||
+          detail.id,
+
+        element:
+          detail.element ||
+          null
+      });
     }
   );
 
   /* =====================================================
-     LEGACY / COMPATIBILITY REQUESTS
-
-     Old/new experimental modules may use these names.
-     They all converge into ONE implementation.
+     LEGACY COMPATIBILITY
      ===================================================== */
 
   window.addEventListener(
     "neyo:regenerate-request",
     event => {
-      const id =
-        event.detail
-          ?.messageId ||
-        event.detail?.id;
+      const detail =
+        event.detail || {};
 
-      if (id) {
-        void regenerate(
-          id
-        );
-      }
+      void regenerate({
+        messageId:
+          detail.messageId ||
+          detail.id,
+
+        element:
+          detail.element ||
+          null
+      });
     }
   );
 
   /* =====================================================
-     CHAT RESET
-
-     Navigation/new conversation invalidates coordinator
-     state. chat.js itself owns the real request abort.
+     NAVIGATION SAFETY
      ===================================================== */
 
-  for (
-    const eventName
-    of [
-      "neyo:chat-new",
-      "neyo:chat-state-loaded",
-      "neyo:messages-cleared"
-    ]
-  ) {
-    window.addEventListener(
-      eventName,
-      reset
-    );
+  function cancelLocalState() {
+    if (!state.active) {
+      return;
+    }
+
+    reset();
   }
 
-  /* =====================================================
-     MESSAGE REMOVAL
+  window.addEventListener(
+    "neyo:chat-new",
+    cancelLocalState
+  );
 
-     During a valid regeneration, chat.js removes the old
-     assistant target as part of canonical truncation.
-     We DO NOT interpret that as failure.
+  window.addEventListener(
+    "neyo:chat-state-loaded",
+    cancelLocalState
+  );
+
+  window.addEventListener(
+    "neyo:messages-cleared",
+    cancelLocalState
+  );
+
+  /* =====================================================
+     CHAT LIFECYCLE SAFETY
      ===================================================== */
 
   window.addEventListener(
-    "neyo:chat-message-removed",
-    event => {
-      if (!state.active) {
-        return;
+    "neyo:chat-aborted",
+    () => {
+      if (state.active) {
+        reset();
       }
+    }
+  );
 
-      const id =
-        cleanId(
-          event.detail?.id ||
-          event.detail
-            ?.message
-            ?.id
-        );
-
-      if (
-        id !==
-        state.messageId
-      ) {
-        return;
+  window.addEventListener(
+    "neyo:chat-error",
+    () => {
+      if (state.active) {
+        reset();
       }
+    }
+  );
 
-      /*
-       * Old target no longer exists, which is normal.
-       * Keep coordinator active until chat.regenerate()
-       * resolves.
-       */
+  window.addEventListener(
+    "neyo:chat-limit-reached",
+    () => {
+      if (state.active) {
+        reset();
+      }
     }
   );
 
@@ -587,7 +591,8 @@ Does NOT own:
 
   const api =
     Object.freeze({
-      __controller: true,
+      __controller:
+        true,
 
       version:
         VERSION,
@@ -597,14 +602,24 @@ Does NOT own:
 
       regenerate,
 
-      request:
-        regenerate,
+      request(
+        messageId,
+        options = {}
+      ) {
+        return regenerate({
+          messageId,
 
-      isRunning() {
+          element:
+            options.element ||
+            null
+        });
+      },
+
+      isActive() {
         return state.active;
       },
 
-      getTargetId() {
+      getMessageId() {
         return (
           state.messageId ||
           null
@@ -619,7 +634,7 @@ Does NOT own:
           active:
             true,
 
-          running:
+          regenerating:
             state.active,
 
           messageId:
@@ -628,19 +643,10 @@ Does NOT own:
           startedAt:
             state.startedAt,
 
-          chatGenerating:
-            isGenerating(),
-
-          metrics: {
-            attempts:
-              state.attempts,
-
-            completed:
-              state.completed,
-
-            failed:
-              state.failed
-          }
+          hasResult:
+            Boolean(
+              state.lastResult
+            )
         };
       }
     });
@@ -676,8 +682,11 @@ Does NOT own:
       active:
         true,
 
-      canonicalOwner:
-        "NeyoChat.regenerate"
+      exactTurn:
+        true,
+
+      conversationOwner:
+        "NeyoChat"
     }
   );
 })();

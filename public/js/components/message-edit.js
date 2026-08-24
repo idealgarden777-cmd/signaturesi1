@@ -1,23 +1,34 @@
 /*
 =========================================================
 NEO — MESSAGE EDIT
-Production v1
+Production v3 — Baseline Safe
+
+Baseline:
+- Old working neo.js inline message editor
+- Old attachment-aware edit UI
+- Current NeyoChat.editUserMessage()
+- Current NeyoMessages DOM ownership
+- Current NeyoMessageActions routing
 
 Owns:
-- inline user-message editor
-- textarea autosize
+- Inline user-message edit UI
+- Edit textarea
+- Existing attachment preview display
 - Cancel
 - Save & Submit
-- edit keyboard UX
-- one active editor at a time
+- Editor autosize
+- Edit keyboard behavior
+- Edit busy state
+- Focus restoration
 
 Does NOT own:
-- conversation mutation
+- Conversation state
 - /api/chat
-- regeneration logic
-- message rendering
-- attachments
-- Send button
+- Regeneration transport
+- Attachment uploading
+- Attachment deletion
+- Message action buttons
+- User message rendering outside edit mode
 =========================================================
 */
 
@@ -25,7 +36,7 @@ Does NOT own:
   "use strict";
 
   const VERSION =
-    "neo-message-edit-production-v1";
+    "neo-message-edit-production-v3";
 
   if (
     window.NeyoMessageEdit
@@ -35,10 +46,46 @@ Does NOT own:
   }
 
   /* =====================================================
+     CONFIG
+     ===================================================== */
+
+  const CONFIG =
+    Object.freeze({
+      maxLength:
+        50_000,
+
+      minRows:
+        2,
+
+      maxTextareaHeight:
+        360
+    });
+
+  /* =====================================================
      STATE
      ===================================================== */
 
-  let active = null;
+  const state = {
+    active: false,
+
+    saving: false,
+
+    messageId: null,
+
+    messageElement: null,
+
+    originalMessage: null,
+
+    editBox: null,
+
+    textarea: null,
+
+    cancelButton: null,
+
+    saveButton: null,
+
+    openedAt: null
+  };
 
   /* =====================================================
      EVENTS
@@ -51,7 +98,9 @@ Does NOT own:
     window.dispatchEvent(
       new CustomEvent(
         name,
-        { detail }
+        {
+          detail
+        }
       )
     );
   }
@@ -60,124 +109,623 @@ Does NOT own:
      HELPERS
      ===================================================== */
 
-  function clean(
-    value
-  ) {
+  function cleanId(value) {
     return String(
       value ?? ""
-    )
-      .replace(/\u0000/g, "")
-      .replace(/\r\n?/g, "\n");
-  }
-
-  function messageIdOf(
-    element
-  ) {
-    return String(
-      element?.dataset
-        ?.neyoMessageId ||
-      element?.dataset
-        ?.messageId ||
-      ""
     ).trim();
   }
 
-  function getMessage(
-    id
-  ) {
-    try {
-      return (
-        window.NeyoChat
-          ?.getMessage
-          ?.(id) ||
-        null
+  function cleanText(value) {
+    return String(
+      value ?? ""
+    )
+      .replace(
+        /\u0000/g,
+        ""
+      )
+      .replace(
+        /\r\n?/g,
+        "\n"
+      )
+      .slice(
+        0,
+        CONFIG.maxLength
       );
-
-    } catch {
-      return null;
-    }
   }
 
-  function getMessageElement(
-    id
-  ) {
+  function refreshIcons() {
     try {
-      return (
-        window.NeyoMessages
-          ?.getElement
-          ?.(id) ||
-        null
-      );
-
-    } catch {
-      return null;
-    }
+      window.lucide
+        ?.createIcons
+        ?.();
+    } catch {}
   }
+
+  /* =====================================================
+     OWNERS
+     ===================================================== */
+
+  function chatController() {
+    const controller =
+      window.NeyoChat;
+
+    return (
+      controller &&
+      controller.__controller === true
+    )
+      ? controller
+      : null;
+  }
+
+  function messagesController() {
+    const controller =
+      window.NeyoMessages;
+
+    return (
+      controller &&
+      controller.__controller === true
+    )
+      ? controller
+      : null;
+  }
+
+  /* =====================================================
+     GENERATION STATE
+     ===================================================== */
 
   function isGenerating() {
     try {
       return Boolean(
-        window.NeyoChat
+        chatController()
           ?.isGenerating
           ?.()
       );
-
     } catch {
       return false;
     }
   }
 
-  function visibleText(
-    message
+  /* =====================================================
+     MESSAGE LOOKUP
+     ===================================================== */
+
+  function getMessage(
+    messageId
+  ) {
+    const id =
+      cleanId(messageId);
+
+    if (!id) {
+      return null;
+    }
+
+    try {
+      const message =
+        chatController()
+          ?.getMessage
+          ?.(id);
+
+      if (
+        message &&
+        message.role === "user"
+      ) {
+        return message;
+      }
+    } catch {}
+
+    return null;
+  }
+
+  function getMessageElement(
+    messageId,
+    suppliedElement = null
   ) {
     if (
-      typeof message
-        ?.displayContent ===
-      "string"
+      suppliedElement instanceof
+        HTMLElement &&
+      suppliedElement.classList
+        .contains("message")
     ) {
-      return message
-        .displayContent;
+      return suppliedElement;
     }
 
-    const content =
-      clean(
-        message?.content
-      );
+    try {
+      const element =
+        messagesController()
+          ?.getElement
+          ?.(messageId);
 
-    /*
-     * Do not expose the internal attachment-only prompt.
-     */
-
-    if (
-      Array.isArray(
-        message?.attachments
-      ) &&
-      message.attachments.length &&
-      (
-        content ===
-          "Please analyze the attached file or files." ||
-        content ===
-          "Please analyze the attached file."
+      return (
+        element instanceof
+          HTMLElement
       )
-    ) {
-      return "";
-    }
+        ? element
+        : null;
 
-    return content;
+    } catch {
+      return null;
+    }
   }
 
   /* =====================================================
-     AUTOSIZE
+     VISIBLE USER TEXT
+
+     Attachment-only messages use internal API prompt but
+     editor must remain visually blank.
      ===================================================== */
 
-  function resize(
+  function getEditableText(
+    message
+  ) {
+    if (!message) {
+      return "";
+    }
+
+    if (
+      typeof message
+        .displayContent ===
+        "string"
+    ) {
+      return cleanText(
+        message.displayContent
+      );
+    }
+
+    return cleanText(
+      message.content || ""
+    );
+  }
+
+  /* =====================================================
+     ATTACHMENTS
+     ===================================================== */
+
+  function cloneAttachments(
+    attachments
+  ) {
+    if (
+      !Array.isArray(
+        attachments
+      )
+    ) {
+      return [];
+    }
+
+    return attachments
+      .filter(
+        file =>
+          file &&
+          typeof file === "object"
+      )
+      .map(file => ({
+        ...file,
+
+        document:
+          file.document &&
+          typeof file.document ===
+            "object"
+            ? {
+                ...file.document
+              }
+            : file.document,
+
+        stats:
+          file.stats &&
+          typeof file.stats ===
+            "object"
+            ? {
+                ...file.stats
+              }
+            : file.stats,
+
+        chunks:
+          Array.isArray(
+            file.chunks
+          )
+            ? file.chunks.map(
+                chunk =>
+                  chunk &&
+                  typeof chunk ===
+                    "object"
+                    ? {
+                        ...chunk
+                      }
+                    : chunk
+              )
+            : file.chunks
+      }));
+  }
+
+  function attachmentName(
+    file
+  ) {
+    return String(
+      file?.name ||
+      file?.fileName ||
+      "Attached file"
+    );
+  }
+
+  function attachmentMime(
+    file
+  ) {
+    return String(
+      file?.mimeType ||
+      file?.type ||
+      file?.mime ||
+      ""
+    ).toLowerCase();
+  }
+
+  function isImageAttachment(
+    file
+  ) {
+    const mime =
+      attachmentMime(file);
+
+    const category =
+      String(
+        file?.category ||
+        ""
+      ).toLowerCase();
+
+    const name =
+      attachmentName(file)
+        .toLowerCase();
+
+    return (
+      mime.startsWith(
+        "image/"
+      ) ||
+      category === "image" ||
+      /\.(png|jpe?g|gif|webp|avif|bmp)$/i
+        .test(name)
+    );
+  }
+
+  /* =====================================================
+     PREVIEW URL
+
+     Prefer already-hydrated safe UI URLs.
+
+     Historical/current DOM fallback is important because
+     canonical attachment metadata may intentionally avoid
+     keeping temporary signed URLs.
+     ===================================================== */
+
+  function getAttachmentPreviewUrl(
+    file,
+    messageElement,
+    index
+  ) {
+    const direct =
+      file?.previewUrl ||
+      file?.preview_url ||
+      file?.signedUrl ||
+      file?.signed_url ||
+      "";
+
+    if (
+      typeof direct === "string" &&
+      direct
+    ) {
+      return direct;
+    }
+
+    /*
+     * Preserve currently rendered image preview from old
+     * or modular message DOM.
+     */
+
+    if (
+      messageElement instanceof
+        HTMLElement
+    ) {
+      const images =
+        messageElement
+          .querySelectorAll(
+            ".message-media-grid img"
+          );
+
+      const image =
+        images[index];
+
+      if (
+        image instanceof
+          HTMLImageElement &&
+        image.src
+      ) {
+        return image.src;
+      }
+    }
+
+    return "";
+  }
+
+  /* =====================================================
+     FILE ICON
+     ===================================================== */
+
+  function getFileIcon(file) {
+    const mime =
+      attachmentMime(file);
+
+    const name =
+      attachmentName(file)
+        .toLowerCase();
+
+    if (
+      mime.startsWith(
+        "audio/"
+      )
+    ) {
+      return "audio-lines";
+    }
+
+    if (
+      mime.startsWith(
+        "video/"
+      )
+    ) {
+      return "video";
+    }
+
+    if (
+      mime.includes("pdf") ||
+      name.endsWith(".pdf")
+    ) {
+      return "file-text";
+    }
+
+    if (
+      mime.includes("zip") ||
+      mime.includes("rar") ||
+      name.endsWith(".zip") ||
+      name.endsWith(".rar") ||
+      name.endsWith(".7z")
+    ) {
+      return "archive";
+    }
+
+    if (
+      mime.includes("word") ||
+      name.endsWith(".doc") ||
+      name.endsWith(".docx")
+    ) {
+      return "file-text";
+    }
+
+    if (
+      mime.includes("excel") ||
+      mime.includes("sheet") ||
+      name.endsWith(".xls") ||
+      name.endsWith(".xlsx") ||
+      name.endsWith(".csv")
+    ) {
+      return "table";
+    }
+
+    if (
+      mime.includes(
+        "presentation"
+      ) ||
+      name.endsWith(".ppt") ||
+      name.endsWith(".pptx")
+    ) {
+      return "presentation";
+    }
+
+    if (
+      mime.includes("json") ||
+      mime.includes(
+        "javascript"
+      ) ||
+      name.endsWith(".js") ||
+      name.endsWith(".ts") ||
+      name.endsWith(".tsx") ||
+      name.endsWith(".jsx") ||
+      name.endsWith(".py") ||
+      name.endsWith(".html") ||
+      name.endsWith(".css") ||
+      name.endsWith(".java") ||
+      name.endsWith(".cpp") ||
+      name.endsWith(".c")
+    ) {
+      return "code";
+    }
+
+    return "file";
+  }
+
+  /* =====================================================
+     IMAGE PREVIEW
+     ===================================================== */
+
+  function createImagePreview(
+    file,
+    previewUrl
+  ) {
+    if (!previewUrl) {
+      return createFilePill(
+        file
+      );
+    }
+
+    const image =
+      document.createElement(
+        "img"
+      );
+
+    image.src =
+      previewUrl;
+
+    image.alt =
+      attachmentName(file) ||
+      "Image";
+
+    image.loading =
+      "lazy";
+
+    image.decoding =
+      "async";
+
+    image.addEventListener(
+      "error",
+      () => {
+        if (!image.isConnected) {
+          return;
+        }
+
+        image.replaceWith(
+          createFilePill(
+            file
+          )
+        );
+
+        refreshIcons();
+      },
+      {
+        once: true
+      }
+    );
+
+    return image;
+  }
+
+  /* =====================================================
+     FILE PILL
+     ===================================================== */
+
+  function createFilePill(
+    file
+  ) {
+    const pill =
+      document.createElement(
+        "div"
+      );
+
+    /*
+     * Preserve old class exactly.
+     */
+
+    pill.className =
+      "message-file-pill";
+
+    const icon =
+      document.createElement(
+        "i"
+      );
+
+    icon.setAttribute(
+      "data-lucide",
+      getFileIcon(file)
+    );
+
+    icon.setAttribute(
+      "size",
+      "14"
+    );
+
+    icon.setAttribute(
+      "aria-hidden",
+      "true"
+    );
+
+    const name =
+      document.createElement(
+        "span"
+      );
+
+    name.textContent =
+      attachmentName(file);
+
+    pill.append(
+      icon,
+      name
+    );
+
+    return pill;
+  }
+
+  /* =====================================================
+     EDIT MEDIA
+     ===================================================== */
+
+  function createMediaWrapper(
+    attachments,
+    messageElement
+  ) {
+    if (
+      !Array.isArray(
+        attachments
+      ) ||
+      attachments.length === 0
+    ) {
+      return null;
+    }
+
+    const wrapper =
+      document.createElement(
+        "div"
+      );
+
+    /*
+     * Old working attachment-aware editor class.
+     */
+
+    wrapper.className =
+      "edit-message-media";
+
+    let imageIndex = 0;
+
+    for (
+      const file
+      of attachments
+    ) {
+      if (
+        isImageAttachment(
+          file
+        )
+      ) {
+        const preview =
+          getAttachmentPreviewUrl(
+            file,
+            messageElement,
+            imageIndex
+          );
+
+        wrapper.appendChild(
+          createImagePreview(
+            file,
+            preview
+          )
+        );
+
+        imageIndex += 1;
+
+        continue;
+      }
+
+      wrapper.appendChild(
+        createFilePill(
+          file
+        )
+      );
+    }
+
+    return wrapper;
+  }
+
+  /* =====================================================
+     TEXTAREA SIZE
+     ===================================================== */
+
+  function autosize(
     textarea
   ) {
     if (
-      !(
-        textarea instanceof
-        HTMLTextAreaElement
-      )
+      !(textarea instanceof
+        HTMLTextAreaElement)
     ) {
       return;
     }
@@ -185,78 +733,208 @@ Does NOT own:
     textarea.style.height =
       "auto";
 
-    textarea.style.height =
-      `${Math.min(
+    const height =
+      Math.min(
         textarea.scrollHeight,
-        180
-      )}px`;
+        CONFIG.maxTextareaHeight
+      );
+
+    textarea.style.height =
+      `${height}px`;
+
+    textarea.style.overflowY =
+      textarea.scrollHeight >
+      CONFIG.maxTextareaHeight
+        ? "auto"
+        : "hidden";
   }
 
   /* =====================================================
-     RESTORE ORIGINAL MESSAGE UI
+     SAVE ELIGIBILITY
+
+     Attachment-only message is valid.
      ===================================================== */
 
-  function restore(
-    editor
-  ) {
-    if (!editor) {
+  function canSave() {
+    if (
+      !state.active ||
+      state.saving
+    ) {
+      return false;
+    }
+
+    const text =
+      cleanText(
+        state.textarea
+          ?.value ||
+        ""
+      ).trim();
+
+    const attachments =
+      state.originalMessage
+        ?.attachments ||
+      [];
+
+    return Boolean(
+      text ||
+      attachments.length
+    );
+  }
+
+  function updateSaveButton() {
+    if (!state.saveButton) {
       return;
     }
 
-    editor.contentElement
-      ?.removeAttribute(
-        "hidden"
-      );
+    const enabled =
+      canSave();
 
-    editor.actionsElement
-      ?.removeAttribute(
-        "hidden"
-      );
+    state.saveButton.disabled =
+      !enabled;
 
-    editor.messageElement
-      ?.classList
-      .remove(
-        "is-editing"
-      );
+    state.saveButton.setAttribute(
+      "aria-disabled",
+      String(!enabled)
+    );
 
-    editor.editBox
-      ?.remove();
+    state.saveButton.classList.toggle(
+      "is-disabled",
+      !enabled
+    );
+  }
+
+  /* =====================================================
+     RESET STATE
+     ===================================================== */
+
+  function clearState() {
+    state.active =
+      false;
+
+    state.saving =
+      false;
+
+    state.messageId =
+      null;
+
+    state.messageElement =
+      null;
+
+    state.originalMessage =
+      null;
+
+    state.editBox =
+      null;
+
+    state.textarea =
+      null;
+
+    state.cancelButton =
+      null;
+
+    state.saveButton =
+      null;
+
+    state.openedAt =
+      null;
+  }
+
+  /* =====================================================
+     RESTORE ORIGINAL MESSAGE
+
+     NeyoMessages remains DOM owner.
+     ===================================================== */
+
+  function restoreOriginal() {
+    const element =
+      state.messageElement;
+
+    const message =
+      state.originalMessage;
+
+    if (
+      !element ||
+      !message
+    ) {
+      return false;
+    }
+
+    const messages =
+      messagesController();
+
+    if (
+      !messages ||
+      typeof messages.update !==
+        "function"
+    ) {
+      return false;
+    }
 
     try {
-      window.NeyoMessageActions
-        ?.refresh
-        ?.();
-    } catch {}
+      messages.update(
+        element,
+        message
+      );
+
+      return true;
+
+    } catch (error) {
+      console.error(
+        "[NEO Message Edit] Restore failed:",
+        error
+      );
+
+      return false;
+    }
   }
 
   /* =====================================================
      CANCEL
      ===================================================== */
 
-  function cancel(
-    reason =
-      "cancel"
-  ) {
-    if (!active) {
+  function cancel({
+    focus = true,
+    reason = "cancel"
+  } = {}) {
+    if (!state.active) {
       return false;
     }
 
-    const editor =
-      active;
+    if (state.saving) {
+      return false;
+    }
 
-    active =
-      null;
+    const messageId =
+      state.messageId;
 
-    restore(
-      editor
-    );
+    const element =
+      state.messageElement;
+
+    restoreOriginal();
+
+    clearState();
+
+    if (
+      focus &&
+      element instanceof
+        HTMLElement &&
+      element.isConnected
+    ) {
+      requestAnimationFrame(
+        () => {
+          element
+            .querySelector(
+              ".user-edit-btn"
+            )
+            ?.focus?.();
+        }
+      );
+    }
 
     emit(
       "neyo:message-edit-cancelled",
       {
-        id:
-          editor.id,
-
+        messageId,
         reason
       }
     );
@@ -265,45 +943,201 @@ Does NOT own:
   }
 
   /* =====================================================
-     BUTTON STATE
+     SAVING UI
      ===================================================== */
 
-  function updateSaveState(
-    editor
+  function setSaving(
+    value
   ) {
-    if (!editor) {
-      return;
+    state.saving =
+      Boolean(value);
+
+    if (
+      state.textarea
+    ) {
+      state.textarea.disabled =
+        state.saving;
+    }
+
+    if (
+      state.cancelButton
+    ) {
+      state.cancelButton.disabled =
+        state.saving;
+
+      state.cancelButton.setAttribute(
+        "aria-disabled",
+        String(
+          state.saving
+        )
+      );
+    }
+
+    if (
+      state.saveButton
+    ) {
+      state.saveButton.disabled =
+        state.saving ||
+        !canSave();
+
+      state.saveButton.setAttribute(
+        "aria-disabled",
+        String(
+          state.saveButton
+            .disabled
+        )
+      );
+
+      state.saveButton.classList.toggle(
+        "is-loading",
+        state.saving
+      );
+    }
+  }
+
+  /* =====================================================
+     SAVE
+     ===================================================== */
+
+  async function save() {
+    if (
+      !state.active ||
+      state.saving ||
+      isGenerating()
+    ) {
+      return false;
+    }
+
+    const chat =
+      chatController();
+
+    if (
+      !chat ||
+      typeof chat
+        .editUserMessage !==
+        "function"
+    ) {
+      emit(
+        "neyo:message-edit-error",
+        {
+          messageId:
+            state.messageId,
+
+          reason:
+            "chat-controller-unavailable"
+        }
+      );
+
+      return false;
     }
 
     const text =
-      clean(
-        editor.textarea.value
+      cleanText(
+        state.textarea
+          ?.value ||
+        ""
       ).trim();
 
-    const hasAttachments =
-      Array.isArray(
-        editor.message.attachments
-      ) &&
-      editor.message
-        .attachments.length > 0;
-
-    const valid =
-      Boolean(
-        text ||
-        hasAttachments
+    const attachments =
+      cloneAttachments(
+        state.originalMessage
+          ?.attachments ||
+        []
       );
 
-    editor.saveButton.disabled =
-      !valid ||
-      isGenerating();
+    /*
+     * Empty text is valid only when preserved attachments
+     * exist.
+     */
 
-    editor.saveButton.setAttribute(
-      "aria-disabled",
-      String(
-        editor.saveButton
-          .disabled
-      )
+    if (
+      !text &&
+      attachments.length === 0
+    ) {
+      updateSaveButton();
+
+      return false;
+    }
+
+    const messageId =
+      state.messageId;
+
+    setSaving(true);
+
+    emit(
+      "neyo:message-edit-submit",
+      {
+        messageId,
+
+        text,
+
+        attachments
+      }
     );
+
+    try {
+      /*
+       * chat.js immediately commits edited user turn,
+       * truncates later turns and starts generation.
+       */
+
+      const result =
+        await chat.editUserMessage(
+          messageId,
+          text,
+          {
+            attachments,
+
+            regenerateResponse:
+              true
+          }
+        );
+
+      /*
+       * If generation failed later, edited user message is
+       * still canonical and should remain edited.
+       *
+       * Therefore do NOT restore original here just because
+       * generate() ultimately returned null.
+       */
+
+      clearState();
+
+      emit(
+        "neyo:message-edit-complete",
+        {
+          messageId,
+
+          result
+        }
+      );
+
+      return true;
+
+    } catch (error) {
+      console.error(
+        "[NEO Message Edit] Save failed:",
+        error
+      );
+
+      /*
+       * Canonical state was not safely confirmed.
+       * Restore original editor appearance.
+       */
+
+      setSaving(false);
+
+      emit(
+        "neyo:message-edit-error",
+        {
+          messageId,
+
+          error
+        }
+      );
+
+      return false;
+    }
   }
 
   /* =====================================================
@@ -311,32 +1145,9 @@ Does NOT own:
      ===================================================== */
 
   function createEditor(
-    id,
-    message,
-    messageElement
+    messageElement,
+    message
   ) {
-    const wrapper =
-      messageElement.querySelector(
-        ".message-wrapper"
-      );
-
-    const contentElement =
-      wrapper?.querySelector(
-        ":scope > .message-content"
-      );
-
-    const actionsElement =
-      wrapper?.querySelector(
-        ":scope > .user-msg-actions"
-      );
-
-    if (
-      !wrapper ||
-      !contentElement
-    ) {
-      return null;
-    }
-
     const editBox =
       document.createElement(
         "div"
@@ -345,9 +1156,23 @@ Does NOT own:
     editBox.className =
       "edit-message-box";
 
-    editBox.dataset
-      .messageEdit =
-      id;
+    const attachments =
+      cloneAttachments(
+        message.attachments ||
+        []
+      );
+
+    const media =
+      createMediaWrapper(
+        attachments,
+        messageElement
+      );
+
+    if (media) {
+      editBox.appendChild(
+        media
+      );
+    }
 
     const textarea =
       document.createElement(
@@ -358,10 +1183,13 @@ Does NOT own:
       "edit-textarea";
 
     textarea.rows =
-      2;
+      CONFIG.minRows;
+
+    textarea.maxLength =
+      CONFIG.maxLength;
 
     textarea.value =
-      visibleText(
+      getEditableText(
         message
       );
 
@@ -370,15 +1198,11 @@ Does NOT own:
       "Edit message"
     );
 
-    textarea.setAttribute(
-      "autocomplete",
-      "off"
-    );
+    textarea.autocomplete =
+      "off";
 
-    textarea.setAttribute(
-      "spellcheck",
-      "true"
-    );
+    textarea.spellcheck =
+      true;
 
     const actions =
       document.createElement(
@@ -393,11 +1217,11 @@ Does NOT own:
         "button"
       );
 
-    cancelButton.type =
-      "button";
-
     cancelButton.className =
       "edit-btn-cancel";
+
+    cancelButton.type =
+      "button";
 
     cancelButton.textContent =
       "Cancel";
@@ -407,11 +1231,15 @@ Does NOT own:
         "button"
       );
 
+    saveButton.className =
+      "edit-btn-save";
+
     saveButton.type =
       "button";
 
-    saveButton.className =
-      "edit-btn-save";
+    /*
+     * Preserve old working label.
+     */
 
     saveButton.textContent =
       "Save & Submit";
@@ -426,256 +1254,283 @@ Does NOT own:
       actions
     );
 
-    /*
-     * Keep existing attachment cards in place.
-     *
-     * Only original text/actions are hidden.
-     */
+    return {
+      editBox,
+      textarea,
+      cancelButton,
+      saveButton
+    };
+  }
 
-    contentElement.hidden =
-      true;
+  /* =====================================================
+     OPEN EDITOR
+     ===================================================== */
 
-    if (actionsElement) {
-      actionsElement.hidden =
-        true;
+  function open({
+    messageId,
+    element = null,
+    message = null
+  } = {}) {
+    if (
+      isGenerating()
+    ) {
+      return false;
     }
 
-    wrapper.appendChild(
-      editBox
+    const id =
+      cleanId(
+        messageId ||
+        message?.id
+      );
+
+    if (!id) {
+      return false;
+    }
+
+    const canonical =
+      getMessage(id) ||
+      (
+        message?.role ===
+          "user"
+          ? message
+          : null
+      );
+
+    if (!canonical) {
+      return false;
+    }
+
+    const messageElement =
+      getMessageElement(
+        id,
+        element
+      );
+
+    if (!messageElement) {
+      return false;
+    }
+
+    /*
+     * Opening another editor closes the previous one first.
+     */
+
+    if (state.active) {
+      if (
+        state.messageId === id
+      ) {
+        state.textarea
+          ?.focus();
+
+        return true;
+      }
+
+      cancel({
+        focus: false,
+
+        reason:
+          "switch-message"
+      });
+    }
+
+    const editor =
+      createEditor(
+        messageElement,
+        canonical
+      );
+
+    /*
+     * Editor temporarily replaces user bubble contents.
+     * Canonical message itself remains untouched until Save.
+     */
+
+    messageElement.replaceChildren(
+      editor.editBox
     );
 
     messageElement.classList.add(
       "is-editing"
     );
 
-    const editor = {
-      id,
+    state.active =
+      true;
 
-      message,
+    state.saving =
+      false;
 
-      messageElement,
+    state.messageId =
+      id;
 
-      wrapper,
+    state.messageElement =
+      messageElement;
 
-      contentElement,
+    state.originalMessage = {
+      ...canonical,
 
-      actionsElement,
-
-      editBox,
-
-      textarea,
-
-      cancelButton,
-
-      saveButton,
-
-      submitting:
-        false
+      attachments:
+        cloneAttachments(
+          canonical.attachments ||
+          []
+        )
     };
 
+    state.editBox =
+      editor.editBox;
+
+    state.textarea =
+      editor.textarea;
+
+    state.cancelButton =
+      editor.cancelButton;
+
+    state.saveButton =
+      editor.saveButton;
+
+    state.openedAt =
+      Date.now();
+
     /* -----------------------------------------------
-       Events
+       INPUT
        ----------------------------------------------- */
 
-    textarea.addEventListener(
-      "input",
-      () => {
-        resize(
-          textarea
-        );
-
-        updateSaveState(
-          editor
-        );
-      }
-    );
-
-    textarea.addEventListener(
-      "keydown",
-      event => {
-        /*
-         * Escape = cancel.
-         */
-
-        if (
-          event.key ===
-          "Escape"
-        ) {
-          event.preventDefault();
-          event.stopPropagation();
-
-          cancel(
-            "escape"
+    editor.textarea
+      .addEventListener(
+        "input",
+        () => {
+          autosize(
+            editor.textarea
           );
 
-          return;
+          updateSaveButton();
         }
+      );
 
-        /*
-         * Cmd/Ctrl + Enter = Save & Submit.
-         *
-         * Plain Enter remains newline.
-         */
+    /* -----------------------------------------------
+       KEYBOARD
+       ----------------------------------------------- */
 
-        if (
-          event.key ===
-            "Enter" &&
-          (
-            event.metaKey ||
-            event.ctrlKey
-          )
-        ) {
+    editor.textarea
+      .addEventListener(
+        "keydown",
+        event => {
+          if (
+            event.key ===
+            "Escape"
+          ) {
+            event.preventDefault();
+
+            event.stopPropagation();
+
+            cancel();
+
+            return;
+          }
+
+          /*
+           * Enter itself remains a newline.
+           *
+           * Ctrl/Cmd + Enter = Save & Submit.
+           */
+
+          if (
+            event.key ===
+              "Enter" &&
+            (
+              event.ctrlKey ||
+              event.metaKey
+            )
+          ) {
+            event.preventDefault();
+
+            event.stopPropagation();
+
+            if (canSave()) {
+              void save();
+            }
+          }
+        }
+      );
+
+    /* -----------------------------------------------
+       CANCEL
+       ----------------------------------------------- */
+
+    editor.cancelButton
+      .addEventListener(
+        "click",
+        event => {
           event.preventDefault();
+
           event.stopPropagation();
 
-          void submit(
-            editor
-          );
+          cancel();
         }
-      }
+      );
+
+    /* -----------------------------------------------
+       SAVE
+       ----------------------------------------------- */
+
+    editor.saveButton
+      .addEventListener(
+        "click",
+        event => {
+          event.preventDefault();
+
+          event.stopPropagation();
+
+          if (canSave()) {
+            void save();
+          }
+        }
+      );
+
+    autosize(
+      editor.textarea
     );
 
-    cancelButton.addEventListener(
-      "click",
-      event => {
-        event.preventDefault();
-        event.stopPropagation();
+    updateSaveButton();
 
-        cancel(
-          "button"
-        );
-      }
-    );
-
-    saveButton.addEventListener(
-      "click",
-      event => {
-        event.preventDefault();
-        event.stopPropagation();
-
-        void submit(
-          editor
-        );
-      }
-    );
+    refreshIcons();
 
     requestAnimationFrame(
       () => {
-        resize(
-          textarea
-        );
+        if (
+          !state.active ||
+          state.messageId !== id
+        ) {
+          return;
+        }
 
-        updateSaveState(
-          editor
-        );
+        editor.textarea.focus();
 
-        textarea.focus();
-
-        /*
-         * Cursor at end, matching normal edit behavior.
-         */
-
-        const length =
-          textarea.value.length;
+        const end =
+          editor.textarea
+            .value.length;
 
         try {
-          textarea.setSelectionRange(
-            length,
-            length
-          );
+          editor.textarea
+            .setSelectionRange(
+              end,
+              end
+            );
         } catch {}
       }
     );
 
-    return editor;
-  }
-
-  /* =====================================================
-     OPEN
-     ===================================================== */
-
-  function open(
-    id
-  ) {
-    const key =
-      String(
-        id || ""
-      ).trim();
-
-    if (
-      !key ||
-      isGenerating()
-    ) {
-      return false;
-    }
-
-    const message =
-      getMessage(
-        key
-      );
-
-    if (
-      !message ||
-      message.role !==
-        "user"
-    ) {
-      return false;
-    }
-
-    const element =
-      getMessageElement(
-        key
-      );
-
-    if (!element) {
-      return false;
-    }
-
-    /*
-     * Same editor already open.
-     */
-
-    if (
-      active?.id ===
-      key
-    ) {
-      active.textarea
-        ?.focus();
-
-      return true;
-    }
-
-    /*
-     * Only one inline editor at a time.
-     */
-
-    if (active) {
-      cancel(
-        "another-message"
-      );
-    }
-
-    const editor =
-      createEditor(
-        key,
-        message,
-        element
-      );
-
-    if (!editor) {
-      return false;
-    }
-
-    active =
-      editor;
-
     emit(
       "neyo:message-edit-opened",
       {
-        id:
-          key,
+        messageId:
+          id,
 
-        message
+        message:
+          state.originalMessage,
+
+        attachmentCount:
+          state.originalMessage
+            .attachments
+            ?.length ||
+          0
       }
     );
 
@@ -683,273 +1538,115 @@ Does NOT own:
   }
 
   /* =====================================================
-     SUBMIT
-     ===================================================== */
-
-  async function submit(
-    editor =
-      active
-  ) {
-    if (
-      !editor ||
-      editor !== active ||
-      editor.submitting ||
-      isGenerating()
-    ) {
-      return false;
-    }
-
-    const chat =
-      window.NeyoChat;
-
-    if (
-      typeof chat
-        ?.editUserMessage !==
-      "function"
-    ) {
-      emit(
-        "neyo:message-edit-error",
-        {
-          id:
-            editor.id,
-
-          reason:
-            "chat-edit-api-unavailable"
-        }
-      );
-
-      return false;
-    }
-
-    const text =
-      clean(
-        editor.textarea.value
-      ).trim();
-
-    const attachments =
-      Array.isArray(
-        editor.message
-          .attachments
-      )
-        ? editor.message
-            .attachments
-            .map(
-              item => ({
-                ...item
-              })
-            )
-        : [];
-
-    /*
-     * Attachment-only user messages remain valid.
-     */
-
-    if (
-      !text &&
-      attachments.length === 0
-    ) {
-      updateSaveState(
-        editor
-      );
-
-      return false;
-    }
-
-    const original =
-      visibleText(
-        editor.message
-      ).trim();
-
-    /*
-     * No actual edit = close without generating a
-     * duplicate response.
-     */
-
-    if (
-      text === original
-    ) {
-      cancel(
-        "unchanged"
-      );
-
-      return true;
-    }
-
-    editor.submitting =
-      true;
-
-    editor.textarea.disabled =
-      true;
-
-    editor.cancelButton.disabled =
-      true;
-
-    editor.saveButton.disabled =
-      true;
-
-    editor.editBox.classList.add(
-      "is-submitting"
-    );
-
-    /*
-     * Restore normal message shell BEFORE chat.js
-     * emits its synchronous update event.
-     *
-     * chat.js remains the only owner of canonical
-     * conversation mutation.
-     */
-
-    active =
-      null;
-
-    restore(
-      editor
-    );
-
-    emit(
-      "neyo:message-edit-submit",
-      {
-        id:
-          editor.id,
-
-        text,
-
-        attachments
-      }
-    );
-
-    try {
-      const result =
-        await chat.editUserMessage(
-          editor.id,
-          text,
-          {
-            attachments,
-
-            regenerateResponse:
-              true
-          }
-        );
-
-      emit(
-        "neyo:message-edit-complete",
-        {
-          id:
-            editor.id,
-
-          result
-        }
-      );
-
-      return result !== null;
-
-    } catch (error) {
-      console.error(
-        "[NEO Message Edit] Submit failed:",
-        error
-      );
-
-      emit(
-        "neyo:message-edit-error",
-        {
-          id:
-            editor.id,
-
-          error
-        }
-      );
-
-      return false;
-    }
-  }
-
-  /* =====================================================
-     REQUEST EVENT
-
-     message-actions.js emits this.
+     MESSAGE-ACTIONS ROUTING
      ===================================================== */
 
   window.addEventListener(
     "neyo:message-edit-request",
     event => {
-      const id =
-        event.detail?.id ||
-        event.detail
-          ?.message
-          ?.id;
+      const detail =
+        event.detail ||
+        {};
 
-      if (id) {
-        open(
-          id
-        );
-      }
+      open({
+        messageId:
+          detail.messageId ||
+          detail.id,
+
+        element:
+          detail.element,
+
+        message:
+          detail.message
+      });
     }
   );
 
   /* =====================================================
-     MESSAGE REMOVED
+     LEGACY COMPATIBILITY EVENT
      ===================================================== */
 
   window.addEventListener(
-    "neyo:chat-message-removed",
+    "neyo:edit-message-request",
     event => {
-      if (!active) {
-        return;
-      }
+      const detail =
+        event.detail ||
+        {};
 
-      const id =
-        event.detail?.id ||
-        event.detail
-          ?.message
-          ?.id;
+      open({
+        messageId:
+          detail.messageId ||
+          detail.id,
 
-      if (
-        String(
-          id || ""
-        ) ===
-        active.id
-      ) {
-        active =
-          null;
-      }
+        element:
+          detail.element,
+
+        message:
+          detail.message
+      });
     }
   );
 
   /* =====================================================
-     CHAT STATE CHANGES
+     NAVIGATION SAFETY
 
-     An open editor should never survive navigation or
-     another generation.
+     Never leave detached/stale editor state after New Chat
+     or history conversation switch.
      ===================================================== */
 
-  for (
-    const eventName
-    of [
-      "neyo:chat-new",
-      "neyo:chat-state-loaded",
-      "neyo:messages-cleared"
-    ]
-  ) {
-    window.addEventListener(
-      eventName,
-      () => {
-        if (active) {
-          cancel(
-            eventName
-          );
-        }
-      }
-    );
+  function discardEditorState() {
+    if (!state.active) {
+      return;
+    }
+
+    clearState();
   }
 
   window.addEventListener(
+    "neyo:chat-new",
+    discardEditorState
+  );
+
+  window.addEventListener(
+    "neyo:chat-state-loaded",
+    discardEditorState
+  );
+
+  window.addEventListener(
+    "neyo:messages-cleared",
+    discardEditorState
+  );
+
+  /* =====================================================
+     GENERATION SAFETY
+
+     External generation should close an unsaved editor.
+     The editor's own Save triggers generation only after
+     canonical edit has already replaced the DOM.
+     ===================================================== */
+
+  window.addEventListener(
     "neyo:chat-send-start",
-    () => {
-      if (active) {
-        cancel(
-          "generation-started"
-        );
+    event => {
+      if (!state.active) {
+        return;
       }
+
+      /*
+       * Edit save is already in progress — don't restore
+       * original message and fight chat.js update.
+       */
+
+      if (state.saving) {
+        return;
+      }
+
+      cancel({
+        focus: false,
+
+        reason:
+          "generation-started"
+      });
     }
   );
 
@@ -959,7 +1656,8 @@ Does NOT own:
 
   const api =
     Object.freeze({
-      __controller: true,
+      __controller:
+        true,
 
       version:
         VERSION,
@@ -969,23 +1667,20 @@ Does NOT own:
 
       open,
 
+      edit:
+        open,
+
+      save,
+
       cancel,
 
-      save() {
-        return submit(
-          active
-        );
-      },
-
       isEditing() {
-        return Boolean(
-          active
-        );
+        return state.active;
       },
 
-      getEditingId() {
+      getMessageId() {
         return (
-          active?.id ||
+          state.messageId ||
           null
         );
       },
@@ -999,19 +1694,22 @@ Does NOT own:
             true,
 
           editing:
-            Boolean(
-              active
-            ),
+            state.active,
+
+          saving:
+            state.saving,
 
           messageId:
-            active?.id ||
-            null,
+            state.messageId,
 
-          submitting:
-            Boolean(
-              active
-                ?.submitting
-            )
+          attachmentCount:
+            state.originalMessage
+              ?.attachments
+              ?.length ||
+            0,
+
+          openedAt:
+            state.openedAt
         };
       }
     });
@@ -1045,6 +1743,15 @@ Does NOT own:
         VERSION,
 
       active:
+        true,
+
+      attachmentPreview:
+        true,
+
+      attachmentPreservation:
+        true,
+
+      keyboardSave:
         true
     }
   );

@@ -2,1071 +2,339 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+
   <meta
     name="viewport"
     content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover"
   >
+
   <meta name="theme-color" content="#ffffff">
   <meta name="referrer" content="strict-origin-when-cross-origin">
 
-  <!-- Monetag Verification (kept) -->
-  <meta name="monetag" content="5c03c9d12ef5dab45df4b58c864f5ae9">
+  <!-- Monetag Verification -->
+  <meta
+    name="monetag"
+    content="5c03c9d12ef5dab45df4b58c864f5ae9"
+  >
 
-  <!-- ========================================================= -->
-  <!-- CSP — UPDATED TO INCLUDE BOTH SUPABASE URLS               -->
-  <!-- ========================================================= -->
-  <meta http-equiv="Content-Security-Policy" content="
-    default-src 'self';
-    script-src 'self' 'unsafe-inline'
-      https://cdn.jsdelivr.net
-      https://unpkg.com
-      https://cdnjs.cloudflare.com
-      https://n6wxm.com
-      https://zovidree.com;
-    style-src 'self' 'unsafe-inline'
-      https://fonts.googleapis.com
-      https://cdn.jsdelivr.net;
-    font-src 'self'
-      https://fonts.gstatic.com
-      https://cdn.jsdelivr.net;
-    img-src 'self' data: blob:
-      https://ajglvfoqiyrrisuoxecu.supabase.co
-      https://ujclhweqqifgoiscvqmd.supabase.co;
-    connect-src 'self'
-      https://accounts.signaturesi.com
-      https://ajglvfoqiyrrisuoxecu.supabase.co
-      https://ujclhweqqifgoiscvqmd.supabase.co
-      https://generativelanguage.googleapis.com
-      wss://generativelanguage.googleapis.com
-      https://cdn.jsdelivr.net
-      https://unpkg.com
-      https://cdnjs.cloudflare.com
-      https://n6wxm.com
-      https://zovidree.com;
-  ">
+  <meta
+    http-equiv="Content-Security-Policy"
+    content="
+      default-src 'self';
+
+      script-src
+        'self'
+        'unsafe-inline'
+        https://cdn.jsdelivr.net
+        https://unpkg.com
+        https://cdnjs.cloudflare.com
+        https://n6wxm.com
+        https://zovidree.com;
+
+      style-src
+        'self'
+        'unsafe-inline'
+        https://fonts.googleapis.com
+        https://cdn.jsdelivr.net;
+
+      font-src
+        'self'
+        https://fonts.gstatic.com
+        https://cdn.jsdelivr.net;
+
+      img-src
+        'self'
+        data:
+        blob:
+        https://ajglvfoqiyrrisuoxecu.supabase.co;
+
+      media-src
+        'self'
+        blob:
+        data:;
+
+      connect-src
+        'self'
+        https://accounts.signaturesi.com
+        https://ajglvfoqiyrrisuoxecu.supabase.co
+        https://cdn.jsdelivr.net
+        https://unpkg.com
+        https://cdnjs.cloudflare.com
+        https://n6wxm.com
+        https://zovidree.com;
+    "
+  >
 
   <title>NEYO • Signaturesi</title>
 
-  <!-- Google Fonts -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <!-- ========================================================= -->
+  <!-- FONTS                                                     -->
+  <!-- ========================================================= -->
+
+  <link
+    rel="preconnect"
+    href="https://fonts.googleapis.com"
+  >
+
+  <link
+    rel="preconnect"
+    href="https://fonts.gstatic.com"
+    crossorigin
+  >
+
   <link
     href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Inter:wght@400;500;600&family=Sora:wght@600&display=swap"
     rel="stylesheet"
   >
 
-  <!-- Styles — Final Order (legacy temporarily disabled) -->
-  <link rel="stylesheet" href="/neo.css?v=82">
-  <link rel="stylesheet" href="/neo-ui-v2.css?v=2">
+  <!-- ========================================================= -->
+  <!-- LEGEND NEYO BASE                                          -->
+  <!-- ========================================================= -->
 
-  <!-- Tokens & Foundation -->
-  <link rel="stylesheet" href="/css/components/tokens.css?v=1">
-  <link rel="stylesheet" href="/css/components/layout.css?v=1">
+  <link
+    rel="stylesheet"
+    href="/neo.css?v=82"
+  >
 
-  <!-- Composer Group -->
-  <link rel="stylesheet" href="/css/components/tooltip.css?v=1">
-  <link rel="stylesheet" href="/css/components/attachments.css?v=1">
-  <link rel="stylesheet" href="/css/components/composer.css?v=1">
-  <link rel="stylesheet" href="/css/components/composer-expand.css?v=2">
-  <link rel="stylesheet" href="/css/components/composer-scrollbar.css?v=1">
-  <link rel="stylesheet" href="/css/components/suggestions.css?v=1">
-  <link rel="stylesheet" href="/css/components/voice.css?v=1">
-  <link rel="stylesheet" href="/css/components/drag-drop.css?v=1">
+  <link
+    rel="stylesheet"
+    href="/neo-ui-v2.css?v=2"
+  >
 
-  <!-- Messages & Hero -->
-  <link rel="stylesheet" href="/css/components/messages.css?v=1">
-  <link rel="stylesheet" href="/css/components/hero.css?v=1">
+  <!--
+  Legacy experimental layer intentionally disabled.
 
-  <!-- Sidebar & Topbar -->
-  <link rel="stylesheet" href="/css/components/sidebar.css?v=17">
-  <link rel="stylesheet" href="/css/components/topbar.css?v=1">
+  <link
+    rel="stylesheet"
+    href="/neo-v3.css?v=46"
+  >
+  -->
 
-  <!-- Menus -->
-  <link rel="stylesheet" href="/css/components/model-menu.css?v=1">
-  <link rel="stylesheet" href="/css/components/menus.css?v=2">
+  <!-- ========================================================= -->
+  <!-- FOUNDATION                                                -->
+  <!-- ========================================================= -->
 
-  <!-- Settings & Modal -->
-  <link rel="stylesheet" href="/css/components/settings.css?v=1">
-  <link rel="stylesheet" href="/css/components/modal.css?v=1">
+  <link
+    rel="stylesheet"
+    href="/css/components/tokens.css?v=1"
+  >
 
-  <!-- Appearance Modes & Responsive (LAST) -->
-  <link rel="stylesheet" href="/css/components/interface-modes.css?v=1">
-  <link rel="stylesheet" href="/css/components/responsive.css?v=1">
+  <link
+    rel="stylesheet"
+    href="/css/components/layout.css?v=1"
+  >
 
-  <!-- Send State Component -->
-  <link rel="stylesheet" href="/css/components/send-state.css?v=2">
-  <link rel="stylesheet" href="/css/components/mobile-shell.css?v=2">
+  <!-- ========================================================= -->
+  <!-- COMPOSER                                                  -->
+  <!-- ========================================================= -->
 
-  <!-- ===== VOICE MODE + MASCOT — FINAL CSS VERSIONS (BUMPED) ===== -->
-  <link rel="stylesheet" href="/css/components/voice-mode.css?v=4">
-  <link rel="stylesheet" href="/css/components/mascot.css?v=7">
+  <link
+    rel="stylesheet"
+    href="/css/components/tooltip.css?v=1"
+  >
 
-  <!-- ===== CHARACTER PICKER ===== -->
+  <link
+    rel="stylesheet"
+    href="/css/components/attachments.css?v=1"
+  >
+
+  <link
+    rel="stylesheet"
+    href="/css/components/composer.css?v=1"
+  >
+
+  <link
+    rel="stylesheet"
+    href="/css/components/composer-expand.css?v=2"
+  >
+
+  <link
+    rel="stylesheet"
+    href="/css/components/composer-scrollbar.css?v=1"
+  >
+
+  <link
+    rel="stylesheet"
+    href="/css/components/suggestions.css?v=1"
+  >
+
+  <link
+    rel="stylesheet"
+    href="/css/components/voice.css?v=1"
+  >
+
+  <link
+    rel="stylesheet"
+    href="/css/components/drag-drop.css?v=1"
+  >
+
+  <!-- ========================================================= -->
+  <!-- CHAT / HERO                                               -->
+  <!-- ========================================================= -->
+
+  <link
+    rel="stylesheet"
+    href="/css/components/messages.css?v=1"
+  >
+
+  <link
+    rel="stylesheet"
+    href="/css/components/hero.css?v=1"
+  >
+
+  <!-- ========================================================= -->
+  <!-- SIDEBAR / TOPBAR                                          -->
+  <!-- ========================================================= -->
+
+  <link
+    rel="stylesheet"
+    href="/css/components/sidebar.css?v=17"
+  >
+
+  <link
+    rel="stylesheet"
+    href="/css/components/topbar.css?v=1"
+  >
+
+  <!-- ========================================================= -->
+  <!-- MENUS                                                     -->
+  <!-- ========================================================= -->
+
+  <link
+    rel="stylesheet"
+    href="/css/components/model-menu.css?v=1"
+  >
+
+  <link
+    rel="stylesheet"
+    href="/css/components/menus.css?v=2"
+  >
+
+  <!-- ========================================================= -->
+  <!-- SETTINGS                                                  -->
+  <!-- ========================================================= -->
+
+  <link
+    rel="stylesheet"
+    href="/css/components/settings.css?v=1"
+  >
+
+  <link
+    rel="stylesheet"
+    href="/css/components/modal.css?v=1"
+  >
+
+  <!-- ========================================================= -->
+  <!-- RESPONSIVE                                                -->
+  <!-- ========================================================= -->
+
+  <link
+    rel="stylesheet"
+    href="/css/components/interface-modes.css?v=1"
+  >
+
+  <link
+    rel="stylesheet"
+    href="/css/components/responsive.css?v=1"
+  >
+
+  <link
+    rel="stylesheet"
+    href="/css/components/send-state.css?v=2"
+  >
+
+  <link
+    rel="stylesheet"
+    href="/css/components/mobile-shell.css?v=2"
+  >
+
+  <!-- ========================================================= -->
+  <!-- NEW NEYO FEATURES                                         -->
+  <!-- ========================================================= -->
+
+  <link
+    rel="stylesheet"
+    href="/css/components/voice-mode.css?v=4"
+  >
+
+  <link
+    rel="stylesheet"
+    href="/css/components/mascot.css?v=7"
+  >
+
   <link
     rel="stylesheet"
     href="/css/components/character-picker.css?v=1"
   >
 
-  <!-- ===== ZADI VISUAL OVERRIDES (temporary until mascot.css v4) ===== -->
-  <style>
-    /* Zadi: soft-diamond light geometry */
-    .neyo-mascot-face[data-character="zadi"] {
-      --face-shape: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
-      --face-bg: #f5efe8;
-      --face-border: #d4c9bc;
-      --face-radius: 0;
-      --eye-color: #2c2a28;
-      --mouth-color: #4a3f38;
-      transform: scale(0.99);
-    }
-    .neyo-mascot-face[data-character="zadi"] .neyo-mascot-features {
-      filter: drop-shadow(0 2px 6px rgba(0,0,0,0.06));
-    }
-    .neyo-mascot-face[data-character="zadi"] .neyo-eye-core {
-      background: #2c2a28;
-    }
-    .neyo-mascot-face[data-character="zadi"] .neyo-mouth-bar {
-      background: #4a3f38;
-    }
-    /* slight diamond glow */
-    .neyo-mascot-face[data-character="zadi"]::after {
-      content: '';
-      position: absolute;
-      inset: -2px;
-      background: radial-gradient(circle at 30% 30%, rgba(255,235,215,0.3), transparent 70%);
-      pointer-events: none;
-      border-radius: inherit;
-      clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
-    }
-  </style>
-
   <!-- ========================================================= -->
-  <!-- COMPOSER STABILITY OVERRIDES                              -->
+  <!-- KATEX                                                     -->
   <!-- ========================================================= -->
 
-  <style id="neyoComposerStabilityV1">
-
-    /* =======================================================
-       COMPOSER ROOT
-       ======================================================= */
-
-    #composerWrapper {
-      position: relative;
-
-      width: 100%;
-      min-width: 0;
-
-      box-sizing: border-box;
-
-      isolation: isolate;
-    }
-
-
-    /* =======================================================
-       MAIN INPUT SURFACE
-
-       Important:
-       - no height jumping
-       - no scale animation
-       - predictable vertical growth
-       ======================================================= */
-
-    #glassInputContainer {
-      position: relative;
-
-      display: flex !important;
-      flex-direction: column !important;
-
-      width: 100% !important;
-      min-width: 0 !important;
-
-      min-height: 56px !important;
-
-      padding: 5px 8px !important;
-
-      overflow: visible;
-
-      box-sizing: border-box;
-
-      transform: none !important;
-
-      transition:
-        background-color 150ms ease,
-        border-color 150ms ease,
-        box-shadow 150ms ease !important;
-    }
-
-
-    #glassInputContainer:hover,
-    #glassInputContainer:focus-within {
-      transform: none !important;
-    }
-
-
-    /* =======================================================
-       ATTACHMENT SHELF
-
-       Empty:
-         zero height
-
-       Has files:
-         one compact horizontal row
-
-       This prevents the composer from growing/shrinking
-       unpredictably during upload progress.
-       ======================================================= */
-
-    #attachmentList {
-      width: 100%;
-      min-width: 0;
-
-      display: flex;
-      align-items: center;
-
-      gap: 8px;
-
-      padding: 0;
-
-      margin: 0;
-
-      overflow-x: auto;
-      overflow-y: hidden;
-
-      overscroll-behavior-x: contain;
-
-      scrollbar-width: thin;
-
-      scroll-behavior: smooth;
-
-      box-sizing: border-box;
-
-      flex: 0 0 auto;
-    }
-
-
-    #attachmentList[hidden] {
-      display: none !important;
-    }
-
-
-    #attachmentList:not([hidden]) {
-      min-height: 54px;
-
-      padding:
-        3px
-        2px
-        7px;
-
-      margin-bottom: 1px;
-    }
-
-
-    #attachmentList::-webkit-scrollbar {
-      height: 4px;
-    }
-
-
-    #attachmentList::-webkit-scrollbar-thumb {
-      border-radius: 999px;
-
-      background:
-        rgba(120, 120, 120, 0.28);
-    }
-
-
-    /* =======================================================
-       ATTACHMENT CHIP
-       ======================================================= */
-
-    #attachmentList .attachment-chip {
-      position: relative;
-
-      display: flex;
-      align-items: center;
-
-      flex:
-        0
-        0
-        auto;
-
-      width: auto;
-      min-width: 180px;
-      max-width: 280px;
-
-      height: 44px;
-
-      gap: 8px;
-
-      padding:
-        5px
-        6px;
-
-      border:
-        1px
-        solid
-        rgba(120, 120, 120, 0.18);
-
-      border-radius: 13px;
-
-      background:
-        rgba(255, 255, 255, 0.62);
-
-      box-shadow:
-        0
-        1px
-        2px
-        rgba(0, 0, 0, 0.04);
-
-      overflow: hidden;
-
-      box-sizing: border-box;
-
-      transform: none !important;
-    }
-
-
-    html.dark #attachmentList .attachment-chip,
-    body.dark #attachmentList .attachment-chip,
-    [data-theme="dark"] #attachmentList .attachment-chip {
-      background:
-        rgba(35, 35, 35, 0.72);
-
-      border-color:
-        rgba(255, 255, 255, 0.1);
-    }
-
-
-    /* =======================================================
-       PREVIEW / ICON
-       ======================================================= */
-
-    #attachmentList .attachment-chip-icon,
-    #attachmentList .attachment-chip-preview {
-      width: 32px;
-      height: 32px;
-
-      min-width: 32px;
-
-      display: grid;
-      place-items: center;
-
-      border-radius: 9px;
-
-      overflow: hidden;
-
-      flex:
-        0
-        0
-        32px;
-
-      background:
-        rgba(128, 128, 128, 0.1);
-    }
-
-
-    #attachmentList .attachment-chip-preview img {
-      width: 100%;
-      height: 100%;
-
-      display: block;
-
-      object-fit: cover;
-    }
-
-
-    #attachmentList .attachment-chip-icon svg {
-      width: 16px;
-      height: 16px;
-    }
-
-
-    /* =======================================================
-       CHIP BODY
-       ======================================================= */
-
-    #attachmentList .attachment-chip-body {
-      position: relative;
-
-      min-width: 0;
-
-      flex:
-        1
-        1
-        auto;
-
-      overflow: hidden;
-    }
-
-
-    #attachmentList .attachment-chip-name {
-      width: 100%;
-
-      overflow: hidden;
-
-      white-space: nowrap;
-
-      text-overflow: ellipsis;
-
-      font-size: 12.5px;
-      font-weight: 550;
-
-      line-height: 1.2;
-    }
-
-
-    #attachmentList .attachment-chip-meta {
-      display: flex;
-      align-items: center;
-
-      min-width: 0;
-
-      gap: 4px;
-
-      margin-top: 3px;
-
-      overflow: hidden;
-
-      white-space: nowrap;
-
-      color:
-        rgba(100, 100, 100, 0.82);
-
-      font-size: 10.5px;
-
-      line-height: 1.1;
-    }
-
-
-    #attachmentList .attachment-chip-status {
-      max-width: 95px;
-
-      overflow: hidden;
-
-      text-overflow: ellipsis;
-
-      white-space: nowrap;
-    }
-
-
-    /* =======================================================
-       UPLOAD PROGRESS
-
-       Absolute positioning prevents layout shift.
-       ======================================================= */
-
-    #attachmentList .attachment-chip-progress {
-      position: absolute;
-
-      left: 0;
-      right: 0;
-      bottom: -4px;
-
-      height: 2px;
-
-      overflow: hidden;
-
-      border-radius: 999px;
-
-      background:
-        rgba(128, 128, 128, 0.12);
-    }
-
-
-    #attachmentList .attachment-chip-progress > span {
-      display: block;
-
-      height: 100%;
-
-      border-radius: inherit;
-
-      background: currentColor;
-
-      opacity: 0.58;
-
-      transition:
-        width
-        180ms
-        ease;
-    }
-
-
-    /* =======================================================
-       REMOVE / RETRY
-       ======================================================= */
-
-    #attachmentList .attachment-chip-remove,
-    #attachmentList .attachment-chip-retry {
-      appearance: none;
-
-      width: 26px;
-      height: 26px;
-
-      min-width: 26px;
-
-      display: grid;
-      place-items: center;
-
-      flex:
-        0
-        0
-        26px;
-
-      padding: 0;
-
-      border: 0;
-
-      border-radius: 8px;
-
-      background: transparent;
-
-      color: inherit;
-
-      cursor: pointer;
-
-      opacity: 0.64;
-
-      transform: none !important;
-
-      transition:
-        opacity 140ms ease,
-        background-color 140ms ease;
-    }
-
-
-    #attachmentList .attachment-chip-remove:hover,
-    #attachmentList .attachment-chip-retry:hover {
-      opacity: 1;
-
-      background:
-        rgba(128, 128, 128, 0.12);
-
-      transform: none !important;
-    }
-
-
-    #attachmentList .attachment-chip-remove svg,
-    #attachmentList .attachment-chip-retry svg {
-      width: 14px;
-      height: 14px;
-    }
-
-
-    /* =======================================================
-       ERROR STATE
-       ======================================================= */
-
-    #attachmentList
-    .attachment-chip[data-status="error"] {
-      border-color:
-        rgba(220, 70, 70, 0.28);
-    }
-
-
-    /* =======================================================
-       READY STATE
-
-       Deliberately subtle.
-       No green giant badge / no layout change.
-       ======================================================= */
-
-    #attachmentList
-    .attachment-chip[data-status="ready"] {
-      opacity: 1;
-    }
-
-
-    /* =======================================================
-       INPUT ROW
-
-       Buttons stay in same vertical position.
-       ======================================================= */
-
-    #glassInputContainer .composer-input-row {
-      display: flex !important;
-
-      align-items: flex-end !important;
-
-      width: 100% !important;
-      min-width: 0 !important;
-
-      min-height: 44px !important;
-
-      gap: 6px !important;
-
-      flex:
-        0
-        0
-        auto;
-
-      box-sizing: border-box;
-    }
-
-
-    /* =======================================================
-       TEXTAREA
-       ======================================================= */
-
-    #chatInput {
-      display: block;
-
-      flex:
-        1
-        1
-        auto;
-
-      width: auto !important;
-      min-width: 0 !important;
-
-      min-height: 38px !important;
-      max-height: 160px !important;
-
-      margin: 0 !important;
-
-      padding:
-        7px
-        7px !important;
-
-      border: 0 !important;
-
-      outline: 0 !important;
-
-      background:
-        transparent !important;
-
-      box-shadow:
-        none !important;
-
-      resize: none !important;
-
-      overflow-y: auto;
-
-      line-height: 1.4 !important;
-
-      box-sizing: border-box;
-    }
-
-
-    #chatInput:focus {
-      border: 0 !important;
-
-      outline: 0 !important;
-
-      box-shadow:
-        none !important;
-    }
-
-
-    /* =======================================================
-       LEFT / RIGHT BUTTON STABILITY
-       ======================================================= */
-
-    #attachBtn,
-    #micBtn,
-    #sendBtn {
-      flex:
-        0
-        0
-        auto !important;
-
-      transform:
-        none !important;
-
-      align-self:
-        flex-end;
-
-      transition:
-        background-color 140ms ease,
-        color 140ms ease,
-        border-color 140ms ease,
-        opacity 140ms ease,
-        box-shadow 140ms ease !important;
-    }
-
-
-    #attachBtn:hover,
-    #attachBtn:active,
-    #micBtn:hover,
-    #micBtn:active,
-    #sendBtn:hover,
-    #sendBtn:active {
-      transform:
-        none !important;
-    }
-
-
-    /* =======================================================
-       PLUS BUTTON
-       ======================================================= */
-
-    #attachBtn {
-      width: 40px !important;
-      height: 40px !important;
-
-      min-width: 40px !important;
-      min-height: 40px !important;
-
-      padding: 0 !important;
-    }
-
-
-    /* =======================================================
-       MIC BUTTON
-       ======================================================= */
-
-    #micBtn {
-      width: 40px !important;
-      height: 40px !important;
-
-      min-width: 40px !important;
-      min-height: 40px !important;
-
-      margin: 0 !important;
-
-      padding: 0 !important;
-    }
-
-
-    /* =======================================================
-       SEND BUTTON
-
-       Changing arrow → stop can no longer change dimensions.
-       ======================================================= */
-
-    #sendBtn {
-      width: 40px !important;
-      height: 40px !important;
-
-      min-width: 40px !important;
-      min-height: 40px !important;
-
-      padding: 0 !important;
-
-      border-radius:
-        999px !important;
-
-      transform:
-        none !important;
-    }
-
-
-    #sendBtn > svg,
-    #sendBtn > i {
-      flex:
-        0
-        0
-        auto;
-    }
-
-
-    #sendBtn.is-generating {
-      width: 40px !important;
-      height: 40px !important;
-
-      min-width: 40px !important;
-      min-height: 40px !important;
-    }
-
-
-    #sendBtn:disabled {
-      cursor: default;
-    }
-
-
-    /* =======================================================
-       VOICE TRANSCRIBE
-
-       Prevent voice state from pushing send button.
-       ======================================================= */
-
-    #voiceTranscribeContainer {
-      flex:
-        0
-        0
-        auto;
-
-      max-width:
-        min(
-          240px,
-          38vw
-        );
-
-      overflow: hidden;
-    }
-
-
-    /* =======================================================
-       EXPAND BUTTON
-
-       Keep it from entering normal flex calculations.
-       ======================================================= */
-
-    #composerExpandBtn {
-      position: absolute;
-
-      top: 8px;
-      right: 10px;
-
-      z-index: 3;
-
-      transform:
-        none !important;
-    }
-
-
-    /*
-     * Don't leave empty space for expand button
-     * when the attachment shelf is visible.
-     */
-
-    #glassInputContainer.has-attachments
-    #composerExpandBtn,
-    #composerWrapper.has-attachments
-    #composerExpandBtn {
-      top: 62px;
-    }
-
-
-    /* =======================================================
-       DRAG / DROP OVERLAY
-
-       Absolute overlay means no composer reflow.
-       ======================================================= */
-
-    #dragDropOverlay {
-      position: absolute !important;
-
-      inset: 0 !important;
-
-      z-index: 20;
-
-      pointer-events: none;
-
-      box-sizing: border-box;
-    }
-
-
-    #dragDropOverlay:not(.active) {
-      visibility: hidden;
-
-      opacity: 0;
-
-      pointer-events: none;
-    }
-
-
-    #dragDropOverlay.active {
-      visibility: visible;
-
-      opacity: 1;
-
-      pointer-events: none;
-    }
-
-
-    /* =======================================================
-       POPUP
-
-       Popup must float.
-       It must never consume composer layout space.
-       ======================================================= */
-
-    #attachPopupMenu {
-      position: absolute;
-
-      z-index: 40;
-
-      max-width:
-        min(
-          280px,
-          calc(100vw - 24px)
-        );
-    }
-
-
-    /* =======================================================
-       LIVE SUGGESTIONS — UPDATED: static, full-width, non-floating
-       ======================================================= */
-
-    #liveSuggestions {
-      position: static !important;
-      width: 100% !important;
-      max-width: 100% !important;
-      margin: 0 0 8px 0 !important;
-      padding: 0 !important;
-    }
-
-    #liveSuggestions:empty {
-      display: none !important;
-    }
-
-
-    /* =======================================================
-       MOBILE
-       ======================================================= */
-
-    @media
-    (
-      max-width: 640px
-    ) {
-
-      #glassInputContainer {
-        padding:
-          5px
-          6px !important;
-      }
-
-
-      #glassInputContainer
-      .composer-input-row {
-        gap:
-          4px !important;
-      }
-
-
-      #attachBtn,
-      #micBtn,
-      #sendBtn {
-        width:
-          38px !important;
-
-        height:
-          38px !important;
-
-        min-width:
-          38px !important;
-
-        min-height:
-          38px !important;
-      }
-
-
-      #attachmentList:not([hidden]) {
-        min-height:
-          52px;
-
-        padding-bottom:
-          6px;
-      }
-
-
-      #attachmentList
-      .attachment-chip {
-        min-width:
-          155px;
-
-        max-width:
-          220px;
-
-        height:
-          42px;
-      }
-
-
-      #attachmentList
-      .attachment-chip-icon,
-      #attachmentList
-      .attachment-chip-preview {
-        width:
-          30px;
-
-        height:
-          30px;
-
-        min-width:
-          30px;
-
-        flex-basis:
-          30px;
-      }
-
-
-      #voiceTranscribeContainer {
-        max-width:
-          34vw;
-      }
-
-
-      #chatInput {
-        font-size:
-          16px !important;
-      }
-
-    }
-
-
-    /* =======================================================
-       VERY SMALL MOBILE
-       ======================================================= */
-
-    @media
-    (
-      max-width: 390px
-    ) {
-
-      #voiceTranscribeContainer:not(.active) {
-        max-width: 0;
-
-        overflow: hidden;
-      }
-
-
-      #attachmentList
-      .attachment-chip {
-        min-width:
-          145px;
-
-        max-width:
-          190px;
-      }
-
-    }
-
-
-    /* =======================================================
-       REDUCED MOTION
-       ======================================================= */
-
-    @media
-    (
-      prefers-reduced-motion: reduce
-    ) {
-
-      #glassInputContainer,
-      #attachBtn,
-      #micBtn,
-      #sendBtn,
-      #attachmentList *,
-      #dragDropOverlay {
-        transition:
-          none !important;
-
-        animation:
-          none !important;
-      }
-
-    }
-
-  </style>
-
-  <!-- KaTeX -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css">
-  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/contrib/auto-render.min.js"></script>
-
-  <!-- External libs -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="https://unpkg.com/lucide@latest"></script>
-  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.8/purify.min.js"></script>
+  <link
+    rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css"
+  >
+
+  <script
+    defer
+    src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js"
+  ></script>
+
+  <script
+    defer
+    src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/contrib/auto-render.min.js"
+  ></script>
+
+  <!-- ========================================================= -->
+  <!-- EXTERNAL LIBRARIES                                        -->
+  <!-- ========================================================= -->
+
+  <script
+    src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"
+  ></script>
+
+  <script
+    src="https://unpkg.com/lucide@latest"
+  ></script>
+
+  <script
+    src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"
+  ></script>
+
+  <script
+    src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.8/purify.min.js"
+  ></script>
 
 </head>
 
 <body>
 
-  <div class="sidebar-scrim" id="sidebarScrim"></div>
+  <!-- ========================================================= -->
+  <!-- MOBILE SIDEBAR SCRIM                                      -->
+  <!-- ========================================================= -->
 
-  <aside class="sidebar" id="sidebar">
+  <div
+    class="sidebar-scrim"
+    id="sidebarScrim"
+  ></div>
+
+
+  <!-- ========================================================= -->
+  <!-- SIDEBAR                                                   -->
+  <!-- ========================================================= -->
+
+  <aside
+    class="sidebar"
+    id="sidebar"
+  >
+
+    <!-- ======================================================= -->
+    <!-- SIDEBAR HEADER                                          -->
+    <!-- ======================================================= -->
+
     <div class="sidebar-header">
+
       <button
         class="brand-button"
         id="brandBtn"
@@ -1074,9 +342,21 @@
         data-tooltip="NEYO home"
         data-tooltip-position="right"
       >
-        <img src="/icon.png" alt="NEYO" class="brand-logo" width="24" height="24">
-        <span class="brand-name">NEYO</span>
+
+        <img
+          src="/icon.png"
+          alt="NEYO"
+          class="brand-logo"
+          width="24"
+          height="24"
+        >
+
+        <span class="brand-name">
+          NEYO
+        </span>
+
       </button>
+
       <button
         class="icon-btn"
         id="collapseSidebarBtn"
@@ -1085,12 +365,28 @@
         data-tooltip="Close sidebar"
         data-tooltip-position="right"
       >
-        <i data-lucide="columns-2" size="20"></i>
+
+        <i
+          data-lucide="columns-2"
+          size="20"
+        ></i>
+
       </button>
+
     </div>
 
+
+    <!-- ======================================================= -->
+    <!-- SIDEBAR CONTENT                                         -->
+    <!-- ======================================================= -->
+
     <div class="sidebar-content">
-      <nav class="sidebar-primary-nav" aria-label="Primary navigation">
+
+      <nav
+        class="sidebar-primary-nav"
+        aria-label="Primary navigation"
+      >
+
         <button
           class="new-chat-btn"
           id="newChatBtn"
@@ -1099,9 +395,23 @@
           data-tooltip="New conversation"
           data-tooltip-position="right"
         >
-          <span class="sidebar-nav-icon"><i data-lucide="square-pen" size="18"></i></span>
-          <span>New Conversation</span>
+
+          <span class="sidebar-nav-icon">
+
+            <i
+              data-lucide="square-pen"
+              size="18"
+            ></i>
+
+          </span>
+
+          <span>
+            New Conversation
+          </span>
+
         </button>
+
+
         <button
           class="sidebar-personality-btn"
           id="sidebarPersonalitiesBtn"
@@ -1110,18 +420,58 @@
           data-tooltip="NEYO Personalities"
           data-tooltip-position="right"
         >
-          <span class="sidebar-nav-icon"><i data-lucide="sparkles" size="18"></i></span>
-          <span>NEYO Personalities</span>
+
+          <span class="sidebar-nav-icon">
+
+            <i
+              data-lucide="sparkles"
+              size="18"
+            ></i>
+
+          </span>
+
+          <span>
+            NEYO Personalities
+          </span>
+
         </button>
+
       </nav>
+
+
+      <!-- ===================================================== -->
+      <!-- HISTORY                                               -->
+      <!-- ===================================================== -->
+
       <div class="history-section">
-        <span class="section-title">Recent Chats</span>
-        <div class="history-list" id="historyList"></div>
+
+        <span class="section-title">
+          Recent Chats
+        </span>
+
+        <div
+          class="history-list"
+          id="historyList"
+        ></div>
+
       </div>
+
     </div>
 
+
+    <!-- ======================================================= -->
+    <!-- SIDEBAR FOOTER                                          -->
+    <!-- ======================================================= -->
+
     <div class="sidebar-footer">
-      <div class="user-popup-menu" id="userPopupMenu" role="menu" aria-hidden="true">
+
+      <div
+        class="user-popup-menu"
+        id="userPopupMenu"
+        role="menu"
+        aria-hidden="true"
+      >
+
         <button
           class="popup-item"
           id="settingsBtn"
@@ -1130,9 +480,23 @@
           data-tooltip="Settings"
           data-tooltip-position="right"
         >
-          <span class="popup-icon-wrapper"><i data-lucide="settings-2" size="18"></i></span>
-          <span>Settings</span>
+
+          <span class="popup-icon-wrapper">
+
+            <i
+              data-lucide="settings-2"
+              size="18"
+            ></i>
+
+          </span>
+
+          <span>
+            Settings
+          </span>
+
         </button>
+
+
         <button
           class="popup-item"
           id="sidebarDarkModeToggle"
@@ -1141,10 +505,26 @@
           data-tooltip="Appearance"
           data-tooltip-position="right"
         >
-          <span class="popup-icon-wrapper"><i data-lucide="sun-moon" size="18"></i></span>
-          <span>Appearance</span>
+
+          <span class="popup-icon-wrapper">
+
+            <i
+              data-lucide="sun-moon"
+              size="18"
+            ></i>
+
+          </span>
+
+          <span>
+            Appearance
+          </span>
+
         </button>
+
+
         <div class="popup-divider"></div>
+
+
         <button
           class="popup-item danger"
           id="logoutBtn"
@@ -1153,10 +533,25 @@
           data-tooltip="Log out"
           data-tooltip-position="right"
         >
-          <span class="popup-icon-wrapper"><i data-lucide="log-out" size="18"></i></span>
-          <span>Log out</span>
+
+          <span class="popup-icon-wrapper">
+
+            <i
+              data-lucide="log-out"
+              size="18"
+            ></i>
+
+          </span>
+
+          <span>
+            Log out
+          </span>
+
         </button>
+
       </div>
+
+
       <button
         class="user-profile-btn"
         id="userProfileBtn"
@@ -1166,23 +561,77 @@
         data-tooltip="Account"
         data-tooltip-position="right"
       >
-        <div id="userAvatar">U</div>
-        <div class="user-info">
-          <span class="user-name" id="userNameDisplay">@user</span>
-          <span class="user-badge" id="userPlanBadge">Free Plan</span>
+
+        <div id="userAvatar">
+          U
         </div>
-        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="more-icon" aria-hidden="true">
-          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
-          <circle cx="12" cy="12" r="4"/>
+
+        <div class="user-info">
+
+          <span
+            class="user-name"
+            id="userNameDisplay"
+          >
+            @user
+          </span>
+
+          <span
+            class="user-badge"
+            id="userPlanBadge"
+          >
+            Free Plan
+          </span>
+
+        </div>
+
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          class="more-icon"
+          aria-hidden="true"
+        >
+
+          <path
+            d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"
+          ></path>
+
+          <circle
+            cx="12"
+            cy="12"
+            r="4"
+          ></circle>
+
         </svg>
+
       </button>
+
     </div>
+
   </aside>
+
+
+  <!-- ========================================================= -->
+  <!-- APP SHELL                                                 -->
+  <!-- ========================================================= -->
 
   <main class="app-shell">
 
+
+    <!-- ======================================================= -->
+    <!-- TOP BAR                                                 -->
+    <!-- ======================================================= -->
+
     <header class="top-bar">
+
       <div class="top-left">
+
         <button
           class="icon-btn top-toggle-btn"
           id="sidebarToggleBtn"
@@ -1191,355 +640,1240 @@
           data-tooltip="Toggle sidebar"
           data-tooltip-position="right"
         >
-          <i data-lucide="columns-2" size="20"></i>
+
+          <i
+            data-lucide="columns-2"
+            size="20"
+          ></i>
+
         </button>
+
+
+        <!-- =================================================== -->
+        <!-- MODEL SELECTOR                                      -->
+        <!-- =================================================== -->
+
         <div class="model-dropdown-wrapper">
+
           <div
             class="model-badge"
             id="modelBadgeBtn"
             data-tooltip="Choose model"
             data-tooltip-position="bottom"
           >
-            <span class="model-name" id="currentModelDisplay">NEYO L1.0</span>
-            <i data-lucide="chevron-down" size="16" class="model-chevron"></i>
+
+            <span
+              class="model-name"
+              id="currentModelDisplay"
+            >
+              NEYO L1.0
+            </span>
+
+            <i
+              data-lucide="chevron-down"
+              size="16"
+              class="model-chevron"
+            ></i>
+
           </div>
-          <div class="model-dropdown-menu" id="modelDropdownMenu">
-            <div class="model-option active" data-model="l1.0" id="optL10">
-              <div class="model-opt-info"><strong>NEYO L1.0</strong><small>Text & Images • Snappy Responses</small></div>
-              <i data-lucide="check" size="16" class="opt-check-icon"></i>
+
+
+          <div
+            class="model-dropdown-menu"
+            id="modelDropdownMenu"
+          >
+
+            <div
+              class="model-option active"
+              data-model="l1.0"
+              id="optL10"
+            >
+
+              <div class="model-opt-info">
+
+                <strong>
+                  NEYO L1.0
+                </strong>
+
+                <small>
+                  Text & Images • Snappy Responses
+                </small>
+
+              </div>
+
+              <i
+                data-lucide="check"
+                size="16"
+                class="opt-check-icon"
+              ></i>
+
             </div>
-            <div class="model-option pro-option" data-model="l1.2" id="optL12">
-              <div class="model-opt-info"><strong>NEYO L1.2 Pro</strong><small>Audio, Video, Deep Reasoning & 4K Tokens</small></div>
-              <span class="pro-tag">PRO</span>
+
+
+            <div
+              class="model-option pro-option"
+              data-model="l1.2"
+              id="optL12"
+            >
+
+              <div class="model-opt-info">
+
+                <strong>
+                  NEYO L1.2 Pro
+                </strong>
+
+                <small>
+                  Audio, Video, Deep Reasoning & 4K Tokens
+                </small>
+
+              </div>
+
+              <span class="pro-badge">
+                PRO
+              </span>
+
             </div>
+
           </div>
+
         </div>
+
       </div>
+
+
+      <!-- ===================================================== -->
+      <!-- TOP RIGHT                                             -->
+      <!-- ===================================================== -->
+
       <div class="top-right">
+
         <button
           class="icon-btn"
           id="topBarDarkModeToggle"
-          title="Toggle Theme"
           type="button"
-          data-tooltip="Change theme"
+          title="Appearance"
+          data-tooltip="Appearance"
           data-tooltip-position="bottom"
         >
-          <i data-lucide="sun" size="20"></i>
-        </button>
-      </div>
-    </header>
 
-    <div class="scroll-area" id="scrollArea">
-      <div class="conversation-column">
-
-        <div class="hero-section" id="heroSection">
-          <h1>What can I help with today?</h1>
-          <p class="hero-copy">Powered by NEYO Engine. Select a prompt or type your message below.</p>
-          <div class="starter-grid">
-            <button type="button" data-prompt="Write a Python script to scrape website data cleanly.">
-              <i data-lucide="code-2" size="16"></i><span>Python Scraper</span>
-            </button>
-            <button type="button" data-prompt="Explain quantum computing in simple terms.">
-              <i data-lucide="cpu" size="16"></i><span>Quantum Computing</span>
-            </button>
-            <button type="button" data-prompt="Help me outline a business plan for a new SaaS product.">
-              <i data-lucide="lightbulb" size="16"></i><span>SaaS Business Plan</span>
-            </button>
-            <button type="button" data-prompt="Draft a professional partnership proposal email.">
-              <i data-lucide="mail-check" size="16"></i><span>Draft Partnership Email</span>
-            </button>
-          </div>
-        </div>
-        <div class="chat-messages" id="chatMessages"></div>
-      </div>
-    </div>
-
-    <!-- ========================================================= -->
-    <!-- COMPOSER DOCK — STABLE VERSION                            -->
-    <!-- ========================================================= -->
-
-    <footer class="composer-dock">
-
-      <div
-        class="composer-wrapper"
-        id="composerWrapper"
-      >
-
-        <!-- Drag/drop floats above composer; never changes its size -->
-        <div
-          class="drag-drop-overlay"
-          id="dragDropOverlay"
-          aria-hidden="true"
-        >
           <i
-            data-lucide="upload-cloud"
-            size="32"
+            data-lucide="sun-moon"
+            size="19"
           ></i>
 
-          <span>
-            Drop files here to attach
-          </span>
-        </div>
+        </button>
+
+      </div>
+
+    </header>
 
 
-        <!-- Suggestions are now static, full-width, non-floating -->
-        <div
-          class="live-suggestions"
-          id="liveSuggestions"
-        ></div>
+    <!-- ======================================================= -->
+    <!-- SCROLL AREA                                             -->
+    <!-- ======================================================= -->
+
+    <section
+      class="scroll-area"
+      id="scrollArea"
+    >
 
 
-        <!--
-          + BUTTON POPUP
+      <!-- ===================================================== -->
+      <!-- HERO                                                  -->
+      <!-- ===================================================== -->
 
-          Ownership:
-          neo.js owns opening/closing this popup.
+      <section
+        class="hero-section"
+        id="heroSection"
+      >
 
-          attachments.js owns ONLY #addFilesMenuBtn.
-        -->
-        <div
-          class="attachment-popup-menu"
-          id="attachPopupMenu"
-          role="menu"
-          aria-hidden="true"
-        >
+        <div class="hero-content">
 
-          <button
-            class="attachment-popup-item"
-            id="addFilesMenuBtn"
-            type="button"
-            role="menuitem"
-            data-tooltip="Add files"
-            data-tooltip-position="right"
-          >
-            <i
-              data-lucide="paperclip"
-              size="16"
-            ></i>
+          <div class="hero-brand">
 
-            <span>
-              Add Files
-            </span>
-          </button>
+            <img
+              src="/icon.png"
+              alt=""
+              class="hero-logo"
+              width="42"
+              height="42"
+            >
+
+            <h1>
+              What can I help with?
+            </h1>
+
+          </div>
 
 
-          <button
-            class="attachment-popup-item"
-            id="deepResearchToggleBtn"
-            type="button"
-            role="menuitem"
-            data-tooltip="Deep Research"
-            data-tooltip-position="right"
-          >
-            <i
-              data-lucide="search-code"
-              size="16"
-            ></i>
-
-            <span>
-              Deep Research
-            </span>
-          </button>
-
-
-          <button
-            class="attachment-popup-item"
-            id="personalMemoryBtn"
-            type="button"
-            role="menuitem"
-            data-tooltip="NEYO Personalities"
-            data-tooltip-position="right"
-          >
-            <i
-              data-lucide="brain-circuit"
-              size="16"
-            ></i>
-
-            <span>
-              NEYO Personalities
-            </span>
-          </button>
-
-        </div>
-
-
-        <!-- =====================================================
-             STABLE INPUT SURFACE
-             ===================================================== -->
-
-        <div
-          class="glass-input-container"
-          id="glassInputContainer"
-        >
-
-          <!--
-            Attachment shelf.
-
-            IMPORTANT:
-            No public <input type="file"> here.
-            attachments.js creates #neyoAttachmentInput privately.
-          -->
           <div
-            class="attached-chips-wrapper"
-            id="attachmentList"
-            aria-label="Attached files"
-            hidden
-          ></div>
-
-
-          <!-- Existing composer expand module remains supported -->
-          <button
-            class="composer-expand-btn"
-            id="composerExpandBtn"
-            type="button"
-            title="Expand composer"
-            aria-label="Expand composer"
-            aria-expanded="false"
-            data-tooltip="Expand"
-            data-tooltip-position="top"
+            class="suggestion-grid"
+            id="suggestionGrid"
           >
-            <i
-              data-lucide="maximize-2"
-              size="16"
-            ></i>
-          </button>
 
-
-          <!-- ===================================================
-               INPUT ROW
-               =================================================== -->
-
-          <div class="composer-input-row">
-
-
-            <!--
-              Existing popup launcher.
-              DO NOT rename this.
-              DO NOT let attachments.js own it.
-            -->
             <button
-              class="attach-btn"
-              id="attachBtn"
-              title="Add Attachments"
+              class="suggestion-card"
               type="button"
-              aria-label="Add attachments"
-              aria-haspopup="menu"
-              aria-controls="attachPopupMenu"
-              aria-expanded="false"
-              data-tooltip="Attach files"
+              data-prompt="Help me write something"
+            >
+
+              <span class="suggestion-icon">
+
+                <i
+                  data-lucide="pen-line"
+                  size="18"
+                ></i>
+
+              </span>
+
+              <div>
+
+                <strong>
+                  Write
+                </strong>
+
+                <small>
+                  Draft, rewrite or improve text
+                </small>
+
+              </div>
+
+            </button>
+
+
+            <button
+              class="suggestion-card"
+              type="button"
+              data-prompt="Help me learn something"
+            >
+
+              <span class="suggestion-icon">
+
+                <i
+                  data-lucide="graduation-cap"
+                  size="18"
+                ></i>
+
+              </span>
+
+              <div>
+
+                <strong>
+                  Learn
+                </strong>
+
+                <small>
+                  Explain a topic clearly
+                </small>
+
+              </div>
+
+            </button>
+
+
+            <button
+              class="suggestion-card"
+              type="button"
+              data-prompt="Help me create an image"
+            >
+
+              <span class="suggestion-icon">
+
+                <i
+                  data-lucide="image"
+                  size="18"
+                ></i>
+
+              </span>
+
+              <div>
+
+                <strong>
+                  Create
+                </strong>
+
+                <small>
+                  Explore ideas and visuals
+                </small>
+
+              </div>
+
+            </button>
+
+
+            <button
+              class="suggestion-card"
+              type="button"
+              data-prompt="Help me solve a problem"
+            >
+
+              <span class="suggestion-icon">
+
+                <i
+                  data-lucide="brain"
+                  size="18"
+                ></i>
+
+              </span>
+
+              <div>
+
+                <strong>
+                  Solve
+                </strong>
+
+                <small>
+                  Reason through complex problems
+                </small>
+
+              </div>
+
+            </button>
+
+          </div>
+
+        </div>
+
+      </section>
+
+
+      <!-- ===================================================== -->
+      <!-- MESSAGES                                              -->
+      <!-- ===================================================== -->
+
+      <div
+        class="chat-messages"
+        id="chatMessages"
+        aria-live="polite"
+      ></div>
+
+
+      <div
+        class="scroll-bottom-spacer"
+        aria-hidden="true"
+      ></div>
+
+    </section>
+
+
+    <!-- ======================================================= -->
+    <!-- COMPOSER                                                -->
+    <!-- ======================================================= -->
+
+    <section
+      class="composer-wrapper"
+      id="composerWrapper"
+    >
+
+
+      <!-- ===================================================== -->
+      <!-- LIVE SUGGESTIONS                                      -->
+      <!-- ===================================================== -->
+
+      <div
+        class="live-suggestions"
+        id="liveSuggestions"
+      ></div>
+
+
+      <!-- ===================================================== -->
+      <!-- ATTACHED FILES                                        -->
+      <!-- ===================================================== -->
+
+      <div
+        class="attached-chips-wrapper"
+        id="attachedChipsWrapper"
+      ></div>
+
+
+      <!-- ===================================================== -->
+      <!-- GLASS INPUT                                           -->
+      <!-- ===================================================== -->
+
+      <div
+        class="glass-input-container"
+        id="glassInputContainer"
+      >
+
+
+        <!-- =================================================== -->
+        <!-- INPUT                                               -->
+        <!-- =================================================== -->
+
+        <textarea
+          id="chatInput"
+          class="chat-input"
+          rows="1"
+          maxlength="50000"
+          placeholder="Message NEYO"
+          aria-label="Message NEYO"
+        ></textarea>
+
+
+        <!-- =================================================== -->
+        <!-- COMPOSER EXPAND                                     -->
+        <!-- =================================================== -->
+
+        <button
+          class="composer-expand-btn"
+          id="composerExpandBtn"
+          type="button"
+          title="Expand composer"
+          aria-label="Expand composer"
+          aria-expanded="false"
+          data-tooltip="Expand"
+          data-tooltip-position="top"
+        >
+
+          <i
+            data-lucide="maximize-2"
+            size="16"
+          ></i>
+
+        </button>
+
+
+        <!-- =================================================== -->
+        <!-- COMPOSER ACTIONS                                    -->
+        <!-- =================================================== -->
+
+        <div class="composer-actions-row">
+
+
+          <div class="composer-left-actions">
+
+            <!-- ================================================= -->
+            <!-- ATTACH                                           -->
+            <!-- ================================================= -->
+
+            <button
+              class="composer-icon-btn"
+              id="attachBtn"
+              type="button"
+              title="Attach"
+              aria-label="Attach"
+              data-tooltip="Attach"
               data-tooltip-position="top"
             >
+
               <i
                 data-lucide="plus"
                 size="20"
               ></i>
+
             </button>
 
 
-            <!-- Chat input -->
-            <textarea
-              id="chatInput"
-              rows="1"
-              placeholder="Message NEYO..."
-              aria-label="Message NEYO"
-              autocomplete="off"
-              autocapitalize="sentences"
-              spellcheck="true"
-            ></textarea>
+            <!-- ================================================= -->
+            <!-- TOOLS                                            -->
+            <!-- ================================================= -->
 
-
-            <!-- Existing voice transcription UI -->
-            <div
-              class="voice-transcribe-container"
-              id="voiceTranscribeContainer"
+            <button
+              class="composer-pill-btn"
+              id="toolsBtn"
+              type="button"
+              title="Tools"
+              data-tooltip="Tools"
+              data-tooltip-position="top"
             >
 
-              <div
-                class="wave-dots-bar"
-                id="waveDotsBar"
-              >
-                <span></span>
-                <span></span>
-                <span></span>
-                <span></span>
-                <span></span>
-                <span></span>
+              <i
+                data-lucide="sliders-horizontal"
+                size="16"
+              ></i>
 
-                <span></span>
-                <span></span>
-                <span></span>
-                <span></span>
-                <span></span>
-                <span></span>
+              <span>
+                Tools
+              </span>
 
-                <span></span>
-                <span></span>
-                <span></span>
-                <span></span>
-                <span></span>
-                <span></span>
-
-                <span></span>
-                <span></span>
-                <span></span>
-                <span></span>
-                <span></span>
-                <span></span>
-              </div>
+            </button>
 
 
-              <button
-                class="stop-recording-btn"
-                id="stopRecBtn"
-                title="Stop Listening"
-                type="button"
-                aria-label="Stop listening"
-                data-tooltip="Stop listening"
-                data-tooltip-position="top"
-              >
-                <i
-                  data-lucide="square"
-                  size="14"
-                ></i>
-              </button>
+            <!-- ================================================= -->
+            <!-- DEEP RESEARCH                                    -->
+            <!-- ================================================= -->
+
+            <button
+              class="composer-pill-btn"
+              id="deepResearchToggleBtn"
+              type="button"
+              aria-pressed="false"
+              title="Deep Research"
+              data-tooltip="Deep Research"
+              data-tooltip-position="top"
+            >
+
+              <i
+                data-lucide="telescope"
+                size="16"
+              ></i>
+
+              <span>
+                Research
+              </span>
+
+            </button>
+
+          </div>
+
+
+          <!-- ================================================= -->
+          <!-- RIGHT ACTIONS                                    -->
+          <!-- ================================================= -->
+
+          <div class="composer-right-actions">
+
+
+            <!-- =============================================== -->
+            <!-- VOICE                                          -->
+            <!-- =============================================== -->
+
+            <button
+              class="composer-icon-btn"
+              id="voiceBtn"
+              type="button"
+              title="Voice"
+              aria-label="Voice"
+              data-tooltip="Voice"
+              data-tooltip-position="top"
+            >
+
+              <i
+                data-lucide="audio-lines"
+                size="20"
+              ></i>
+
+            </button>
+
+
+            <!-- =============================================== -->
+            <!-- SEND                                           -->
+            <!-- =============================================== -->
+
+            <button
+              class="send-btn"
+              id="sendBtn"
+              type="button"
+              aria-label="Send message"
+              title="Send"
+            >
+
+              <i
+                data-lucide="arrow-up"
+                size="20"
+              ></i>
+
+            </button>
+
+          </div>
+
+        </div>
+
+      </div>
+
+
+      <!-- ===================================================== -->
+      <!-- DISCLAIMER                                            -->
+      <!-- ===================================================== -->
+
+      <div class="composer-disclaimer">
+
+        NEYO can make mistakes. Check important info.
+
+      </div>
+
+    </section>
+
+  </main>
+
+
+  <!-- ========================================================= -->
+  <!-- ATTACH MENU                                               -->
+  <!-- ========================================================= -->
+
+  <div
+    class="attach-popup-menu"
+    id="attachPopupMenu"
+  >
+
+    <button
+      class="attach-menu-item"
+      id="addFilesMenuBtn"
+      type="button"
+    >
+
+      <i
+        data-lucide="paperclip"
+        size="18"
+      ></i>
+
+      <span>
+        Add files
+      </span>
+
+    </button>
+
+
+    <button
+      class="attach-menu-item"
+      id="neoPersonalitiesBtn"
+      type="button"
+    >
+
+      <i
+        data-lucide="sparkles"
+        size="18"
+      ></i>
+
+      <span>
+        NEYO Personalities
+      </span>
+
+    </button>
+
+  </div>
+
+
+  <!-- ========================================================= -->
+  <!-- LEGACY FILE INPUT                                         -->
+  <!-- ========================================================= -->
+
+  <input
+    type="file"
+    id="hiddenFileInput"
+    multiple
+    hidden
+  >
+
+
+  <!-- ========================================================= -->
+  <!-- DRAG DROP OVERLAY                                         -->
+  <!-- ========================================================= -->
+
+  <div
+    class="drag-drop-overlay"
+    id="dragDropOverlay"
+  >
+
+    <div class="drag-drop-content">
+
+      <i
+        data-lucide="upload-cloud"
+        size="34"
+      ></i>
+
+      <strong>
+        Drop files here
+      </strong>
+
+      <span>
+        Add files to your conversation
+      </span>
+
+    </div>
+
+  </div>
+
+
+  <!-- ========================================================= -->
+  <!-- HISTORY POPUP                                             -->
+  <!-- ========================================================= -->
+
+  <div
+    class="history-popup-menu"
+    id="historyPopupMenu"
+    role="menu"
+  >
+
+    <button
+      class="history-popup-item"
+      id="hpShareBtn"
+      type="button"
+      role="menuitem"
+    >
+
+      <i
+        data-lucide="share-2"
+        size="16"
+      ></i>
+
+      <span>
+        Share
+      </span>
+
+    </button>
+
+
+    <button
+      class="history-popup-item"
+      id="hpRenameBtn"
+      type="button"
+      role="menuitem"
+    >
+
+      <i
+        data-lucide="pencil"
+        size="16"
+      ></i>
+
+      <span>
+        Rename
+      </span>
+
+    </button>
+
+
+    <button
+      class="history-popup-item"
+      id="hpPinBtn"
+      type="button"
+      role="menuitem"
+    >
+
+      <i
+        data-lucide="pin"
+        size="16"
+      ></i>
+
+      <span id="hpPinLabel">
+        Pin
+      </span>
+
+    </button>
+
+
+    <div class="popup-divider"></div>
+
+
+    <button
+      class="history-popup-item danger"
+      id="hpDeleteBtn"
+      type="button"
+      role="menuitem"
+    >
+
+      <i
+        data-lucide="trash-2"
+        size="16"
+      ></i>
+
+      <span>
+        Delete
+      </span>
+
+    </button>
+
+  </div>
+
+
+  <!-- ========================================================= -->
+  <!-- PERSONALITY MODAL                                         -->
+  <!-- ========================================================= -->
+
+  <div
+    class="personality-modal"
+    id="personalityModal"
+    aria-hidden="true"
+  >
+
+    <div
+      class="personality-modal-card"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Choose NEYO personality"
+    >
+
+      <div class="personality-modal-header">
+
+        <div>
+
+          <h2>
+            Choose a personality
+          </h2>
+
+          <p>
+            Change how NEYO communicates with you.
+          </p>
+
+        </div>
+
+        <button
+          class="icon-btn"
+          id="personalityModalCloseBtn"
+          type="button"
+          aria-label="Close"
+        >
+
+          <i
+            data-lucide="x"
+            size="20"
+          ></i>
+
+        </button>
+
+      </div>
+
+
+      <div class="personality-grid">
+
+        <button
+          class="personality-option"
+          type="button"
+          data-neo-personality="default"
+        >
+
+          <strong>
+            Default
+          </strong>
+
+          <small>
+            Balanced and helpful.
+          </small>
+
+        </button>
+
+
+        <button
+          class="personality-option"
+          type="button"
+          data-neo-personality="concise"
+        >
+
+          <strong>
+            Concise
+          </strong>
+
+          <small>
+            Direct and compact.
+          </small>
+
+        </button>
+
+
+        <button
+          class="personality-option"
+          type="button"
+          data-neo-personality="creative"
+        >
+
+          <strong>
+            Creative
+          </strong>
+
+          <small>
+            Expressive and imaginative.
+          </small>
+
+        </button>
+
+
+        <button
+          class="personality-option"
+          type="button"
+          data-neo-personality="technical"
+        >
+
+          <strong>
+            Technical
+          </strong>
+
+          <small>
+            Detailed and precise.
+          </small>
+
+        </button>
+
+      </div>
+
+    </div>
+
+  </div>
+
+
+  <!-- ========================================================= -->
+  <!-- SETTINGS MODAL                                            -->
+  <!-- ========================================================= -->
+
+  <div
+    class="neo-settings-overlay"
+    id="settingsModal"
+    aria-hidden="true"
+  >
+
+    <div
+      class="neo-settings-shell"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="settingsModalTitle"
+    >
+
+
+      <!-- ===================================================== -->
+      <!-- SETTINGS SIDEBAR                                      -->
+      <!-- ===================================================== -->
+
+      <aside class="neo-settings-sidebar">
+
+        <div class="neo-settings-sidebar-header">
+
+          <div>
+
+            <span class="settings-eyebrow">
+              NEYO
+            </span>
+
+            <h2 id="settingsModalTitle">
+              Settings
+            </h2>
+
+          </div>
+
+          <button
+            class="neo-settings-close-btn"
+            id="settingsCloseBtn"
+            type="button"
+            aria-label="Close settings"
+          >
+
+            <i
+              data-lucide="x"
+              size="20"
+            ></i>
+
+          </button>
+
+        </div>
+
+
+        <nav
+          class="neo-settings-nav"
+          aria-label="Settings sections"
+        >
+
+          <button
+            class="neo-settings-nav-item active"
+            type="button"
+            data-settings-panel="profile"
+          >
+
+            <i
+              data-lucide="user"
+              size="18"
+            ></i>
+
+            <span>
+              Profile
+            </span>
+
+          </button>
+
+
+          <button
+            class="neo-settings-nav-item"
+            type="button"
+            data-settings-panel="appearance"
+          >
+
+            <i
+              data-lucide="palette"
+              size="18"
+            ></i>
+
+            <span>
+              Appearance
+            </span>
+
+          </button>
+
+
+          <button
+            class="neo-settings-nav-item"
+            type="button"
+            data-settings-panel="workspace"
+          >
+
+            <i
+              data-lucide="briefcase-business"
+              size="18"
+            ></i>
+
+            <span>
+              Workspace
+            </span>
+
+          </button>
+
+
+          <button
+            class="neo-settings-nav-item"
+            type="button"
+            data-settings-panel="privacy"
+          >
+
+            <i
+              data-lucide="shield-check"
+              size="18"
+            ></i>
+
+            <span>
+              Privacy
+            </span>
+
+          </button>
+
+
+          <button
+            class="neo-settings-nav-item"
+            type="button"
+            data-settings-panel="memory"
+          >
+
+            <i
+              data-lucide="brain"
+              size="18"
+            ></i>
+
+            <span>
+              Memory
+            </span>
+
+          </button>
+
+
+          <button
+            class="neo-settings-nav-item"
+            type="button"
+            data-settings-panel="files"
+          >
+
+            <i
+              data-lucide="folder"
+              size="18"
+            ></i>
+
+            <span>
+              Files
+            </span>
+
+          </button>
+
+
+          <button
+            class="neo-settings-nav-item"
+            type="button"
+            data-settings-panel="accessibility"
+          >
+
+            <i
+              data-lucide="accessibility"
+              size="18"
+            ></i>
+
+            <span>
+              Accessibility
+            </span>
+
+          </button>
+
+
+          <button
+            class="neo-settings-nav-item"
+            type="button"
+            data-settings-panel="keyboard"
+          >
+
+            <i
+              data-lucide="keyboard"
+              size="18"
+            ></i>
+
+            <span>
+              Keyboard
+            </span>
+
+          </button>
+
+
+          <button
+            class="neo-settings-nav-item"
+            type="button"
+            data-settings-panel="about"
+          >
+
+            <i
+              data-lucide="circle-info"
+              size="18"
+            ></i>
+
+            <span>
+              About
+            </span>
+
+          </button>
+
+        </nav>
+
+      </aside>
+
+
+      <!-- ===================================================== -->
+      <!-- SETTINGS CONTENT                                      -->
+      <!-- ===================================================== -->
+
+      <section class="neo-settings-content">
+
+
+        <!-- =================================================== -->
+        <!-- PROFILE                                             -->
+        <!-- =================================================== -->
+
+        <div
+          class="neo-settings-panel active"
+          id="settingsPanelProfile"
+        >
+
+          <div class="neo-settings-panel-header">
+
+            <h2>
+              Profile
+            </h2>
+
+            <p>
+              Manage how your NEYO account appears.
+            </p>
+
+          </div>
+
+
+          <div class="settings-profile-card">
+
+            <div
+              class="settings-avatar-preview"
+              id="settingsAvatarPreview"
+            >
+              U
+            </div>
+
+
+            <div class="settings-profile-meta">
+
+              <strong id="settingsProfileName">
+                @user
+              </strong>
+
+              <span id="settingsProfileEmail">
+                user@example.com
+              </span>
+
+              <span id="settingsProfilePlan">
+                Free Plan
+              </span>
+
+            </div>
+
+          </div>
+
+
+          <div class="settings-row">
+
+            <div>
+
+              <strong>
+                Profile photo
+              </strong>
+
+              <small>
+                JPG, PNG or WebP up to 5 MB.
+              </small>
 
             </div>
 
 
-            <!-- Existing voice input -->
             <button
-              class="icon-btn mic-btn"
-              id="micBtn"
-              title="Voice Input"
+              class="settings-secondary-btn"
+              id="chooseAvatarBtn"
               type="button"
-              aria-label="Voice input"
-              data-tooltip="Voice input"
-              data-tooltip-position="top"
             >
-              <i
-                data-lucide="audio-lines"
-                size="16"
-              ></i>
+              Choose image
             </button>
 
+          </div>
 
-            <!--
-              send-state.js owns this button.
-              chat.js DOES NOT bind it directly.
-            -->
-            <button
-              class="send-btn"
-              id="sendBtn"
-              title="Send Message"
-              type="button"
-              aria-label="Send message"
-              data-tooltip="Send message"
-              data-tooltip-position="top"
+
+          <input
+            id="settingsAvatarFileInput"
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            hidden
+          >
+
+
+          <div class="settings-row">
+
+            <div>
+
+              <strong>
+                Display name
+              </strong>
+
+              <small>
+                Used across your NEYO account.
+              </small>
+
+            </div>
+
+            <input
+              class="settings-text-input"
+              id="settingsDisplayNameInput"
+              type="text"
+              maxlength="80"
+              autocomplete="name"
             >
-              <i
-                data-lucide="arrow-up"
-                size="18"
-              ></i>
+
+          </div>
+
+
+          <div class="settings-row">
+
+            <div>
+
+              <strong>
+                Username
+              </strong>
+
+              <small>
+                Your unique NEYO identity.
+              </small>
+
+            </div>
+
+            <input
+              class="settings-text-input"
+              id="settingsUsernameInput"
+              type="text"
+              maxlength="40"
+              autocomplete="username"
+            >
+
+          </div>
+
+
+          <div class="settings-panel-actions">
+
+            <button
+              class="settings-secondary-btn"
+              id="settingsProfileCancelBtn"
+              type="button"
+            >
+              Cancel
+            </button>
+
+            <button
+              class="settings-primary-btn"
+              id="settingsProfileSaveBtn"
+              type="button"
+            >
+              Save changes
             </button>
 
           </div>
@@ -1547,170 +1881,55 @@
         </div>
 
 
-        <p class="composer-note">
-          NEYO may produce inaccurate info. Verify critical data.
-        </p>
+        <!-- =================================================== -->
+        <!-- APPEARANCE                                          -->
+        <!-- =================================================== -->
 
-      </div>
-
-    </footer>
-  </main>
-
-  <div class="history-popup-menu" id="historyPopupMenu">
-    <div
-      class="history-popup-item"
-      id="hpShareBtn"
-      data-tooltip="Share conversation"
-      data-tooltip-position="left"
-    >
-      <i data-lucide="share-2" size="16"></i>Share conversation
-    </div>
-    <div
-      class="history-popup-item"
-      id="hpPinBtn"
-      data-tooltip="Pin conversation"
-      data-tooltip-position="left"
-    >
-      <i data-lucide="pin" size="16"></i>Pin
-    </div>
-    <div
-      class="history-popup-item"
-      id="hpRenameBtn"
-      data-tooltip="Rename conversation"
-      data-tooltip-position="left"
-    >
-      <i data-lucide="pencil" size="16"></i>Rename
-    </div>
-    <div
-      class="history-popup-item danger"
-      id="hpDeleteBtn"
-      data-tooltip="Delete conversation"
-      data-tooltip-position="left"
-    >
-      <i data-lucide="trash-2" size="16"></i>Delete
-    </div>
-  </div>
-
-  <!-- NEYO SETTINGS V1 — WITH PROFILE RESTORED -->
-  <div class="neo-settings-overlay" id="neoSettingsOverlay" aria-hidden="true">
-    <div class="neo-settings-modal" role="dialog" aria-modal="true" aria-label="NEYO Settings">
-      <aside class="neo-settings-sidebar">
-
-        <!-- Close button -->
-        <button
-          class="neo-settings-close"
-          id="neoSettingsCloseBtn"
-          type="button"
-          aria-label="Close settings"
-          data-tooltip="Close settings"
-          data-tooltip-position="right"
+        <div
+          class="neo-settings-panel"
+          id="settingsPanelAppearance"
         >
-          <i data-lucide="x" size="20"></i>
-        </button>
 
-        <!-- Navigation – Profile restored after General -->
-        <button class="neo-settings-tab active" type="button" data-settings-tab="general">
-          <i data-lucide="settings-2" size="17"></i>
-          <span>General</span>
-        </button>
-
-        <button class="neo-settings-tab" type="button" data-settings-tab="profile">
-          <i data-lucide="user-circle" size="17"></i>
-          <span>Profile</span>
-        </button>
-
-        <button class="neo-settings-tab" type="button" data-settings-tab="appearance">
-          <i data-lucide="palette" size="17"></i>
-          <span>Appearance</span>
-        </button>
-
-        <button class="neo-settings-tab" type="button" data-settings-tab="workspace">
-          <i data-lucide="briefcase-business" size="17"></i>
-          <span>Workspace</span>
-        </button>
-
-        <div class="neo-settings-nav-divider"></div>
-
-        <button class="neo-settings-tab" type="button" data-settings-tab="privacy">
-          <i data-lucide="shield-check" size="17"></i>
-          <span>Privacy</span>
-        </button>
-
-        <button class="neo-settings-tab" type="button" data-settings-tab="memory">
-          <i data-lucide="brain" size="17"></i>
-          <span>Memory</span>
-        </button>
-
-        <button class="neo-settings-tab" type="button" data-settings-tab="notifications">
-          <i data-lucide="bell" size="17"></i>
-          <span>Notifications</span>
-        </button>
-
-        <button class="neo-settings-tab" type="button" data-settings-tab="files">
-          <i data-lucide="folder" size="17"></i>
-          <span>Files</span>
-        </button>
-
-        <div class="neo-settings-nav-divider"></div>
-
-        <button class="neo-settings-tab" type="button" data-settings-tab="personalities">
-          <i data-lucide="sparkles" size="17"></i>
-          <span>NEYO Personalities</span>
-        </button>
-
-        <div class="neo-settings-nav-divider"></div>
-
-        <button class="neo-settings-tab" type="button" data-settings-tab="accessibility">
-          <i data-lucide="accessibility" size="17"></i>
-          <span>Accessibility</span>
-        </button>
-
-        <button class="neo-settings-tab" type="button" data-settings-tab="keyboard">
-          <i data-lucide="keyboard" size="17"></i>
-          <span>Keyboard</span>
-        </button>
-
-        <button class="neo-settings-tab" type="button" data-settings-tab="about">
-          <i data-lucide="circle-info" size="17"></i>
-          <span>About</span>
-        </button>
-
-      </aside>
-
-      <section class="neo-settings-content">
-
-        <!-- PANEL: GENERAL — V1 FINAL -->
-        <div class="neo-settings-panel active" id="settingsPanelGeneral">
           <div class="neo-settings-panel-header">
-            <h2>General</h2>
-            <p>Control how NEYO behaves across your workspace.</p>
+
+            <h2>
+              Appearance
+            </h2>
+
+            <p>
+              Personalize how NEYO looks and feels.
+            </p>
+
           </div>
 
-          <!-- QUICK CONTROLS -->
-          <div class="neo-settings-section">
-            <span class="neo-settings-section-title">Quick Controls</span>
 
-            <!-- Theme -->
+          <div class="neo-settings-section">
+
+            <span class="neo-settings-section-title">
+              Theme
+            </span>
+
             <div class="settings-row">
+
               <div>
-                <strong>Theme</strong>
-                <small>Choose your preferred interface theme.</small>
+
+                <strong>
+                  Interface Theme
+                </strong>
+
+                <small>
+                  Choose light, dark, or follow your system.
+                </small>
+
               </div>
+
 
               <div
                 class="settings-segmented-control"
-                id="settingsThemeControl"
+                id="appearanceThemeControl"
                 role="group"
-                aria-label="Theme"
+                aria-label="Interface theme"
               >
-                <button
-                  type="button"
-                  data-value="system"
-                  class="active"
-                  aria-pressed="true"
-                >
-                  System
-                </button>
 
                 <button
                   type="button"
@@ -1727,673 +1946,430 @@
                 >
                   Dark
                 </button>
+
+                <button
+                  type="button"
+                  data-value="system"
+                  aria-pressed="false"
+                >
+                  System
+                </button>
+
               </div>
+
             </div>
 
-            <!-- Intelligence -->
+          </div>
+
+
+          <div class="neo-settings-section">
+
+            <span class="neo-settings-section-title">
+              Interface
+            </span>
+
             <div class="settings-row">
+
               <div>
-                <strong>Intelligence</strong>
-                <small>Choose the default reasoning level.</small>
+
+                <strong>
+                  Sidebar Density
+                </strong>
+
+                <small>
+                  Adjust spacing in navigation and history.
+                </small>
+
               </div>
+
 
               <div
                 class="settings-segmented-control"
-                id="settingsIntelligenceControl"
+                id="appearanceSidebarDensityControl"
                 role="group"
-                aria-label="Intelligence"
+                aria-label="Sidebar density"
               >
-                <button
-                  type="button"
-                  data-value="standard"
-                  class="active"
-                  aria-pressed="true"
-                >
-                  Standard
-                </button>
 
                 <button
                   type="button"
-                  data-value="maximum"
+                  data-value="compact"
                   aria-pressed="false"
                 >
-                  Maximum
+                  Compact
                 </button>
+
+                <button
+                  type="button"
+                  data-value="comfortable"
+                  aria-pressed="false"
+                >
+                  Comfortable
+                </button>
+
               </div>
+
             </div>
 
-            <!-- Private Chat -->
+          </div>
+
+
+          <div class="neo-settings-section">
+
+            <span class="neo-settings-section-title">
+              Motion
+            </span>
+
             <div class="settings-row">
+
               <div>
-                <strong>Private Chat</strong>
-                <small>Keep new chats outside saved history and memory.</small>
+
+                <strong>
+                  Interface Motion
+                </strong>
+
+                <small>
+                  Reduce non-essential animation across NEYO.
+                </small>
+
               </div>
 
-              <button
-                class="settings-toggle"
-                id="settingsPrivateChatToggle"
-                type="button"
-                role="switch"
-                aria-label="Private Chat"
-                aria-checked="false"
-              >
-                <span aria-hidden="true"></span>
-              </button>
-            </div>
-
-            <!-- Interface -->
-            <div class="settings-row">
-              <div>
-                <strong>Interface</strong>
-                <small>Choose the visual character of NEYO.</small>
-              </div>
 
               <div
                 class="settings-segmented-control"
-                id="settingsInterfaceControl"
+                id="appearanceMotionControl"
                 role="group"
-                aria-label="Interface style"
+                aria-label="Interface motion"
               >
-                <button
-                  type="button"
-                  data-value="minimal"
-                  class="active"
-                  aria-pressed="true"
-                >
-                  Minimal
-                </button>
 
                 <button
                   type="button"
-                  data-value="warm"
+                  data-value="on"
                   aria-pressed="false"
                 >
-                  Warm
+                  On
                 </button>
 
                 <button
                   type="button"
-                  data-value="glass"
+                  data-value="reduced"
                   aria-pressed="false"
                 >
-                  Glass
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <!-- GENERAL PREFERENCES -->
-          <div class="neo-settings-section">
-            <span class="neo-settings-section-title">General Preferences</span>
-
-            <!-- Language -->
-            <div class="settings-row settings-select-row">
-              <div>
-                <strong>Language</strong>
-                <small>Choose how NEYO should respond by default.</small>
-              </div>
-
-              <div class="settings-select-wrapper">
-                <button
-                  class="settings-value-btn"
-                  id="settingsLanguageBtn"
-                  type="button"
-                  aria-haspopup="listbox"
-                  aria-expanded="false"
-                  aria-controls="settingsLanguageMenu"
-                >
-                  <span id="settingsLanguageValue">Auto-detect</span>
-                  <i data-lucide="chevron-down" size="15"></i>
+                  Reduced
                 </button>
 
-                <div
-                  class="settings-select-menu"
-                  id="settingsLanguageMenu"
-                  role="listbox"
-                  aria-label="Language"
-                  hidden
-                >
-                  <button
-                    type="button"
-                    class="settings-select-option active"
-                    data-value="auto"
-                    role="option"
-                    aria-selected="true"
-                  >
-                    Auto-detect
-                  </button>
-
-                  <button
-                    type="button"
-                    class="settings-select-option"
-                    data-value="english"
-                    role="option"
-                    aria-selected="false"
-                  >
-                    English
-                  </button>
-
-                  <button
-                    type="button"
-                    class="settings-select-option"
-                    data-value="urdu"
-                    role="option"
-                    aria-selected="false"
-                  >
-                    Urdu
-                  </button>
-
-                  <button
-                    type="button"
-                    class="settings-select-option"
-                    data-value="roman-urdu"
-                    role="option"
-                    aria-selected="false"
-                  >
-                    Roman Urdu
-                  </button>
-                </div>
               </div>
+
             </div>
 
-            <!-- Default Personality -->
-            <div class="settings-row settings-select-row">
-              <div>
-                <strong>Default Personality</strong>
-                <small>Choose which NEYO personality starts new chats.</small>
-              </div>
-
-              <div class="settings-select-wrapper">
-                <button
-                  class="settings-value-btn"
-                  id="settingsDefaultPersonalityBtn"
-                  type="button"
-                  aria-haspopup="listbox"
-                  aria-expanded="false"
-                  aria-controls="settingsDefaultPersonalityMenu"
-                >
-                  <span id="settingsDefaultPersonalityValue">Neyo</span>
-                  <i data-lucide="chevron-down" size="15"></i>
-                </button>
-
-                <div
-                  class="settings-select-menu"
-                  id="settingsDefaultPersonalityMenu"
-                  role="listbox"
-                  aria-label="Default personality"
-                  hidden
-                >
-                  <button
-                    type="button"
-                    class="settings-select-option active"
-                    data-value="neyo"
-                    role="option"
-                    aria-selected="true"
-                  >
-                    Neyo
-                  </button>
-
-                  <button
-                    type="button"
-                    class="settings-select-option"
-                    data-value="zadi"
-                    role="option"
-                    aria-selected="false"
-                  >
-                    Zadi
-                  </button>
-
-                  <button
-                    type="button"
-                    class="settings-select-option"
-                    data-value="wizi"
-                    role="option"
-                    aria-selected="false"
-                  >
-                    Wizi
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <!-- Open NEYO On -->
-            <div class="settings-row settings-select-row">
-              <div>
-                <strong>Open NEYO on</strong>
-                <small>Choose what appears when the app opens.</small>
-              </div>
-
-              <div class="settings-select-wrapper">
-                <button
-                  class="settings-value-btn"
-                  id="settingsOpenOnBtn"
-                  type="button"
-                  aria-haspopup="listbox"
-                  aria-expanded="false"
-                  aria-controls="settingsOpenOnMenu"
-                >
-                  <span id="settingsOpenOnValue">New chat</span>
-                  <i data-lucide="chevron-down" size="15"></i>
-                </button>
-
-                <div
-                  class="settings-select-menu"
-                  id="settingsOpenOnMenu"
-                  role="listbox"
-                  aria-label="Open NEYO on"
-                  hidden
-                >
-                  <button
-                    type="button"
-                    class="settings-select-option active"
-                    data-value="new-chat"
-                    role="option"
-                    aria-selected="true"
-                  >
-                    New chat
-                  </button>
-
-                  <button
-                    type="button"
-                    class="settings-select-option"
-                    data-value="last-chat"
-                    role="option"
-                    aria-selected="false"
-                  >
-                    Last chat
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <!-- Auto-save Drafts -->
-            <div class="settings-row">
-              <div>
-                <strong>Auto-save drafts</strong>
-                <small>Preserve unfinished messages automatically.</small>
-              </div>
-
-              <button
-                class="settings-toggle active"
-                id="settingsAutoSaveToggle"
-                type="button"
-                role="switch"
-                aria-label="Auto-save drafts"
-                aria-checked="true"
-              >
-                <span aria-hidden="true"></span>
-              </button>
-            </div>
           </div>
+
         </div>
 
-        <!-- PANEL: PROFILE – EXISTING (UNCHANGED) -->
-        <div class="neo-settings-panel" id="settingsPanelProfile">
-          <h2>Profile</h2>
-          <div class="profile-editor-card">
-            <div class="profile-editor-main">
-              <div class="profile-avatar-upload">
-                <span class="profile-upload-label">Profile photo</span>
-                <div class="profile-upload-row">
-                  <div class="profile-editor-avatar" id="settingsAvatarPreview">U</div>
-                  <div class="profile-upload-actions">
-                    <button
-                      class="settings-ghost-btn"
-                      id="chooseAvatarBtn"
-                      type="button"
-                      data-tooltip="Change profile photo"
-                      data-tooltip-position="top"
-                    >
-                      Change photo
-                    </button>
-                    <button
-                      class="settings-ghost-btn"
-                      id="removeAvatarBtn"
-                      type="button"
-                      data-tooltip="Remove profile photo"
-                      data-tooltip-position="top"
-                    >
-                      Remove
-                    </button>
-                    <input id="settingsAvatarFileInput" type="file" accept="image/jpeg,image/png,image/webp" hidden>
-                    <span class="settings-helper-text">PNG, JPG or WebP · Max 5 MB</span>
-                  </div>
-                </div>
-              </div>
-              <label>
-                Display name
-                <input id="settingsDisplayNameInput" type="text" placeholder="Your NEYO name">
-              </label>
-              <label>
-                Bean ID
-                <input id="settingsUsernameInput" type="text" placeholder="@username" readonly>
-              </label>
-              <div class="profile-editor-actions">
-                <button
-                  class="settings-primary-btn"
-                  id="saveProfileSettingsBtn"
-                  type="button"
-                  data-tooltip="Save profile"
-                  data-tooltip-position="top"
-                >
-                  Save
-                </button>
-                <button
-                  class="settings-ghost-btn"
-                  id="resetProfileSettingsBtn"
-                  type="button"
-                  data-tooltip="Cancel changes"
-                  data-tooltip-position="top"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
 
-        <!-- PANEL: NOTIFICATIONS – EXISTING -->
-        <div class="neo-settings-panel" id="settingsPanelNotifications">
-          <h2>Notifications</h2>
-          <div class="notification-center" id="notificationCenter">
-            <div class="notification-empty-state">
-              <i data-lucide="inbox" size="22"></i>
-              <strong>No new notifications</strong>
-              <small>Important account, billing, and NEYO updates will appear here.</small>
-            </div>
-          </div>
-        </div>
+        <!-- =================================================== -->
+        <!-- WORKSPACE                                           -->
+        <!-- =================================================== -->
 
-        <!-- PANEL: PERSONALITIES – EXISTING -->
-        <div class="neo-settings-panel" id="settingsPanelPersonalities">
-          <h2>NEYO Personalities</h2>
-          <p class="settings-subtitle">Choose how NEYO should respond. Custom personality is Pro only.</p>
-          <div class="personality-grid" id="personalityGrid">
-            <button class="personality-card active" type="button" data-personality="default">
-              <span class="personality-avatar"><i data-lucide="zap" size="20"></i></span>
-              <strong>Default NEYO</strong><small>Balanced and helpful</small>
-            </button>
-            <button class="personality-card" type="button" data-personality="teacher">
-              <span class="personality-avatar"><i data-lucide="graduation-cap" size="20"></i></span>
-              <strong>Teacher</strong><small>Simple learning style</small>
-            </button>
-            <button class="personality-card" type="button" data-personality="coder">
-              <span class="personality-avatar"><i data-lucide="code" size="20"></i></span>
-              <strong>Coder</strong><small>Clean coding help</small>
-            </button>
-            <button class="personality-card" type="button" data-personality="researcher">
-              <span class="personality-avatar"><i data-lucide="search" size="20"></i></span>
-              <strong>Researcher</strong><small>Careful deep answers</small>
-            </button>
-            <button class="personality-card" type="button" data-personality="business">
-              <span class="personality-avatar"><i data-lucide="chart-line" size="20"></i></span>
-              <strong>Business</strong><small>Growth and planning</small>
-            </button>
-            <button class="personality-card" type="button" data-personality="creative">
-              <span class="personality-avatar"><i data-lucide="palette" size="20"></i></span>
-              <strong>Creative</strong><small>Ideas and writing</small>
-            </button>
-            <button class="personality-card" type="button" data-personality="calm">
-              <span class="personality-avatar"><i data-lucide="leaf" size="20"></i></span>
-              <strong>Calm</strong><small>Soft supportive tone</small>
-            </button>
-            <button class="personality-card" type="button" data-personality="direct">
-              <span class="personality-avatar"><i data-lucide="target" size="20"></i></span>
-              <strong>Direct</strong><small>Short and focused</small>
-            </button>
-            <button class="personality-card pro-personality" type="button" data-personality="custom">
-              <span class="personality-avatar"><i data-lucide="sparkles" size="20"></i></span>
-              <strong>Custom</strong><small>Pro only</small>
-            </button>
-          </div>
-        </div>
-
-        <!-- PANEL: BILLING – EXISTING -->
-        <div class="neo-settings-panel" id="settingsPanelBilling">
-          <h2>Billing</h2>
-          <div class="settings-row">
-            <div>
-              <strong id="billingPlanText">Free Plan</strong>
-              <small>Upgrade to unlock more usage and advanced features.</small>
-            </div>
-            <button
-              class="settings-primary-btn"
-              id="settingsUpgradeBtn"
-              type="button"
-              data-tooltip="Upgrade to Pro"
-              data-tooltip-position="top"
-            >
-              Upgrade
-            </button>
-          </div>
-        </div>
-
-        <!-- PANEL: APPEARANCE – V1 (NEW) -->
-        <div class="neo-settings-panel" id="settingsPanelAppearance">
+        <div
+          class="neo-settings-panel"
+          id="settingsPanelWorkspace"
+        >
 
           <div class="neo-settings-panel-header">
-            <h2>Appearance</h2>
-            <p>Personalize how NEYO looks and feels.</p>
+
+            <h2>
+              Workspace
+            </h2>
+
+            <p>
+              Manage your workspace preferences.
+            </p>
+
           </div>
 
-          <!-- LIVE PREVIEW -->
-          <div class="appearance-preview" id="appearancePreview">
-            <div class="appearance-preview-window">
-
-              <div class="appearance-preview-sidebar">
-                <span></span>
-                <span></span>
-                <span></span>
-              </div>
-
-              <div class="appearance-preview-main">
-                <div class="appearance-preview-message"></div>
-                <div class="appearance-preview-composer">
-                  <span>Message NEYO...</span>
-                  <div class="appearance-preview-send"></div>
-                </div>
-              </div>
-
-            </div>
-          </div>
-
-          <!-- VISUAL STYLE -->
-          <div class="neo-settings-section">
-            <span class="neo-settings-section-title">Visual Style</span>
-
-            <div class="settings-row">
-              <div>
-                <strong>Interface</strong>
-                <small>Choose the visual character of NEYO.</small>
-              </div>
-              <div class="settings-segmented-control" id="appearanceInterfaceControl" role="group" aria-label="Interface style">
-                <button type="button" data-value="minimal" aria-pressed="false">Minimal</button>
-                <button type="button" data-value="warm" aria-pressed="false">Warm</button>
-                <button type="button" data-value="glass" aria-pressed="false">Glass</button>
-              </div>
-            </div>
-
-            <div class="settings-row">
-              <div>
-                <strong>Theme</strong>
-                <small>Choose your preferred interface theme.</small>
-              </div>
-              <div class="settings-segmented-control" id="appearanceThemeControl" role="group" aria-label="Theme">
-                <button type="button" data-value="system" aria-pressed="false">System</button>
-                <button type="button" data-value="light" aria-pressed="false">Light</button>
-                <button type="button" data-value="dark" aria-pressed="false">Dark</button>
-              </div>
-            </div>
-
-            <div class="settings-row">
-              <div>
-                <strong>Accent</strong>
-                <small>Choose a subtle interface accent.</small>
-              </div>
-              <div class="settings-segmented-control" id="appearanceAccentControl" role="group" aria-label="Accent color">
-                <button type="button" data-value="neutral" aria-pressed="false">Neutral</button>
-                <button type="button" data-value="emerald" aria-pressed="false">Emerald</button>
-                <button type="button" data-value="violet" aria-pressed="false">Violet</button>
-                <button type="button" data-value="blue" aria-pressed="false">Blue</button>
-              </div>
-            </div>
-          </div>
-
-          <!-- DISPLAY -->
-          <div class="neo-settings-section">
-            <span class="neo-settings-section-title">Display</span>
-
-            <div class="settings-row">
-              <div>
-                <strong>Text Size</strong>
-                <small>Adjust conversation text size.</small>
-              </div>
-              <div class="settings-segmented-control" id="appearanceTextSizeControl" role="group" aria-label="Text size">
-                <button type="button" data-value="small" aria-pressed="false">Small</button>
-                <button type="button" data-value="default" aria-pressed="false">Default</button>
-                <button type="button" data-value="large" aria-pressed="false">Large</button>
-              </div>
-            </div>
-
-            <div class="settings-row">
-              <div>
-                <strong>Content Width</strong>
-                <small>Control the width of conversations.</small>
-              </div>
-              <div class="settings-segmented-control" id="appearanceContentWidthControl" role="group" aria-label="Content width">
-                <button type="button" data-value="compact" aria-pressed="false">Compact</button>
-                <button type="button" data-value="balanced" aria-pressed="false">Balanced</button>
-                <button type="button" data-value="wide" aria-pressed="false">Wide</button>
-              </div>
-            </div>
-
-            <div class="settings-row">
-              <div>
-                <strong>Sidebar Density</strong>
-                <small>Adjust spacing in navigation and history.</small>
-              </div>
-              <div class="settings-segmented-control" id="appearanceSidebarDensityControl" role="group" aria-label="Sidebar density">
-                <button type="button" data-value="compact" aria-pressed="false">Compact</button>
-                <button type="button" data-value="comfortable" aria-pressed="false">Comfortable</button>
-              </div>
-            </div>
-          </div>
-
-          <!-- MOTION -->
-          <div class="neo-settings-section">
-            <span class="neo-settings-section-title">Motion</span>
-            <div class="settings-row">
-              <div>
-                <strong>Interface Motion</strong>
-                <small>Reduce non-essential animation across NEYO.</small>
-              </div>
-              <div class="settings-segmented-control" id="appearanceMotionControl" role="group" aria-label="Interface motion">
-                <button type="button" data-value="on" aria-pressed="false">On</button>
-                <button type="button" data-value="reduced" aria-pressed="false">Reduced</button>
-              </div>
-            </div>
-          </div>
-
-        </div>
-
-        <!-- PANEL: WORKSPACE – PLACEHOLDER -->
-        <div class="neo-settings-panel" id="settingsPanelWorkspace">
-          <div class="neo-settings-panel-header">
-            <h2>Workspace</h2>
-            <p>Manage your workspace preferences.</p>
-          </div>
           <div class="neo-settings-placeholder">
-            <i data-lucide="briefcase-business" size="28"></i>
-            <strong>Workspace settings</strong>
-            <small>Coming soon.</small>
+
+            <i
+              data-lucide="briefcase-business"
+              size="28"
+            ></i>
+
+            <strong>
+              Workspace settings
+            </strong>
+
+            <small>
+              Coming soon.
+            </small>
+
           </div>
+
         </div>
 
-        <!-- PANEL: PRIVACY – PLACEHOLDER -->
-        <div class="neo-settings-panel" id="settingsPanelPrivacy">
+
+        <!-- =================================================== -->
+        <!-- PRIVACY                                             -->
+        <!-- =================================================== -->
+
+        <div
+          class="neo-settings-panel"
+          id="settingsPanelPrivacy"
+        >
+
           <div class="neo-settings-panel-header">
-            <h2>Privacy</h2>
-            <p>Control your data and privacy preferences.</p>
+
+            <h2>
+              Privacy
+            </h2>
+
+            <p>
+              Control your data and privacy preferences.
+            </p>
+
           </div>
+
           <div class="neo-settings-placeholder">
-            <i data-lucide="shield-check" size="28"></i>
-            <strong>Privacy settings</strong>
-            <small>Coming soon.</small>
+
+            <i
+              data-lucide="shield-check"
+              size="28"
+            ></i>
+
+            <strong>
+              Privacy settings
+            </strong>
+
+            <small>
+              Coming soon.
+            </small>
+
           </div>
+
         </div>
 
-        <!-- PANEL: MEMORY – PLACEHOLDER -->
-        <div class="neo-settings-panel" id="settingsPanelMemory">
+
+        <!-- =================================================== -->
+        <!-- MEMORY                                              -->
+        <!-- =================================================== -->
+
+        <div
+          class="neo-settings-panel"
+          id="settingsPanelMemory"
+        >
+
           <div class="neo-settings-panel-header">
-            <h2>Memory</h2>
-            <p>Manage what NEYO remembers about you.</p>
+
+            <h2>
+              Memory
+            </h2>
+
+            <p>
+              Manage what NEYO remembers about you.
+            </p>
+
           </div>
+
           <div class="neo-settings-placeholder">
-            <i data-lucide="brain" size="28"></i>
-            <strong>Memory settings</strong>
-            <small>Coming soon.</small>
+
+            <i
+              data-lucide="brain"
+              size="28"
+            ></i>
+
+            <strong>
+              Memory settings
+            </strong>
+
+            <small>
+              Coming soon.
+            </small>
+
           </div>
+
         </div>
 
-        <!-- PANEL: FILES – PLACEHOLDER -->
-        <div class="neo-settings-panel" id="settingsPanelFiles">
+
+        <!-- =================================================== -->
+        <!-- FILES                                               -->
+        <!-- =================================================== -->
+
+        <div
+          class="neo-settings-panel"
+          id="settingsPanelFiles"
+        >
+
           <div class="neo-settings-panel-header">
-            <h2>Files</h2>
-            <p>Manage your uploaded files and attachments.</p>
+
+            <h2>
+              Files
+            </h2>
+
+            <p>
+              Manage your uploaded files and attachments.
+            </p>
+
           </div>
+
           <div class="neo-settings-placeholder">
-            <i data-lucide="folder" size="28"></i>
-            <strong>Files settings</strong>
-            <small>Coming soon.</small>
+
+            <i
+              data-lucide="folder"
+              size="28"
+            ></i>
+
+            <strong>
+              Files settings
+            </strong>
+
+            <small>
+              Coming soon.
+            </small>
+
           </div>
+
         </div>
 
-        <!-- PANEL: ACCESSIBILITY – PLACEHOLDER -->
-        <div class="neo-settings-panel" id="settingsPanelAccessibility">
+
+        <!-- =================================================== -->
+        <!-- ACCESSIBILITY                                       -->
+        <!-- =================================================== -->
+
+        <div
+          class="neo-settings-panel"
+          id="settingsPanelAccessibility"
+        >
+
           <div class="neo-settings-panel-header">
-            <h2>Accessibility</h2>
-            <p>Make NEYO work better for you.</p>
+
+            <h2>
+              Accessibility
+            </h2>
+
+            <p>
+              Make NEYO work better for you.
+            </p>
+
           </div>
+
           <div class="neo-settings-placeholder">
-            <i data-lucide="accessibility" size="28"></i>
-            <strong>Accessibility settings</strong>
-            <small>Coming soon.</small>
+
+            <i
+              data-lucide="accessibility"
+              size="28"
+            ></i>
+
+            <strong>
+              Accessibility settings
+            </strong>
+
+            <small>
+              Coming soon.
+            </small>
+
           </div>
+
         </div>
 
-        <!-- PANEL: KEYBOARD – PLACEHOLDER -->
-        <div class="neo-settings-panel" id="settingsPanelKeyboard">
+
+        <!-- =================================================== -->
+        <!-- KEYBOARD                                            -->
+        <!-- =================================================== -->
+
+        <div
+          class="neo-settings-panel"
+          id="settingsPanelKeyboard"
+        >
+
           <div class="neo-settings-panel-header">
-            <h2>Keyboard</h2>
-            <p>Customize keyboard shortcuts and behavior.</p>
+
+            <h2>
+              Keyboard
+            </h2>
+
+            <p>
+              Customize keyboard shortcuts and behavior.
+            </p>
+
           </div>
+
           <div class="neo-settings-placeholder">
-            <i data-lucide="keyboard" size="28"></i>
-            <strong>Keyboard settings</strong>
-            <small>Coming soon.</small>
+
+            <i
+              data-lucide="keyboard"
+              size="28"
+            ></i>
+
+            <strong>
+              Keyboard settings
+            </strong>
+
+            <small>
+              Coming soon.
+            </small>
+
           </div>
+
         </div>
 
-        <!-- PANEL: ABOUT – PLACEHOLDER -->
-        <div class="neo-settings-panel" id="settingsPanelAbout">
+
+        <!-- =================================================== -->
+        <!-- ABOUT                                               -->
+        <!-- =================================================== -->
+
+        <div
+          class="neo-settings-panel"
+          id="settingsPanelAbout"
+        >
+
           <div class="neo-settings-panel-header">
-            <h2>About</h2>
-            <p>Version, credits, and legal information.</p>
+
+            <h2>
+              About
+            </h2>
+
+            <p>
+              Version, credits, and legal information.
+            </p>
+
           </div>
+
           <div class="neo-settings-placeholder">
-            <i data-lucide="circle-info" size="28"></i>
-            <strong>NEYO</strong>
-            <small>Version 1.0 · Built with ❤️</small>
+
+            <i
+              data-lucide="circle-info"
+              size="28"
+            ></i>
+
+            <strong>
+              NEYO
+            </strong>
+
+            <small>
+              Version 1.0 · Built with ❤️
+            </small>
+
           </div>
+
         </div>
 
       </section>
+
     </div>
+
   </div>
 
-  <!-- Upgrade Modal (unchanged) -->
-  <div class="modal-overlay" id="upgradeModal">
+
+  <!-- ========================================================= -->
+  <!-- UPGRADE MODAL                                             -->
+  <!-- ========================================================= -->
+
+  <div
+    class="modal-overlay"
+    id="upgradeModal"
+  >
+
     <div class="modal-card">
+
       <button
         class="modal-close-btn"
         id="modalCloseBtn"
@@ -2403,26 +2379,114 @@
       >
         &times;
       </button>
+
+
       <div class="modal-header">
-        <div class="pro-sparkle-badge"><i data-lucide="zap" size="22"></i></div>
-        <h2>Unlock NEYO L1.2 Pro</h2>
-        <p>Supercharge your workflow with full multimodal power and reasoning.</p>
+
+        <div class="pro-sparkle-badge">
+
+          <i
+            data-lucide="zap"
+            size="22"
+          ></i>
+
+        </div>
+
+        <h2>
+          Unlock NEYO L1.2 Pro
+        </h2>
+
+        <p>
+          Supercharge your workflow with full multimodal power and reasoning.
+        </p>
+
       </div>
+
+
       <div class="modal-features-list">
+
         <div class="feature-item">
-          <div class="feature-icon"><i data-lucide="clapperboard" size="18"></i></div>
-          <div class="feature-text"><strong>Video & Audio Processing</strong><small>Upload MP4, MP3, and WAV files directly for AI analysis.</small></div>
+
+          <div class="feature-icon">
+
+            <i
+              data-lucide="clapperboard"
+              size="18"
+            ></i>
+
+          </div>
+
+          <div class="feature-text">
+
+            <strong>
+              Video & Audio Processing
+            </strong>
+
+            <small>
+              Upload MP4, MP3, and WAV files directly for AI analysis.
+            </small>
+
+          </div>
+
         </div>
+
+
         <div class="feature-item">
-          <div class="feature-icon"><i data-lucide="brain-circuit" size="18"></i></div>
-          <div class="feature-text"><strong>Deep Structural Reasoning</strong><small>Solve complex logic, architecture, and step-by-step math.</small></div>
+
+          <div class="feature-icon">
+
+            <i
+              data-lucide="brain-circuit"
+              size="18"
+            ></i>
+
+          </div>
+
+          <div class="feature-text">
+
+            <strong>
+              Deep Structural Reasoning
+            </strong>
+
+            <small>
+              Solve complex logic, architecture, and step-by-step math.
+            </small>
+
+          </div>
+
         </div>
+
+
         <div class="feature-item">
-          <div class="feature-icon"><i data-lucide="file-text" size="18"></i></div>
-          <div class="feature-text"><strong>4,000 Output Tokens</strong><small>Generate long-form scripts, complete codebases, and reports.</small></div>
+
+          <div class="feature-icon">
+
+            <i
+              data-lucide="file-text"
+              size="18"
+            ></i>
+
+          </div>
+
+          <div class="feature-text">
+
+            <strong>
+              4,000 Output Tokens
+            </strong>
+
+            <small>
+              Generate long-form scripts, complete codebases, and reports.
+            </small>
+
+          </div>
+
         </div>
+
       </div>
+
+
       <div class="modal-footer-actions">
+
         <button
           class="upgrade-btn-primary"
           id="upgradeActionBtn"
@@ -2432,6 +2496,8 @@
         >
           Upgrade to Pro ($12/mo)
         </button>
+
+
         <button
           class="upgrade-btn-secondary"
           id="modalMaybeLaterBtn"
@@ -2441,12 +2507,16 @@
         >
           Maybe Later
         </button>
+
       </div>
+
     </div>
+
   </div>
 
+
   <!-- ========================================================= -->
-  <!-- NEYO VOICE MODE — WITH CHARACTER PICKER INSIDE            -->
+  <!-- NEW NEYO VOICE MODE                                       -->
   <!-- ========================================================= -->
 
   <div
@@ -2454,13 +2524,18 @@
     class="voice-mode-shell"
     aria-hidden="true"
   >
+
     <div
       class="voice-mode-stage"
       role="dialog"
       aria-label="NEYO voice conversation"
     >
 
-      <!-- MASCOT -->
+
+      <!-- ===================================================== -->
+      <!-- MASCOT                                                -->
+      <!-- ===================================================== -->
+
       <div class="voice-mode-mascot-slot">
 
         <div
@@ -2478,32 +2553,44 @@
 
             <div class="neyo-mascot-features">
 
-              <!-- Left eye -->
+
+              <!-- LEFT EYE -->
+
               <div
                 id="neyoMascotLeftEye"
                 class="neyo-eye neyo-eye-left"
               >
+
                 <span class="neyo-eye-core"></span>
+
               </div>
 
-              <!-- Right eye -->
+
+              <!-- RIGHT EYE -->
+
               <div
                 id="neyoMascotRightEye"
                 class="neyo-eye neyo-eye-right"
               >
+
                 <span class="neyo-eye-core"></span>
+
               </div>
 
-              <!-- Mouth -->
+
+              <!-- MOUTH -->
+
               <div
                 id="neyoMascotMouth"
                 class="neyo-mouth"
               >
+
                 <span class="neyo-mouth-bar"></span>
                 <span class="neyo-mouth-bar"></span>
                 <span class="neyo-mouth-bar"></span>
                 <span class="neyo-mouth-bar"></span>
                 <span class="neyo-mouth-bar"></span>
+
               </div>
 
             </div>
@@ -2512,23 +2599,33 @@
 
         </div>
 
-        <!-- Camera preview -->
+
+        <!-- =================================================== -->
+        <!-- CAMERA PREVIEW                                      -->
+        <!-- =================================================== -->
+
         <div
           id="neyoCameraPreview"
           class="voice-mode-camera-preview"
           aria-hidden="true"
         >
+
           <video
             id="neyoCameraVideo"
             autoplay
             muted
             playsinline
           ></video>
+
         </div>
 
       </div>
 
-      <!-- STATUS -->
+
+      <!-- ===================================================== -->
+      <!-- STATUS                                                -->
+      <!-- ===================================================== -->
+
       <div
         id="neyoMascotStatus"
         class="voice-mode-status"
@@ -2537,8 +2634,13 @@
         Ready
       </div>
 
-      <!-- CONTROLS — WITH CHARACTER BUTTON -->
+
+      <!-- ===================================================== -->
+      <!-- VOICE CONTROLS                                        -->
+      <!-- ===================================================== -->
+
       <div class="voice-mode-controls">
+
 
         <button
           id="voiceModeMicBtn"
@@ -2548,6 +2650,7 @@
           aria-pressed="true"
         ></button>
 
+
         <button
           id="voiceModeCameraBtn"
           class="voice-mode-control"
@@ -2555,6 +2658,7 @@
           aria-label="Turn camera on"
           aria-pressed="false"
         ></button>
+
 
         <button
           id="voiceModeSpeakerBtn"
@@ -2564,7 +2668,11 @@
           aria-pressed="true"
         ></button>
 
-        <!-- CHARACTER BUTTON -->
+
+        <!-- =================================================== -->
+        <!-- CHARACTER PICKER                                    -->
+        <!-- =================================================== -->
+
         <button
           id="characterPickerBtn"
           class="voice-mode-control"
@@ -2573,7 +2681,13 @@
           aria-haspopup="dialog"
           aria-controls="characterPicker"
         >
-          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            aria-hidden="true"
+          >
+
             <rect
               x="5"
               y="5"
@@ -2582,21 +2696,30 @@
               rx="5"
               stroke="currentColor"
               stroke-width="1.8"
-            />
+            ></rect>
+
             <path
               d="M9 10h.01M15 10h.01"
               stroke="currentColor"
               stroke-width="2.2"
               stroke-linecap="round"
-            />
+            ></path>
+
             <path
               d="M9 15c1.8 1.2 4.2 1.2 6 0"
               stroke="currentColor"
               stroke-width="1.7"
               stroke-linecap="round"
-            />
+            ></path>
+
           </svg>
+
         </button>
+
+
+        <!-- =================================================== -->
+        <!-- END VOICE                                           -->
+        <!-- =================================================== -->
 
         <button
           id="voiceModeEndBtn"
@@ -2609,24 +2732,28 @@
 
     </div>
 
-    <!-- ========================================================= -->
-    <!-- CHARACTER PICKER — INSIDE VOICE MODE SHELL                -->
-    <!-- ========================================================= -->
+
+    <!-- ======================================================= -->
+    <!-- CHARACTER PICKER                                        -->
+    <!-- ======================================================= -->
 
     <div
       id="characterPicker"
       class="character-picker-shell"
       aria-hidden="true"
     >
+
       <section
         class="character-picker-panel"
         role="dialog"
         aria-modal="true"
         aria-labelledby="characterPickerTitle"
       >
+
         <header class="character-picker-header">
 
           <div class="character-picker-heading">
+
             <h2
               id="characterPickerTitle"
               class="character-picker-title"
@@ -2637,7 +2764,9 @@
             <p class="character-picker-subtitle">
               Pick who you want to talk with.
             </p>
+
           </div>
+
 
           <button
             id="characterPickerCloseBtn"
@@ -2645,17 +2774,26 @@
             type="button"
             aria-label="Close character picker"
           >
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              aria-hidden="true"
+            >
+
               <path
                 d="M7 7l10 10M17 7L7 17"
                 stroke="currentColor"
                 stroke-width="1.8"
                 stroke-linecap="round"
-              />
+              ></path>
+
             </svg>
+
           </button>
 
         </header>
+
 
         <div
           id="characterPickerList"
@@ -2663,35 +2801,52 @@
           role="listbox"
           aria-label="Available characters"
         ></div>
+
       </section>
+
     </div>
 
   </div>
-  <!-- END #neyoVoiceMode -->
-
-  <!-- ========================================================= -->
-  <!-- NEYO — STABLE MIGRATION LOADER                            -->
-  <!-- Phase 2                                                  -->
-  <!--                                                         -->
-  <!-- RULES                                                   -->
-  <!-- - neo.js remains untouched                              -->
-  <!-- - V2 chat modules are now active                        -->
-  <!-- - chat-runtime.js bridges legacy & V2                   -->
-  <!-- - order: attachments → chat → messages → renderer       -->
-  <!--          → history → send-state → chat-runtime LAST      -->
-  <!-- - voice.js bumped to v104 to bust cache                 -->
-  <!-- ========================================================= -->
 
 
   <!-- ========================================================= -->
-  <!-- 1. LEGACY STABLE APPLICATION                              -->
+  <!-- CONTROLLED MIGRATION LOADER                               -->
+  <!-- ========================================================= -->
+  <!--                                                          -->
+  <!-- IMPORTANT                                                -->
+  <!--                                                          -->
+  <!-- neo.js stays as proven core runtime for now.              -->
+  <!--                                                          -->
+  <!-- We DO NOT load these yet:                                 -->
+  <!-- attachments.js                                           -->
+  <!-- chat.js                                                  -->
+  <!-- messages.js                                              -->
+  <!-- message-renderer.js                                      -->
+  <!-- history.js                                               -->
+  <!-- history-menu.js                                          -->
+  <!-- chat-runtime.js                                          -->
+  <!-- composer.js                                              -->
+  <!-- new-chat.js                                              -->
+  <!--                                                          -->
+  <!-- Reason: neo.js already owns those behaviors. Loading      -->
+  <!-- them simultaneously caused duplicate listeners, duplicate -->
+  <!-- fetches and layout/state conflicts.                       -->
+  <!--                                                          -->
+  <!-- They will be activated ONE BY ONE during migration.       -->
   <!-- ========================================================= -->
 
-  <script src="/neo.js?v=86"></script>
+
+  <!-- ========================================================= -->
+  <!-- PROVEN CORE                                               -->
+  <!-- ========================================================= -->
+
+  <script
+    src="/neo.js?v=86"
+  ></script>
 
 
   <!-- ========================================================= -->
-  <!-- 2. SAFE UI MODULES                                        -->
+  <!-- EXISTING STABLE MODULES                                   -->
   <!-- ========================================================= -->
 
   <script
@@ -2709,11 +2864,6 @@
     src="/js/components/checkout.js?v=4"
   ></script>
 
-
-  <!-- ========================================================= -->
-  <!-- 3. COMPOSER VISUAL HELPERS                                -->
-  <!-- ========================================================= -->
-
   <script
     type="module"
     src="/js/components/composer-expand.js?v=2"
@@ -2726,7 +2876,7 @@
 
 
   <!-- ========================================================= -->
-  <!-- 4. CHARACTER DEFINITIONS                                  -->
+  <!-- NEW CHARACTER SYSTEM                                      -->
   <!-- ========================================================= -->
 
   <script
@@ -2746,13 +2896,8 @@
 
 
   <!-- ========================================================= -->
-  <!-- 5. VOICE / MASCOT  (VERSIONS BUMPED TO BUST CACHE)        -->
+  <!-- NEW MASCOT                                                -->
   <!-- ========================================================= -->
-
-  <script
-    type="module"
-    src="/js/components/voice.js?v=104"
-  ></script>
 
   <script
     type="module"
@@ -2763,6 +2908,11 @@
     type="module"
     src="/js/components/mascot-intelligence.js?v=1"
   ></script>
+
+
+  <!-- ========================================================= -->
+  <!-- NEW VOICE MODE                                            -->
+  <!-- ========================================================= -->
 
   <script
     type="module"
@@ -2776,50 +2926,17 @@
 
 
   <!-- ========================================================= -->
-  <!-- 6. CHAT V2 RUNTIME                                        -->
-  <!-- ========================================================= -->
-  <!-- ORDER: attachments → chat → messages → renderer           -->
-  <!--        → history → send-state → chat-runtime LAST         -->
+  <!-- VOICE INPUT                                               -->
   <!-- ========================================================= -->
 
   <script
     type="module"
-    src="/js/components/attachments.js?v=7"
-  ></script>
-
-  <script
-    type="module"
-    src="/js/components/chat.js?v=2"
-  ></script>
-
-  <script
-    type="module"
-    src="/js/components/messages.js?v=2"
-  ></script>
-
-  <script
-    type="module"
-    src="/js/components/message-renderer.js?v=2"
-  ></script>
-
-  <script
-    type="module"
-    src="/js/components/history.js?v=2"
-  ></script>
-
-  <script
-    type="module"
-    src="/js/components/send-state.js?v=2"
-  ></script>
-
-  <script
-    type="module"
-    src="/js/components/chat-runtime.js?v=1"
+    src="/js/components/voice.js?v=104"
   ></script>
 
 
   <!-- ========================================================= -->
-  <!-- 7. UI UTILITIES                                           -->
+  <!-- UTILITIES                                                 -->
   <!-- ========================================================= -->
 
   <script
@@ -2834,12 +2951,22 @@
 
   <script
     type="module"
+    src="/js/components/send-state.js?v=2"
+  ></script>
+
+
+  <!-- ========================================================= -->
+  <!-- ADS                                                       -->
+  <!-- ========================================================= -->
+
+  <script
+    type="module"
     src="/js/components/ads.js?v=3"
   ></script>
 
 
   <!-- ========================================================= -->
-  <!-- 8. MOBILE                                                 -->
+  <!-- MOBILE                                                    -->
   <!-- ========================================================= -->
 
   <script
@@ -2854,76 +2981,7 @@
 
 
   <!-- ========================================================= -->
-  <!-- 9. FINAL BOOT SAFETY                                      -->
-  <!-- ========================================================= -->
-
-  <script>
-    (() => {
-      "use strict";
-
-      const boot = () => {
-        try {
-          window.lucide?.createIcons?.();
-        } catch (error) {
-          console.warn(
-            "[NEYO Boot] Icon initialization failed:",
-            error
-          );
-        }
-
-        document.documentElement.classList.add(
-          "neyo-ready"
-        );
-
-        window.dispatchEvent(
-          new CustomEvent(
-            "neyo:app-ready",
-            {
-              detail: {
-                architecture:
-                  "v2-runtime-active",
-
-                legacyChat:
-                  true,
-
-                modularChat:
-                  true,
-
-                runtime:
-                  "chat-runtime.js",
-
-                voiceCache:
-                  "bumped-v104"
-              }
-            }
-          )
-        );
-
-        console.log(
-          "[NEYO] V2 runtime active."
-        );
-      };
-
-      if (
-        document.readyState ===
-        "loading"
-      ) {
-        document.addEventListener(
-          "DOMContentLoaded",
-          boot,
-          {
-            once: true
-          }
-        );
-      } else {
-        boot();
-      }
-    })();
-  </script>
-
-
-  <!-- ========================================================= -->
-  <!-- 10. LAUNCH SMOKE TEST                                     -->
+  <!-- SMOKE CHECK                                               -->
   <!-- ========================================================= -->
 
   <script

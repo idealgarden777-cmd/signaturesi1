@@ -1,80 +1,23 @@
 /*
 =========================================================
-NEYO — MESSAGE EDIT
-FINAL PRODUCTION MIXER v7
+NEO — MESSAGE EDIT
+Production v1
 
-FILE:
-public/js/components/message-edit.js
+Owns:
+- inline user-message editor
+- textarea autosize
+- Cancel
+- Save & Submit
+- edit keyboard UX
+- one active editor at a time
 
-OWNS
----------------------------------------------------------
-- User inline edit UI
-- Edit textarea
-- Existing attachment preview while editing
-- Original message DOM preservation
-- Cancel / restore
-- Save & Submit UI
-- Enter to submit
-- Shift+Enter newline
-- Escape to cancel
-- IME-safe keyboard handling
-- Textarea auto-resize
-- Edit busy state
-- Focus handling
-- Edit lifecycle events
-- Public edit API
-
-DOES NOT OWN
----------------------------------------------------------
-- Conversation state
-- Conversation truncation
+Does NOT own:
+- conversation mutation
 - /api/chat
-- Regenerate transport
-- Attachment upload
-- Message rendering architecture
-- Assistant actions
-- Copy / share
-- History persistence
-
-FINAL FLOW
----------------------------------------------------------
-
-message-actions.js
-      ↓
-neyo:message-edit-request
-      ↓
-message-edit.js
-      ↓
-inline editor
-      ↓
-Save & Submit
-      ↓
-NeyoChat.editUserMessage()
-      ↓
-chat.js:
-  - updates canonical user message
-  - preserves attachments
-  - truncates future conversation
-  - emits DOM events
-  - regenerates assistant response
-
-IMPORTANT
----------------------------------------------------------
-The original user-message DOM is preserved before edit.
-
-Before submit, normal message DOM is restored FIRST.
-Then chat.js emits its canonical update/truncate events.
-
-This prevents messages.js from receiving an update while
-the message element still contains only an edit textarea.
-
-MIGRATION RULE
----------------------------------------------------------
-No dependency on neo.js business logic.
-
-Old production CSS classes are intentionally preserved.
-
-After neo.js removal this file continues unchanged.
+- regeneration logic
+- message rendering
+- attachments
+- Send button
 =========================================================
 */
 
@@ -82,7 +25,7 @@ After neo.js removal this file continues unchanged.
   "use strict";
 
   const VERSION =
-    "neyo-message-edit-final-v7";
+    "neo-message-edit-production-v1";
 
   if (
     window.NeyoMessageEdit
@@ -92,107 +35,10 @@ After neo.js removal this file continues unchanged.
   }
 
   /* =====================================================
-     CONFIG
-     ===================================================== */
-
-  const CONFIG =
-    Object.freeze({
-      maxLength:
-        50_000,
-
-      minRows:
-        2,
-
-      maxTextareaHeight:
-        320,
-
-      submitLabel:
-        "Save & Submit",
-
-      submittingLabel:
-        "Submitting…"
-    });
-
-  /* =====================================================
-     DOM
-     ===================================================== */
-
-  const chatMessages =
-    document.getElementById(
-      "chatMessages"
-    );
-
-  const active =
-    Boolean(
-      chatMessages
-    );
-
-  if (!active) {
-    console.warn(
-      "[NEYO Message Edit] #chatMessages missing."
-    );
-
-    return;
-  }
-
-  /* =====================================================
-     LEGACY TELEMETRY
-     ===================================================== */
-
-  const legacyScriptPresent =
-    Array
-      .from(
-        document.scripts || []
-      )
-      .some(
-        script =>
-          /(?:^|\/)neo\.js(?:\?|$)/
-            .test(
-              script.src || ""
-            )
-      );
-
-  /* =====================================================
      STATE
      ===================================================== */
 
-  let session =
-    null;
-
-  let composing =
-    false;
-
-  let submitting =
-    false;
-
-  let generationActive =
-    false;
-
-  const metrics = {
-    opened:
-      0,
-
-    cancelled:
-      0,
-
-    submitted:
-      0,
-
-    failed:
-      0,
-
-    blocked:
-      0,
-
-    attachmentEdits:
-      0,
-
-    lastOpenedAt:
-      null,
-
-    lastSubmittedAt:
-      null
-  };
+  let active = null;
 
   /* =====================================================
      EVENTS
@@ -205,9 +51,7 @@ After neo.js removal this file continues unchanged.
     window.dispatchEvent(
       new CustomEvent(
         name,
-        {
-          detail
-        }
+        { detail }
       )
     );
   }
@@ -216,719 +60,117 @@ After neo.js removal this file continues unchanged.
      HELPERS
      ===================================================== */
 
-  function cleanId(
-    value
-  ) {
-    return String(
-      value || ""
-    )
-      .replace(
-        /\u0000/g,
-        ""
-      )
-      .trim()
-      .slice(
-        0,
-        256
-      );
-  }
-
-  function cleanText(
+  function clean(
     value
   ) {
     return String(
       value ?? ""
     )
-      .replace(
-        /\u0000/g,
-        ""
-      )
-      .replace(
-        /\r\n?/g,
-        "\n"
-      )
-      .slice(
-        0,
-        CONFIG.maxLength
-      );
+      .replace(/\u0000/g, "")
+      .replace(/\r\n?/g, "\n");
   }
 
-  function refreshIcons() {
-    try {
-      window.lucide
-        ?.createIcons
-        ?.();
-    } catch {}
-  }
-
-  function cloneValue(
-    value
+  function messageIdOf(
+    element
   ) {
-    if (
-      value === null ||
-      value === undefined
-    ) {
-      return value;
-    }
+    return String(
+      element?.dataset
+        ?.neyoMessageId ||
+      element?.dataset
+        ?.messageId ||
+      ""
+    ).trim();
+  }
 
-    if (
-      typeof structuredClone ===
-      "function"
-    ) {
-      try {
-        return structuredClone(
-          value
-        );
-      } catch {}
-    }
-
+  function getMessage(
+    id
+  ) {
     try {
-      return JSON.parse(
-        JSON.stringify(
-          value
-        )
+      return (
+        window.NeyoChat
+          ?.getMessage
+          ?.(id) ||
+        null
       );
 
     } catch {
-      return value;
+      return null;
     }
   }
 
-  /* =====================================================
-     GENERATING
-     ===================================================== */
+  function getMessageElement(
+    id
+  ) {
+    try {
+      return (
+        window.NeyoMessages
+          ?.getElement
+          ?.(id) ||
+        null
+      );
+
+    } catch {
+      return null;
+    }
+  }
 
   function isGenerating() {
     try {
-      if (
+      return Boolean(
         window.NeyoChat
           ?.isGenerating
-          ?.() ===
-        true
-      ) {
-        return true;
-      }
-    } catch {}
-
-    return generationActive;
-  }
-
-  /* =====================================================
-     MESSAGE LOOKUP
-     ===================================================== */
-
-  function getMessageElement(
-    value
-  ) {
-    if (
-      value instanceof
-      HTMLElement
-    ) {
-      return value.closest(
-        ".message"
+          ?.()
       );
+
+    } catch {
+      return false;
     }
-
-    const id =
-      cleanId(
-        value
-      );
-
-    if (!id) {
-      return null;
-    }
-
-    try {
-      const direct =
-        window.NeyoMessages
-          ?.getElement
-          ?.(id);
-
-      if (
-        direct instanceof
-        HTMLElement
-      ) {
-        return direct;
-      }
-    } catch {}
-
-    return Array
-      .from(
-        chatMessages.querySelectorAll(
-          ".message"
-        )
-      )
-      .find(
-        element =>
-          cleanId(
-            element.dataset
-              ?.neyoMessageId ||
-            element.dataset
-              ?.messageId
-          ) ===
-          id
-      ) ||
-      null;
   }
 
-  /* =====================================================
-     MESSAGE ID
-     ===================================================== */
-
-  function getMessageId(
-    element
-  ) {
-    return cleanId(
-      element
-        ?.dataset
-        ?.neyoMessageId ||
-      element
-        ?.dataset
-        ?.messageId ||
-      ""
-    );
-  }
-
-  /* =====================================================
-     CANONICAL MESSAGE
-     ===================================================== */
-
-  function getCanonicalMessage(
-    id,
-    fallback =
-      null
-  ) {
-    const key =
-      cleanId(
-        id
-      );
-
-    try {
-      const direct =
-        window.NeyoChat
-          ?.getMessage
-          ?.(key);
-
-      if (
-        direct &&
-        direct.role ===
-          "user"
-      ) {
-        return cloneValue(
-          direct
-        );
-      }
-    } catch {}
-
-    try {
-      const conversation =
-        window.NeyoChat
-          ?.getConversation
-          ?.();
-
-      if (
-        Array.isArray(
-          conversation
-        )
-      ) {
-        const match =
-          conversation.find(
-            message =>
-              cleanId(
-                message?.id
-              ) ===
-              key
-          );
-
-        if (
-          match?.role ===
-          "user"
-        ) {
-          return cloneValue(
-            match
-          );
-        }
-      }
-    } catch {}
-
-    if (
-      fallback &&
-      fallback.role ===
-        "user"
-    ) {
-      return cloneValue(
-        fallback
-      );
-    }
-
-    return null;
-  }
-
-  /* =====================================================
-     DISPLAY CONTENT
-
-     Internal attachment-only prompt should not suddenly
-     appear when user presses Edit.
-     ===================================================== */
-
-  function getEditableText(
+  function visibleText(
     message
   ) {
-    const value =
-      cleanText(
-        message
-          ?.displayContent ??
-        message
-          ?.content ??
-        ""
+    if (
+      typeof message
+        ?.displayContent ===
+      "string"
+    ) {
+      return message
+        .displayContent;
+    }
+
+    const content =
+      clean(
+        message?.content
       );
+
+    /*
+     * Do not expose the internal attachment-only prompt.
+     */
 
     if (
       Array.isArray(
-        message
-          ?.attachments
-      ) &&
-      message.attachments.length >
-        0 &&
-      [
-        "Please analyze the attached file.",
-        "Please analyze the attached file or files."
-      ].includes(
-        value.trim()
-      )
-    ) {
-      return "";
-    }
-
-    return value;
-  }
-
-  /* =====================================================
-     ATTACHMENTS
-     ===================================================== */
-
-  function getAttachments(
-    message
-  ) {
-    if (
-      !Array.isArray(
         message?.attachments
-      )
-    ) {
-      return [];
-    }
-
-    return message
-      .attachments
-      .slice(
-        0,
-        5
-      )
-      .map(
-        attachment => ({
-          ...cloneValue(
-            attachment
-          )
-        })
-      );
-  }
-
-  /* =====================================================
-     CAPTURE CURRENT ATTACHMENT DOM
-
-     Important for private/signed/blob image previews.
-
-     The canonical attachment object may have bucket/path
-     but history/private-storage rendering may already have
-     a working signed preview in the current DOM.
-
-     Preserve that rendered visual instead of trying to
-     invent storage URLs here.
-     ===================================================== */
-
-  function captureAttachmentDom(
-    messageElement
-  ) {
-    const source =
-      messageElement
-        ?.querySelector(
-          ".neyo-message-attachments, .message-media-grid"
-        );
-
-    if (!source) {
-      return null;
-    }
-
-    const clone =
-      source.cloneNode(
-        true
-      );
-
-    clone
-      .querySelectorAll(
-        "button"
-      )
-      .forEach(
-        button => {
-          button.disabled =
-            true;
-
-          button.tabIndex =
-            -1;
-        }
-      );
-
-    return clone;
-  }
-
-  /* =====================================================
-     FILE ICON
-     ===================================================== */
-
-  function attachmentIcon(
-    attachment
-  ) {
-    const category =
-      String(
-        attachment
-          ?.category ||
-        ""
-      )
-        .toLowerCase();
-
-    const mime =
-      String(
-        attachment
-          ?.mimeType ||
-        attachment
-          ?.mime ||
-        attachment
-          ?.type ||
-        ""
-      )
-        .toLowerCase();
-
-    const name =
-      String(
-        attachment
-          ?.name ||
-        ""
-      )
-        .toLowerCase();
-
-    if (
-      category ===
-        "image" ||
-      mime.startsWith(
-        "image/"
-      )
-    ) {
-      return "image";
-    }
-
-    if (
-      category ===
-        "spreadsheet" ||
-      /\.(xlsx?|xlsm|csv|tsv|ods)$/
-        .test(
-          name
-        )
-    ) {
-      return "sheet";
-    }
-
-    if (
-      category ===
-        "presentation" ||
-      /\.(pptx?|odp|key)$/
-        .test(
-          name
-        )
-    ) {
-      return "presentation";
-    }
-
-    if (
-      category ===
-      "archive"
-    ) {
-      return "archive";
-    }
-
-    if (
-      category ===
-        "audio" ||
-      mime.startsWith(
-        "audio/"
-      )
-    ) {
-      return "audio-lines";
-    }
-
-    if (
-      category ===
-        "video" ||
-      mime.startsWith(
-        "video/"
-      )
-    ) {
-      return "video";
-    }
-
-    if (
-      category ===
-      "code"
-    ) {
-      return "file-code-2";
-    }
-
-    return "file-text";
-  }
-
-  /* =====================================================
-     SAFE PREVIEW
-     ===================================================== */
-
-  function safePreview(
-    value
-  ) {
-    const raw =
-      String(
-        value || ""
-      )
-        .trim();
-
-    if (!raw) {
-      return "";
-    }
-
-    if (
-      /^(blob:|data:image\/)/i
-        .test(
-          raw
-        )
-    ) {
-      return raw;
-    }
-
-    try {
-      const url =
-        new URL(
-          raw,
-          location.origin
-        );
-
-      return [
-        "http:",
-        "https:"
-      ].includes(
-        url.protocol
-      )
-        ? url.href
-        : "";
-
-    } catch {
-      return "";
-    }
-  }
-
-  /* =====================================================
-     IMAGE TEST
-     ===================================================== */
-
-  function isImage(
-    attachment
-  ) {
-    const category =
-      String(
-        attachment
-          ?.category ||
-        ""
-      )
-        .toLowerCase();
-
-    const mime =
-      String(
-        attachment
-          ?.mimeType ||
-        attachment
-          ?.mime ||
-        attachment
-          ?.type ||
-        ""
-      )
-        .toLowerCase();
-
-    return (
-      category ===
-        "image" ||
-      mime.startsWith(
-        "image/"
-      )
-    );
-  }
-
-  /* =====================================================
-     FALLBACK ATTACHMENT PREVIEW
-
-     Used only when we don't have a rendered attachment
-     DOM snapshot to clone.
-     ===================================================== */
-
-  function createAttachmentPreview(
-    attachment
-  ) {
-    const name =
-      cleanText(
-        attachment?.name ||
-        "Attached file"
-      )
-        .trim() ||
-      "Attached file";
-
-    const preview =
-      safePreview(
-        attachment
-          ?.previewUrl ||
-        attachment
-          ?.signedUrl ||
-        attachment
-          ?.url ||
-        ""
-      );
-
-    if (
-      isImage(
-        attachment
       ) &&
-      preview
-    ) {
-      const card =
-        document.createElement(
-          "div"
-        );
-
-      card.className =
-        "edit-message-image";
-
-      const image =
-        document.createElement(
-          "img"
-        );
-
-      image.src =
-        preview;
-
-      image.alt =
-        name;
-
-      image.loading =
-        "lazy";
-
-      image.decoding =
-        "async";
-
-      card.appendChild(
-        image
-      );
-
-      return card;
-    }
-
-    const pill =
-      document.createElement(
-        "div"
-      );
-
-    /*
-     * Preserve old CSS hook.
-     */
-
-    pill.className =
-      "message-file-pill";
-
-    const icon =
-      document.createElement(
-        "i"
-      );
-
-    icon.setAttribute(
-      "data-lucide",
-      attachmentIcon(
-        attachment
+      message.attachments.length &&
+      (
+        content ===
+          "Please analyze the attached file or files." ||
+        content ===
+          "Please analyze the attached file."
       )
-    );
+    ) {
+      return "";
+    }
 
-    icon.setAttribute(
-      "aria-hidden",
-      "true"
-    );
-
-    const nameSpan =
-      document.createElement(
-        "span"
-      );
-
-    nameSpan.textContent =
-      name;
-
-    pill.append(
-      icon,
-      nameSpan
-    );
-
-    return pill;
+    return content;
   }
 
   /* =====================================================
-     EDIT ATTACHMENT AREA
+     AUTOSIZE
      ===================================================== */
 
-  function createEditMedia(
-    originalAttachmentDom,
-    attachments
-  ) {
-    const root =
-      document.createElement(
-        "div"
-      );
-
-    /*
-     * Exact old production class.
-     */
-
-    root.className =
-      "edit-message-media";
-
-    if (
-      originalAttachmentDom
-    ) {
-      root.appendChild(
-        originalAttachmentDom
-      );
-
-      return root;
-    }
-
-    for (
-      const attachment
-      of attachments
-    ) {
-      root.appendChild(
-        createAttachmentPreview(
-          attachment
-        )
-      );
-    }
-
-    return root;
-  }
-
-  /* =====================================================
-     TEXTAREA AUTO RESIZE
-     ===================================================== */
-
-  function resizeTextarea(
+  function resize(
     textarea
   ) {
     if (
@@ -937,269 +179,175 @@ After neo.js removal this file continues unchanged.
         HTMLTextAreaElement
       )
     ) {
-      return false;
+      return;
     }
 
     textarea.style.height =
       "auto";
 
-    const next =
-      Math.min(
-        CONFIG
-          .maxTextareaHeight,
-        Math.max(
-          textarea.scrollHeight,
-          44
-        )
-      );
-
     textarea.style.height =
-      `${next}px`;
-
-    textarea.style.overflowY =
-      textarea.scrollHeight >
-        CONFIG
-          .maxTextareaHeight
-        ? "auto"
-        : "hidden";
-
-    return true;
+      `${Math.min(
+        textarea.scrollHeight,
+        180
+      )}px`;
   }
 
   /* =====================================================
-     ORIGINAL DOM SNAPSHOT
+     RESTORE ORIGINAL MESSAGE UI
      ===================================================== */
 
-  function snapshotChildren(
-    element
+  function restore(
+    editor
   ) {
-    return Array
-      .from(
-        element.childNodes
-      )
-      .map(
-        child =>
-          child.cloneNode(
-            true
-          )
-      );
-  }
-
-  /* =====================================================
-     RESTORE ORIGINAL DOM
-     ===================================================== */
-
-  function restoreOriginalDom(
-    currentSession =
-      session
-  ) {
-    if (
-      !currentSession
-        ?.element
-    ) {
-      return false;
+    if (!editor) {
+      return;
     }
 
-    const {
-      element,
-      originalChildren
-    } =
-      currentSession;
-
-    if (
-      !element.isConnected
-    ) {
-      return false;
-    }
-
-    const clones =
-      originalChildren.map(
-        child =>
-          child.cloneNode(
-            true
-          )
+    editor.contentElement
+      ?.removeAttribute(
+        "hidden"
       );
 
-    element.replaceChildren(
-      ...clones
-    );
+    editor.actionsElement
+      ?.removeAttribute(
+        "hidden"
+      );
 
-    element.classList.remove(
-      "is-editing",
-      "is-edit-submitting"
-    );
+    editor.messageElement
+      ?.classList
+      .remove(
+        "is-editing"
+      );
 
-    delete element.dataset
-      .editActive;
-
-    /*
-     * Restored cloned action buttons have no listeners,
-     * which is fine because message-actions.js uses
-     * delegated capture handling.
-
-     * Hydrate is still requested to dedupe/rebuild final
-     * action controls if necessary.
-     */
+    editor.editBox
+      ?.remove();
 
     try {
-      window
-        .NeyoMessageActions
-        ?.hydrateMessage
-        ?.(element);
-
+      window.NeyoMessageActions
+        ?.refresh
+        ?.();
     } catch {}
-
-    refreshIcons();
-
-    return true;
-  }
-
-  /* =====================================================
-     CLOSE SESSION INTERNAL
-     ===================================================== */
-
-  function clearSession() {
-    composing =
-      false;
-
-    submitting =
-      false;
-
-    session =
-      null;
   }
 
   /* =====================================================
      CANCEL
      ===================================================== */
 
-  function cancel({
-    restoreFocus =
-      true,
+  function cancel(
     reason =
-      "user"
-  } = {}) {
-    if (!session) {
+      "cancel"
+  ) {
+    if (!active) {
       return false;
     }
 
-    if (
-      submitting
-    ) {
-      return false;
-    }
+    const editor =
+      active;
 
-    const current =
-      session;
+    active =
+      null;
 
-    restoreOriginalDom(
-      current
+    restore(
+      editor
     );
-
-    metrics.cancelled +=
-      1;
 
     emit(
       "neyo:message-edit-cancelled",
       {
-        messageId:
-          current.messageId,
+        id:
+          editor.id,
 
         reason
       }
     );
 
-    const focusTarget =
-      current.editButton ||
-      current.element
-        ?.querySelector(
-          ".user-edit-btn"
-        );
-
-    clearSession();
-
-    if (
-      restoreFocus &&
-      focusTarget
-        ?.isConnected
-    ) {
-      requestAnimationFrame(
-        () => {
-          try {
-            focusTarget.focus({
-              preventScroll:
-                true
-            });
-
-          } catch {
-            try {
-              focusTarget.focus();
-            } catch {}
-          }
-        }
-      );
-    }
-
     return true;
   }
 
   /* =====================================================
-     CREATE EDIT UI
+     BUTTON STATE
+     ===================================================== */
+
+  function updateSaveState(
+    editor
+  ) {
+    if (!editor) {
+      return;
+    }
+
+    const text =
+      clean(
+        editor.textarea.value
+      ).trim();
+
+    const hasAttachments =
+      Array.isArray(
+        editor.message.attachments
+      ) &&
+      editor.message
+        .attachments.length > 0;
+
+    const valid =
+      Boolean(
+        text ||
+        hasAttachments
+      );
+
+    editor.saveButton.disabled =
+      !valid ||
+      isGenerating();
+
+    editor.saveButton.setAttribute(
+      "aria-disabled",
+      String(
+        editor.saveButton
+          .disabled
+      )
+    );
+  }
+
+  /* =====================================================
+     CREATE EDITOR
      ===================================================== */
 
   function createEditor(
-    currentSession
+    id,
+    message,
+    messageElement
   ) {
-    const {
-      element,
-      originalText,
-      attachments,
-      attachmentDom
-    } =
-      currentSession;
+    const wrapper =
+      messageElement.querySelector(
+        ".message-wrapper"
+      );
+
+    const contentElement =
+      wrapper?.querySelector(
+        ":scope > .message-content"
+      );
+
+    const actionsElement =
+      wrapper?.querySelector(
+        ":scope > .user-msg-actions"
+      );
+
+    if (
+      !wrapper ||
+      !contentElement
+    ) {
+      return null;
+    }
 
     const editBox =
       document.createElement(
         "div"
       );
 
-    /*
-     * Exact old production CSS hook.
-     */
-
     editBox.className =
       "edit-message-box";
 
-    editBox.setAttribute(
-      "role",
-      "group"
-    );
-
-    editBox.setAttribute(
-      "aria-label",
-      "Edit message"
-    );
-
-    /* =================================================
-       ATTACHMENTS
-       ================================================= */
-
-    if (
-      attachments.length >
-        0 ||
-      attachmentDom
-    ) {
-      editBox.appendChild(
-        createEditMedia(
-          attachmentDom,
-          attachments
-        )
-      );
-    }
-
-    /* =================================================
-       TEXTAREA
-       ================================================= */
+    editBox.dataset
+      .messageEdit =
+      id;
 
     const textarea =
       document.createElement(
@@ -1210,17 +358,16 @@ After neo.js removal this file continues unchanged.
       "edit-textarea";
 
     textarea.rows =
-      CONFIG.minRows;
-
-    textarea.maxLength =
-      CONFIG.maxLength;
+      2;
 
     textarea.value =
-      originalText;
+      visibleText(
+        message
+      );
 
     textarea.setAttribute(
       "aria-label",
-      "Edit message text"
+      "Edit message"
     );
 
     textarea.setAttribute(
@@ -1232,10 +379,6 @@ After neo.js removal this file continues unchanged.
       "spellcheck",
       "true"
     );
-
-    /* =================================================
-       ACTIONS
-       ================================================= */
 
     const actions =
       document.createElement(
@@ -1259,11 +402,6 @@ After neo.js removal this file continues unchanged.
     cancelButton.textContent =
       "Cancel";
 
-    cancelButton.setAttribute(
-      "aria-label",
-      "Cancel editing"
-    );
-
     const saveButton =
       document.createElement(
         "button"
@@ -1276,12 +414,7 @@ After neo.js removal this file continues unchanged.
       "edit-btn-save";
 
     saveButton.textContent =
-      CONFIG.submitLabel;
-
-    saveButton.setAttribute(
-      "aria-label",
-      "Save and submit edited message"
-    );
+      "Save & Submit";
 
     actions.append(
       cancelButton,
@@ -1293,70 +426,77 @@ After neo.js removal this file continues unchanged.
       actions
     );
 
-    element.replaceChildren(
+    /*
+     * Keep existing attachment cards in place.
+     *
+     * Only original text/actions are hidden.
+     */
+
+    contentElement.hidden =
+      true;
+
+    if (actionsElement) {
+      actionsElement.hidden =
+        true;
+    }
+
+    wrapper.appendChild(
       editBox
     );
 
-    element.classList.add(
+    messageElement.classList.add(
       "is-editing"
     );
 
-    element.dataset
-      .editActive =
-      "true";
+    const editor = {
+      id,
 
-    currentSession.editBox =
-      editBox;
+      message,
 
-    currentSession.textarea =
-      textarea;
+      messageElement,
 
-    currentSession.cancelButton =
-      cancelButton;
+      wrapper,
 
-    currentSession.saveButton =
-      saveButton;
+      contentElement,
 
-    /* =================================================
-       INPUT
-       ================================================= */
+      actionsElement,
+
+      editBox,
+
+      textarea,
+
+      cancelButton,
+
+      saveButton,
+
+      submitting:
+        false
+    };
+
+    /* -----------------------------------------------
+       Events
+       ----------------------------------------------- */
 
     textarea.addEventListener(
       "input",
       () => {
-        resizeTextarea(
+        resize(
           textarea
         );
 
-        syncSaveState();
+        updateSaveState(
+          editor
+        );
       }
     );
-
-    textarea.addEventListener(
-      "compositionstart",
-      () => {
-        composing =
-          true;
-      }
-    );
-
-    textarea.addEventListener(
-      "compositionend",
-      () => {
-        composing =
-          false;
-
-        syncSaveState();
-      }
-    );
-
-    /* =================================================
-       KEYBOARD
-       ================================================= */
 
     textarea.addEventListener(
       "keydown",
       event => {
+        /*
+         * Escape = cancel.
+         */
+
         if (
           event.key ===
           "Escape"
@@ -1364,60 +504,36 @@ After neo.js removal this file continues unchanged.
           event.preventDefault();
           event.stopPropagation();
 
-          cancel({
-            reason:
-              "escape"
-          });
+          cancel(
+            "escape"
+          );
 
-          return;
-        }
-
-        if (
-          event.key !==
-          "Enter"
-        ) {
           return;
         }
 
         /*
-         * Shift+Enter = newline.
+         * Cmd/Ctrl + Enter = Save & Submit.
+         *
+         * Plain Enter remains newline.
          */
 
         if (
-          event.shiftKey
+          event.key ===
+            "Enter" &&
+          (
+            event.metaKey ||
+            event.ctrlKey
+          )
         ) {
-          return;
+          event.preventDefault();
+          event.stopPropagation();
+
+          void submit(
+            editor
+          );
         }
-
-        /*
-         * Modifier combos remain browser/editor behavior.
-         */
-
-        if (
-          event.ctrlKey ||
-          event.metaKey ||
-          event.altKey
-        ) {
-          return;
-        }
-
-        if (
-          event.isComposing ||
-          composing
-        ) {
-          return;
-        }
-
-        event.preventDefault();
-        event.stopPropagation();
-
-        void submit();
       }
     );
-
-    /* =================================================
-       BUTTONS
-       ================================================= */
 
     cancelButton.addEventListener(
       "click",
@@ -1425,7 +541,9 @@ After neo.js removal this file continues unchanged.
         event.preventDefault();
         event.stopPropagation();
 
-        cancel();
+        cancel(
+          "button"
+        );
       }
     );
 
@@ -1435,164 +553,65 @@ After neo.js removal this file continues unchanged.
         event.preventDefault();
         event.stopPropagation();
 
-        void submit();
+        void submit(
+          editor
+        );
       }
     );
 
     requestAnimationFrame(
       () => {
-        resizeTextarea(
+        resize(
           textarea
         );
 
-        syncSaveState();
+        updateSaveState(
+          editor
+        );
 
-        try {
-          textarea.focus({
-            preventScroll:
-              true
-          });
-
-        } catch {
-          textarea.focus();
-        }
+        textarea.focus();
 
         /*
-         * Cursor at end matches normal message-edit UX.
+         * Cursor at end, matching normal edit behavior.
          */
+
+        const length =
+          textarea.value.length;
 
         try {
           textarea.setSelectionRange(
-            textarea.value.length,
-            textarea.value.length
+            length,
+            length
           );
         } catch {}
       }
     );
 
-    refreshIcons();
-
-    return editBox;
+    return editor;
   }
 
   /* =====================================================
-     SAVE STATE
+     OPEN
      ===================================================== */
 
-  function syncSaveState() {
-    if (
-      !session
-        ?.saveButton ||
-      !session
-        ?.textarea
-    ) {
-      return false;
-    }
-
-    const text =
-      cleanText(
-        session
-          .textarea
-          .value
-      )
-        .trim();
-
-    const hasAttachments =
-      session
-        .attachments
-        .length >
-      0;
-
-    const valid =
-      (
-        Boolean(
-          text
-        ) ||
-        hasAttachments
-      ) &&
-      !submitting &&
-      !isGenerating();
-
-    session
-      .saveButton
-      .disabled =
-      !valid;
-
-    session
-      .saveButton
-      .setAttribute(
-        "aria-disabled",
-        String(
-          !valid
-        )
-      );
-
-    return valid;
-  }
-
-  /* =====================================================
-     BEGIN EDIT
-     ===================================================== */
-
-  function beginEdit(
-    request = {}
+  function open(
+    id
   ) {
+    const key =
+      String(
+        id || ""
+      ).trim();
+
     if (
-      submitting ||
+      !key ||
       isGenerating()
     ) {
-      metrics.blocked +=
-        1;
-
-      emit(
-        "neyo:message-edit-blocked",
-        {
-          reason:
-            "generating"
-        }
-      );
-
       return false;
     }
-
-    const suppliedElement =
-      request.element instanceof
-        HTMLElement
-        ? request.element
-        : null;
-
-    const requestedId =
-      cleanId(
-        request.messageId ||
-        request.id ||
-        request.message?.id ||
-        getMessageId(
-          suppliedElement
-        )
-      );
-
-    const element =
-      suppliedElement ||
-      getMessageElement(
-        requestedId
-      );
-
-    if (
-      !element
-    ) {
-      return false;
-    }
-
-    const messageId =
-      requestedId ||
-      getMessageId(
-        element
-      );
 
     const message =
-      getCanonicalMessage(
-        messageId,
-        request.message
+      getMessage(
+        key
       );
 
     if (
@@ -1603,126 +622,60 @@ After neo.js removal this file continues unchanged.
       return false;
     }
 
-    /*
-     * Only one editor at once.
+    const element =
+      getMessageElement(
+        key
+      );
 
-     * Clicking Edit on another message safely restores the
-     * previous message before opening the new editor.
+    if (!element) {
+      return false;
+    }
+
+    /*
+     * Same editor already open.
      */
 
     if (
-      session
+      active?.id ===
+      key
     ) {
-      if (
-        session.messageId ===
-        messageId
-      ) {
-        session.textarea
-          ?.focus();
+      active.textarea
+        ?.focus();
 
-        return true;
-      }
-
-      cancel({
-        restoreFocus:
-          false,
-
-        reason:
-          "switch-message"
-      });
+      return true;
     }
 
-    const originalText =
-      getEditableText(
-        message
-      );
+    /*
+     * Only one inline editor at a time.
+     */
 
-    const attachments =
-      getAttachments(
-        message
+    if (active) {
+      cancel(
+        "another-message"
       );
+    }
 
-    const attachmentDom =
-      captureAttachmentDom(
+    const editor =
+      createEditor(
+        key,
+        message,
         element
       );
 
-    const editButton =
-      element.querySelector(
-        ".user-edit-btn"
-      );
-
-    session = {
-      messageId,
-
-      element,
-
-      message:
-        cloneValue(
-          message
-        ),
-
-      originalText,
-
-      attachments,
-
-      attachmentDom,
-
-      originalChildren:
-        snapshotChildren(
-          element
-        ),
-
-      editButton,
-
-      openedAt:
-        Date.now(),
-
-      editBox:
-        null,
-
-      textarea:
-        null,
-
-      cancelButton:
-        null,
-
-      saveButton:
-        null
-    };
-
-    if (
-      attachments.length >
-      0
-    ) {
-      metrics.attachmentEdits +=
-        1;
+    if (!editor) {
+      return false;
     }
 
-    createEditor(
-      session
-    );
-
-    metrics.opened +=
-      1;
-
-    metrics.lastOpenedAt =
-      Date.now();
+    active =
+      editor;
 
     emit(
       "neyo:message-edit-opened",
       {
-        messageId,
+        id:
+          key,
 
-        message:
-          cloneValue(
-            message
-          ),
-
-        attachmentCount:
-          attachments.length,
-
-        element
+        message
       }
     );
 
@@ -1730,126 +683,19 @@ After neo.js removal this file continues unchanged.
   }
 
   /* =====================================================
-     SUBMIT UI STATE
-     ===================================================== */
-
-  function setSubmittingUi(
-    value
-  ) {
-    if (!session) {
-      return;
-    }
-
-    submitting =
-      Boolean(
-        value
-      );
-
-    const {
-      element,
-      textarea,
-      saveButton,
-      cancelButton
-    } =
-      session;
-
-    element.classList.toggle(
-      "is-edit-submitting",
-      submitting
-    );
-
-    if (
-      textarea
-    ) {
-      textarea.disabled =
-        submitting;
-    }
-
-    if (
-      cancelButton
-    ) {
-      cancelButton.disabled =
-        submitting;
-    }
-
-    if (
-      saveButton
-    ) {
-      saveButton.disabled =
-        submitting;
-
-      saveButton.setAttribute(
-        "aria-busy",
-        String(
-          submitting
-        )
-      );
-
-      saveButton.textContent =
-        submitting
-          ? CONFIG
-              .submittingLabel
-          : CONFIG
-              .submitLabel;
-    }
-  }
-
-  /* =====================================================
      SUBMIT
-
-     IMPORTANT ORDER
-     -----------------------------------------------------
-     1. Validate.
-     2. Save session data locally.
-     3. Restore normal message DOM.
-     4. Call NeyoChat.editUserMessage().
-     5. chat.js updates canonical message + truncates future.
-     6. messages.js receives normal DOM lifecycle events.
-
-     This avoids trying to update a DOM shell that currently
-     contains only .edit-message-box.
      ===================================================== */
 
-  async function submit() {
+  async function submit(
+    editor =
+      active
+  ) {
     if (
-      !session ||
-      submitting ||
+      !editor ||
+      editor !== active ||
+      editor.submitting ||
       isGenerating()
     ) {
-      return false;
-    }
-
-    const current =
-      session;
-
-    const textarea =
-      current.textarea;
-
-    if (!textarea) {
-      return false;
-    }
-
-    const enteredText =
-      cleanText(
-        textarea.value
-      );
-
-    const trimmed =
-      enteredText.trim();
-
-    const hasAttachments =
-      current.attachments
-        .length >
-      0;
-
-    if (
-      !trimmed &&
-      !hasAttachments
-    ) {
-      syncSaveState();
-
-      textarea.focus();
-
       return false;
     }
 
@@ -1864,315 +710,216 @@ After neo.js removal this file continues unchanged.
       emit(
         "neyo:message-edit-error",
         {
-          messageId:
-            current.messageId,
+          id:
+            editor.id,
 
-          message:
-            "Chat edit engine is unavailable."
+          reason:
+            "chat-edit-api-unavailable"
         }
       );
 
       return false;
     }
 
-    /*
-     * Attachment-only edit may legitimately contain
-     * blank display text.
+    const text =
+      clean(
+        editor.textarea.value
+      ).trim();
 
-     * chat.js knows how to convert that into its internal
-     * attachment prompt while retaining attachments.
+    const attachments =
+      Array.isArray(
+        editor.message
+          .attachments
+      )
+        ? editor.message
+            .attachments
+            .map(
+              item => ({
+                ...item
+              })
+            )
+        : [];
+
+    /*
+     * Attachment-only user messages remain valid.
      */
 
-    const submitText =
-      trimmed;
+    if (
+      !text &&
+      attachments.length === 0
+    ) {
+      updateSaveState(
+        editor
+      );
 
-    setSubmittingUi(
-      true
+      return false;
+    }
+
+    const original =
+      visibleText(
+        editor.message
+      ).trim();
+
+    /*
+     * No actual edit = close without generating a
+     * duplicate response.
+     */
+
+    if (
+      text === original
+    ) {
+      cancel(
+        "unchanged"
+      );
+
+      return true;
+    }
+
+    editor.submitting =
+      true;
+
+    editor.textarea.disabled =
+      true;
+
+    editor.cancelButton.disabled =
+      true;
+
+    editor.saveButton.disabled =
+      true;
+
+    editor.editBox.classList.add(
+      "is-submitting"
     );
 
     /*
-     * Capture everything BEFORE restoring/clearing session.
+     * Restore normal message shell BEFORE chat.js
+     * emits its synchronous update event.
+     *
+     * chat.js remains the only owner of canonical
+     * conversation mutation.
      */
 
-    const messageId =
-      current.messageId;
+    active =
+      null;
 
-    const originalMessage =
-      cloneValue(
-        current.message
-      );
-
-    const originalText =
-      current.originalText;
-
-    /*
-     * Restore a valid normal message structure first.
-     */
-
-    restoreOriginalDom(
-      current
+    restore(
+      editor
     );
 
     emit(
-      "neyo:message-edit-submitting",
+      "neyo:message-edit-submit",
       {
-        messageId,
+        id:
+          editor.id,
 
-        content:
-          submitText,
+        text,
 
-        attachments:
-          cloneValue(
-            current.attachments
-          )
+        attachments
       }
     );
 
     try {
-      /*
-       * This is the SINGLE canonical mutation.
-       *
-       * No local conversation splice.
-       * No local assistant removal.
-       * No direct /api/chat.
-       */
-
       const result =
-        await chat
-          .editUserMessage(
-            messageId,
-            submitText,
-            {
-              regenerateResponse:
-                true
-            }
-          );
-
-      if (
-        !result
-      ) {
-        /*
-         * A null result can happen if chat rejected the
-         * edit before mutation. Restore original state UI.
-         */
-
-        try {
-          window.NeyoMessages
-            ?.updateFromMessage
-            ?.(
-              messageId,
-              originalMessage,
-              {
-                markdown:
-                  false
-              }
-            );
-        } catch {}
-
-        metrics.failed +=
-          1;
-
-        emit(
-          "neyo:message-edit-error",
+        await chat.editUserMessage(
+          editor.id,
+          text,
           {
-            messageId,
+            attachments,
 
-            message:
-              "Edited message could not be submitted."
+            regenerateResponse:
+              true
           }
         );
 
-        clearSession();
-
-        return false;
-      }
-
-      metrics.submitted +=
-        1;
-
-      metrics.lastSubmittedAt =
-        Date.now();
-
       emit(
-        "neyo:message-edit-submitted",
+        "neyo:message-edit-complete",
         {
-          messageId,
+          id:
+            editor.id,
 
-          originalText,
-
-          content:
-            submitText,
-
-          attachments:
-            cloneValue(
-              current.attachments
-            ),
-
-          result:
-            cloneValue(
-              result
-            )
+          result
         }
       );
 
-      clearSession();
+      return result !== null;
 
-      return true;
-
-    } catch (
-      error
-    ) {
+    } catch (error) {
       console.error(
-        "[NEYO Message Edit] Submit failed:",
+        "[NEO Message Edit] Submit failed:",
         error
       );
-
-      metrics.failed +=
-        1;
-
-      /*
-       * chat.js normally absorbs request-level errors after
-       * canonical edit has occurred. This catch is for
-       * unexpected JavaScript/module failures.
-
-       * If canonical message still exists, ask messages.js
-       * to render whatever chat.js currently owns.
-       */
-
-      try {
-        const canonical =
-          chat.getMessage
-            ?.(messageId);
-
-        if (
-          canonical
-        ) {
-          window.NeyoMessages
-            ?.updateFromMessage
-            ?.(
-              messageId,
-              canonical,
-              {
-                markdown:
-                  false
-              }
-            );
-
-        } else {
-          window.NeyoMessages
-            ?.updateFromMessage
-            ?.(
-              messageId,
-              originalMessage,
-              {
-                markdown:
-                  false
-              }
-            );
-        }
-      } catch {}
 
       emit(
         "neyo:message-edit-error",
         {
-          messageId,
+          id:
+            editor.id,
 
-          error,
-
-          message:
-            error?.message ||
-            "Edited message could not be submitted."
+          error
         }
       );
-
-      clearSession();
 
       return false;
     }
   }
 
   /* =====================================================
-     ACTION EVENT
+     REQUEST EVENT
 
-     Final message-actions.js emits:
-     neyo:message-edit-request
+     message-actions.js emits this.
      ===================================================== */
 
   window.addEventListener(
     "neyo:message-edit-request",
     event => {
-      beginEdit(
-        event.detail ||
-        {}
-      );
-    }
-  );
+      const id =
+        event.detail?.id ||
+        event.detail
+          ?.message
+          ?.id;
 
-  /* =====================================================
-     COMPATIBILITY EVENT
-     ===================================================== */
-
-  window.addEventListener(
-    "neyo:user-message-edit-request",
-    event => {
-      const detail =
-        event.detail ||
-        {};
-
-      /*
-       * message-actions.js intentionally emits both modern
-       * and compatibility aliases.
-
-       * If modern event already opened same message,
-       * beginEdit() simply focuses the existing textarea.
-       */
-
-      beginEdit(
-        detail
-      );
-    }
-  );
-
-  /* =====================================================
-     GENERATION STATE
-     ===================================================== */
-
-  window.addEventListener(
-    "neyo:chat-send-start",
-    () => {
-      generationActive =
-        true;
-
-      syncSaveState();
-    }
-  );
-
-  for (
-    const eventName
-    of [
-      "neyo:chat-send-end",
-      "neyo:chat-response",
-      "neyo:chat-error",
-      "neyo:chat-aborted",
-      "neyo:chat-limit-reached"
-    ]
-  ) {
-    window.addEventListener(
-      eventName,
-      () => {
-        generationActive =
-          false;
-
-        syncSaveState();
+      if (id) {
+        open(
+          id
+        );
       }
-    );
-  }
+    }
+  );
 
   /* =====================================================
-     NEW CHAT / HISTORY LOAD
+     MESSAGE REMOVED
+     ===================================================== */
 
-     Never leave an editor attached to a conversation that
-     is no longer active.
+  window.addEventListener(
+    "neyo:chat-message-removed",
+    event => {
+      if (!active) {
+        return;
+      }
+
+      const id =
+        event.detail?.id ||
+        event.detail
+          ?.message
+          ?.id;
+
+      if (
+        String(
+          id || ""
+        ) ===
+        active.id
+      ) {
+        active =
+          null;
+      }
+    }
+  );
+
+  /* =====================================================
+     CHAT STATE CHANGES
+
+     An open editor should never survive navigation or
+     another generation.
      ===================================================== */
 
   for (
@@ -2186,69 +933,23 @@ After neo.js removal this file continues unchanged.
     window.addEventListener(
       eventName,
       () => {
-        if (
-          session &&
-          !submitting
-        ) {
-          /*
-           * Do not restore stale DOM when entire
-           * conversation has already been replaced.
-           */
-
-          composing =
-            false;
-
-          submitting =
-            false;
-
-          session =
-            null;
+        if (active) {
+          cancel(
+            eventName
+          );
         }
       }
     );
   }
 
-  /* =====================================================
-     MESSAGE REMOVED
-
-     If another operation removes the message being edited,
-     terminate editor state without restoring stale DOM.
-     ===================================================== */
-
   window.addEventListener(
-    "neyo:chat-message-removed",
-    event => {
-      if (!session) {
-        return;
-      }
-
-      const id =
-        cleanId(
-          event.detail
-            ?.message
-            ?.id ||
-          event.detail
-            ?.id
-        );
-
-      if (
-        id &&
-        id ===
-          session.messageId
-      ) {
-        clearSession();
-      }
-    }
-  );
-
-  /* =====================================================
-     EXPLICIT CANCEL REQUEST
-     ===================================================== */
-
-  window.addEventListener(
-    "neyo:message-edit-cancel-request",
+    "neyo:chat-send-start",
     () => {
-      cancel();
+      if (active) {
+        cancel(
+          "generation-started"
+        );
+      }
     }
   );
 
@@ -2258,8 +959,7 @@ After neo.js removal this file continues unchanged.
 
   const api =
     Object.freeze({
-      __controller:
-        true,
+      __controller: true,
 
       version:
         VERSION,
@@ -2267,55 +967,27 @@ After neo.js removal this file continues unchanged.
       active:
         true,
 
-      legacyScriptPresent,
-
-      legacyOwnerActive:
-        false,
-
-      /*
-       * Lifecycle
-       */
-
-      open:
-        beginEdit,
-
-      beginEdit,
+      open,
 
       cancel,
 
-      submit,
-
-      /*
-       * State
-       */
+      save() {
+        return submit(
+          active
+        );
+      },
 
       isEditing() {
         return Boolean(
-          session
+          active
         );
       },
 
-      isSubmitting() {
-        return submitting;
-      },
-
-      getMessageId() {
+      getEditingId() {
         return (
-          session
-            ?.messageId ||
+          active?.id ||
           null
         );
-      },
-
-      getDraft() {
-        return session
-          ?.textarea
-          ? cleanText(
-              session
-                .textarea
-                .value
-            )
-          : null;
       },
 
       getState() {
@@ -2326,41 +998,20 @@ After neo.js removal this file continues unchanged.
           active:
             true,
 
-          legacyScriptPresent,
-
-          legacyOwnerActive:
-            false,
-
           editing:
             Boolean(
-              session
+              active
             ),
 
-          submitting,
-
-          composing,
-
-          generationActive,
-
           messageId:
-            session
-              ?.messageId ||
+            active?.id ||
             null,
 
-          attachmentCount:
-            session
-              ?.attachments
-              ?.length ||
-            0,
-
-          openedAt:
-            session
-              ?.openedAt ||
-            null,
-
-          metrics: {
-            ...metrics
-          }
+          submitting:
+            Boolean(
+              active
+                ?.submitting
+            )
         };
       }
     });
@@ -2394,18 +1045,7 @@ After neo.js removal this file continues unchanged.
         VERSION,
 
       active:
-        true,
-
-      attachmentPreservation:
-        true,
-
-      keyboard:
-        true,
-
-      legacyScriptPresent,
-
-      legacyOwnerActive:
-        false
+        true
     }
   );
 })();

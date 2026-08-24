@@ -1,94 +1,98 @@
 /*
 =========================================================
 NEO — SEND COMPATIBILITY FACADE
-Production v1
+Production v2 — Thin Bridge
 
 Purpose:
-Keep the old window.NeyoSend API available without
-creating a second send implementation.
+- Preserve window.NeyoSend compatibility
+- Delegate Send / Stop to NeyoSendState
+- Provide a stable compatibility surface while old code
+  and newer modular code coexist
 
-Canonical ownership:
-- send-state.js → Send / Stop UI + keyboard
-- chat.js       → network + conversation
-- attachments.js→ attachment lifecycle
+Owns:
+- Compatibility API only
 
-This file owns NO DOM and NO network request.
+Does NOT own:
+- #sendBtn
+- #chatInput
+- Enter / Shift+Enter
+- Send / Stop visual state
+- /api/chat
+- AbortController
+- Conversation state
+- Attachment upload
+- Attachment cleanup
+- Composer clearing
+- Message rendering
+- Topbar / model selector
 =========================================================
 */
 
 (() => {
   "use strict";
 
-  const VERSION = "neo-send-production-v1";
+  const VERSION =
+    "neo-send-facade-production-v2";
 
-  if (window.NeyoSend?.__controller === true) return;
-
-  /* =====================================================
-     STATE
-     ===================================================== */
-
-  const state = {
-    lifecycleActive: false,
-    sends: 0,
-    stops: 0,
-    failures: 0
-  };
+  if (
+    window.NeyoSend
+      ?.__controller === true
+  ) {
+    return;
+  }
 
   /* =====================================================
-     HELPERS
+     EVENTS
      ===================================================== */
 
-  function emit(name, detail = {}) {
+  function emit(
+    name,
+    detail = {}
+  ) {
     window.dispatchEvent(
-      new CustomEvent(name, { detail })
+      new CustomEvent(
+        name,
+        {
+          detail
+        }
+      )
     );
   }
+
+  /* =====================================================
+     CONTROLLER
+     ===================================================== */
 
   function controller() {
     const value =
       window.NeyoSendState;
 
-    return (
+    if (
       value &&
+      typeof value === "object" &&
       value.__controller === true
-    )
-      ? value
-      : null;
-  }
-
-  function getControllerState() {
-    try {
-      return (
-        controller()
-          ?.getState
-          ?.() ||
-        null
-      );
-    } catch {
-      return null;
+    ) {
+      return value;
     }
+
+    return null;
   }
 
   /* =====================================================
      SEND
-
-     Never:
-     - reads #chatInput
-     - reads files
-     - emits neyo:chat-send-request itself
-     - calls NeyoChat.send()
      ===================================================== */
 
   function send() {
-    const sendState =
+    const owner =
       controller();
 
-    if (!sendState) {
-      state.failures += 1;
-
+    if (!owner) {
       emit(
-        "neyo:send-unavailable",
+        "neyo:send-facade-error",
         {
+          action:
+            "send",
+
           reason:
             "send-state-unavailable"
         }
@@ -98,294 +102,338 @@ This file owns NO DOM and NO network request.
     }
 
     try {
-      let result = false;
+      if (
+        typeof owner.send ===
+        "function"
+      ) {
+        return (
+          owner.send() !==
+          false
+        );
+      }
 
       if (
-        typeof sendState.requestSend ===
+        typeof owner.requestSend ===
         "function"
       ) {
-        result =
-          sendState.requestSend();
-
-      } else if (
-        typeof sendState.send ===
-        "function"
-      ) {
-        result =
-          sendState.send();
+        return (
+          owner.requestSend() !==
+          false
+        );
       }
-
-      if (result) {
-        state.sends += 1;
-      }
-
-      return result;
 
     } catch (error) {
-      state.failures += 1;
-
       console.error(
         "[NEO Send] Send delegation failed:",
         error
       );
 
       emit(
-        "neyo:send-error",
+        "neyo:send-facade-error",
         {
-          error,
-          source:
-            "send-facade"
+          action:
+            "send",
+
+          reason:
+            "delegation-failed",
+
+          error
         }
       );
 
       return false;
-    }
-  }
-
-  /* =====================================================
-     STOP
-     ===================================================== */
-
-  function stop(
-    reason =
-      "send-facade"
-  ) {
-    const sendState =
-      controller();
-
-    if (!sendState) {
-      state.failures += 1;
-
-      return false;
-    }
-
-    try {
-      let result = false;
-
-      if (
-        typeof sendState.stop ===
-        "function"
-      ) {
-        result =
-          sendState.stop(reason);
-      }
-
-      if (result) {
-        state.stops += 1;
-      }
-
-      return result;
-
-    } catch (error) {
-      state.failures += 1;
-
-      console.error(
-        "[NEO Send] Stop delegation failed:",
-        error
-      );
-
-      return false;
-    }
-  }
-
-  /* =====================================================
-     REFRESH
-
-     Compatibility for older modules that called:
-     NeyoSend.refresh()
-     ===================================================== */
-
-  function refresh() {
-    const sendState =
-      controller();
-
-    if (!sendState) {
-      return false;
-    }
-
-    try {
-      if (
-        typeof sendState.refresh ===
-        "function"
-      ) {
-        return sendState.refresh();
-      }
-
-      if (
-        typeof sendState.update ===
-        "function"
-      ) {
-        return sendState.update();
-      }
-
-    } catch (error) {
-      console.warn(
-        "[NEO Send] Refresh failed:",
-        error
-      );
     }
 
     return false;
   }
 
   /* =====================================================
-     STATE HELPERS
+     STOP
+     ===================================================== */
+
+  function stop() {
+    const owner =
+      controller();
+
+    if (!owner) {
+      emit(
+        "neyo:send-facade-error",
+        {
+          action:
+            "stop",
+
+          reason:
+            "send-state-unavailable"
+        }
+      );
+
+      return false;
+    }
+
+    try {
+      if (
+        typeof owner.stop ===
+        "function"
+      ) {
+        return (
+          owner.stop() !==
+          false
+        );
+      }
+
+      if (
+        typeof owner.requestStop ===
+        "function"
+      ) {
+        return (
+          owner.requestStop() !==
+          false
+        );
+      }
+
+    } catch (error) {
+      console.error(
+        "[NEO Send] Stop delegation failed:",
+        error
+      );
+
+      emit(
+        "neyo:send-facade-error",
+        {
+          action:
+            "stop",
+
+          reason:
+            "delegation-failed",
+
+          error
+        }
+      );
+
+      return false;
+    }
+
+    return false;
+  }
+
+  /* =====================================================
+     REQUEST SEND
+     ===================================================== */
+
+  function requestSend() {
+    const owner =
+      controller();
+
+    if (!owner) {
+      return false;
+    }
+
+    try {
+      if (
+        typeof owner.requestSend ===
+        "function"
+      ) {
+        return (
+          owner.requestSend() !==
+          false
+        );
+      }
+
+      return send();
+
+    } catch (error) {
+      console.error(
+        "[NEO Send] requestSend failed:",
+        error
+      );
+
+      return false;
+    }
+  }
+
+  /* =====================================================
+     REQUEST STOP
+     ===================================================== */
+
+  function requestStop() {
+    const owner =
+      controller();
+
+    if (!owner) {
+      return false;
+    }
+
+    try {
+      if (
+        typeof owner.requestStop ===
+        "function"
+      ) {
+        return (
+          owner.requestStop() !==
+          false
+        );
+      }
+
+      return stop();
+
+    } catch (error) {
+      console.error(
+        "[NEO Send] requestStop failed:",
+        error
+      );
+
+      return false;
+    }
+  }
+
+  /* =====================================================
+     CAN SEND
      ===================================================== */
 
   function canSend() {
+    const owner =
+      controller();
+
+    if (!owner) {
+      return false;
+    }
+
     try {
-      return Boolean(
-        controller()
-          ?.canSend
-          ?.()
-      );
+      if (
+        typeof owner.canSend ===
+        "function"
+      ) {
+        return Boolean(
+          owner.canSend()
+        );
+      }
+
+      return false;
+
     } catch {
       return false;
     }
   }
 
+  /* =====================================================
+     REFRESH
+     ===================================================== */
+
+  function refresh() {
+    const owner =
+      controller();
+
+    if (!owner) {
+      return false;
+    }
+
+    try {
+      if (
+        typeof owner.refresh ===
+        "function"
+      ) {
+        return (
+          owner.refresh() !==
+          false
+        );
+      }
+
+      if (
+        typeof owner.update ===
+        "function"
+      ) {
+        return (
+          owner.update() !==
+          false
+        );
+      }
+
+    } catch (error) {
+      console.error(
+        "[NEO Send] Refresh delegation failed:",
+        error
+      );
+
+      return false;
+    }
+
+    return false;
+  }
+
+  /* =====================================================
+     GENERATION STATE
+     ===================================================== */
+
   function isGenerating() {
-    const current =
-      getControllerState();
+    const owner =
+      controller();
 
-    return Boolean(
-      current?.generating
-    );
+    if (!owner) {
+      return false;
+    }
+
+    try {
+      if (
+        typeof owner.isGenerating ===
+        "function"
+      ) {
+        return Boolean(
+          owner.isGenerating()
+        );
+      }
+
+      const state =
+        owner.getState?.();
+
+      return Boolean(
+        state?.generating
+      );
+
+    } catch {
+      return false;
+    }
   }
 
-  function isSending() {
-    const current =
-      getControllerState();
+  /* =====================================================
+     STATE
+     ===================================================== */
 
-    return Boolean(
-      current?.sending
-    );
+  function getState() {
+    const owner =
+      controller();
+
+    let ownerState = null;
+
+    try {
+      ownerState =
+        owner?.getState?.() ||
+        null;
+    } catch {}
+
+    return {
+      version:
+        VERSION,
+
+      active:
+        Boolean(owner),
+
+      delegated:
+        true,
+
+      owner:
+        owner
+          ? "NeyoSendState"
+          : null,
+
+      canSend:
+        canSend(),
+
+      generating:
+        isGenerating(),
+
+      ownerState
+    };
   }
-
-  /* =====================================================
-     LEGACY PROGRAMMATIC REQUESTS
-
-     Old modules may still dispatch these.
-     They now route through the canonical SendState owner.
-     ===================================================== */
-
-  window.addEventListener(
-    "neyo:send-request",
-    () => {
-      send();
-    }
-  );
-
-  window.addEventListener(
-    "neyo:send-stop-request",
-    event => {
-      stop(
-        event.detail?.reason ||
-        "legacy-send-stop-request"
-      );
-    }
-  );
-
-  /* =====================================================
-     LIFECYCLE COMPATIBILITY
-
-     Preserve older observers without creating another
-     transport pipeline.
-     ===================================================== */
-
-  window.addEventListener(
-    "neyo:chat-send-start",
-    event => {
-      if (state.lifecycleActive) {
-        return;
-      }
-
-      state.lifecycleActive =
-        true;
-
-      emit(
-        "neyo:send-start",
-        {
-          ...(event.detail || {}),
-          compatibility: true
-        }
-      );
-    }
-  );
-
-  window.addEventListener(
-    "neyo:chat-response",
-    event => {
-      if (!state.lifecycleActive) {
-        return;
-      }
-
-      emit(
-        "neyo:send-success",
-        {
-          ...(event.detail || {}),
-          compatibility: true
-        }
-      );
-    }
-  );
-
-  window.addEventListener(
-    "neyo:chat-error",
-    event => {
-      if (!state.lifecycleActive) {
-        return;
-      }
-
-      emit(
-        "neyo:send-error",
-        {
-          ...(event.detail || {}),
-          compatibility: true
-        }
-      );
-    }
-  );
-
-  /*
-   * chat-send-end is the single lifecycle closer.
-   *
-   * We intentionally do not emit send-end separately for
-   * response/error/abort because chat.js ultimately emits
-   * its canonical send-end lifecycle.
-   */
-
-  window.addEventListener(
-    "neyo:chat-send-end",
-    event => {
-      if (!state.lifecycleActive) {
-        return;
-      }
-
-      state.lifecycleActive =
-        false;
-
-      emit(
-        "neyo:send-end",
-        {
-          ...(event.detail || {}),
-          compatibility: true
-        }
-      );
-    }
-  );
-
-  /* =====================================================
-     RESET
-     ===================================================== */
-
-  window.addEventListener(
-    "neyo:chat-new",
-    () => {
-      state.lifecycleActive =
-        false;
-    }
-  );
 
   /* =====================================================
      PUBLIC API
@@ -393,66 +441,57 @@ This file owns NO DOM and NO network request.
 
   const api =
     Object.freeze({
-      __controller: true,
-      version: VERSION,
+      __controller:
+        true,
+
+      version:
+        VERSION,
+
+      active:
+        true,
 
       /*
-       * Compatibility façade marker.
+       * Main compatibility names
        */
 
-      facade: true,
-      active: true,
-
       send,
-      request: send,
+
+      sendMessage:
+        send,
+
+      submit:
+        send,
+
+      requestSend,
+
+      /*
+       * Stop compatibility
+       */
 
       stop,
 
-      refresh,
-      update: refresh,
+      stopGeneration:
+        stop,
+
+      requestStop,
+
+      /*
+       * State
+       */
 
       canSend,
+
       isGenerating,
-      isSending,
 
-      getState() {
-        return {
-          version: VERSION,
+      refresh,
 
-          active: true,
-          facade: true,
+      update:
+        refresh,
 
-          canonicalOwner:
-            controller()
-              ? "NeyoSendState"
-              : null,
+      getState,
 
-          lifecycleActive:
-            state.lifecycleActive,
-
-          canSend:
-            canSend(),
-
-          generating:
-            isGenerating(),
-
-          sending:
-            isSending(),
-
-          controller:
-            getControllerState(),
-
-          metrics: {
-            sends:
-              state.sends,
-
-            stops:
-              state.stops,
-
-            failures:
-              state.failures
-          }
-        };
+      getOwner() {
+        return controller();
       }
     });
 
@@ -460,10 +499,17 @@ This file owns NO DOM and NO network request.
     window,
     "NeyoSend",
     {
-      value: api,
-      writable: false,
-      configurable: true,
-      enumerable: true
+      value:
+        api,
+
+      writable:
+        false,
+
+      configurable:
+        true,
+
+      enumerable:
+        true
     }
   );
 
@@ -474,11 +520,16 @@ This file owns NO DOM and NO network request.
   emit(
     "neyo:send-ready",
     {
-      version: VERSION,
+      version:
+        VERSION,
 
-      facade: true,
+      active:
+        true,
 
-      canonicalOwner:
+      facade:
+        true,
+
+      owner:
         controller()
           ? "NeyoSendState"
           : null

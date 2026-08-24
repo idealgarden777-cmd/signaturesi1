@@ -1,27 +1,34 @@
 /*
 =========================================================
 NEO — MESSAGE RENDERER
-Production v1
+Production v2 — Baseline Safe
+
+Baseline:
+- Old neo.js safeParseMarkdown()
+- Old neo.js renderNeoMath()
+- Old modular message-renderer.js
+- Current NeyoMessages streaming contract
 
 Owns:
-- assistant Markdown rendering
-- HTML sanitization
-- safe links / images
-- code block enhancement
-- code copy
-- syntax highlighting
-- responsive tables
-- KaTeX auto-render hook
-- plain-text fallback
+- Assistant Markdown rendering
+- User plain-text rendering
+- DOMPurify sanitization
+- Safe links
+- Safe images
+- Code-block enhancement
+- Code-block copy action
+- Responsive table wrappers
+- KaTeX rendering
+- Streaming-safe progressive rendering
+- Plain-text fallback
 
 Does NOT own:
-- message shells
-- conversation state
-- /api/chat
-- copy/share message actions
-- edit/regenerate
-- source pills
-- attachments
+- Message shell DOM
+- Chat API
+- Conversation state
+- Message-level Copy / Share / Regenerate
+- History
+- Sources UI
 =========================================================
 */
 
@@ -29,7 +36,7 @@ Does NOT own:
   "use strict";
 
   const VERSION =
-    "neo-message-renderer-production-v1";
+    "neo-message-renderer-production-v2";
 
   if (
     window.NeyoMessageRenderer
@@ -42,18 +49,40 @@ Does NOT own:
      CONFIG
      ===================================================== */
 
-  const SAFE_LINK_PROTOCOLS =
-    new Set([
+  const CONFIG = Object.freeze({
+    codeCopyResetMs: 1800,
+
+    safeProtocols: new Set([
       "http:",
       "https:",
       "mailto:"
-    ]);
+    ]),
 
-  const SAFE_IMAGE_PROTOCOLS =
-    new Set([
-      "http:",
-      "https:"
-    ]);
+    blockedTags: [
+      "script",
+      "style",
+      "iframe",
+      "object",
+      "embed",
+      "form",
+      "input",
+      "button",
+      "textarea",
+      "select",
+      "option"
+    ],
+
+    blockedAttributes: [
+      "style",
+      "srcdoc",
+      "formaction",
+      "onerror",
+      "onload",
+      "onclick",
+      "onmouseover",
+      "onfocus"
+    ]
+  });
 
   /* =====================================================
      EVENTS
@@ -64,262 +93,132 @@ Does NOT own:
     detail = {}
   ) {
     window.dispatchEvent(
-      new CustomEvent(
-        name,
-        { detail }
-      )
+      new CustomEvent(name, {
+        detail
+      })
     );
   }
 
   /* =====================================================
-     TEXT
+     ESCAPE
      ===================================================== */
 
-  function text(
-    value
-  ) {
-    return String(
-      value ?? ""
-    )
-      .replace(
-        /\u0000/g,
-        ""
-      )
-      .replace(
-        /\r\n?/g,
-        "\n"
-      );
-  }
-
-  function escapeHtml(
-    value
-  ) {
-    return text(value)
-      .replace(
-        /&/g,
+  function escapeHtml(value) {
+    return String(value ?? "")
+      .replaceAll(
+        "&",
         "&amp;"
       )
-      .replace(
-        /</g,
+      .replaceAll(
+        "<",
         "&lt;"
       )
-      .replace(
-        />/g,
+      .replaceAll(
+        ">",
         "&gt;"
       )
-      .replace(
-        /"/g,
+      .replaceAll(
+        '"',
         "&quot;"
       )
-      .replace(
-        /'/g,
+      .replaceAll(
+        "'",
         "&#039;"
       );
   }
 
-  function plainTextHtml(
+  /* =====================================================
+     MATH NORMALIZATION
+
+     Preserve old NEO behavior while avoiding modification
+     inside fenced code blocks.
+     ===================================================== */
+
+  function normalizeMathDelimiters(
     value
   ) {
-    return escapeHtml(
-      value
-    ).replace(
-      /\n/g,
-      "<br>"
-    );
+    const source =
+      String(value ?? "");
+
+    if (!source) {
+      return "";
+    }
+
+    const parts =
+      source.split(
+        /(```[\s\S]*?```|`[^`\n]*`)/g
+      );
+
+    return parts
+      .map((part, index) => {
+        /*
+         * Regex captures code pieces into odd positions.
+         */
+
+        if (index % 2 === 1) {
+          return part;
+        }
+
+        return part
+          /*
+           * \[...\] and \(...\) are already supported by
+           * KaTeX auto-render. Preserve them.
+           */
+
+          /*
+           * Common model output:
+           * escaped dollar delimiters.
+           */
+
+          .replace(
+            /\\\$\$([\s\S]*?)\\\$\$/g,
+            "$$$$1$$"
+          )
+
+          .replace(
+            /\\\$([^$\n]+?)\\\$/g,
+            "$$$1$"
+          );
+      })
+      .join("");
   }
 
   /* =====================================================
-     MARKED
+     MARKED CONFIG
      ===================================================== */
-
-  let markedConfigured =
-    false;
 
   function configureMarked() {
-    if (
-      markedConfigured
-    ) {
-      return true;
-    }
-
-    const marked =
-      window.marked;
-
-    if (!marked) {
+    if (!window.marked) {
       return false;
     }
 
     try {
-      marked.setOptions?.({
+      window.marked.setOptions({
         gfm: true,
-        breaks: true
+
+        /*
+         * Old working neo.js used breaks:false.
+         * Keep that behavior.
+         */
+
+        breaks: false
       });
 
-      markedConfigured =
-        true;
-
       return true;
-
-    } catch (error) {
-      console.warn(
-        "[NEO Renderer] Could not configure marked:",
-        error
-      );
-
+    } catch {
       return false;
     }
   }
 
   /* =====================================================
-     SANITIZE
-
-     Raw model HTML is never trusted.
+     SAFE URL
      ===================================================== */
 
-  function sanitizeHtml(
-    html
-  ) {
-    const purifier =
-      window.DOMPurify;
-
-    /*
-     * Critical fail-safe:
-     * without DOMPurify we NEVER inject Markdown HTML.
-     */
-
+  function parseSafeUrl(value) {
     if (
-      !purifier ||
-      typeof purifier.sanitize !==
-        "function"
+      typeof value !== "string" ||
+      !value.trim()
     ) {
-      return null;
-    }
-
-    try {
-      return purifier.sanitize(
-        String(
-          html ?? ""
-        ),
-        {
-          USE_PROFILES: {
-            html: true
-          },
-
-          FORBID_TAGS: [
-            "script",
-            "style",
-            "iframe",
-            "object",
-            "embed",
-            "form",
-            "input",
-            "button",
-            "textarea",
-            "select",
-            "option",
-            "meta",
-            "link",
-            "base"
-          ],
-
-          FORBID_ATTR: [
-            "style",
-            "srcdoc",
-            "formaction",
-            "autofocus"
-          ]
-        }
-      );
-
-    } catch (error) {
-      console.warn(
-        "[NEO Renderer] Sanitization failed:",
-        error
-      );
-
-      return null;
-    }
-  }
-
-  /* =====================================================
-     MARKDOWN → SAFE HTML
-     ===================================================== */
-
-  function markdownToHtml(
-    markdown
-  ) {
-    const input =
-      text(
-        markdown
-      );
-
-    const marked =
-      window.marked;
-
-    /*
-     * Safe fallback when either library is unavailable.
-     */
-
-    if (
-      !marked ||
-      !window.DOMPurify
-    ) {
-      return plainTextHtml(
-        input
-      );
-    }
-
-    try {
-      configureMarked();
-
-      const parsed =
-        marked.parse(
-          input
-        );
-
-      /*
-       * Renderer must stay synchronous.
-       */
-
-      if (
-        typeof parsed !==
-        "string"
-      ) {
-        return plainTextHtml(
-          input
-        );
-      }
-
-      return (
-        sanitizeHtml(
-          parsed
-        ) ||
-        plainTextHtml(
-          input
-        )
-      );
-
-    } catch (error) {
-      console.warn(
-        "[NEO Renderer] Markdown failed:",
-        error
-      );
-
-      return plainTextHtml(
-        input
-      );
-    }
-  }
-
-  /* =====================================================
-     URL
-     ===================================================== */
-
-  function safeUrl(
-    value,
-    allowedProtocols
-  ) {
-    if (!value) {
       return null;
     }
 
@@ -330,294 +229,414 @@ Does NOT own:
           window.location.href
         );
 
-      return allowedProtocols
-        .has(
+      if (
+        !CONFIG.safeProtocols.has(
           url.protocol
         )
-          ? url
-          : null;
+      ) {
+        return null;
+      }
 
+      return url;
     } catch {
       return null;
     }
   }
 
+  function isSafeUrl(value) {
+    return Boolean(
+      parseSafeUrl(value)
+    );
+  }
+
   /* =====================================================
-     LINKS
+     SANITIZATION
      ===================================================== */
 
-  function secureLinks(
-    root
-  ) {
-    if (
-      !(
-        root instanceof
-        HTMLElement
+  function sanitizeHtml(html) {
+    const source =
+      String(html ?? "");
+
+    /*
+     * Critical:
+     * if DOMPurify is unavailable, never trust parsed HTML.
+     */
+
+    if (!window.DOMPurify) {
+      return escapeHtml(source);
+    }
+
+    try {
+      return window.DOMPurify.sanitize(
+        source,
+        {
+          USE_PROFILES: {
+            html: true
+          },
+
+          FORBID_TAGS:
+            CONFIG.blockedTags,
+
+          FORBID_ATTR:
+            CONFIG.blockedAttributes
+        }
+      );
+    } catch (error) {
+      console.warn(
+        "[NEO Renderer] Sanitization failed:",
+        error
+      );
+
+      return escapeHtml(source);
+    }
+  }
+
+  /* =====================================================
+     PLAIN-TEXT HTML FALLBACK
+     ===================================================== */
+
+  function plainTextHtml(value) {
+    return escapeHtml(
+      String(value ?? "")
+    ).replace(
+      /\n/g,
+      "<br>"
+    );
+  }
+
+  /* =====================================================
+     MARKDOWN → HTML
+     ===================================================== */
+
+  function markdownToHtml(markdown) {
+    const source =
+      normalizeMathDelimiters(
+        String(markdown ?? "")
       )
+        .replace(
+          /\r\n?/g,
+          "\n"
+        )
+        .trim();
+
+    /*
+     * Match old neo.js safety rule:
+     * Marked without DOMPurify is NOT enough.
+     */
+
+    if (
+      !window.marked ||
+      !window.DOMPurify
+    ) {
+      return plainTextHtml(
+        source
+      );
+    }
+
+    try {
+      configureMarked();
+
+      const parsed =
+        window.marked.parse(
+          source,
+          {
+            gfm: true,
+            breaks: false
+          }
+        );
+
+      return sanitizeHtml(
+        parsed
+      );
+    } catch (error) {
+      console.warn(
+        "[NEO Renderer] Markdown parsing failed:",
+        error
+      );
+
+      return plainTextHtml(
+        source
+      );
+    }
+  }
+
+  /* =====================================================
+     LINK HARDENING
+     ===================================================== */
+
+  function secureLinks(root) {
+    if (
+      !(root instanceof HTMLElement)
     ) {
       return false;
     }
 
-    root
-      .querySelectorAll(
+    const links =
+      root.querySelectorAll(
         "a[href]"
-      )
-      .forEach(
-        link => {
-          const url =
-            safeUrl(
-              link.getAttribute(
-                "href"
-              ),
-              SAFE_LINK_PROTOCOLS
-            );
-
-          /*
-           * Unsafe schemes:
-           * javascript:
-           * data:
-           * file:
-           * etc.
-           */
-
-          if (!url) {
-            link.removeAttribute(
-              "href"
-            );
-
-            link.removeAttribute(
-              "target"
-            );
-
-            link.removeAttribute(
-              "rel"
-            );
-
-            return;
-          }
-
-          link.href =
-            url.href;
-
-          if (
-            url.protocol ===
-            "http:" ||
-            url.protocol ===
-            "https:"
-          ) {
-            /*
-             * External links.
-             */
-
-            if (
-              url.origin !==
-              window.location.origin
-            ) {
-              link.target =
-                "_blank";
-
-              link.rel =
-                "noopener noreferrer nofollow";
-
-            } else {
-              link.removeAttribute(
-                "target"
-              );
-
-              link.rel =
-                "noopener";
-            }
-
-          } else {
-            /*
-             * mailto:
-             */
-
-            link.removeAttribute(
-              "target"
-            );
-
-            link.rel =
-              "noopener";
-          }
-        }
       );
+
+    for (const link of links) {
+      const raw =
+        link.getAttribute(
+          "href"
+        );
+
+      const url =
+        parseSafeUrl(raw);
+
+      if (!url) {
+        link.removeAttribute(
+          "href"
+        );
+
+        link.removeAttribute(
+          "target"
+        );
+
+        link.removeAttribute(
+          "rel"
+        );
+
+        continue;
+      }
+
+      link.setAttribute(
+        "href",
+        url.href
+      );
+
+      if (
+        url.protocol === "http:" ||
+        url.protocol === "https:"
+      ) {
+        link.setAttribute(
+          "target",
+          "_blank"
+        );
+
+        link.setAttribute(
+          "rel",
+          "noopener noreferrer"
+        );
+      } else {
+        link.removeAttribute(
+          "target"
+        );
+
+        link.removeAttribute(
+          "rel"
+        );
+      }
+    }
 
     return true;
   }
 
   /* =====================================================
-     MARKDOWN IMAGES
+     IMAGE HARDENING
      ===================================================== */
 
-  function secureImages(
-    root
-  ) {
+  function secureImages(root) {
     if (
-      !(
-        root instanceof
-        HTMLElement
-      )
+      !(root instanceof HTMLElement)
     ) {
       return false;
     }
 
-    root
-      .querySelectorAll(
+    const images =
+      root.querySelectorAll(
         "img[src]"
-      )
-      .forEach(
-        image => {
-          const url =
-            safeUrl(
-              image.getAttribute(
-                "src"
-              ),
-              SAFE_IMAGE_PROTOCOLS
-            );
-
-          if (!url) {
-            image.remove();
-            return;
-          }
-
-          image.src =
-            url.href;
-
-          image.loading =
-            "lazy";
-
-          image.decoding =
-            "async";
-
-          image.referrerPolicy =
-            "no-referrer";
-
-          image.draggable =
-            false;
-
-          /*
-           * Avoid a broken-image icon dominating
-           * the answer.
-           */
-
-          image.addEventListener(
-            "error",
-            () => {
-              image.remove();
-            },
-            {
-              once: true
-            }
-          );
-        }
       );
 
-    return true;
-  }
+    for (const image of images) {
+      const raw =
+        image.getAttribute(
+          "src"
+        );
 
-  /* =====================================================
-     INLINE CODE
+      const url =
+        parseSafeUrl(raw);
 
-     Marked already produces <code>.
-     We add only stable CSS hooks.
-     ===================================================== */
+      /*
+       * Markdown-generated images only allow HTTP(S).
+       * Message attachment previews are rendered elsewhere.
+       */
 
-  function enhanceInlineCode(
-    root
-  ) {
-    if (
-      !(
-        root instanceof
-        HTMLElement
-      )
-    ) {
-      return false;
+      if (
+        !url ||
+        (
+          url.protocol !== "http:" &&
+          url.protocol !== "https:"
+        )
+      ) {
+        image.remove();
+        continue;
+      }
+
+      image.src =
+        url.href;
+
+      image.loading =
+        "lazy";
+
+      image.decoding =
+        "async";
+
+      image.referrerPolicy =
+        "no-referrer";
+
+      if (!image.alt) {
+        image.alt =
+          "Image";
+      }
     }
 
-    root
-      .querySelectorAll(
-        "code"
-      )
-      .forEach(
-        code => {
-          if (
-            code.parentElement
-              ?.tagName ===
-            "PRE"
-          ) {
-            return;
-          }
-
-          code.classList.add(
-            "neyo-inline-code"
-          );
-        }
-      );
-
     return true;
   }
 
   /* =====================================================
-     CODE LANGUAGE
+     LANGUAGE
      ===================================================== */
 
-  function languageOf(
-    code
-  ) {
-    const className =
-      String(
-        code?.className ||
-        ""
+  function getCodeLanguage(code) {
+    if (
+      !(code instanceof HTMLElement)
+    ) {
+      return "";
+    }
+
+    const languageClass =
+      Array.from(
+        code.classList
+      ).find(item =>
+        item.startsWith(
+          "language-"
+        )
       );
 
-    const match =
-      className.match(
-        /(?:language|lang)-([\w#+.-]+)/i
-      );
+    if (!languageClass) {
+      return "";
+    }
+
+    return languageClass
+      .slice(
+        "language-".length
+      )
+      .trim()
+      .toLowerCase();
+  }
+
+  function displayLanguage(value) {
+    const language =
+      String(value || "")
+        .trim()
+        .toLowerCase();
+
+    if (!language) {
+      return "Code";
+    }
+
+    const names = {
+      js: "JavaScript",
+      javascript:
+        "JavaScript",
+
+      ts: "TypeScript",
+      typescript:
+        "TypeScript",
+
+      jsx: "JSX",
+      tsx: "TSX",
+
+      html: "HTML",
+      css: "CSS",
+
+      json: "JSON",
+
+      py: "Python",
+      python: "Python",
+
+      sh: "Shell",
+      bash: "Bash",
+      shell: "Shell",
+
+      sql: "SQL",
+
+      java: "Java",
+
+      c: "C",
+      cpp: "C++",
+      "c++": "C++",
+
+      cs: "C#",
+      csharp: "C#",
+
+      php: "PHP",
+
+      ruby: "Ruby",
+      rb: "Ruby",
+
+      go: "Go",
+
+      rust: "Rust",
+
+      rs: "Rust",
+
+      swift: "Swift",
+
+      kotlin: "Kotlin",
+
+      xml: "XML",
+
+      yaml: "YAML",
+      yml: "YAML",
+
+      md: "Markdown",
+      markdown: "Markdown",
+
+      text: "Text",
+      plaintext: "Text"
+    };
 
     return (
-      match?.[1] ||
-      "code"
-    )
-      .toLowerCase();
+      names[language] ||
+      language
+        .replace(
+          /[-_]+/g,
+          " "
+        )
+        .replace(
+          /\b\w/g,
+          char =>
+            char.toUpperCase()
+        )
+    );
   }
 
   /* =====================================================
      CLIPBOARD
      ===================================================== */
 
-  async function writeClipboard(
-    value
-  ) {
-    const content =
-      String(
-        value ?? ""
-      );
+  async function copyText(value) {
+    const text =
+      String(value ?? "");
 
-    /*
-     * Preferred modern API.
-     */
+    if (!text) {
+      return false;
+    }
 
     try {
       if (
-        navigator.clipboard
-          ?.writeText &&
+        navigator.clipboard &&
         window.isSecureContext
       ) {
-        await navigator
-          .clipboard
-          .writeText(
-            content
-          );
+        await navigator.clipboard
+          .writeText(text);
 
         return true;
       }
     } catch {}
-
-    /*
-     * Compatibility fallback.
-     */
 
     const textarea =
       document.createElement(
@@ -625,7 +644,7 @@ Does NOT own:
       );
 
     textarea.value =
-      content;
+      text;
 
     textarea.setAttribute(
       "readonly",
@@ -641,14 +660,16 @@ Does NOT own:
     textarea.style.pointerEvents =
       "none";
 
+    textarea.style.left =
+      "-9999px";
+
     document.body.appendChild(
       textarea
     );
 
     textarea.select();
 
-    let copied =
-      false;
+    let copied = false;
 
     try {
       copied =
@@ -656,8 +677,7 @@ Does NOT own:
           "copy"
         );
     } catch {
-      copied =
-        false;
+      copied = false;
     }
 
     textarea.remove();
@@ -665,107 +685,210 @@ Does NOT own:
     return copied;
   }
 
-  async function copyCode(
-    code,
-    button
+  /* =====================================================
+     CODE COPY BUTTON
+     ===================================================== */
+
+  function createCodeCopyButton(
+    code
   ) {
-    const copied =
-      await writeClipboard(
-        code?.textContent ||
-        ""
+    const button =
+      document.createElement(
+        "button"
       );
 
-    if (!copied) {
-      return false;
-    }
+    button.type =
+      "button";
 
-    if (!button) {
-      return true;
-    }
-
-    const oldLabel =
-      button.getAttribute(
-        "aria-label"
-      ) ||
-      "Copy code";
-
-    const oldText =
-      button.textContent;
+    button.className =
+      "message-code-copy";
 
     button.setAttribute(
       "aria-label",
-      "Copied"
+      "Copy code"
     );
 
-    button.dataset.copied =
-      "true";
+    button.setAttribute(
+      "data-tooltip",
+      "Copy code"
+    );
 
-    button.textContent =
-      "Copied";
+    const icon =
+      document.createElement(
+        "i"
+      );
 
-    window.setTimeout(
-      () => {
+    icon.setAttribute(
+      "data-lucide",
+      "copy"
+    );
+
+    icon.setAttribute(
+      "aria-hidden",
+      "true"
+    );
+
+    icon.setAttribute(
+      "size",
+      "14"
+    );
+
+    const text =
+      document.createElement(
+        "span"
+      );
+
+    text.textContent =
+      "Copy";
+
+    button.append(
+      icon,
+      text
+    );
+
+    button.addEventListener(
+      "click",
+      async event => {
+        event.preventDefault();
+        event.stopPropagation();
+
         if (
-          !button.isConnected
+          button.dataset.busy ===
+          "true"
         ) {
           return;
         }
 
-        button.setAttribute(
-          "aria-label",
-          oldLabel
+        button.dataset.busy =
+          "true";
+
+        const copied =
+          await copyText(
+            code.textContent || ""
+          );
+
+        button.dataset.busy =
+          "false";
+
+        if (!copied) {
+          emit(
+            "neyo:code-copy-error",
+            {
+              code:
+                code.textContent ||
+                ""
+            }
+          );
+
+          return;
+        }
+
+        icon.setAttribute(
+          "data-lucide",
+          "check"
         );
 
-        button.textContent =
-          oldText ||
-          "Copy";
+        text.textContent =
+          "Copied";
 
-        delete button.dataset
-          .copied;
-      },
-      1200
+        button.classList.add(
+          "is-copied"
+        );
+
+        try {
+          window.lucide
+            ?.createIcons?.();
+        } catch {}
+
+        emit(
+          "neyo:code-copied",
+          {
+            code:
+              code.textContent ||
+              ""
+          }
+        );
+
+        window.setTimeout(
+          () => {
+            if (
+              !button.isConnected
+            ) {
+              return;
+            }
+
+            icon.setAttribute(
+              "data-lucide",
+              "copy"
+            );
+
+            text.textContent =
+              "Copy";
+
+            button.classList.remove(
+              "is-copied"
+            );
+
+            try {
+              window.lucide
+                ?.createIcons?.();
+            } catch {}
+          },
+          CONFIG.codeCopyResetMs
+        );
+      }
     );
 
-    return true;
+    return button;
   }
 
   /* =====================================================
      SYNTAX HIGHLIGHTING
      ===================================================== */
 
-  function highlightCode(
-    code
-  ) {
-    try {
-      if (
-        window.hljs
-          ?.highlightElement
-      ) {
-        window.hljs
-          .highlightElement(
-            code
-          );
+  function highlightCode(code) {
+    if (
+      !(code instanceof HTMLElement)
+    ) {
+      return false;
+    }
+
+    /*
+     * Highlight.js
+     */
+
+    if (
+      window.hljs &&
+      typeof window.hljs
+        .highlightElement ===
+        "function"
+    ) {
+      try {
+        window.hljs.highlightElement(
+          code
+        );
 
         return true;
-      }
+      } catch {}
+    }
 
-      if (
-        window.Prism
-          ?.highlightElement
-      ) {
-        window.Prism
-          .highlightElement(
-            code
-          );
+    /*
+     * Prism fallback
+     */
+
+    if (
+      window.Prism &&
+      typeof window.Prism
+        .highlightElement ===
+        "function"
+    ) {
+      try {
+        window.Prism.highlightElement(
+          code
+        );
 
         return true;
-      }
-
-    } catch (error) {
-      console.warn(
-        "[NEO Renderer] Syntax highlighting failed:",
-        error
-      );
+      } catch {}
     }
 
     return false;
@@ -774,226 +897,257 @@ Does NOT own:
   /* =====================================================
      CODE BLOCKS
 
-     Existing CSS contracts preserved:
-     .neyo-code-block
-     .neyo-code-header
-     .neyo-code-language
-     .neyo-code-copy
-     .message-code-block
+     Preserve old .message-code-block class and also add
+     modern .neo-code-block class for future CSS.
      ===================================================== */
 
   function enhanceCodeBlocks(
-    root
+    root,
+    {
+      streaming = false
+    } = {}
   ) {
     if (
-      !(
-        root instanceof
-        HTMLElement
-      )
+      !(root instanceof HTMLElement)
     ) {
       return false;
     }
 
-    root
-      .querySelectorAll(
+    const blocks =
+      root.querySelectorAll(
         "pre > code"
-      )
-      .forEach(
-        code => {
-          const pre =
-            code.parentElement;
+      );
 
-          if (!pre) {
-            return;
-          }
+    for (const code of blocks) {
+      const pre =
+        code.parentElement;
 
-          /*
-           * Prevent duplicate wrappers on updates.
-           */
+      if (!pre) {
+        continue;
+      }
 
-          if (
-            pre.closest(
-              ".neyo-code-block"
-            )
-          ) {
-            return;
-          }
+      pre.classList.add(
+        "message-code-block",
+        "neo-code-block"
+      );
 
-          pre.classList.add(
-            "message-code-block"
+      const language =
+        getCodeLanguage(code);
+
+      if (language) {
+        pre.dataset.language =
+          language;
+      } else {
+        delete pre.dataset.language;
+      }
+
+      /*
+       * Streaming:
+       * avoid repeatedly running syntax highlighter against
+       * incomplete code. It renders once stream finishes.
+       */
+
+      if (!streaming) {
+        highlightCode(code);
+      }
+
+      /*
+       * Do not duplicate header if renderer is called again.
+       */
+
+      let header =
+        pre.querySelector(
+          ":scope > .message-code-header"
+        );
+
+      if (!header) {
+        header =
+          document.createElement(
+            "div"
           );
 
-          const language =
-            languageOf(
-              code
-            );
+        header.className =
+          "message-code-header";
 
-          pre.dataset.language =
-            language;
-
-          const shell =
-            document.createElement(
-              "div"
-            );
-
-          shell.className =
-            "neyo-code-block";
-
-          const header =
-            document.createElement(
-              "div"
-            );
-
-          header.className =
-            "neyo-code-header";
-
-          const label =
-            document.createElement(
-              "span"
-            );
-
-          label.className =
-            "neyo-code-language";
-
-          label.textContent =
-            language;
-
-          const copy =
-            document.createElement(
-              "button"
-            );
-
-          copy.type =
-            "button";
-
-          copy.className =
-            "neyo-code-copy";
-
-          copy.setAttribute(
-            "aria-label",
-            "Copy code"
+        const languageLabel =
+          document.createElement(
+            "span"
           );
 
-          copy.title =
-            "Copy code";
+        languageLabel.className =
+          "message-code-language";
 
-          copy.textContent =
-            "Copy";
-
-          copy.addEventListener(
-            "click",
-            event => {
-              event.preventDefault();
-              event.stopPropagation();
-
-              void copyCode(
-                code,
-                copy
-              );
-            }
-          );
-
-          header.append(
-            label,
-            copy
-          );
-
-          pre.before(
-            shell
-          );
-
-          shell.append(
-            header,
-            pre
-          );
-
-          highlightCode(
+        const copyButton =
+          createCodeCopyButton(
             code
           );
-        }
-      );
+
+        header.append(
+          languageLabel,
+          copyButton
+        );
+
+        pre.prepend(header);
+      }
+
+      const languageLabel =
+        header.querySelector(
+          ".message-code-language"
+        );
+
+      if (languageLabel) {
+        languageLabel.textContent =
+          displayLanguage(
+            language
+          );
+      }
+    }
+
+    try {
+      window.lucide
+        ?.createIcons?.();
+    } catch {}
 
     return true;
   }
 
   /* =====================================================
-     TABLES
+     TABLE WRAPPERS
      ===================================================== */
 
-  function wrapTables(
-    root
-  ) {
+  function enhanceTables(root) {
     if (
-      !(
-        root instanceof
-        HTMLElement
-      )
+      !(root instanceof HTMLElement)
     ) {
       return false;
     }
 
-    root
-      .querySelectorAll(
+    const tables =
+      root.querySelectorAll(
         "table"
-      )
-      .forEach(
-        table => {
-          if (
-            table.parentElement
-              ?.classList
-              .contains(
-                "neyo-table-wrap"
-              )
-          ) {
-            return;
-          }
-
-          const wrapper =
-            document.createElement(
-              "div"
-            );
-
-          wrapper.className =
-            "neyo-table-wrap";
-
-          wrapper.setAttribute(
-            "role",
-            "region"
-          );
-
-          wrapper.setAttribute(
-            "aria-label",
-            "Scrollable table"
-          );
-
-          wrapper.tabIndex =
-            0;
-
-          table.before(
-            wrapper
-          );
-
-          wrapper.appendChild(
-            table
-          );
-        }
       );
+
+    for (const table of tables) {
+      const parent =
+        table.parentElement;
+
+      if (
+        parent?.classList.contains(
+          "message-table-wrap"
+        )
+      ) {
+        continue;
+      }
+
+      const wrapper =
+        document.createElement(
+          "div"
+        );
+
+      wrapper.className =
+        "message-table-wrap";
+
+      table.parentNode?.insertBefore(
+        wrapper,
+        table
+      );
+
+      wrapper.appendChild(
+        table
+      );
+    }
 
     return true;
   }
 
   /* =====================================================
-     MATH
+     HEADING IDS
+
+     Local IDs only. No anchor links are inserted, avoiding
+     duplicate global navigation ownership.
      ===================================================== */
 
-  function renderMath(
-    root
-  ) {
+  function enhanceHeadings(root) {
     if (
-      !(
-        root instanceof
-        HTMLElement
-      )
+      !(root instanceof HTMLElement)
+    ) {
+      return false;
+    }
+
+    const headings =
+      root.querySelectorAll(
+        "h1, h2, h3, h4, h5, h6"
+      );
+
+    const used =
+      new Set();
+
+    for (const heading of headings) {
+      if (heading.id) {
+        used.add(
+          heading.id
+        );
+
+        continue;
+      }
+
+      const base =
+        String(
+          heading.textContent ||
+          "section"
+        )
+          .toLowerCase()
+          .trim()
+          .replace(
+            /[^\p{L}\p{N}\s-]/gu,
+            ""
+          )
+          .replace(
+            /\s+/g,
+            "-"
+          )
+          .replace(
+            /-+/g,
+            "-"
+          )
+          .slice(
+            0,
+            80
+          ) ||
+        "section";
+
+      let id =
+        base;
+
+      let index = 2;
+
+      while (
+        used.has(id)
+      ) {
+        id =
+          `${base}-${index}`;
+
+        index += 1;
+      }
+
+      heading.id =
+        id;
+
+      used.add(id);
+    }
+
+    return true;
+  }
+
+  /* =====================================================
+     KATEX
+
+     Matches old neo.js delimiters, including single $...$.
+     ===================================================== */
+
+  function renderMath(root) {
+    if (
+      !(root instanceof HTMLElement)
     ) {
       return false;
     }
@@ -1002,8 +1156,7 @@ Does NOT own:
       window.renderMathInElement;
 
     if (
-      typeof renderer !==
-      "function"
+      typeof renderer !== "function"
     ) {
       return false;
     }
@@ -1012,21 +1165,6 @@ Does NOT own:
       renderer(
         root,
         {
-          throwOnError:
-            false,
-
-          strict:
-            "ignore",
-
-          ignoredTags: [
-            "script",
-            "noscript",
-            "style",
-            "textarea",
-            "pre",
-            "code"
-          ],
-
           delimiters: [
             {
               left: "$$",
@@ -1042,21 +1180,73 @@ Does NOT own:
               left: "\\(",
               right: "\\)",
               display: false
+            },
+            {
+              left: "$",
+              right: "$",
+              display: false
             }
+          ],
+
+          throwOnError: false,
+
+          ignoredTags: [
+            "script",
+            "noscript",
+            "style",
+            "textarea",
+            "pre",
+            "code"
           ]
         }
       );
 
       return true;
-
     } catch (error) {
       console.warn(
-        "[NEO Renderer] Math rendering failed:",
+        "[NEO Renderer] KaTeX rendering failed:",
         error
       );
 
       return false;
     }
+  }
+
+  /* =====================================================
+     POST PROCESS
+     ===================================================== */
+
+  function postProcess(
+    root,
+    {
+      streaming = false
+    } = {}
+  ) {
+    secureLinks(root);
+
+    secureImages(root);
+
+    enhanceTables(root);
+
+    enhanceHeadings(root);
+
+    enhanceCodeBlocks(
+      root,
+      {
+        streaming
+      }
+    );
+
+    /*
+     * Streaming math can be incomplete and KaTeX may
+     * repeatedly replace DOM. Render math only at final.
+     */
+
+    if (!streaming) {
+      renderMath(root);
+    }
+
+    return true;
   }
 
   /* =====================================================
@@ -1069,10 +1259,7 @@ Does NOT own:
     options = {}
   ) {
     if (
-      !(
-        element instanceof
-        HTMLElement
-      )
+      !(element instanceof HTMLElement)
     ) {
       return false;
     }
@@ -1081,30 +1268,27 @@ Does NOT own:
       options.role ||
       "assistant";
 
+    const streaming =
+      Boolean(
+        options.streaming
+      );
+
     /*
      * User messages remain plain text by default.
      * Assistant messages use Markdown by default.
      */
 
-    const markdown =
+    const useMarkdown =
       options.markdown ??
       (
-        role ===
-        "assistant"
+        role === "assistant"
       );
 
-    const value =
-      text(
-        content
-      );
-
-    /* -----------------------------------------------
-       Plain text
-       ----------------------------------------------- */
-
-    if (!markdown) {
+    if (!useMarkdown) {
       element.textContent =
-        value;
+        String(
+          content ?? ""
+        );
 
       emit(
         "neyo:message-rendered",
@@ -1112,51 +1296,26 @@ Does NOT own:
           element,
           role,
           markdown: false,
-          content: value
+          streaming
         }
       );
 
       return true;
     }
 
-    /* -----------------------------------------------
-       Markdown
-       ----------------------------------------------- */
-
     const html =
       markdownToHtml(
-        value
+        content
       );
 
     element.innerHTML =
       html;
 
-    /*
-     * Post-processing happens only on sanitized content.
-     */
-
-    secureLinks(
-      element
-    );
-
-    secureImages(
-      element
-    );
-
-    enhanceInlineCode(
-      element
-    );
-
-    wrapTables(
-      element
-    );
-
-    enhanceCodeBlocks(
-      element
-    );
-
-    renderMath(
-      element
+    postProcess(
+      element,
+      {
+        streaming
+      }
     );
 
     emit(
@@ -1165,7 +1324,7 @@ Does NOT own:
         element,
         role,
         markdown: true,
-        content: value
+        streaming
       }
     );
 
@@ -1174,10 +1333,6 @@ Does NOT own:
 
   /* =====================================================
      RENDER MESSAGE SHELL
-
-     messages.js supplies:
-       .message
-          .message-content
      ===================================================== */
 
   function renderMessage(
@@ -1188,46 +1343,40 @@ Does NOT own:
     if (
       !(
         messageElement instanceof
-        HTMLElement
+          HTMLElement
       )
     ) {
       return false;
     }
 
-    const target =
-      messageElement
-        .querySelector(
-          ".message-content"
-        );
+    const contentElement =
+      messageElement.querySelector(
+        ".message-content"
+      );
 
-    if (!target) {
+    if (!contentElement) {
       return false;
     }
 
     return renderInto(
-      target,
+      contentElement,
       content,
       options
     );
   }
 
   /* =====================================================
-     EVENTS
+     PUBLIC EVENTS
      ===================================================== */
 
   window.addEventListener(
     "neyo:message-render-request",
     event => {
       renderMessage(
-        event.detail
-          ?.message,
-
-        event.detail
-          ?.content,
-
-        event.detail
-          ?.options ||
-        {}
+        event.detail?.message,
+        event.detail?.content,
+        event.detail?.options ||
+          {}
       );
     }
   );
@@ -1236,15 +1385,10 @@ Does NOT own:
     "neyo:content-render-request",
     event => {
       renderInto(
-        event.detail
-          ?.element,
-
-        event.detail
-          ?.content,
-
-        event.detail
-          ?.options ||
-        {}
+        event.detail?.element,
+        event.detail?.content,
+        event.detail?.options ||
+          {}
       );
     }
   );
@@ -1256,7 +1400,10 @@ Does NOT own:
   const api =
     Object.freeze({
       __controller: true,
-      version: VERSION,
+
+      version:
+        VERSION,
+
       active: true,
 
       render:
@@ -1272,22 +1419,26 @@ Does NOT own:
       escape:
         escapeHtml,
 
+      normalizeMathDelimiters,
+
       secureLinks,
+
       secureImages,
 
-      enhanceInlineCode,
       enhanceCodeBlocks,
 
-      wrapTables,
+      enhanceTables,
+
       renderMath,
+
+      isSafeUrl,
 
       getState() {
         return {
           version:
             VERSION,
 
-          active:
-            true,
+          active: true,
 
           marked:
             Boolean(
@@ -1300,10 +1451,9 @@ Does NOT own:
             ),
 
           katex:
-            Boolean(
-              window
-                .renderMathInElement
-            ),
+            typeof window
+              .renderMathInElement ===
+              "function",
 
           highlighter:
             Boolean(
@@ -1319,8 +1469,11 @@ Does NOT own:
     "NeyoMessageRenderer",
     {
       value: api,
+
       writable: false,
+
       configurable: true,
+
       enumerable: true
     }
   );
@@ -1337,18 +1490,19 @@ Does NOT own:
       version:
         VERSION,
 
-      active:
-        true,
+      active: true,
 
-      marked:
-        Boolean(
-          window.marked
-        ),
+      markdown: true,
 
-      domPurify:
-        Boolean(
-          window.DOMPurify
-        )
+      safeHtml: true,
+
+      math: true,
+
+      codeBlocks: true,
+
+      codeCopy: true,
+
+      streamingSafe: true
     }
   );
 })();

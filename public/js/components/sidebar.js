@@ -1,1131 +1,749 @@
 /*
 =========================================================
 NEO — SIDEBAR
-Production v4 — neo.js Baseline Modular Owner
+Production v1 — Old neo.js Exact Baseline
 
-Baseline:
-- Old working neo.js sidebar behavior
-- Existing #sidebar DOM
-- Existing #sidebarToggleBtn
-- Existing #collapseSidebarBtn
-- Existing #sidebarScrim
-- Existing .collapsed class
-- Existing body.sidebar-collapsed contract
-- Existing desktop persistence key
+Old working behavior preserved:
+- Desktop: sidebar open
+- Mobile: sidebar collapsed
+- Mobile scrim only when sidebar is open
+- Topbar toggle toggles sidebar
+- Internal collapse button toggles sidebar
+- Scrim click toggles/closes sidebar
+- body.sidebar-collapsed always synced
+- Crossing 767px breakpoint reinitializes state
+- New Chat closes mobile sidebar
+- History conversation open closes mobile sidebar
 
 Owns:
-- Sidebar open / collapse state
-- Desktop sidebar persistence
-- Mobile drawer state
+- Sidebar open / close / toggle
 - Sidebar scrim
-- Sidebar toggle buttons
-- Responsive mode switching
-- Body sidebar state
-- ARIA state
-- Sidebar open / close request events
+- body.sidebar-collapsed
+- Responsive sidebar initialization
+- Sidebar buttons
 
 Does NOT own:
+- New Chat logic
 - History rendering
-- New Chat
-- Topbar layout
 - Profile menu
-- Theme
-- Chat state
-- Sidebar visual CSS
+- Topbar model menu
+- Settings
 =========================================================
 */
 
 (() => {
-  "use strict";
+    "use strict";
 
-  const VERSION =
-    "neo-sidebar-production-v4";
+    const VERSION = "neo-sidebar-v1";
 
-  if (
-    window.NeyoSidebar
-      ?.__controller === true
-  ) {
-    return;
-  }
+    if (
+        window.NeyoSidebar?.__controller === true
+    ) {
+        return;
+    }
 
-  /* =====================================================
-     CONFIG
-     ===================================================== */
+    /* =====================================================
+       DOM
+       ===================================================== */
 
-  const CONFIG =
-    Object.freeze({
-      mobileQuery:
-        "(max-width: 767px)",
+    const sidebar =
+        document.getElementById("sidebar");
 
-      desktopQuery:
-        "(min-width: 768px)",
+    const sidebarToggleBtn =
+        document.getElementById(
+            "sidebarToggleBtn"
+        );
 
-      storageKey:
-        "neo_desktop_sidebar",
+    const collapseSidebarBtn =
+        document.getElementById(
+            "collapseSidebarBtn"
+        );
 
-      collapsedValue:
-        "collapsed",
+    const sidebarScrim =
+        document.getElementById(
+            "sidebarScrim"
+        );
 
-      openValue:
-        "open"
-    });
+    if (!sidebar) {
+        return;
+    }
 
-  /* =====================================================
-     DOM
-     ===================================================== */
+    /* =====================================================
+       CONSTANTS
+       ===================================================== */
 
-  const sidebar =
-    document.getElementById(
-      "sidebar"
-    );
+    const MOBILE_QUERY =
+        "(max-width: 767px)";
 
-  const sidebarToggleBtn =
-    document.getElementById(
-      "sidebarToggleBtn"
-    );
+    /* =====================================================
+       STATE
+       ===================================================== */
 
-  const collapseSidebarBtn =
-    document.getElementById(
-      "collapseSidebarBtn"
-    );
+    let lastResponsiveMode =
+        window.matchMedia(
+            MOBILE_QUERY
+        ).matches;
 
-  const sidebarScrim =
-    document.getElementById(
-      "sidebarScrim"
-    );
+    /* =====================================================
+       HELPERS
+       ===================================================== */
 
-  if (!sidebar) {
-    console.warn(
-      "[NEO Sidebar] #sidebar is missing."
-    );
+    const isMobile = () =>
+        window.matchMedia(
+            MOBILE_QUERY
+        ).matches;
 
-    return;
-  }
+    const isCollapsed = () =>
+        sidebar.classList.contains(
+            "collapsed"
+        );
 
-  /* =====================================================
-     STATE
-     ===================================================== */
+    const isOpen = () =>
+        !isCollapsed();
 
-  const state = {
-    initialized:
-      false,
+    /* =====================================================
+       EVENTS
+       ===================================================== */
 
-    mobile:
-      window.matchMedia(
-        CONFIG.mobileQuery
-      ).matches,
-
-    collapsed:
-      sidebar.classList
-        .contains(
-          "collapsed"
-        ),
-
-    lastResponsiveMode:
-      null,
-
-    lastChangedAt:
-      null
-  };
-
-  /* =====================================================
-     EVENTS
-     ===================================================== */
-
-  function emit(
-    name,
-    detail = {}
-  ) {
-    window.dispatchEvent(
-      new CustomEvent(
+    const emit = (
         name,
-        {
-          detail
+        detail = {}
+    ) => {
+        window.dispatchEvent(
+            new CustomEvent(
+                name,
+                {
+                    detail
+                }
+            )
+        );
+    };
+
+    /* =====================================================
+       BODY STATE
+
+       Exact old neo.js contract:
+       body.sidebar-collapsed
+       ===================================================== */
+
+    const updateBodySidebarState = () => {
+        const collapsed =
+            sidebar.classList.contains(
+                "collapsed"
+            );
+
+        document.body.classList.toggle(
+            "sidebar-collapsed",
+            Boolean(collapsed)
+        );
+    };
+
+    /* =====================================================
+       SCRIM
+
+       Old neo.js:
+       visible only on mobile when sidebar is open.
+       ===================================================== */
+
+    const syncScrim = () => {
+        const visible =
+            isMobile() &&
+            isOpen();
+
+        sidebarScrim?.classList.toggle(
+            "visible",
+            visible
+        );
+
+        /*
+         * Compatibility for CSS builds that used .show.
+         * Harmless if unused.
+         */
+
+        sidebarScrim?.classList.toggle(
+            "show",
+            visible
+        );
+
+        sidebarScrim?.setAttribute(
+            "aria-hidden",
+            String(!visible)
+        );
+    };
+
+    /* =====================================================
+       BUTTON ARIA
+       ===================================================== */
+
+    const syncButtons = () => {
+        const open =
+            isOpen();
+
+        sidebarToggleBtn?.setAttribute(
+            "aria-expanded",
+            String(open)
+        );
+
+        sidebarToggleBtn?.setAttribute(
+            "aria-label",
+            open
+                ? "Close sidebar"
+                : "Open sidebar"
+        );
+
+        collapseSidebarBtn?.setAttribute(
+            "aria-expanded",
+            String(open)
+        );
+
+        collapseSidebarBtn?.setAttribute(
+            "aria-label",
+            "Collapse sidebar"
+        );
+    };
+
+    /* =====================================================
+       SYNC
+       ===================================================== */
+
+    const sync = (
+        reason = "sync"
+    ) => {
+        updateBodySidebarState();
+        syncScrim();
+        syncButtons();
+
+        emit(
+            "neyo:sidebar-state",
+            {
+                version:
+                    VERSION,
+
+                reason,
+
+                mobile:
+                    isMobile(),
+
+                collapsed:
+                    isCollapsed(),
+
+                open:
+                    isOpen()
+            }
+        );
+    };
+
+    /* =====================================================
+       OPEN
+       ===================================================== */
+
+    const openSidebar = (
+        reason = "open"
+    ) => {
+        sidebar.classList.remove(
+            "collapsed"
+        );
+
+        sync(reason);
+
+        emit(
+            "neyo:sidebar-open",
+            {
+                reason
+            }
+        );
+
+        return true;
+    };
+
+    /* =====================================================
+       CLOSE
+       ===================================================== */
+
+    const closeSidebar = (
+        reason = "close"
+    ) => {
+        sidebar.classList.add(
+            "collapsed"
+        );
+
+        /*
+         * Old neo.js explicitly removed mobile scrim.
+         */
+
+        sidebarScrim?.classList.remove(
+            "visible",
+            "show"
+        );
+
+        sync(reason);
+
+        emit(
+            "neyo:sidebar-close",
+            {
+                reason
+            }
+        );
+
+        return true;
+    };
+
+    /* =====================================================
+       TOGGLE
+
+       Exact old behavior:
+       sidebar.classList.toggle("collapsed")
+       ===================================================== */
+
+    const toggleSidebar = (
+        reason = "toggle"
+    ) => {
+        sidebar.classList.toggle(
+            "collapsed"
+        );
+
+        sync(reason);
+
+        emit(
+            isOpen()
+                ? "neyo:sidebar-open"
+                : "neyo:sidebar-close",
+            {
+                reason
+            }
+        );
+
+        return true;
+    };
+
+    /* =====================================================
+       INITIALIZE
+
+       Exact OLD WORKING neo.js:
+
+       Mobile:
+       - body collapsed
+       - sidebar collapsed
+       - scrim hidden
+
+       Desktop:
+       - body open
+       - sidebar open
+       - scrim hidden
+
+       No desktop persistence.
+       ===================================================== */
+
+    const initializeSidebarState = (
+        reason = "initialize"
+    ) => {
+        const mobile =
+            isMobile();
+
+        if (mobile) {
+            document.body.classList.add(
+                "sidebar-collapsed"
+            );
+
+            sidebar.classList.add(
+                "collapsed"
+            );
+
+            sidebarScrim?.classList.remove(
+                "visible",
+                "show"
+            );
+        } else {
+            document.body.classList.remove(
+                "sidebar-collapsed"
+            );
+
+            sidebar.classList.remove(
+                "collapsed"
+            );
+
+            sidebarScrim?.classList.remove(
+                "visible",
+                "show"
+            );
         }
-      )
-    );
-  }
 
-  /* =====================================================
-     DEVICE MODE
-     ===================================================== */
+        updateBodySidebarState();
+        syncScrim();
+        syncButtons();
 
-  function isMobile() {
-    return window
-      .matchMedia(
-        CONFIG.mobileQuery
-      )
-      .matches;
-  }
+        emit(
+            "neyo:sidebar-state",
+            {
+                version:
+                    VERSION,
 
-  function isDesktop() {
-    return window
-      .matchMedia(
-        CONFIG.desktopQuery
-      )
-      .matches;
-  }
+                reason,
 
-  /* =====================================================
-     STORAGE
-     ===================================================== */
+                mobile,
 
-  function getSavedDesktopState() {
-    try {
-      return localStorage
-        .getItem(
-          CONFIG.storageKey
-        );
-    } catch {
-      return null;
-    }
-  }
+                collapsed:
+                    isCollapsed(),
 
-  function saveDesktopState(
-    collapsed
-  ) {
-    if (!isDesktop()) {
-      return;
-    }
-
-    try {
-      localStorage.setItem(
-        CONFIG.storageKey,
-        collapsed
-          ? CONFIG.collapsedValue
-          : CONFIG.openValue
-      );
-    } catch {}
-  }
-
-  /* =====================================================
-     BODY STATE
-
-     Exact old neo.js contract:
-     body.sidebar-collapsed
-     ===================================================== */
-
-  function updateBodySidebarState() {
-    const collapsed =
-      sidebar.classList
-        .contains(
-          "collapsed"
+                open:
+                    isOpen()
+            }
         );
 
-    document.body
-      .classList
-      .toggle(
-        "sidebar-collapsed",
-        collapsed
-      );
+        return true;
+    };
 
-    saveDesktopState(
-      collapsed
+    /* =====================================================
+       BUTTON OWNERSHIP
+
+       neo.js abhi physically loaded hai.
+       Capture phase prevents old neo.js from toggling again.
+       ===================================================== */
+
+    sidebarToggleBtn?.addEventListener(
+        "click",
+        event => {
+            event.preventDefault();
+            event.stopPropagation();
+            event.stopImmediatePropagation();
+
+            toggleSidebar(
+                "topbar-toggle"
+            );
+        },
+        true
     );
 
-    return collapsed;
-  }
+    collapseSidebarBtn?.addEventListener(
+        "click",
+        event => {
+            event.preventDefault();
+            event.stopPropagation();
+            event.stopImmediatePropagation();
 
-  /* =====================================================
-     SCRIM
-
-     Exact old neo.js behavior:
-     mobile + open = visible
-     desktop = never visible
-     ===================================================== */
-
-  function updateScrim() {
-    if (!sidebarScrim) {
-      return;
-    }
-
-    const mobile =
-      isMobile();
-
-    const open =
-      !sidebar.classList
-        .contains(
-          "collapsed"
-        );
-
-    sidebarScrim
-      .classList
-      .toggle(
-        "visible",
-        mobile && open
-      );
-
-    /*
-     * Compatibility with alternate CSS builds that used
-     * .show instead of .visible.
-     */
-
-    sidebarScrim
-      .classList
-      .toggle(
-        "show",
-        mobile && open
-      );
-
-    sidebarScrim.setAttribute(
-      "aria-hidden",
-      String(
-        !(mobile && open)
-      )
-    );
-  }
-
-  /* =====================================================
-     BUTTON ARIA
-     ===================================================== */
-
-  function updateButtons() {
-    const collapsed =
-      sidebar.classList
-        .contains(
-          "collapsed"
-        );
-
-    const open =
-      !collapsed;
-
-    /*
-     * Topbar toggle represents opening the navigation.
-     */
-
-    sidebarToggleBtn
-      ?.setAttribute(
-        "aria-expanded",
-        String(open)
-      );
-
-    sidebarToggleBtn
-      ?.setAttribute(
-        "aria-label",
-        open
-          ? "Close sidebar"
-          : "Open sidebar"
-      );
-
-    /*
-     * Internal collapse button always means close/collapse.
-     */
-
-    collapseSidebarBtn
-      ?.setAttribute(
-        "aria-expanded",
-        String(open)
-      );
-
-    collapseSidebarBtn
-      ?.setAttribute(
-        "aria-label",
-        "Collapse sidebar"
-      );
-  }
-
-  /* =====================================================
-     STATE EMIT
-     ===================================================== */
-
-  function emitState(
-    reason = "state-change"
-  ) {
-    const collapsed =
-      sidebar.classList
-        .contains(
-          "collapsed"
-        );
-
-    state.mobile =
-      isMobile();
-
-    state.collapsed =
-      collapsed;
-
-    state.lastChangedAt =
-      Date.now();
-
-    emit(
-      "neyo:sidebar-state",
-      {
-        version:
-          VERSION,
-
-        reason,
-
-        mobile:
-          state.mobile,
-
-        collapsed,
-
-        open:
-          !collapsed
-      }
-    );
-  }
-
-  /* =====================================================
-     SYNC ALL
-     ===================================================== */
-
-  function sync(
-    reason = "sync"
-  ) {
-    state.mobile =
-      isMobile();
-
-    state.collapsed =
-      sidebar.classList
-        .contains(
-          "collapsed"
-        );
-
-    updateScrim();
-
-    updateButtons();
-
-    updateBodySidebarState();
-
-    emitState(
-      reason
+            toggleSidebar(
+                "collapse-button"
+            );
+        },
+        true
     );
 
-    return true;
-  }
+    /* =====================================================
+       SCRIM
 
-  /* =====================================================
-     SET COLLAPSED
-     ===================================================== */
+       Old neo.js used toggleSidebar().
+       In mobile open state this effectively closes it.
+       ===================================================== */
 
-  function setCollapsed(
-    collapsed,
-    {
-      reason = "set",
-      focus = false
-    } = {}
-  ) {
-    const next =
-      Boolean(
-        collapsed
-      );
+    sidebarScrim?.addEventListener(
+        "click",
+        event => {
+            event.preventDefault();
+            event.stopPropagation();
+            event.stopImmediatePropagation();
 
-    const current =
-      sidebar.classList
-        .contains(
-          "collapsed"
-        );
-
-    if (
-      current === next
-    ) {
-      sync(
-        reason
-      );
-
-      return true;
-    }
-
-    sidebar.classList
-      .toggle(
-        "collapsed",
-        next
-      );
-
-    sync(
-      reason
+            if (
+                isMobile() &&
+                isOpen()
+            ) {
+                closeSidebar(
+                    "scrim"
+                );
+            } else {
+                syncScrim();
+            }
+        },
+        true
     );
 
-    if (
-      focus &&
-      !next
-    ) {
-      requestAnimationFrame(
+    /* =====================================================
+       NEW CHAT
+
+       Old neo.js:
+       New Chat on mobile collapses sidebar.
+       We listen to canonical event instead of owning button.
+       ===================================================== */
+
+    window.addEventListener(
+        "neyo:chat-new",
         () => {
-          collapseSidebarBtn
-            ?.focus?.();
+            if (!isMobile()) {
+                return;
+            }
+
+            closeSidebar(
+                "new-chat"
+            );
         }
-      );
-    }
-
-    return true;
-  }
-
-  /* =====================================================
-     OPEN
-     ===================================================== */
-
-  function open(
-    options = {}
-  ) {
-    return setCollapsed(
-      false,
-      {
-        reason:
-          options.reason ||
-          "open",
-
-        focus:
-          options.focus ===
-          true
-      }
-    );
-  }
-
-  /* =====================================================
-     CLOSE / COLLAPSE
-     ===================================================== */
-
-  function close(
-    options = {}
-  ) {
-    return setCollapsed(
-      true,
-      {
-        reason:
-          options.reason ||
-          "close",
-
-        focus:
-          false
-      }
-    );
-  }
-
-  function collapse(
-    options = {}
-  ) {
-    return close(
-      options
-    );
-  }
-
-  /* =====================================================
-     TOGGLE
-
-     Exact old neo.js behavior:
-     sidebar.classList.toggle("collapsed")
-     ===================================================== */
-
-  function toggle(
-    options = {}
-  ) {
-    const collapsed =
-      sidebar.classList
-        .contains(
-          "collapsed"
-        );
-
-    return setCollapsed(
-      !collapsed,
-      {
-        reason:
-          options.reason ||
-          "toggle",
-
-        focus:
-          options.focus ===
-          true
-      }
-    );
-  }
-
-  /* =====================================================
-     INITIAL STATE
-
-     Exact old neo.js behavior:
-
-     Mobile:
-     - always collapsed
-     - scrim hidden
-
-     Desktop:
-     - restore neo_desktop_sidebar
-     - default open
-     - scrim hidden
-     ===================================================== */
-
-  function initializeSidebarState() {
-    const mobile =
-      isMobile();
-
-    state.mobile =
-      mobile;
-
-    state.lastResponsiveMode =
-      mobile;
-
-    if (mobile) {
-      sidebar.classList.add(
-        "collapsed"
-      );
-
-      sidebarScrim
-        ?.classList
-        .remove(
-          "visible",
-          "show"
-        );
-
-    } else {
-      const saved =
-        getSavedDesktopState();
-
-      sidebar.classList.toggle(
-        "collapsed",
-        saved ===
-          CONFIG.collapsedValue
-      );
-
-      sidebarScrim
-        ?.classList
-        .remove(
-          "visible",
-          "show"
-        );
-    }
-
-    state.initialized =
-      true;
-
-    sync(
-      "initialize"
     );
 
-    return true;
-  }
+    /* =====================================================
+       HISTORY OPEN
 
-  /* =====================================================
-     BUTTON OWNERSHIP
+       Preserve mobile drawer UX.
+       ===================================================== */
 
-     Capture phase is intentional while neo.js remains
-     physically loaded.
+    window.addEventListener(
+        "neyo:history-opened",
+        () => {
+            if (!isMobile()) {
+                return;
+            }
 
-     This prevents:
-     modular toggle
-     +
-     old neo.js toggle
-     =
-     double toggle / no visible change
-     ===================================================== */
-
-  function handleToggleClick(
-    event,
-    reason
-  ) {
-    event.preventDefault();
-
-    event.stopPropagation();
-
-    event.stopImmediatePropagation();
-
-    toggle({
-      reason
-    });
-  }
-
-  sidebarToggleBtn
-    ?.addEventListener(
-      "click",
-      event => {
-        handleToggleClick(
-          event,
-          "topbar-toggle"
-        );
-      },
-      true
+            closeSidebar(
+                "history-opened"
+            );
+        }
     );
 
-  collapseSidebarBtn
-    ?.addEventListener(
-      "click",
-      event => {
-        handleToggleClick(
-          event,
-          "sidebar-collapse-button"
-        );
-      },
-      true
+    /* =====================================================
+       REQUEST EVENTS
+       ===================================================== */
+
+    window.addEventListener(
+        "neyo:sidebar-open-request",
+        () => {
+            openSidebar(
+                "external-open"
+            );
+        }
     );
 
-  /* =====================================================
-     SCRIM
+    window.addEventListener(
+        "neyo:sidebar-close-request",
+        () => {
+            closeSidebar(
+                "external-close"
+            );
+        }
+    );
 
-     Old neo.js toggled sidebar through same toggle function.
-     In modular version we close explicitly to avoid any
-     race where the drawer somehow changed state first.
-     ===================================================== */
+    window.addEventListener(
+        "neyo:sidebar-collapse-request",
+        () => {
+            closeSidebar(
+                "external-collapse"
+            );
+        }
+    );
 
-  sidebarScrim
-    ?.addEventListener(
-      "click",
-      event => {
-        event.preventDefault();
+    window.addEventListener(
+        "neyo:sidebar-toggle-request",
+        () => {
+            toggleSidebar(
+                "external-toggle"
+            );
+        }
+    );
 
-        event.stopPropagation();
+    /* =====================================================
+       RESPONSIVE
 
-        event.stopImmediatePropagation();
+       Exact old neo.js behavior:
+       only reinitialize when crossing mobile/desktop mode.
+       ===================================================== */
 
-        if (!isMobile()) {
-          updateScrim();
+    const handleResize = () => {
+        const mobile =
+            isMobile();
 
-          return;
+        if (
+            mobile ===
+            lastResponsiveMode
+        ) {
+            return;
         }
 
-        close({
-          reason:
-            "scrim"
+        lastResponsiveMode =
+            mobile;
+
+        initializeSidebarState(
+            "responsive-change"
+        );
+    };
+
+    window.addEventListener(
+        "resize",
+        handleResize,
+        {
+            passive: true
+        }
+    );
+
+    /* =====================================================
+       ESCAPE — MOBILE ONLY
+
+       Safe improvement.
+       Does not change desktop old behavior.
+       ===================================================== */
+
+    document.addEventListener(
+        "keydown",
+        event => {
+            if (
+                event.key !== "Escape" ||
+                !isMobile() ||
+                isCollapsed()
+            ) {
+                return;
+            }
+
+            const target =
+                event.target;
+
+            if (
+                target instanceof Element &&
+                target.closest(
+                    [
+                        "[role='dialog']",
+                        ".modal",
+                        ".history-dialog"
+                    ].join(",")
+                )
+            ) {
+                return;
+            }
+
+            event.preventDefault();
+
+            closeSidebar(
+                "escape"
+            );
+
+            requestAnimationFrame(
+                () => {
+                    sidebarToggleBtn
+                        ?.focus?.();
+                }
+            );
+        },
+        true
+    );
+
+    /* =====================================================
+       PUBLIC API
+       ===================================================== */
+
+    const api =
+        Object.freeze({
+            __controller:
+                true,
+
+            version:
+                VERSION,
+
+            active:
+                true,
+
+            open:
+                openSidebar,
+
+            close:
+                closeSidebar,
+
+            collapse:
+                closeSidebar,
+
+            toggle:
+                toggleSidebar,
+
+            initialize:
+                initializeSidebarState,
+
+            refresh() {
+                sync(
+                    "manual-refresh"
+                );
+
+                return true;
+            },
+
+            isOpen,
+
+            isCollapsed,
+
+            isMobile,
+
+            getState() {
+                return {
+                    version:
+                        VERSION,
+
+                    active:
+                        true,
+
+                    mobile:
+                        isMobile(),
+
+                    collapsed:
+                        isCollapsed(),
+
+                    open:
+                        isOpen(),
+
+                    bodyCollapsed:
+                        document.body
+                            .classList
+                            .contains(
+                                "sidebar-collapsed"
+                            ),
+
+                    scrimVisible:
+                        Boolean(
+                            sidebarScrim &&
+                            (
+                                sidebarScrim.classList
+                                    .contains(
+                                        "visible"
+                                    ) ||
+                                sidebarScrim.classList
+                                    .contains(
+                                        "show"
+                                    )
+                            )
+                        )
+                };
+            }
         });
-      },
-      true
+
+    Object.defineProperty(
+        window,
+        "NeyoSidebar",
+        {
+            value:
+                api,
+
+            writable:
+                false,
+
+            configurable:
+                true,
+
+            enumerable:
+                true
+        }
     );
 
-  /* =====================================================
-     MOBILE NEW CHAT
-
-     Old neo.js closed sidebar after New Chat on mobile.
-
-     We preserve behavior by responding to canonical
-     neyo:chat-new instead of owning newChatBtn.
-     ===================================================== */
-
-  window.addEventListener(
-    "neyo:chat-new",
-    () => {
-      if (!isMobile()) {
-        return;
-      }
-
-      close({
-        reason:
-          "new-chat"
-      });
-    }
-  );
-
-  /* =====================================================
-     MOBILE HISTORY OPEN
-
-     Old working UX collapses drawer after selecting a
-     conversation.
-     ===================================================== */
-
-  window.addEventListener(
-    "neyo:history-opened",
-    () => {
-      if (!isMobile()) {
-        return;
-      }
-
-      close({
-        reason:
-          "history-opened"
-      });
-    }
-  );
-
-  /* =====================================================
-     REQUEST EVENTS
-     ===================================================== */
-
-  window.addEventListener(
-    "neyo:sidebar-open-request",
-    event => {
-      open({
-        reason:
-          event.detail
-            ?.reason ||
-          "external-open",
-
-        focus:
-          event.detail
-            ?.focus ===
-          true
-      });
-    }
-  );
-
-  window.addEventListener(
-    "neyo:sidebar-close-request",
-    event => {
-      close({
-        reason:
-          event.detail
-            ?.reason ||
-          "external-close"
-      });
-    }
-  );
-
-  window.addEventListener(
-    "neyo:sidebar-collapse-request",
-    event => {
-      close({
-        reason:
-          event.detail
-            ?.reason ||
-          "external-collapse"
-      });
-    }
-  );
-
-  window.addEventListener(
-    "neyo:sidebar-toggle-request",
-    event => {
-      toggle({
-        reason:
-          event.detail
-            ?.reason ||
-          "external-toggle"
-      });
-    }
-  );
-
-  /* =====================================================
-     RESPONSIVE MODE SWITCH
-
-     Exact neo.js concept:
-     only reinitialize when crossing 767px boundary.
-
-     Desktop resize inside desktop:
-     preserve state.
-
-     Mobile resize inside mobile:
-     preserve drawer state.
-     ===================================================== */
-
-  function handleResponsiveChange() {
-    const mobile =
-      isMobile();
-
-    if (
-      mobile ===
-      state.lastResponsiveMode
-    ) {
-      /*
-       * Width changed but mode did not.
-       * Only keep scrim/body synchronized.
-       */
-
-      updateScrim();
-
-      updateButtons();
-
-      return;
-    }
-
-    state.lastResponsiveMode =
-      mobile;
+    /* =====================================================
+       INIT
+       ===================================================== */
 
     initializeSidebarState();
 
     emit(
-      "neyo:sidebar-responsive-change",
-      {
-        mobile
-      }
+        "neyo:sidebar-ready",
+        {
+            version:
+                VERSION,
+
+            baseline:
+                "old-neo.js",
+
+            mobile:
+                isMobile(),
+
+            collapsed:
+                isCollapsed()
+        }
     );
-  }
-
-  window.addEventListener(
-    "resize",
-    handleResponsiveChange,
-    {
-      passive: true
-    }
-  );
-
-  window.addEventListener(
-    "orientationchange",
-    handleResponsiveChange,
-    {
-      passive: true
-    }
-  );
-
-  /* =====================================================
-     ESCAPE — MOBILE DRAWER
-
-     Desktop collapse remains explicit button behavior.
-     ===================================================== */
-
-  document.addEventListener(
-    "keydown",
-    event => {
-      if (
-        event.key !==
-        "Escape" ||
-        !isMobile() ||
-        sidebar.classList
-          .contains(
-            "collapsed"
-          )
-      ) {
-        return;
-      }
-
-      const target =
-        event.target;
-
-      /*
-       * Let dialogs consume Escape first.
-       */
-
-      if (
-        target instanceof
-          Element &&
-        target.closest(
-          [
-            "[role='dialog']",
-            ".modal",
-            ".history-dialog"
-          ].join(",")
-        )
-      ) {
-        return;
-      }
-
-      event.preventDefault();
-
-      close({
-        reason:
-          "escape"
-      });
-
-      requestAnimationFrame(
-        () => {
-          sidebarToggleBtn
-            ?.focus?.();
-        }
-      );
-    },
-    true
-  );
-
-  /* =====================================================
-     EXTERNAL CLASS MUTATIONS
-
-     During migration old CSS/legacy modules may still
-     mutate sidebar class directly.
-
-     Observe and re-sync supporting state without fighting
-     the class itself.
-     ===================================================== */
-
-  let internalMutationFrame =
-    null;
-
-  const observer =
-    new MutationObserver(
-      mutations => {
-        const changed =
-          mutations.some(
-            mutation =>
-              mutation.type ===
-                "attributes" &&
-              mutation.attributeName ===
-                "class"
-          );
-
-        if (!changed) {
-          return;
-        }
-
-        if (
-          internalMutationFrame !==
-          null
-        ) {
-          return;
-        }
-
-        internalMutationFrame =
-          requestAnimationFrame(
-            () => {
-              internalMutationFrame =
-                null;
-
-              sync(
-                "class-mutation"
-              );
-            }
-          );
-      }
-    );
-
-  observer.observe(
-    sidebar,
-    {
-      attributes: true,
-
-      attributeFilter: [
-        "class"
-      ]
-    }
-  );
-
-  /* =====================================================
-     STATE REQUEST
-     ===================================================== */
-
-  window.addEventListener(
-    "neyo:sidebar-state-request",
-    () => {
-      emit(
-        "neyo:sidebar-state",
-        getState()
-      );
-    }
-  );
-
-  /* =====================================================
-     STATE
-     ===================================================== */
-
-  function getState() {
-    const collapsed =
-      sidebar.classList
-        .contains(
-          "collapsed"
-        );
-
-    return {
-      version:
-        VERSION,
-
-      active:
-        true,
-
-      initialized:
-        state.initialized,
-
-      mobile:
-        isMobile(),
-
-      collapsed,
-
-      open:
-        !collapsed,
-
-      scrimVisible:
-        Boolean(
-          sidebarScrim &&
-          (
-            sidebarScrim
-              .classList
-              .contains(
-                "visible"
-              ) ||
-            sidebarScrim
-              .classList
-              .contains(
-                "show"
-              )
-          )
-        ),
-
-      persistedDesktopState:
-        getSavedDesktopState(),
-
-      lastChangedAt:
-        state.lastChangedAt
-    };
-  }
-
-  /* =====================================================
-     PUBLIC API
-     ===================================================== */
-
-  const api =
-    Object.freeze({
-      __controller:
-        true,
-
-      version:
-        VERSION,
-
-      active:
-        true,
-
-      open,
-
-      close,
-
-      collapse,
-
-      toggle,
-
-      setCollapsed,
-
-      initialize:
-        initializeSidebarState,
-
-      refresh(
-        reason =
-          "manual-refresh"
-      ) {
-        return sync(
-          reason
-        );
-      },
-
-      isOpen() {
-        return !sidebar
-          .classList
-          .contains(
-            "collapsed"
-          );
-      },
-
-      isCollapsed() {
-        return sidebar
-          .classList
-          .contains(
-            "collapsed"
-          );
-      },
-
-      isMobile,
-
-      getState
-    });
-
-  Object.defineProperty(
-    window,
-    "NeyoSidebar",
-    {
-      value:
-        api,
-
-      writable:
-        false,
-
-      configurable:
-        true,
-
-      enumerable:
-        true
-    }
-  );
-
-  /* =====================================================
-     INIT
-     ===================================================== */
-
-  initializeSidebarState();
-
-  emit(
-    "neyo:sidebar-ready",
-    {
-      version:
-        VERSION,
-
-      active:
-        true,
-
-      baseline:
-        "neo.js",
-
-      ...getState()
-    }
-  );
 })();

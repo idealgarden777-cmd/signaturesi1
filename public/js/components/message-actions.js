@@ -1,24 +1,35 @@
 /*
 =========================================================
 NEO — MESSAGE ACTIONS
-Production v1
+Production v3 — Baseline Safe
+
+Baseline:
+- Old working neo.js message action UI
+- Current NeyoMessages DOM structure
+- Current NeyoChat canonical state
+- Current message-edit.js
+- Current regenerate.js
+- Current share.js
 
 Owns:
-- user/assistant action bars
-- copy message
-- edit request routing
-- regenerate request routing
-- share request routing
-- feedback request routing
-- action enabled/disabled state
+- Message action button DOM
+- Assistant Copy button
+- Assistant Share routing
+- Assistant Regenerate routing
+- User Edit routing
+- User Copy button
+- Copy visual feedback
+- Delegated action click interception
+- Busy/streaming action state
 
 Does NOT own:
-- inline edit UI
-- regenerate implementation
-- share implementation
+- Message rendering
+- Edit UI
+- Regeneration business logic
+- Share business logic
+- Conversation state
 - /api/chat
-- conversation mutation
-- message rendering
+- Feedback / thumbs UI
 =========================================================
 */
 
@@ -26,7 +37,7 @@ Does NOT own:
   "use strict";
 
   const VERSION =
-    "neo-message-actions-production-v1";
+    "neo-message-actions-production-v3";
 
   if (
     window.NeyoMessageActions
@@ -46,11 +57,27 @@ Does NOT own:
 
   if (!chatMessages) {
     console.warn(
-      "[NEO Actions] #chatMessages is missing."
+      "[NEO Message Actions] #chatMessages is missing."
     );
 
     return;
   }
+
+  /* =====================================================
+     CONFIG
+     ===================================================== */
+
+  const CONFIG =
+    Object.freeze({
+      copyFeedbackMs:
+        2000,
+
+      copyIconSize:
+        16,
+
+      userIconSize:
+        14
+    });
 
   /* =====================================================
      STATE
@@ -59,8 +86,11 @@ Does NOT own:
   const state = {
     generating: false,
 
-    feedback:
-      new Map()
+    activeAction: null,
+
+    copiedButton: null,
+
+    copyResetTimer: null
   };
 
   /* =====================================================
@@ -74,7 +104,9 @@ Does NOT own:
     window.dispatchEvent(
       new CustomEvent(
         name,
-        { detail }
+        {
+          detail
+        }
       )
     );
   }
@@ -91,94 +123,164 @@ Does NOT own:
     } catch {}
   }
 
-  function messageIdOf(
-    element
-  ) {
+  function cleanId(value) {
     return String(
-      element?.dataset
-        ?.neyoMessageId ||
-      element?.dataset
-        ?.messageId ||
-      ""
+      value ?? ""
     ).trim();
   }
 
-  function getMessage(
-    id
-  ) {
-    if (!id) {
-      return null;
-    }
+  function chatController() {
+    const controller =
+      window.NeyoChat;
 
-    try {
-      return (
-        window.NeyoChat
-          ?.getMessage
-          ?.(id) ||
-        null
-      );
-
-    } catch {
-      return null;
-    }
+    return (
+      controller &&
+      controller.__controller ===
+        true
+    )
+      ? controller
+      : null;
   }
 
-  function visibleText(
-    message,
-    element = null
+  /* =====================================================
+     MESSAGE ID
+     ===================================================== */
+
+  function getMessageId(
+    element
   ) {
-    if (message) {
-      if (
-        message.role ===
-          "user" &&
-        typeof message
-          .displayContent ===
-          "string"
-      ) {
-        return message
-          .displayContent;
-      }
+    if (
+      !(element instanceof
+        HTMLElement)
+    ) {
+      return "";
+    }
 
-      if (
-        typeof message
-          .content ===
-          "string"
-      ) {
-        /*
-         * Do not expose the internal attachment-only
-         * fallback prompt to Copy.
-         */
+    return cleanId(
+      element.dataset
+        .messageId ||
+      element.dataset
+        .neyoMessageId ||
+      ""
+    );
+  }
 
-        if (
-          message.role ===
-            "user" &&
-          Array.isArray(
-            message.attachments
-          ) &&
-          message.attachments
-            .length &&
-          (
-            message.content ===
-              "Please analyze the attached file or files." ||
-            message.content ===
-              "Please analyze the attached file."
-          )
-        ) {
-          return "";
+  /* =====================================================
+     MESSAGE INDEX
+     ===================================================== */
+
+  function getMessageIndex(
+    element
+  ) {
+    if (
+      !(element instanceof
+        HTMLElement)
+    ) {
+      return -1;
+    }
+
+    const raw =
+      element.dataset
+        .msgIndex;
+
+    const index =
+      Number(raw);
+
+    return Number.isInteger(
+      index
+    )
+      ? index
+      : -1;
+  }
+
+  /* =====================================================
+     RESOLVE CANONICAL MESSAGE
+     ===================================================== */
+
+  function getCanonicalMessage(
+    element
+  ) {
+    const chat =
+      chatController();
+
+    if (!chat) {
+      return null;
+    }
+
+    const id =
+      getMessageId(
+        element
+      );
+
+    if (
+      id &&
+      typeof chat.getMessage ===
+        "function"
+    ) {
+      try {
+        const message =
+          chat.getMessage(id);
+
+        if (message) {
+          return message;
         }
-
-        return message.content;
-      }
+      } catch {}
     }
 
     /*
-     * DOM fallback only.
-     *
-     * Important:
-     * read .message-content, not element.textContent,
-     * otherwise action labels / code Copy controls can
-     * enter copied text.
+     * Compatibility fallback for old DOM that only had
+     * data-msg-index.
      */
+
+    const index =
+      getMessageIndex(
+        element
+      );
+
+    if (
+      index >= 0 &&
+      typeof chat.getConversation ===
+        "function"
+    ) {
+      try {
+        const conversation =
+          chat.getConversation();
+
+        if (
+          Array.isArray(
+            conversation
+          ) &&
+          conversation[index]
+        ) {
+          return conversation[index];
+        }
+      } catch {}
+    }
+
+    return null;
+  }
+
+  /* =====================================================
+     MESSAGE TEXT
+
+     Prefer canonical content.
+     DOM text is fallback for old pre-migration messages.
+     ===================================================== */
+
+  function getMessageText(
+    element
+  ) {
+    const message =
+      getCanonicalMessage(
+        element
+      );
+
+    if (
+      typeof message?.content ===
+      "string"
+    ) {
+      return message.content;
+    }
 
     return (
       element
@@ -190,113 +292,31 @@ Does NOT own:
     );
   }
 
-  function isGenerating() {
-    try {
-      return Boolean(
-        window.NeyoChat
-          ?.isGenerating
-          ?.()
-      );
-
-    } catch {
-      return state.generating;
-    }
-  }
-
   /* =====================================================
-     BUTTON
-     ===================================================== */
-
-  function button({
-    className,
-    action,
-    title,
-    icon,
-    iconSize = 16
-  }) {
-    const element =
-      document.createElement(
-        "button"
-      );
-
-    element.type =
-      "button";
-
-    element.className =
-      className;
-
-    element.dataset.action =
-      action;
-
-    element.title =
-      title;
-
-    element.setAttribute(
-      "aria-label",
-      title
-    );
-
-    const iconElement =
-      document.createElement(
-        "i"
-      );
-
-    iconElement.setAttribute(
-      "data-lucide",
-      icon
-    );
-
-    iconElement.setAttribute(
-      "size",
-      String(
-        iconSize
-      )
-    );
-
-    iconElement.setAttribute(
-      "aria-hidden",
-      "true"
-    );
-
-    element.appendChild(
-      iconElement
-    );
-
-    return element;
-  }
-
-  /* =====================================================
-     COPY
+     CLIPBOARD
      ===================================================== */
 
   async function writeClipboard(
     value
   ) {
-    const content =
-      String(
-        value ?? ""
-      );
+    const text =
+      String(value ?? "");
+
+    if (!text) {
+      return false;
+    }
 
     try {
       if (
-        navigator.clipboard
-          ?.writeText &&
+        navigator.clipboard &&
         window.isSecureContext
       ) {
-        await navigator
-          .clipboard
-          .writeText(
-            content
-          );
+        await navigator.clipboard
+          .writeText(text);
 
         return true;
       }
-
     } catch {}
-
-    /*
-     * Compatibility fallback.
-     */
 
     const textarea =
       document.createElement(
@@ -304,7 +324,7 @@ Does NOT own:
       );
 
     textarea.value =
-      content;
+      text;
 
     textarea.setAttribute(
       "readonly",
@@ -320,667 +340,714 @@ Does NOT own:
     textarea.style.pointerEvents =
       "none";
 
+    textarea.style.left =
+      "-9999px";
+
     document.body.appendChild(
       textarea
     );
 
     textarea.select();
 
-    let success =
-      false;
+    let copied = false;
 
     try {
-      success =
+      copied =
         document.execCommand(
           "copy"
         );
-    } catch {}
+    } catch {
+      copied = false;
+    }
 
     textarea.remove();
-
-    return success;
-  }
-
-  function setCopyFeedback(
-    buttonElement,
-    copied
-  ) {
-    if (!buttonElement) {
-      return;
-    }
-
-    const oldTitle =
-      buttonElement.title ||
-      "Copy";
-
-    const oldLabel =
-      buttonElement.getAttribute(
-        "aria-label"
-      ) ||
-      oldTitle;
-
-    const icon =
-      buttonElement.querySelector(
-        "i"
-      );
-
-    if (copied) {
-      buttonElement.title =
-        "Copied";
-
-      buttonElement.setAttribute(
-        "aria-label",
-        "Copied"
-      );
-
-      buttonElement.dataset.copied =
-        "true";
-
-      if (icon) {
-        icon.setAttribute(
-          "data-lucide",
-          "check"
-        );
-      }
-
-      refreshIcons();
-
-      window.setTimeout(
-        () => {
-          if (
-            !buttonElement
-              .isConnected
-          ) {
-            return;
-          }
-
-          buttonElement.title =
-            oldTitle;
-
-          buttonElement.setAttribute(
-            "aria-label",
-            oldLabel
-          );
-
-          delete buttonElement
-            .dataset
-            .copied;
-
-          if (icon) {
-            icon.setAttribute(
-              "data-lucide",
-              "copy"
-            );
-          }
-
-          refreshIcons();
-        },
-        1200
-      );
-
-      return;
-    }
-
-    buttonElement.dataset
-      .copyError =
-      "true";
-
-    window.setTimeout(
-      () => {
-        delete buttonElement
-          .dataset
-          .copyError;
-      },
-      1200
-    );
-  }
-
-  async function copyMessage(
-    id,
-    buttonElement = null
-  ) {
-    const element =
-      window.NeyoMessages
-        ?.getElement
-        ?.(id) ||
-      null;
-
-    const message =
-      getMessage(
-        id
-      );
-
-    const content =
-      visibleText(
-        message,
-        element
-      );
-
-    if (!content) {
-      return false;
-    }
-
-    const copied =
-      await writeClipboard(
-        content
-      );
-
-    setCopyFeedback(
-      buttonElement,
-      copied
-    );
-
-    emit(
-      copied
-        ? "neyo:message-copied"
-        : "neyo:message-copy-error",
-      {
-        id,
-        role:
-          message?.role ||
-          element?.dataset
-            ?.role ||
-          null
-      }
-    );
 
     return copied;
   }
 
   /* =====================================================
-     USER ACTION BAR
-
-     Existing production CSS contracts:
-     .user-msg-actions
-     .user-action-btn
-     .user-edit-btn
-     .user-copy-btn
+     BUTTON ICON
      ===================================================== */
 
-  function createUserActions(
-    message
+  function setButtonIcon(
+    button,
+    iconName,
+    size
   ) {
-    const root =
+    if (
+      !(button instanceof
+        HTMLElement)
+    ) {
+      return;
+    }
+
+    button.replaceChildren();
+
+    const icon =
+      document.createElement(
+        "i"
+      );
+
+    icon.setAttribute(
+      "data-lucide",
+      iconName
+    );
+
+    icon.setAttribute(
+      "size",
+      String(size)
+    );
+
+    icon.setAttribute(
+      "aria-hidden",
+      "true"
+    );
+
+    button.appendChild(
+      icon
+    );
+
+    refreshIcons();
+  }
+
+  /* =====================================================
+     COPY FEEDBACK
+
+     Old working behavior:
+     Copy → green check → Copy after 2 seconds.
+     We preserve the icon timing without inline CSS.
+     ===================================================== */
+
+  function resetCopyFeedback() {
+    if (
+      state.copyResetTimer !==
+      null
+    ) {
+      clearTimeout(
+        state.copyResetTimer
+      );
+
+      state.copyResetTimer =
+        null;
+    }
+
+    const button =
+      state.copiedButton;
+
+    if (
+      !button ||
+      !button.isConnected
+    ) {
+      state.copiedButton =
+        null;
+
+      return;
+    }
+
+    const isUser =
+      button.classList
+        .contains(
+          "user-copy-btn"
+        );
+
+    button.classList.remove(
+      "is-copied"
+    );
+
+    button.setAttribute(
+      "aria-label",
+      isUser
+        ? "Copy text"
+        : "Copy"
+    );
+
+    setButtonIcon(
+      button,
+      "copy",
+      isUser
+        ? CONFIG.userIconSize
+        : CONFIG.copyIconSize
+    );
+
+    state.copiedButton =
+      null;
+  }
+
+  function showCopyFeedback(
+    button
+  ) {
+    resetCopyFeedback();
+
+    const isUser =
+      button.classList
+        .contains(
+          "user-copy-btn"
+        );
+
+    state.copiedButton =
+      button;
+
+    button.classList.add(
+      "is-copied"
+    );
+
+    button.setAttribute(
+      "aria-label",
+      "Copied"
+    );
+
+    setButtonIcon(
+      button,
+      "check",
+      isUser
+        ? CONFIG.userIconSize
+        : CONFIG.copyIconSize
+    );
+
+    state.copyResetTimer =
+      window.setTimeout(
+        resetCopyFeedback,
+        CONFIG.copyFeedbackMs
+      );
+  }
+
+  /* =====================================================
+     COPY
+     ===================================================== */
+
+  async function copyMessage(
+    messageElement,
+    button
+  ) {
+    const text =
+      getMessageText(
+        messageElement
+      );
+
+    if (!text) {
+      return false;
+    }
+
+    const copied =
+      await writeClipboard(
+        text
+      );
+
+    if (!copied) {
+      emit(
+        "neyo:message-copy-error",
+        {
+          messageId:
+            getMessageId(
+              messageElement
+            )
+        }
+      );
+
+      return false;
+    }
+
+    showCopyFeedback(
+      button
+    );
+
+    emit(
+      "neyo:message-copied",
+      {
+        id:
+          getMessageId(
+            messageElement
+          ),
+
+        message:
+          getCanonicalMessage(
+            messageElement
+          )
+      }
+    );
+
+    return true;
+  }
+
+  /* =====================================================
+     BUTTON CREATION
+     ===================================================== */
+
+  function createActionButton({
+    className,
+    icon,
+    size,
+    label,
+    title
+  }) {
+    const button =
+      document.createElement(
+        "button"
+      );
+
+    button.type =
+      "button";
+
+    button.className =
+      className;
+
+    button.setAttribute(
+      "aria-label",
+      label
+    );
+
+    /*
+     * Preserve old visual/browser contract.
+     */
+
+    if (title) {
+      button.title =
+        title;
+    }
+
+    setButtonIcon(
+      button,
+      icon,
+      size
+    );
+
+    return button;
+  }
+
+  /* =====================================================
+     ASSISTANT ACTIONS
+     ===================================================== */
+
+  function createAssistantActions() {
+    const actions =
       document.createElement(
         "div"
       );
 
-    root.className =
-      "user-msg-actions";
+    actions.className =
+      "message-actions";
 
-    root.dataset
-      .messageActions =
-      "user";
-
-    const edit =
-      button({
+    const copyButton =
+      createActionButton({
         className:
-          "user-action-btn user-edit-btn",
+          "msg-action-btn copy-msg-btn",
 
-        action:
-          "edit",
+        icon:
+          "copy",
+
+        size:
+          CONFIG.copyIconSize,
+
+        label:
+          "Copy",
 
         title:
-          "Edit message",
+          "Copy"
+      });
+
+    const shareButton =
+      createActionButton({
+        className:
+          "msg-action-btn share-msg-btn",
+
+        icon:
+          "share-2",
+
+        size:
+          CONFIG.copyIconSize,
+
+        label:
+          "Share",
+
+        title:
+          "Share"
+      });
+
+    const regenerateButton =
+      createActionButton({
+        className:
+          "msg-action-btn regen-msg-btn",
+
+        icon:
+          "rotate-cw",
+
+        size:
+          CONFIG.copyIconSize,
+
+        label:
+          "Regenerate",
+
+        title:
+          "Regenerate"
+      });
+
+    actions.append(
+      copyButton,
+      shareButton,
+      regenerateButton
+    );
+
+    return actions;
+  }
+
+  /* =====================================================
+     USER ACTIONS
+     ===================================================== */
+
+  function createUserActions() {
+    const actions =
+      document.createElement(
+        "div"
+      );
+
+    actions.className =
+      "user-msg-actions";
+
+    const editButton =
+      createActionButton({
+        className:
+          "user-action-btn user-edit-btn",
 
         icon:
           "pencil",
 
-        iconSize:
-          14
+        size:
+          CONFIG.userIconSize,
+
+        label:
+          "Edit message",
+
+        title:
+          "Edit message"
       });
 
-    const copy =
-      button({
+    const copyButton =
+      createActionButton({
         className:
           "user-action-btn user-copy-btn",
 
-        action:
+        icon:
           "copy",
 
-        title:
+        size:
+          CONFIG.userIconSize,
+
+        label:
           "Copy text",
 
-        icon:
-          "copy",
-
-        iconSize:
-          14
+        title:
+          "Copy text"
       });
 
-    root.append(
-      edit,
-      copy
+    actions.append(
+      editButton,
+      copyButton
     );
 
-    return root;
+    return actions;
   }
 
   /* =====================================================
-     ASSISTANT ACTION BAR
-
-     Existing production CSS contracts:
-     .message-actions
-     .msg-action-btn
-     .copy-msg-btn
-     .share-msg-btn
-     .regen-msg-btn
+     REMOVE ACTIONS
      ===================================================== */
 
-  function createAssistantActions(
+  function removeActions(
+    messageElement
+  ) {
+    if (
+      !(messageElement instanceof
+        HTMLElement)
+    ) {
+      return false;
+    }
+
+    messageElement
+      .querySelector(
+        ":scope > .message-actions"
+      )
+      ?.remove();
+
+    messageElement
+      .querySelector(
+        ".message-wrapper > .user-msg-actions"
+      )
+      ?.remove();
+
+    return true;
+  }
+
+  /* =====================================================
+     STREAMING STATE
+     ===================================================== */
+
+  function isStreamingMessage(
+    element,
     message
   ) {
-    const root =
-      document.createElement(
-        "div"
-      );
-
-    root.className =
-      "message-actions";
-
-    root.dataset
-      .messageActions =
-      "assistant";
-
-    const copy =
-      button({
-        className:
-          "msg-action-btn copy-msg-btn",
-
-        action:
-          "copy",
-
-        title:
-          "Copy",
-
-        icon:
-          "copy"
-      });
-
-    const share =
-      button({
-        className:
-          "msg-action-btn share-msg-btn",
-
-        action:
-          "share",
-
-        title:
-          "Share",
-
-        icon:
-          "share-2"
-      });
-
-    const regenerate =
-      button({
-        className:
-          "msg-action-btn regen-msg-btn",
-
-        action:
-          "regenerate",
-
-        title:
-          "Regenerate",
-
-        icon:
-          "rotate-cw"
-      });
-
-    /*
-     * Feedback controls are additive.
-     * Existing Copy / Share / Regenerate structure is
-     * preserved exactly.
-     */
-
-    const positive =
-      button({
-        className:
-          "msg-action-btn feedback-msg-btn feedback-up-btn",
-
-        action:
-          "feedback-up",
-
-        title:
-          "Good response",
-
-        icon:
-          "thumbs-up"
-      });
-
-    const negative =
-      button({
-        className:
-          "msg-action-btn feedback-msg-btn feedback-down-btn",
-
-        action:
-          "feedback-down",
-
-        title:
-          "Bad response",
-
-        icon:
-          "thumbs-down"
-      });
-
-    root.append(
-      copy,
-      share,
-      regenerate,
-      positive,
-      negative
+    return Boolean(
+      element.classList
+        .contains(
+          "is-streaming"
+        ) ||
+      message?.streaming ===
+        true
     );
-
-    return root;
   }
 
   /* =====================================================
-     ATTACH ACTIONS
+     ERROR MESSAGE
      ===================================================== */
 
-  function attachActions(
+  function isErrorMessage(
     element,
-    message = null
+    message
+  ) {
+    return Boolean(
+      element.classList
+        .contains(
+          "is-error"
+        ) ||
+      element.dataset.error ===
+        "true" ||
+      message?.error === true
+    );
+  }
+
+  /* =====================================================
+     MOUNT ACTIONS
+     ===================================================== */
+
+  function mountActions(
+    messageElement,
+    suppliedMessage = null
   ) {
     if (
-      !(element instanceof HTMLElement)
+      !(messageElement instanceof
+        HTMLElement)
     ) {
       return false;
     }
 
-    const id =
-      message?.id ||
-      messageIdOf(
-        element
-      );
-
-    const role =
-      message?.role ||
-      element.dataset.role;
-
     if (
-      !id ||
-      (
-        role !== "user" &&
-        role !== "assistant"
-      )
-    ) {
-      return false;
-    }
-
-    /*
-     * Never attach actions to Thinking shell.
-     */
-
-    if (
-      id ===
-      "neyo-thinking" ||
-      element.classList
+      messageElement.classList
         .contains(
           "is-thinking"
         )
     ) {
+      removeActions(
+        messageElement
+      );
+
       return false;
     }
 
-    /*
-     * Duplicate protection.
-     */
-
-    if (
-      element.querySelector(
-        "[data-message-actions]"
-      )
-    ) {
-      updateActionsState(
-        element
+    const message =
+      suppliedMessage ||
+      getCanonicalMessage(
+        messageElement
       );
 
-      return true;
-    }
+    const isUser =
+      messageElement.classList
+        .contains(
+          "user"
+        ) ||
+      message?.role ===
+        "user";
 
-    /*
-     * During migration an old action bar may already
-     * exist without our data marker.
-     *
-     * Reuse it rather than creating a second visible bar.
-     */
-
-    if (
-      role ===
-      "assistant"
-    ) {
-      const legacy =
-        element.querySelector(
-          ".message-actions"
-        );
-
-      if (legacy) {
-        legacy.dataset
-          .messageActions =
-          "assistant";
-
-        normalizeLegacyAssistantActions(
-          legacy
-        );
-
-        updateActionsState(
-          element
-        );
-
-        return true;
-      }
-    }
+    const isAssistant =
+      messageElement.classList
+        .contains(
+          "assistant"
+        ) ||
+      message?.role ===
+        "assistant";
 
     if (
-      role === "user"
+      !isUser &&
+      !isAssistant
     ) {
-      const legacy =
-        element.querySelector(
-          ".user-msg-actions"
-        );
-
-      if (legacy) {
-        legacy.dataset
-          .messageActions =
-          "user";
-
-        normalizeLegacyUserActions(
-          legacy
-        );
-
-        updateActionsState(
-          element
-        );
-
-        return true;
-      }
+      return false;
     }
 
-    const actions =
-      role === "user"
-        ? createUserActions(
-            message
-          )
-        : createAssistantActions(
-            message
-          );
+    /* -----------------------------------------------
+       USER
+       ----------------------------------------------- */
 
-    if (
-      role === "user"
-    ) {
+    if (isUser) {
       const wrapper =
-        element.querySelector(
-          ".message-wrapper"
-        );
-
-      /*
-       * Preserve old user-message layout:
-       * content + actions inside .message-wrapper.
-       */
+        messageElement
+          .querySelector(
+            ":scope > .message-wrapper"
+          );
 
       if (!wrapper) {
         return false;
       }
 
-      wrapper.appendChild(
-        actions
+      let actions =
+        wrapper.querySelector(
+          ":scope > .user-msg-actions"
+        );
+
+      if (!actions) {
+        actions =
+          createUserActions();
+
+        wrapper.appendChild(
+          actions
+        );
+      }
+
+      setActionAvailability(
+        messageElement
       );
 
-    } else {
-      element.appendChild(
+      refreshIcons();
+
+      return true;
+    }
+
+    /* -----------------------------------------------
+       ASSISTANT
+
+       ChatGPT-standard:
+       don't expose Regenerate/Share/Copy while response is
+       still streaming.
+       ----------------------------------------------- */
+
+    if (
+      isStreamingMessage(
+        messageElement,
+        message
+      )
+    ) {
+      messageElement
+        .querySelector(
+          ":scope > .message-actions"
+        )
+        ?.remove();
+
+      return false;
+    }
+
+    /*
+     * Local error rows should not expose normal actions.
+     */
+
+    if (
+      isErrorMessage(
+        messageElement,
+        message
+      )
+    ) {
+      messageElement
+        .querySelector(
+          ":scope > .message-actions"
+        )
+        ?.remove();
+
+      return false;
+    }
+
+    let actions =
+      messageElement
+        .querySelector(
+          ":scope > .message-actions"
+        );
+
+    if (!actions) {
+      actions =
+        createAssistantActions();
+
+      messageElement.appendChild(
         actions
       );
     }
 
-    updateActionsState(
-      element
+    setActionAvailability(
+      messageElement
     );
 
     refreshIcons();
 
-    emit(
-      "neyo:message-actions-attached",
-      {
-        id,
-        role,
-        element
-      }
-    );
-
     return true;
   }
 
   /* =====================================================
-     LEGACY ACTION NORMALIZATION
-
-     Existing action elements receive canonical data-action
-     attributes, allowing ONE delegated click handler.
+     GENERATION AVAILABILITY
      ===================================================== */
 
-  function normalizeLegacyAssistantActions(
-    root
+  function setActionAvailability(
+    messageElement
   ) {
-    root
-      .querySelector(
-        ".copy-msg-btn"
-      )
-      ?.setAttribute(
-        "data-action",
-        "copy"
-      );
-
-    root
-      .querySelector(
-        ".share-msg-btn"
-      )
-      ?.setAttribute(
-        "data-action",
-        "share"
-      );
-
-    root
-      .querySelector(
-        ".regen-msg-btn"
-      )
-      ?.setAttribute(
-        "data-action",
-        "regenerate"
-      );
-  }
-
-  function normalizeLegacyUserActions(
-    root
-  ) {
-    root
-      .querySelector(
-        ".user-edit-btn"
-      )
-      ?.setAttribute(
-        "data-action",
-        "edit"
-      );
-
-    root
-      .querySelector(
-        ".user-copy-btn"
-      )
-      ?.setAttribute(
-        "data-action",
-        "copy"
-      );
-  }
-
-  /* =====================================================
-     DISABLED STATE
-     ===================================================== */
-
-  function updateActionsState(
-    element = null
-  ) {
-    const generating =
-      isGenerating();
-
-    state.generating =
-      generating;
-
-    const roots =
-      element
-        ? [element]
-        : Array.from(
-            chatMessages
-              .querySelectorAll(
-                '.message[data-neyo-message-id]:not([data-neyo-message-id="neyo-thinking"])'
-              )
-          );
-
-    for (
-      const messageElement
-      of roots
+    if (
+      !(messageElement instanceof
+        HTMLElement)
     ) {
-      /*
-       * Copy remains available while generation runs.
-       * Share also remains safe.
-       *
-       * Mutation actions are disabled.
-       */
-
-      const edit =
-        messageElement.querySelector(
-          '[data-action="edit"]'
-        );
-
-      const regenerate =
-        messageElement.querySelector(
-          '[data-action="regenerate"]'
-        );
-
-      if (edit) {
-        edit.disabled =
-          generating;
-
-        edit.setAttribute(
-          "aria-disabled",
-          String(
-            generating
-          )
-        );
-      }
-
-      if (regenerate) {
-        regenerate.disabled =
-          generating;
-
-        regenerate.setAttribute(
-          "aria-disabled",
-          String(
-            generating
-          )
-        );
-      }
+      return;
     }
 
-    return true;
+    const userEdit =
+      messageElement.querySelector(
+        ".user-edit-btn"
+      );
+
+    const regenerate =
+      messageElement.querySelector(
+        ".regen-msg-btn"
+      );
+
+    /*
+     * Copy and Share remain available for completed
+     * existing messages while another answer generates.
+     *
+     * Edit and Regenerate mutate conversation state and
+     * therefore must wait until generation ends.
+     */
+
+    for (
+      const button
+      of [
+        userEdit,
+        regenerate
+      ]
+    ) {
+      if (!button) {
+        continue;
+      }
+
+      button.disabled =
+        state.generating;
+
+      button.setAttribute(
+        "aria-disabled",
+        String(
+          state.generating
+        )
+      );
+
+      button.classList.toggle(
+        "is-disabled",
+        state.generating
+      );
+    }
+  }
+
+  function refreshAllAvailability() {
+    const messages =
+      chatMessages.querySelectorAll(
+        ".message"
+      );
+
+    for (
+      const message
+      of messages
+    ) {
+      setActionAvailability(
+        message
+      );
+    }
   }
 
   /* =====================================================
@@ -988,25 +1055,26 @@ Does NOT own:
      ===================================================== */
 
   function requestEdit(
-    id
+    messageElement
   ) {
-    if (
-      !id ||
-      isGenerating()
-    ) {
+    if (state.generating) {
       return false;
     }
 
     const message =
-      getMessage(
-        id
+      getCanonicalMessage(
+        messageElement
       );
 
-    if (
-      !message ||
-      message.role !==
-        "user"
-    ) {
+    const id =
+      getMessageId(
+        messageElement
+      ) ||
+      cleanId(
+        message?.id
+      );
+
+    if (!id) {
       return false;
     }
 
@@ -1014,45 +1082,14 @@ Does NOT own:
       "neyo:message-edit-request",
       {
         id,
-        message
-      }
-    );
 
-    return true;
-  }
+        messageId:
+          id,
 
-  /* =====================================================
-     REGENERATE REQUEST
-     ===================================================== */
+        message,
 
-  function requestRegenerate(
-    id
-  ) {
-    if (
-      !id ||
-      isGenerating()
-    ) {
-      return false;
-    }
-
-    const message =
-      getMessage(
-        id
-      );
-
-    if (
-      !message ||
-      message.role !==
-        "assistant"
-    ) {
-      return false;
-    }
-
-    emit(
-      "neyo:message-regenerate-request",
-      {
-        id,
-        message
+        element:
+          messageElement
       }
     );
 
@@ -1064,22 +1101,22 @@ Does NOT own:
      ===================================================== */
 
   function requestShare(
-    id
+    messageElement
   ) {
-    if (!id) {
-      return false;
-    }
-
     const message =
-      getMessage(
-        id
+      getCanonicalMessage(
+        messageElement
       );
 
-    if (
-      !message ||
-      message.role !==
-        "assistant"
-    ) {
+    const id =
+      getMessageId(
+        messageElement
+      ) ||
+      cleanId(
+        message?.id
+      );
+
+    if (!id) {
       return false;
     }
 
@@ -1087,7 +1124,14 @@ Does NOT own:
       "neyo:message-share-request",
       {
         id,
-        message
+
+        messageId:
+          id,
+
+        message,
+
+        element:
+          messageElement
       }
     );
 
@@ -1095,263 +1139,223 @@ Does NOT own:
   }
 
   /* =====================================================
-     FEEDBACK
-
-     message-actions.js owns only the user selection and
-     request event. Backend persistence belongs elsewhere.
+     REGENERATE REQUEST
      ===================================================== */
 
-  function setFeedback(
-    id,
-    value
+  function requestRegenerate(
+    messageElement
   ) {
-    if (
-      !id ||
-      ![
-        "positive",
-        "negative"
-      ].includes(
-        value
-      )
-    ) {
+    if (state.generating) {
       return false;
     }
 
     const message =
-      getMessage(
-        id
+      getCanonicalMessage(
+        messageElement
       );
 
-    if (
-      !message ||
-      message.role !==
-        "assistant"
-    ) {
+    const id =
+      getMessageId(
+        messageElement
+      ) ||
+      cleanId(
+        message?.id
+      );
+
+    if (!id) {
       return false;
     }
 
-    const previous =
-      state.feedback.get(
-        id
-      );
-
-    /*
-     * Clicking same feedback again clears it.
-     */
-
-    const next =
-      previous === value
-        ? null
-        : value;
-
-    if (next) {
-      state.feedback.set(
-        id,
-        next
-      );
-    } else {
-      state.feedback.delete(
-        id
-      );
-    }
-
-    renderFeedback(
-      id
-    );
-
     emit(
-      "neyo:message-feedback-request",
+      "neyo:message-regenerate-request",
       {
         id,
+
+        messageId:
+          id,
+
         message,
-        value: next,
-        previous
+
+        element:
+          messageElement
       }
     );
 
     return true;
   }
 
-  function renderFeedback(
-    id
-  ) {
-    const element =
-      window.NeyoMessages
-        ?.getElement
-        ?.(id);
+  /* =====================================================
+     ACTION RESOLUTION
+     ===================================================== */
 
-    if (!element) {
-      return false;
+  function getActionButton(
+    target
+  ) {
+    if (
+      !(target instanceof
+        Element)
+    ) {
+      return null;
     }
 
-    const value =
-      state.feedback.get(
-        id
-      ) ||
-      null;
-
-    const up =
-      element.querySelector(
-        '[data-action="feedback-up"]'
-      );
-
-    const down =
-      element.querySelector(
-        '[data-action="feedback-down"]'
-      );
-
-    up?.classList.toggle(
-      "is-active",
-      value === "positive"
+    return target.closest(
+      [
+        ".copy-msg-btn",
+        ".share-msg-btn",
+        ".regen-msg-btn",
+        ".user-edit-btn",
+        ".user-copy-btn"
+      ].join(",")
     );
-
-    down?.classList.toggle(
-      "is-active",
-      value === "negative"
-    );
-
-    up?.setAttribute(
-      "aria-pressed",
-      String(
-        value === "positive"
-      )
-    );
-
-    down?.setAttribute(
-      "aria-pressed",
-      String(
-        value === "negative"
-      )
-    );
-
-    return true;
   }
 
   /* =====================================================
-     CLICK ROUTING
+     CLICK
 
-     Single delegated handler.
-     No per-message business logic listeners.
+     Capture phase is intentional.
+     Old neo.js has delegated message action listeners.
+     This prevents both old + modular actions firing.
      ===================================================== */
 
   chatMessages.addEventListener(
     "click",
     event => {
-      const target =
-        event.target instanceof
-          Element
-          ? event.target
-          : null;
-
-      if (!target) {
-        return;
-      }
-
-      const buttonElement =
-        target.closest(
-          "[data-action]"
+      const button =
+        getActionButton(
+          event.target
         );
 
-      if (
-        !buttonElement ||
-        !chatMessages.contains(
-          buttonElement
-        )
-      ) {
+      if (!button) {
         return;
       }
 
       const messageElement =
-        buttonElement.closest(
-          "[data-neyo-message-id], [data-message-id]"
+        button.closest(
+          ".message"
         );
 
       if (!messageElement) {
         return;
       }
 
-      const id =
-        messageIdOf(
-          messageElement
-        );
+      event.preventDefault();
 
-      if (!id) {
+      event.stopPropagation();
+
+      event.stopImmediatePropagation();
+
+      if (
+        button.disabled ||
+        button.getAttribute(
+          "aria-disabled"
+        ) === "true"
+      ) {
         return;
       }
 
-      const action =
-        buttonElement.dataset
-          .action;
+      /* -----------------------------------------------
+         COPY ASSISTANT
+         ----------------------------------------------- */
 
-      /*
-       * Stop old neo.js click handlers from executing
-       * the same action a second time.
-       */
+      if (
+        button.classList
+          .contains(
+            "copy-msg-btn"
+          )
+      ) {
+        void copyMessage(
+          messageElement,
+          button
+        );
 
-      event.preventDefault();
-      event.stopPropagation();
-      event.stopImmediatePropagation();
+        return;
+      }
 
-      switch (action) {
-        case "copy":
-          void copyMessage(
-            id,
-            buttonElement
-          );
-          break;
+      /* -----------------------------------------------
+         COPY USER
+         ----------------------------------------------- */
 
-        case "edit":
-          requestEdit(
-            id
-          );
-          break;
+      if (
+        button.classList
+          .contains(
+            "user-copy-btn"
+          )
+      ) {
+        void copyMessage(
+          messageElement,
+          button
+        );
 
-        case "regenerate":
-          requestRegenerate(
-            id
-          );
-          break;
+        return;
+      }
 
-        case "share":
-          requestShare(
-            id
-          );
-          break;
+      /* -----------------------------------------------
+         EDIT
+         ----------------------------------------------- */
 
-        case "feedback-up":
-          setFeedback(
-            id,
-            "positive"
-          );
-          break;
+      if (
+        button.classList
+          .contains(
+            "user-edit-btn"
+          )
+      ) {
+        requestEdit(
+          messageElement
+        );
 
-        case "feedback-down":
-          setFeedback(
-            id,
-            "negative"
-          );
-          break;
+        return;
+      }
+
+      /* -----------------------------------------------
+         SHARE
+         ----------------------------------------------- */
+
+      if (
+        button.classList
+          .contains(
+            "share-msg-btn"
+          )
+      ) {
+        requestShare(
+          messageElement
+        );
+
+        return;
+      }
+
+      /* -----------------------------------------------
+         REGENERATE
+         ----------------------------------------------- */
+
+      if (
+        button.classList
+          .contains(
+            "regen-msg-btn"
+          )
+      ) {
+        requestRegenerate(
+          messageElement
+        );
       }
     },
     true
   );
 
   /* =====================================================
-     MESSAGE CREATED
+     MESSAGE MOUNTED
      ===================================================== */
 
   window.addEventListener(
-    "neyo:message-shell-created",
+    "neyo:message-mounted",
     event => {
       const element =
-        event.detail
-          ?.element;
+        event.detail?.element;
 
       const message =
-        event.detail
-          ?.message;
+        event.detail?.message ||
+        null;
 
-      attachActions(
+      mountActions(
         element,
         message
       );
@@ -1359,24 +1363,62 @@ Does NOT own:
   );
 
   /* =====================================================
-     MESSAGE UPDATE
+     MESSAGE UPDATED
+
+     Streaming assistant becomes completed assistant here.
      ===================================================== */
 
   window.addEventListener(
     "neyo:message-updated",
     event => {
       const element =
-        event.detail
-          ?.element;
+        event.detail?.element;
 
-      if (element) {
-        attachActions(
-          element,
-          event.detail
-            ?.message ||
-          null
-        );
+      const message =
+        event.detail?.message ||
+        null;
+
+      if (
+        !(element instanceof
+          HTMLElement)
+      ) {
+        return;
       }
+
+      mountActions(
+        element,
+        message
+      );
+    }
+  );
+
+  /*
+   * Canonical chat update fallback.
+   */
+
+  window.addEventListener(
+    "neyo:chat-message-updated",
+    event => {
+      const message =
+        event.detail?.message;
+
+      if (!message?.id) {
+        return;
+      }
+
+      const element =
+        window.NeyoMessages
+          ?.getElement
+          ?.(message.id);
+
+      if (!element) {
+        return;
+      }
+
+      mountActions(
+        element,
+        message
+      );
     }
   );
 
@@ -1390,94 +1432,97 @@ Does NOT own:
       state.generating =
         true;
 
-      updateActionsState();
+      refreshAllAvailability();
     }
   );
 
-  for (
-    const eventName
-    of [
-      "neyo:chat-send-end",
-      "neyo:chat-response",
-      "neyo:chat-error",
-      "neyo:chat-aborted",
-      "neyo:chat-limit-reached",
-      "neyo:chat-new",
-      "neyo:chat-state-loaded"
-    ]
-  ) {
-    window.addEventListener(
-      eventName,
-      () => {
-        state.generating =
-          false;
+  function generationFinished() {
+    state.generating =
+      false;
 
-        updateActionsState();
-      }
-    );
+    refreshAllAvailability();
   }
 
-  /* =====================================================
-     CLEAR FEEDBACK FOR REMOVED/NEW MESSAGES
-     ===================================================== */
+  window.addEventListener(
+    "neyo:chat-send-end",
+    generationFinished
+  );
 
   window.addEventListener(
-    "neyo:chat-message-removed",
-    event => {
-      const id =
-        event.detail
-          ?.id ||
-        event.detail
-          ?.message
-          ?.id;
+    "neyo:chat-aborted",
+    generationFinished
+  );
 
-      if (id) {
-        state.feedback.delete(
-          String(id)
-        );
+  window.addEventListener(
+    "neyo:chat-error",
+    generationFinished
+  );
+
+  window.addEventListener(
+    "neyo:chat-limit-reached",
+    generationFinished
+  );
+
+  window.addEventListener(
+    "neyo:chat-state",
+    event => {
+      const value =
+        event.detail
+          ?.generating;
+
+      if (
+        typeof value !==
+        "boolean"
+      ) {
+        return;
       }
+
+      state.generating =
+        value;
+
+      refreshAllAvailability();
     }
   );
+
+  /* =====================================================
+     CLEAR
+     ===================================================== */
 
   window.addEventListener(
     "neyo:messages-cleared",
     () => {
-      state.feedback.clear();
+      resetCopyFeedback();
+
+      state.activeAction =
+        null;
     }
   );
 
   /* =====================================================
-     HYDRATE EXISTING SHELLS
+     HYDRATE EXISTING DOM
 
-     Useful if this component loads after messages.js.
+     Important while old neo.js remains physically loaded.
+     Do not duplicate old action containers.
      ===================================================== */
 
-  function hydrate() {
-    const elements =
+  function hydrateExistingMessages() {
+    const messages =
       chatMessages.querySelectorAll(
-        '.message[data-neyo-message-id]:not([data-neyo-message-id="neyo-thinking"])'
+        ".message:not(.is-thinking)"
       );
 
     for (
-      const element
-      of elements
+      const messageElement
+      of messages
     ) {
-      const id =
-        messageIdOf(
-          element
-        );
-
-      attachActions(
-        element,
-        getMessage(
-          id
-        )
+      mountActions(
+        messageElement
       );
     }
 
     refreshIcons();
 
-    return elements.length;
+    return messages.length;
   }
 
   /* =====================================================
@@ -1486,42 +1531,99 @@ Does NOT own:
 
   const api =
     Object.freeze({
-      __controller: true,
-      version: VERSION,
-      active: true,
+      __controller:
+        true,
 
-      attach:
-        attachActions,
+      version:
+        VERSION,
 
-      hydrate,
+      active:
+        true,
 
-      copy:
-        copyMessage,
+      mount:
+        mountActions,
 
-      edit:
-        requestEdit,
+      hydrate:
+        hydrateExistingMessages,
 
-      regenerate:
-        requestRegenerate,
-
-      share:
-        requestShare,
-
-      feedback:
-        setFeedback,
-
-      refresh:
-        updateActionsState,
-
-      getFeedback(
-        id
+      copy(
+        messageId
       ) {
-        return (
-          state.feedback.get(
-            String(id)
-          ) ||
-          null
+        const element =
+          window.NeyoMessages
+            ?.getElement
+            ?.(messageId);
+
+        if (!element) {
+          return Promise.resolve(
+            false
+          );
+        }
+
+        const button =
+          element.querySelector(
+            ".copy-msg-btn, .user-copy-btn"
+          );
+
+        if (!button) {
+          return Promise.resolve(
+            false
+          );
+        }
+
+        return copyMessage(
+          element,
+          button
         );
+      },
+
+      edit(
+        messageId
+      ) {
+        const element =
+          window.NeyoMessages
+            ?.getElement
+            ?.(messageId);
+
+        return element
+          ? requestEdit(element)
+          : false;
+      },
+
+      share(
+        messageId
+      ) {
+        const element =
+          window.NeyoMessages
+            ?.getElement
+            ?.(messageId);
+
+        return element
+          ? requestShare(element)
+          : false;
+      },
+
+      regenerate(
+        messageId
+      ) {
+        const element =
+          window.NeyoMessages
+            ?.getElement
+            ?.(messageId);
+
+        return element
+          ? requestRegenerate(
+              element
+            )
+          : false;
+      },
+
+      refresh() {
+        hydrateExistingMessages();
+
+        refreshAllAvailability();
+
+        return true;
       },
 
       getState() {
@@ -1533,15 +1635,24 @@ Does NOT own:
             true,
 
           generating:
-            isGenerating(),
+            state.generating,
 
-          feedbackCount:
-            state.feedback.size,
+          copied:
+            Boolean(
+              state.copiedButton
+            ),
 
-          actionBars:
+          assistantActionGroups:
             chatMessages
               .querySelectorAll(
-                "[data-message-actions]"
+                ".message-actions"
+              )
+              .length,
+
+          userActionGroups:
+            chatMessages
+              .querySelectorAll(
+                ".user-msg-actions"
               )
               .length
         };
@@ -1552,10 +1663,17 @@ Does NOT own:
     window,
     "NeyoMessageActions",
     {
-      value: api,
-      writable: false,
-      configurable: true,
-      enumerable: true
+      value:
+        api,
+
+      writable:
+        false,
+
+      configurable:
+        true,
+
+      enumerable:
+        true
     }
   );
 
@@ -1563,7 +1681,16 @@ Does NOT own:
      INIT
      ===================================================== */
 
-  hydrate();
+  try {
+    state.generating =
+      Boolean(
+        window.NeyoChat
+          ?.isGenerating
+          ?.()
+      );
+  } catch {}
+
+  hydrateExistingMessages();
 
   emit(
     "neyo:message-actions-ready",
@@ -1572,7 +1699,13 @@ Does NOT own:
         VERSION,
 
       active:
-        true
+        true,
+
+      oldActionClasses:
+        true,
+
+      feedbackButtons:
+        false
     }
   );
 })();

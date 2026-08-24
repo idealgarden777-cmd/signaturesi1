@@ -1,84 +1,23 @@
 /*
 =========================================================
-NEYO — SHARE
-FINAL PRODUCTION MIXER v6
+NEO — SHARE
+Production v1
 
-FILE:
-public/js/components/share.js
+Owns:
+- single-message sharing
+- conversation sharing
+- native Web Share API
+- clipboard fallback
+- safe share formatting
+- compatibility share events
 
-OWNS
----------------------------------------------------------
-- Individual message sharing
-- Current conversation sharing
-- History conversation sharing
-- Native Web Share API
-- Clipboard fallback
-- Share fallback modal
-- Share preview text
-- Attachment-name representation
-- Copy feedback
-- Share lifecycle events
-- Keyboard / Escape / focus handling
-- Public share API
-- Duplicate share protection
-
-DOES NOT OWN
----------------------------------------------------------
-- Public share-link backend
-- Conversation persistence
-- History menu positioning
-- Message action buttons
-- Chat transport
-- Message rendering
-- Attachments storage
-- Authentication
-- neo.js internals
-
-IMPORTANT
----------------------------------------------------------
-This module DOES NOT invent public URLs.
-
-Until a real server-side share-link endpoint exists,
-conversation sharing is local:
-
-1. Native device share sheet, when available.
-2. Fallback share modal.
-3. Clipboard copy.
-
-No private bucket URL or internal storage path is exposed.
-
-FLOW — MESSAGE
----------------------------------------------------------
-
-message-actions.js
-      ↓
-neyo:message-share-request
-      ↓
-share.js
-      ↓
-native share OR modal/copy fallback
-
-FLOW — CONVERSATION
----------------------------------------------------------
-
-history-menu.js
-      ↓
-neyo:conversation-share-request
-      ↓
-share.js
-      ↓
-history.js fetch if needed
-      ↓
-native share OR modal/copy fallback
-
-MIGRATION RULE
----------------------------------------------------------
-Works while neo.js is still physically loaded.
-
-message-actions.js already intercepts legacy message share
-button clicks.
-
-After neo.js removal this file continues unchanged.
+Does NOT own:
+- public share links
+- backend share storage
+- conversation mutation
+- history persistence
+- message action buttons
+- message rendering
 =========================================================
 */
 
@@ -86,7 +25,7 @@ After neo.js removal this file continues unchanged.
   "use strict";
 
   const VERSION =
-    "neyo-share-final-v6";
+    "neo-share-production-v1";
 
   if (
     window.NeyoShare
@@ -101,122 +40,38 @@ After neo.js removal this file continues unchanged.
 
   const CONFIG =
     Object.freeze({
-      maxMessageLength:
-        100_000,
+      defaultTitle:
+        "NEO",
 
-      maxConversationLength:
-        180_000,
+      conversationTitle:
+        "NEO Conversation",
 
-      maxMessages:
-        100,
-
-      maxAttachmentsPerMessage:
-        5,
-
-      duplicateWindowMs:
-        500,
-
-      copyFeedbackMs:
-        1600,
-
-      appName:
-        "NEYO",
-
-      modalId:
-        "neyoShareModal",
-
-      modalStyleId:
-        "neyoShareModalStyle"
+      maxShareCharacters:
+        100_000
     });
-
-  /* =====================================================
-     LEGACY TELEMETRY
-     ===================================================== */
-
-  const legacyScriptPresent =
-    Array
-      .from(
-        document.scripts || []
-      )
-      .some(
-        script =>
-          /(?:^|\/)neo\.js(?:\?|$)/
-            .test(
-              script.src || ""
-            )
-      );
 
   /* =====================================================
      STATE
      ===================================================== */
 
-  let modal =
-    null;
+  const state = {
+    active: false,
 
-  let modalPanel =
-    null;
+    lastType: null,
 
-  let modalTitle =
-    null;
+    lastMessageId: null,
 
-  let modalPreview =
-    null;
+    nativeShares: 0,
 
-  let modalCopyButton =
-    null;
+    clipboardFallbacks: 0,
 
-  let modalNativeButton =
-    null;
+    cancelled: 0,
 
-  let modalCloseButton =
-    null;
-
-  let previousFocus =
-    null;
-
-  let currentPayload =
-    null;
-
-  let shareInProgress =
-    false;
-
-  let lastShareKey =
-    "";
-
-  let lastShareAt =
-    0;
-
-  const metrics = {
-    messageShares:
-      0,
-
-    conversationShares:
-      0,
-
-    nativeShares:
-      0,
-
-    clipboardShares:
-      0,
-
-    modalOpens:
-      0,
-
-    cancelled:
-      0,
-
-    duplicateBlocked:
-      0,
-
-    failures:
-      0,
-
-    lastSharedAt:
-      null
+    failures: 0
   };
 
   /* =====================================================
-     EVENT
+     EVENTS
      ===================================================== */
 
   function emit(
@@ -226,9 +81,7 @@ After neo.js removal this file continues unchanged.
     window.dispatchEvent(
       new CustomEvent(
         name,
-        {
-          detail
-        }
+        { detail }
       )
     );
   }
@@ -237,27 +90,10 @@ After neo.js removal this file continues unchanged.
      HELPERS
      ===================================================== */
 
-  function cleanId(
-    value
-  ) {
-    return String(
-      value || ""
-    )
-      .replace(
-        /\u0000/g,
-        ""
-      )
-      .trim()
-      .slice(
-        0,
-        256
-      );
-  }
-
-  function cleanText(
+  function clean(
     value,
     max =
-      CONFIG.maxMessageLength
+      CONFIG.maxShareCharacters
   ) {
     return String(
       value ?? ""
@@ -273,386 +109,59 @@ After neo.js removal this file continues unchanged.
       .slice(
         0,
         max
-      );
+      )
+      .trim();
   }
 
-  function cloneValue(
+  function cleanId(
     value
   ) {
-    if (
-      value === null ||
-      value === undefined
-    ) {
-      return value;
-    }
+    return clean(
+      value,
+      128
+    );
+  }
 
-    if (
-      typeof structuredClone ===
-      "function"
-    ) {
-      try {
-        return structuredClone(
-          value
-        );
-      } catch {}
-    }
+  function chat() {
+    const controller =
+      window.NeyoChat;
 
+    return (
+      controller &&
+      controller.__controller ===
+        true
+    )
+      ? controller
+      : null;
+  }
+
+  function getMessage(
+    id
+  ) {
     try {
-      return JSON.parse(
-        JSON.stringify(
-          value
-        )
+      return (
+        chat()
+          ?.getMessage
+          ?.(id) ||
+        null
       );
 
     } catch {
-      return value;
-    }
-  }
-
-  function refreshIcons() {
-    try {
-      window.lucide
-        ?.createIcons
-        ?.();
-    } catch {}
-  }
-
-  /* =====================================================
-     ATTACHMENT NAME
-     ===================================================== */
-
-  function attachmentName(
-    attachment
-  ) {
-    return cleanText(
-      attachment?.name ||
-      "Attached file",
-      255
-    )
-      .trim() ||
-      "Attached file";
-  }
-
-  /* =====================================================
-     ATTACHMENT LABEL
-     ===================================================== */
-
-  function attachmentLabel(
-    attachment
-  ) {
-    const category =
-      cleanText(
-        attachment
-          ?.category ||
-        "",
-        50
-      )
-        .trim()
-        .toLowerCase();
-
-    const name =
-      attachmentName(
-        attachment
-      );
-
-    return category &&
-      category !==
-        "unknown"
-      ? `[${category}: ${name}]`
-      : `[Attachment: ${name}]`;
-  }
-
-  /* =====================================================
-     DISPLAY MESSAGE CONTENT
-
-     Do not expose our internal attachment-only prompt.
-     ===================================================== */
-
-  function displayContent(
-    message
-  ) {
-    const content =
-      cleanText(
-        message
-          ?.displayContent ??
-        message
-          ?.content ??
-        ""
-      );
-
-    const attachments =
-      Array.isArray(
-        message?.attachments
-      )
-        ? message.attachments
-        : [];
-
-    if (
-      attachments.length &&
-      [
-        "Please analyze the attached file.",
-        "Please analyze the attached file or files."
-      ].includes(
-        content.trim()
-      )
-    ) {
-      return "";
-    }
-
-    return content.trim();
-  }
-
-  /* =====================================================
-     FORMAT ONE MESSAGE
-     ===================================================== */
-
-  function formatMessage(
-    message,
-    {
-      includeRole =
-        true
-    } = {}
-  ) {
-    if (
-      !message ||
-      ![
-        "user",
-        "assistant"
-      ].includes(
-        message.role
-      )
-    ) {
-      return "";
-    }
-
-    const text =
-      displayContent(
-        message
-      );
-
-    const attachments =
-      Array.isArray(
-        message.attachments
-      )
-        ? message
-            .attachments
-            .slice(
-              0,
-              CONFIG
-                .maxAttachmentsPerMessage
-            )
-        : [];
-
-    const attachmentText =
-      attachments
-        .map(
-          attachmentLabel
-        )
-        .join(
-          "\n"
-        );
-
-    const body =
-      [
-        text,
-        attachmentText
-      ]
-        .filter(Boolean)
-        .join(
-          text &&
-          attachmentText
-            ? "\n\n"
-            : ""
-        );
-
-    if (!body) {
-      return "";
-    }
-
-    if (
-      !includeRole
-    ) {
-      return body;
-    }
-
-    const roleLabel =
-      message.role ===
-        "user"
-        ? "You"
-        : CONFIG.appName;
-
-    return `${roleLabel}:\n${body}`;
-  }
-
-  /* =====================================================
-     GET CHAT MESSAGE
-     ===================================================== */
-
-  function getChatMessage(
-    id
-  ) {
-    const key =
-      cleanId(
-        id
-      );
-
-    if (!key) {
       return null;
     }
-
-    try {
-      const direct =
-        window.NeyoChat
-          ?.getMessage
-          ?.(key);
-
-      if (
-        direct
-      ) {
-        return cloneValue(
-          direct
-        );
-      }
-    } catch {}
-
-    try {
-      const conversation =
-        window.NeyoChat
-          ?.getConversation
-          ?.();
-
-      if (
-        Array.isArray(
-          conversation
-        )
-      ) {
-        const match =
-          conversation.find(
-            message =>
-              cleanId(
-                message?.id
-              ) ===
-              key
-          );
-
-        if (
-          match
-        ) {
-          return cloneValue(
-            match
-          );
-        }
-      }
-    } catch {}
-
-    return null;
   }
 
-  /* =====================================================
-     NORMALIZE MESSAGE SHARE REQUEST
-     ===================================================== */
-
-  function normalizeMessageRequest(
-    request = {}
-  ) {
-    const messageId =
-      cleanId(
-        request.messageId ||
-        request.id ||
-        request.message?.id
-      );
-
-    const canonical =
-      getChatMessage(
-        messageId
-      ) ||
-      (
-        request.message &&
-        typeof request.message ===
-          "object"
-          ? cloneValue(
-              request.message
-            )
-          : null
-      );
-
-    let text =
-      cleanText(
-        request.text ||
-        ""
-      )
-        .trim();
-
-    if (
-      !text &&
-      canonical
-    ) {
-      text =
-        formatMessage(
-          canonical,
-          {
-            includeRole:
-              false
-          }
-        );
-    }
-
-    if (
-      !text
-    ) {
-      return null;
-    }
-
-    return {
-      type:
-        "message",
-
-      messageId:
-        messageId ||
-        cleanId(
-          canonical?.id
-        ) ||
-        null,
-
-      title:
-        canonical?.role ===
-        "user"
-          ? "Shared message"
-          : "NEYO response",
-
-      text:
-        text.slice(
-          0,
-          CONFIG
-            .maxMessageLength
-        ),
-
-      message:
-        canonical
-          ? cloneValue(
-              canonical
-            )
-          : null
-    };
-  }
-
-  /* =====================================================
-     CHAT CONVERSATION
-     ===================================================== */
-
-  function getCurrentConversation() {
+  function getConversation() {
     try {
-      const conversation =
-        window.NeyoChat
+      const messages =
+        chat()
           ?.getConversation
           ?.();
 
       return Array.isArray(
-        conversation
+        messages
       )
-        ? cloneValue(
-            conversation
-          )
+        ? messages
         : [];
 
     } catch {
@@ -661,277 +170,377 @@ After neo.js removal this file continues unchanged.
   }
 
   /* =====================================================
-     CURRENT CONVERSATION ID
+     VISIBLE MESSAGE TEXT
+
+     Never expose attachment-only internal API prompt.
      ===================================================== */
 
-  function getCurrentConversationId() {
-    try {
-      return cleanId(
-        window.NeyoChat
-          ?.getConversationId
-          ?.()
-      );
-
-    } catch {
+  function messageText(
+    message
+  ) {
+    if (
+      !message ||
+      typeof message !==
+        "object"
+    ) {
       return "";
     }
-  }
 
-  /* =====================================================
-     HISTORY TITLE
-     ===================================================== */
+    if (
+      message.role ===
+        "user" &&
+      typeof message
+        .displayContent ===
+        "string"
+    ) {
+      return clean(
+        message.displayContent
+      );
+    }
 
-  function getConversationTitle(
-    conversationId
-  ) {
-    const id =
-      cleanId(
-        conversationId
+    const content =
+      clean(
+        message.content
       );
 
-    try {
-      const item =
-        window.NeyoHistory
-          ?.getById
-          ?.(id);
+    if (
+      message.role ===
+        "user" &&
+      Array.isArray(
+        message.attachments
+      ) &&
+      message.attachments.length &&
+      (
+        content ===
+          "Please analyze the attached file or files." ||
+        content ===
+          "Please analyze the attached file."
+      )
+    ) {
+      return "";
+    }
 
-      if (
-        item?.title
-      ) {
-        return cleanText(
-          item.title,
-          100
-        ).trim();
-      }
-    } catch {}
-
-    return "NEYO conversation";
+    return content;
   }
 
   /* =====================================================
-     FORMAT CONVERSATION
+     ATTACHMENT NAMES
+
+     Share readable filenames only.
+     Never expose:
+     - storage bucket
+     - storage path
+     - signed URL
+     - upload token
+     - process internals
      ===================================================== */
 
-  function formatConversation(
-    messages,
-    {
-      title =
-        "NEYO conversation"
-    } = {}
+  function attachmentNames(
+    message
   ) {
     if (
       !Array.isArray(
-        messages
+        message?.attachments
       )
     ) {
-      return "";
+      return [];
     }
 
-    const sections =
-      [];
+    return message
+      .attachments
+      .map(
+        item =>
+          clean(
+            item?.name,
+            255
+          )
+      )
+      .filter(Boolean)
+      .slice(
+        0,
+        10
+      );
+  }
+
+  /* =====================================================
+     SOURCE FORMAT
+
+     Only public HTTP(S) source URLs are included.
+     ===================================================== */
+
+  function sourceLines(
+    message
+  ) {
+    if (
+      !Array.isArray(
+        message?.sources
+      )
+    ) {
+      return [];
+    }
+
+    const lines = [];
 
     for (
-      const message
-      of messages.slice(
-        -CONFIG.maxMessages
-      )
+      const source
+      of message.sources
+        .slice(
+          0,
+          10
+        )
     ) {
-      const formatted =
-        formatMessage(
-          message
+      const raw =
+        source?.url ||
+        source?.uri ||
+        source?.link ||
+        source?.web?.uri ||
+        "";
+
+      if (!raw) {
+        continue;
+      }
+
+      try {
+        const url =
+          new URL(
+            raw
+          );
+
+        if (
+          url.protocol !==
+            "https:" &&
+          url.protocol !==
+            "http:"
+        ) {
+          continue;
+        }
+
+        const title =
+          clean(
+            source?.title ||
+            source?.name ||
+            source?.web?.title ||
+            url.hostname,
+            160
+          );
+
+        lines.push(
+          title
+            ? `${title}: ${url.href}`
+            : url.href
         );
 
-      if (
-        formatted
-      ) {
-        sections.push(
-          formatted
-        );
-      }
+      } catch {}
     }
 
+    return lines;
+  }
+
+  /* =====================================================
+     MESSAGE FORMAT
+     ===================================================== */
+
+  function formatMessage(
+    message
+  ) {
     if (
-      sections.length ===
-      0
+      !message ||
+      typeof message !==
+        "object"
     ) {
       return "";
     }
 
     const body =
-      sections.join(
-        "\n\n"
+      messageText(
+        message
       );
 
-    return [
-      cleanText(
-        title,
-        120
-      ).trim(),
-      body
-    ]
-      .filter(Boolean)
-      .join(
+    const files =
+      attachmentNames(
+        message
+      );
+
+    const sources =
+      sourceLines(
+        message
+      );
+
+    const parts = [];
+
+    if (body) {
+      parts.push(
+        body
+      );
+    }
+
+    if (files.length) {
+      parts.push(
+        [
+          files.length === 1
+            ? "Attachment:"
+            : "Attachments:",
+
+          ...files.map(
+            name =>
+              `• ${name}`
+          )
+        ].join(
+          "\n"
+        )
+      );
+    }
+
+    if (sources.length) {
+      parts.push(
+        [
+          "Sources:",
+
+          ...sources.map(
+            source =>
+              `• ${source}`
+          )
+        ].join(
+          "\n"
+        )
+      );
+    }
+
+    return clean(
+      parts.join(
         "\n\n"
       )
-      .slice(
-        0,
-        CONFIG
-          .maxConversationLength
-      );
+    );
   }
 
   /* =====================================================
-     FETCH HISTORY CONVERSATION
-
-     Needed when sharing a conversation selected from
-     history that is not currently open.
+     CONVERSATION TITLE
      ===================================================== */
 
-  async function getHistoryConversation(
-    conversationId
+  function deriveConversationTitle(
+    messages
   ) {
-    const id =
-      cleanId(
-        conversationId
+    const firstUser =
+      messages.find(
+        message =>
+          message?.role ===
+            "user"
       );
 
-    if (!id) {
-      return null;
+    const firstText =
+      messageText(
+        firstUser
+      );
+
+    if (firstText) {
+      const oneLine =
+        firstText
+          .replace(
+            /\s+/g,
+            " "
+          )
+          .trim();
+
+      if (oneLine.length) {
+        return (
+          oneLine.length >
+          60
+            ? `${oneLine.slice(
+                0,
+                57
+              )}…`
+            : oneLine
+        );
+      }
     }
 
+    const firstFile =
+      attachmentNames(
+        firstUser
+      )[0];
+
+    return (
+      firstFile ||
+      CONFIG
+        .conversationTitle
+    );
+  }
+
+  /* =====================================================
+     CONVERSATION FORMAT
+     ===================================================== */
+
+  function formatConversation(
+    messages =
+      getConversation()
+  ) {
     if (
-      id ===
-      getCurrentConversationId()
+      !Array.isArray(
+        messages
+      ) ||
+      !messages.length
     ) {
-      return {
-        conversationId:
-          id,
-
-        title:
-          getConversationTitle(
-            id
-          ),
-
-        messages:
-          getCurrentConversation()
-      };
+      return "";
     }
 
-    try {
-      const result =
-        await window.NeyoHistory
-          ?.fetchConversation
-          ?.(id);
+    const blocks = [];
 
+    for (
+      const message
+      of messages
+    ) {
       if (
-        result
+        !message ||
+        (
+          message.role !==
+            "user" &&
+          message.role !==
+            "assistant"
+        )
       ) {
-        return result;
+        continue;
       }
-    } catch (
-      error
-    ) {
-      console.warn(
-        "[NEYO Share] Could not load history conversation:",
-        error
-      );
-    }
 
-    return null;
-  }
-
-  /* =====================================================
-     COPY FALLBACK
-     ===================================================== */
-
-  function fallbackCopy(
-    text
-  ) {
-    const textarea =
-      document.createElement(
-        "textarea"
-      );
-
-    textarea.value =
-      text;
-
-    textarea.setAttribute(
-      "readonly",
-      ""
-    );
-
-    textarea.setAttribute(
-      "aria-hidden",
-      "true"
-    );
-
-    Object.assign(
-      textarea.style,
-      {
-        position:
-          "fixed",
-
-        left:
-          "-9999px",
-
-        top:
-          "0",
-
-        opacity:
-          "0",
-
-        pointerEvents:
-          "none"
-      }
-    );
-
-    document.body.appendChild(
-      textarea
-    );
-
-    textarea.select();
-
-    textarea.setSelectionRange(
-      0,
-      textarea.value.length
-    );
-
-    let success =
-      false;
-
-    try {
-      success =
-        document.execCommand(
-          "copy"
+      const content =
+        formatMessage(
+          message
         );
 
-    } catch {
-      success =
-        false;
+      if (!content) {
+        continue;
+      }
+
+      const label =
+        message.role ===
+          "user"
+          ? "You"
+          : "NEO";
+
+      blocks.push(
+        `${label}\n${content}`
+      );
     }
 
-    textarea.remove();
-
-    return success;
+    return clean(
+      blocks.join(
+        "\n\n──────────\n\n"
+      )
+    );
   }
 
   /* =====================================================
-     COPY
+     CLIPBOARD
      ===================================================== */
 
-  async function copyText(
-    text
+  async function writeClipboard(
+    value
   ) {
-    const value =
-      cleanText(
-        text,
-        CONFIG
-          .maxConversationLength
+    const content =
+      clean(
+        value
       );
 
-    if (
-      !value.trim()
-    ) {
+    if (!content) {
       return false;
     }
 
@@ -944,157 +553,149 @@ After neo.js removal this file continues unchanged.
         await navigator
           .clipboard
           .writeText(
-            value
+            content
           );
-
-        metrics
-          .clipboardShares +=
-          1;
 
         return true;
       }
 
     } catch {}
 
-    const copied =
-      fallbackCopy(
-        value
+    /*
+     * Browser compatibility fallback.
+     */
+
+    const textarea =
+      document.createElement(
+        "textarea"
       );
 
-    if (
-      copied
-    ) {
-      metrics
-        .clipboardShares +=
-        1;
+    textarea.value =
+      content;
+
+    textarea.setAttribute(
+      "readonly",
+      ""
+    );
+
+    textarea.setAttribute(
+      "aria-hidden",
+      "true"
+    );
+
+    textarea.style.position =
+      "fixed";
+
+    textarea.style.left =
+      "-9999px";
+
+    textarea.style.top =
+      "0";
+
+    textarea.style.opacity =
+      "0";
+
+    textarea.style.pointerEvents =
+      "none";
+
+    document.body.appendChild(
+      textarea
+    );
+
+    textarea.focus();
+    textarea.select();
+
+    let copied =
+      false;
+
+    try {
+      copied =
+        document.execCommand(
+          "copy"
+        );
+
+    } catch {
+      copied =
+        false;
     }
+
+    textarea.remove();
 
     return copied;
-  }
-
-  /* =====================================================
-     CAN NATIVE SHARE
-     ===================================================== */
-
-  function canNativeShare(
-    payload
-  ) {
-    if (
-      typeof navigator.share !==
-      "function"
-    ) {
-      return false;
-    }
-
-    if (
-      !payload?.text
-    ) {
-      return false;
-    }
-
-    if (
-      typeof navigator.canShare ===
-      "function"
-    ) {
-      try {
-        return navigator.canShare({
-          title:
-            payload.title,
-
-          text:
-            payload.text
-        });
-
-      } catch {}
-    }
-
-    return true;
   }
 
   /* =====================================================
      NATIVE SHARE
      ===================================================== */
 
-  async function nativeShare(
-    payload
-  ) {
+  function canNativeShare() {
+    return (
+      typeof navigator
+        .share ===
+      "function"
+    );
+  }
+
+  async function nativeShare({
+    title,
+    text
+  }) {
     if (
-      !canNativeShare(
-        payload
-      )
+      !canNativeShare()
     ) {
       return {
-        success:
+        supported:
           false,
 
-        unavailable:
-          true
+        shared:
+          false,
+
+        cancelled:
+          false
       };
     }
 
     try {
       await navigator.share({
         title:
-          payload.title ||
-          CONFIG.appName,
+          clean(
+            title,
+            200
+          ) ||
+          CONFIG.defaultTitle,
 
         text:
-          payload.text
+          clean(
+            text
+          )
       });
 
-      metrics.nativeShares +=
-        1;
-
-      metrics.lastSharedAt =
-        Date.now();
-
-      emit(
-        "neyo:shared",
-        {
-          type:
-            payload.type,
-
-          method:
-            "native",
-
-          messageId:
-            payload.messageId ||
-            null,
-
-          conversationId:
-            payload.conversationId ||
-            null
-        }
-      );
-
       return {
-        success:
+        supported:
           true,
 
-        method:
-          "native"
+        shared:
+          true,
+
+        cancelled:
+          false
       };
 
-    } catch (
-      error
-    ) {
+    } catch (error) {
+      /*
+       * AbortError means the user simply dismissed
+       * the system share sheet.
+       */
+
       if (
         error?.name ===
         "AbortError"
       ) {
-        metrics.cancelled +=
-          1;
-
-        emit(
-          "neyo:share-cancelled",
-          {
-            type:
-              payload.type
-          }
-        );
-
         return {
-          success:
+          supported:
+            true,
+
+          shared:
             false,
 
           cancelled:
@@ -1103,7 +704,13 @@ After neo.js removal this file continues unchanged.
       }
 
       return {
-        success:
+        supported:
+          true,
+
+        shared:
+          false,
+
+        cancelled:
           false,
 
         error
@@ -1112,836 +719,204 @@ After neo.js removal this file continues unchanged.
   }
 
   /* =====================================================
-     MODAL STYLE
+     SHARE CONTENT
 
-     Existing production HTML does not provide a dedicated
-     share modal. Create a small self-contained fallback
-     without requiring index.html changes.
+     Native first.
+     Clipboard only when native sharing is unavailable
+     or native sharing fails technically.
+
+     User-cancelled native share does NOT auto-copy.
      ===================================================== */
 
-  function ensureModalStyle() {
-    if (
-      document.getElementById(
-        CONFIG.modalStyleId
-      )
-    ) {
-      return;
-    }
-
-    const style =
-      document.createElement(
-        "style"
+  async function shareContent({
+    type,
+    title,
+    text,
+    messageId = null
+  }) {
+    const content =
+      clean(
+        text
       );
-
-    style.id =
-      CONFIG.modalStyleId;
-
-    style.textContent = `
-      .neyo-share-modal {
-        position: fixed;
-        inset: 0;
-        z-index: 10050;
-        display: none;
-        align-items: center;
-        justify-content: center;
-        padding: 18px;
-        background: rgba(0, 0, 0, .35);
-        backdrop-filter: blur(10px);
-      }
-
-      .neyo-share-modal.is-open {
-        display: flex;
-      }
-
-      .neyo-share-dialog {
-        width: min(520px, 100%);
-        max-height: min(680px, calc(100dvh - 36px));
-        overflow: hidden;
-        border-radius: 24px;
-        background: var(--surface, #fff);
-        color: var(--text-primary, #111);
-        border: 1px solid rgba(127, 127, 127, .18);
-        box-shadow:
-          0 30px 80px rgba(0, 0, 0, .20);
-        display: flex;
-        flex-direction: column;
-      }
-
-      .neyo-share-header {
-        min-height: 62px;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 12px;
-        padding: 14px 16px 14px 20px;
-        border-bottom: 1px solid rgba(127, 127, 127, .14);
-      }
-
-      .neyo-share-title {
-        margin: 0;
-        font-size: 16px;
-        font-weight: 650;
-      }
-
-      .neyo-share-close {
-        width: 36px;
-        height: 36px;
-        border: 0;
-        border-radius: 50%;
-        background: transparent;
-        color: inherit;
-        cursor: pointer;
-        display: grid;
-        place-items: center;
-      }
-
-      .neyo-share-close:hover {
-        background: rgba(127, 127, 127, .12);
-      }
-
-      .neyo-share-body {
-        padding: 16px 20px;
-        overflow: auto;
-      }
-
-      .neyo-share-preview {
-        width: 100%;
-        min-height: 150px;
-        max-height: 340px;
-        resize: none;
-        overflow: auto;
-        box-sizing: border-box;
-        border-radius: 16px;
-        border: 1px solid rgba(127, 127, 127, .18);
-        background: rgba(127, 127, 127, .06);
-        color: inherit;
-        padding: 14px;
-        font: inherit;
-        line-height: 1.5;
-        outline: none;
-      }
-
-      .neyo-share-footer {
-        display: flex;
-        justify-content: flex-end;
-        gap: 10px;
-        padding: 14px 20px 18px;
-      }
-
-      .neyo-share-action {
-        min-height: 40px;
-        padding: 0 16px;
-        border: 0;
-        border-radius: 999px;
-        cursor: pointer;
-        font: inherit;
-        font-weight: 600;
-      }
-
-      .neyo-share-copy {
-        background: rgba(127, 127, 127, .12);
-        color: inherit;
-      }
-
-      .neyo-share-native {
-        background: var(--accent, #111);
-        color: var(--accent-contrast, #fff);
-      }
-
-      .neyo-share-action:disabled {
-        opacity: .55;
-        cursor: default;
-      }
-
-      @media (prefers-reduced-motion: no-preference) {
-        .neyo-share-dialog {
-          animation:
-            neyoShareDialogIn 160ms ease-out;
-        }
-
-        @keyframes neyoShareDialogIn {
-          from {
-            opacity: 0;
-            transform: translateY(6px) scale(.985);
-          }
-
-          to {
-            opacity: 1;
-            transform: translateY(0) scale(1);
-          }
-        }
-      }
-    `;
-
-    document.head
-      .appendChild(
-        style
-      );
-  }
-
-  /* =====================================================
-     CREATE MODAL
-     ===================================================== */
-
-  function ensureModal() {
-    if (
-      modal &&
-      modal.isConnected
-    ) {
-      return modal;
-    }
-
-    ensureModalStyle();
-
-    modal =
-      document.createElement(
-        "div"
-      );
-
-    modal.id =
-      CONFIG.modalId;
-
-    modal.className =
-      "neyo-share-modal";
-
-    modal.setAttribute(
-      "aria-hidden",
-      "true"
-    );
-
-    modal.innerHTML = `
-      <div
-        class="neyo-share-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="neyoShareTitle"
-      >
-        <div class="neyo-share-header">
-          <h2
-            class="neyo-share-title"
-            id="neyoShareTitle"
-          >
-            Share
-          </h2>
-
-          <button
-            class="neyo-share-close"
-            type="button"
-            aria-label="Close share dialog"
-          >
-            <i
-              data-lucide="x"
-              size="18"
-              aria-hidden="true"
-            ></i>
-          </button>
-        </div>
-
-        <div class="neyo-share-body">
-          <textarea
-            class="neyo-share-preview"
-            readonly
-            aria-label="Content to share"
-          ></textarea>
-        </div>
-
-        <div class="neyo-share-footer">
-          <button
-            class="neyo-share-action neyo-share-copy"
-            type="button"
-          >
-            Copy
-          </button>
-
-          <button
-            class="neyo-share-action neyo-share-native"
-            type="button"
-          >
-            Share
-          </button>
-        </div>
-      </div>
-    `;
-
-    document.body
-      .appendChild(
-        modal
-      );
-
-    modalPanel =
-      modal.querySelector(
-        ".neyo-share-dialog"
-      );
-
-    modalTitle =
-      modal.querySelector(
-        ".neyo-share-title"
-      );
-
-    modalPreview =
-      modal.querySelector(
-        ".neyo-share-preview"
-      );
-
-    modalCopyButton =
-      modal.querySelector(
-        ".neyo-share-copy"
-      );
-
-    modalNativeButton =
-      modal.querySelector(
-        ".neyo-share-native"
-      );
-
-    modalCloseButton =
-      modal.querySelector(
-        ".neyo-share-close"
-      );
-
-    /* =================================================
-       CLOSE
-       ================================================= */
-
-    modalCloseButton
-      ?.addEventListener(
-        "click",
-        event => {
-          event.preventDefault();
-
-          closeModal();
-        }
-      );
-
-    /* =================================================
-       BACKDROP
-       ================================================= */
-
-    modal.addEventListener(
-      "pointerdown",
-      event => {
-        if (
-          event.target ===
-          modal
-        ) {
-          closeModal();
-        }
-      }
-    );
-
-    /* =================================================
-       COPY
-       ================================================= */
-
-    modalCopyButton
-      ?.addEventListener(
-        "click",
-        async event => {
-          event.preventDefault();
-
-          if (
-            !currentPayload
-          ) {
-            return;
-          }
-
-          const copied =
-            await copyText(
-              currentPayload.text
-            );
-
-          if (
-            copied
-          ) {
-            setCopyButtonFeedback(
-              true
-            );
-
-            emit(
-              "neyo:shared",
-              {
-                type:
-                  currentPayload.type,
-
-                method:
-                  "clipboard",
-
-                messageId:
-                  currentPayload
-                    .messageId ||
-                  null,
-
-                conversationId:
-                  currentPayload
-                    .conversationId ||
-                  null
-              }
-            );
-
-          } else {
-            setCopyButtonFeedback(
-              false
-            );
-          }
-        }
-      );
-
-    /* =================================================
-       NATIVE SHARE
-       ================================================= */
-
-    modalNativeButton
-      ?.addEventListener(
-        "click",
-        async event => {
-          event.preventDefault();
-
-          if (
-            !currentPayload
-          ) {
-            return;
-          }
-
-          const result =
-            await nativeShare(
-              currentPayload
-            );
-
-          if (
-            result.success
-          ) {
-            closeModal();
-          }
-        }
-      );
-
-    refreshIcons();
-
-    return modal;
-  }
-
-  /* =====================================================
-     COPY BUTTON FEEDBACK
-     ===================================================== */
-
-  function setCopyButtonFeedback(
-    success
-  ) {
-    if (
-      !modalCopyButton
-    ) {
-      return;
-    }
-
-    const original =
-      "Copy";
-
-    modalCopyButton
-      .textContent =
-      success
-        ? "Copied"
-        : "Copy failed";
-
-    modalCopyButton
-      .classList
-      .toggle(
-        "is-success",
-        success
-      );
-
-    modalCopyButton
-      .classList
-      .toggle(
-        "is-error",
-        !success
-      );
-
-    window.setTimeout(
-      () => {
-        if (
-          !modalCopyButton
-            ?.isConnected
-        ) {
-          return;
-        }
-
-        modalCopyButton
-          .textContent =
-          original;
-
-        modalCopyButton
-          .classList
-          .remove(
-            "is-success",
-            "is-error"
-          );
-      },
-      CONFIG.copyFeedbackMs
-    );
-  }
-
-  /* =====================================================
-     OPEN MODAL
-     ===================================================== */
-
-  function openModal(
-    payload
-  ) {
-    ensureModal();
 
     if (
-      !payload?.text
+      !content ||
+      state.active
     ) {
       return false;
     }
 
-    currentPayload =
-      cloneValue(
-        payload
-      );
-
-    previousFocus =
-      document.activeElement
-        instanceof
-        HTMLElement
-        ? document.activeElement
-        : null;
-
-    modalTitle.textContent =
-      payload.type ===
-        "conversation"
-        ? "Share conversation"
-        : "Share response";
-
-    modalPreview.value =
-      payload.text;
-
-    const nativeAvailable =
-      canNativeShare(
-        payload
-      );
-
-    modalNativeButton.hidden =
-      !nativeAvailable;
-
-    modal.classList.add(
-      "is-open"
-    );
-
-    modal.setAttribute(
-      "aria-hidden",
-      "false"
-    );
-
-    document.body
-      .classList
-      .add(
-        "neyo-share-open"
-      );
-
-    metrics.modalOpens +=
-      1;
-
-    requestAnimationFrame(
-      () => {
-        try {
-          (
-            nativeAvailable
-              ? modalNativeButton
-              : modalCopyButton
-          )
-            ?.focus({
-              preventScroll:
-                true
-            });
-
-        } catch {}
-      }
-    );
-
-    emit(
-      "neyo:share-modal-opened",
-      {
-        type:
-          payload.type
-      }
-    );
-
-    return true;
-  }
-
-  /* =====================================================
-     CLOSE MODAL
-     ===================================================== */
-
-  function closeModal({
-    restoreFocus =
-      true
-  } = {}) {
-    if (
-      !modal
-    ) {
-      return false;
-    }
-
-    modal.classList.remove(
-      "is-open"
-    );
-
-    modal.setAttribute(
-      "aria-hidden",
-      "true"
-    );
-
-    document.body
-      .classList
-      .remove(
-        "neyo-share-open"
-      );
-
-    currentPayload =
-      null;
-
-    if (
-      restoreFocus &&
-      previousFocus
-        ?.isConnected
-    ) {
-      requestAnimationFrame(
-        () => {
-          try {
-            previousFocus.focus({
-              preventScroll:
-                true
-            });
-
-          } catch {}
-        }
-      );
-    }
-
-    previousFocus =
-      null;
-
-    emit(
-      "neyo:share-modal-closed"
-    );
-
-    return true;
-  }
-
-  /* =====================================================
-     MODAL OPEN
-     ===================================================== */
-
-  function isModalOpen() {
-    return (
-      modal
-        ?.getAttribute(
-          "aria-hidden"
-        ) ===
-      "false"
-    );
-  }
-
-  /* =====================================================
-     DUPLICATE GUARD
-
-     Important because our current message-actions.js emits
-     neyo:message-share-request and then may also call
-     NeyoShare.shareMessage() directly.
-
-     These two paths must still produce only ONE share.
-     ===================================================== */
-
-  function isDuplicate(
-    payload
-  ) {
-    const now =
-      performance.now();
-
-    const key =
-      [
-        payload.type,
-        payload.messageId ||
-        payload.conversationId ||
-        "",
-        payload.text
-          ?.slice(
-            0,
-            80
-          )
-      ].join(":");
-
-    if (
-      key ===
-        lastShareKey &&
-      now -
-        lastShareAt <
-        CONFIG
-          .duplicateWindowMs
-    ) {
-      metrics
-        .duplicateBlocked +=
-        1;
-
-      return true;
-    }
-
-    lastShareKey =
-      key;
-
-    lastShareAt =
-      now;
-
-    return false;
-  }
-
-  /* =====================================================
-     PERFORM SHARE
-
-     Native is preferred.
-
-     If native unavailable, show fallback modal instead of
-     silently copying immediately. User remains in control.
-     ===================================================== */
-
-  async function performShare(
-    payload,
-    {
-      preferNative =
-        true,
-      allowModal =
-        true
-    } = {}
-  ) {
-    if (
-      !payload?.text
-    ) {
-      return false;
-    }
-
-    if (
-      isDuplicate(
-        payload
-      )
-    ) {
-      return false;
-    }
-
-    if (
-      shareInProgress
-    ) {
-      return false;
-    }
-
-    shareInProgress =
+    state.active =
       true;
+
+    state.lastType =
+      type;
+
+    state.lastMessageId =
+      messageId;
 
     emit(
       "neyo:share-start",
       {
-        type:
-          payload.type,
-
-        messageId:
-          payload.messageId ||
-          null,
-
-        conversationId:
-          payload.conversationId ||
-          null
+        type,
+        title,
+        messageId
       }
     );
 
     try {
-      if (
-        preferNative &&
-        canNativeShare(
-          payload
-        )
-      ) {
-        const result =
-          await nativeShare(
-            payload
-          );
+      const native =
+        await nativeShare({
+          title,
+          text:
+            content
+        });
 
-        if (
-          result.success
-        ) {
-          return true;
-        }
-
-        if (
-          result.cancelled
-        ) {
-          return false;
-        }
-      }
+      /* -----------------------------------------------
+         Native success
+         ----------------------------------------------- */
 
       if (
-        allowModal
+        native.shared
       ) {
-        return openModal(
-          payload
+        state.nativeShares +=
+          1;
+
+        emit(
+          "neyo:share-success",
+          {
+            type,
+
+            method:
+              "native",
+
+            messageId
+          }
         );
+
+        return true;
       }
+
+      /* -----------------------------------------------
+         User cancelled share sheet
+         ----------------------------------------------- */
+
+      if (
+        native.cancelled
+      ) {
+        state.cancelled +=
+          1;
+
+        emit(
+          "neyo:share-cancelled",
+          {
+            type,
+
+            method:
+              "native",
+
+            messageId
+          }
+        );
+
+        return false;
+      }
+
+      /* -----------------------------------------------
+         Clipboard fallback
+         ----------------------------------------------- */
 
       const copied =
-        await copyText(
-          payload.text
+        await writeClipboard(
+          content
         );
 
-      if (
-        copied
-      ) {
+      if (copied) {
+        state
+          .clipboardFallbacks +=
+          1;
+
         emit(
-          "neyo:shared",
+          "neyo:share-success",
           {
-            type:
-              payload.type,
+            type,
 
             method:
               "clipboard",
 
-            messageId:
-              payload.messageId ||
-              null,
-
-            conversationId:
-              payload.conversationId ||
-              null
+            messageId
           }
         );
+
+        emit(
+          "neyo:notification-request",
+          {
+            type:
+              "success",
+
+            message:
+              "Copied to clipboard"
+          }
+        );
+
+        return true;
       }
 
-      return copied;
+      /* -----------------------------------------------
+         Failure
+         ----------------------------------------------- */
 
-    } catch (
-      error
-    ) {
-      metrics.failures +=
+      state.failures +=
         1;
 
-      console.warn(
-        "[NEYO Share] Share failed:",
+      emit(
+        "neyo:share-error",
+        {
+          type,
+
+          messageId,
+
+          error:
+            native.error ||
+            null
+        }
+      );
+
+      emit(
+        "neyo:notification-request",
+        {
+          type:
+            "error",
+
+          message:
+            "Couldn't share this content."
+        }
+      );
+
+      return false;
+
+    } catch (error) {
+      state.failures +=
+        1;
+
+      console.error(
+        "[NEO Share] Failed:",
         error
       );
 
       emit(
         "neyo:share-error",
         {
-          error,
-
-          message:
-            error?.message ||
-            "Share failed."
+          type,
+          messageId,
+          error
         }
       );
 
       return false;
 
     } finally {
-      shareInProgress =
+      state.active =
         false;
     }
   }
@@ -1951,423 +926,274 @@ After neo.js removal this file continues unchanged.
      ===================================================== */
 
   async function shareMessage(
-    request = {}
+    messageId
   ) {
-    const payload =
-      normalizeMessageRequest(
-        request
-      );
-
-    if (!payload) {
-      return false;
-    }
-
-    metrics.messageShares +=
-      1;
-
-    return performShare(
-      payload,
-      {
-        preferNative:
-          request.preferNative !==
-          false,
-
-        allowModal:
-          request.allowModal !==
-          false
-      }
-    );
-  }
-
-  /* =====================================================
-     SHARE CURRENT CONVERSATION
-     ===================================================== */
-
-  async function shareCurrentConversation(
-    options = {}
-  ) {
-    const conversationId =
-      getCurrentConversationId();
-
-    const messages =
-      getCurrentConversation();
-
-    if (
-      messages.length ===
-      0
-    ) {
-      return false;
-    }
-
-    const title =
-      options.title ||
-      getConversationTitle(
-        conversationId
-      );
-
-    const text =
-      formatConversation(
-        messages,
-        {
-          title
-        }
-      );
-
-    if (!text) {
-      return false;
-    }
-
-    const payload = {
-      type:
-        "conversation",
-
-      conversationId:
-        conversationId ||
-        null,
-
-      title,
-
-      text,
-
-      messages
-    };
-
-    metrics
-      .conversationShares +=
-      1;
-
-    return performShare(
-      payload,
-      options
-    );
-  }
-
-  /* =====================================================
-     SHARE HISTORY CONVERSATION
-     ===================================================== */
-
-  async function shareConversation(
-    request = {}
-  ) {
-    const conversationId =
+    const id =
       cleanId(
-        request.conversationId ||
-        request.id
+        messageId
       );
 
-    /*
-     * No supplied ID = current conversation.
-     */
-
-    if (
-      !conversationId
-    ) {
-      return shareCurrentConversation(
-        request
-      );
+    if (!id) {
+      return false;
     }
 
-    const loaded =
-      await getHistoryConversation(
-        conversationId
+    const message =
+      getMessage(
+        id
       );
 
-    if (
-      !loaded ||
-      !Array.isArray(
-        loaded.messages
-      ) ||
-      loaded.messages.length ===
-        0
-    ) {
+    if (!message) {
       emit(
         "neyo:share-error",
         {
-          conversationId,
+          type:
+            "message",
 
-          message:
-            "Conversation could not be loaded."
+          messageId:
+            id,
+
+          reason:
+            "message-not-found"
         }
       );
 
+      return false;
+    }
+
+    const content =
+      formatMessage(
+        message
+      );
+
+    if (!content) {
+      return false;
+    }
+
+    return shareContent({
+      type:
+        "message",
+
+      title:
+        message.role ===
+          "assistant"
+          ? "NEO Response"
+          : "NEO Message",
+
+      text:
+        content,
+
+      messageId:
+        id
+    });
+  }
+
+  /* =====================================================
+     COPY MESSAGE SHARE TEXT
+     ===================================================== */
+
+  async function copyMessage(
+    messageId
+  ) {
+    const id =
+      cleanId(
+        messageId
+      );
+
+    const message =
+      getMessage(
+        id
+      );
+
+    if (!message) {
+      return false;
+    }
+
+    const content =
+      formatMessage(
+        message
+      );
+
+    const copied =
+      await writeClipboard(
+        content
+      );
+
+    if (copied) {
+      emit(
+        "neyo:share-copied",
+        {
+          type:
+            "message",
+
+          messageId:
+            id
+        }
+      );
+    }
+
+    return copied;
+  }
+
+  /* =====================================================
+     SHARE CONVERSATION
+
+     This shares readable text only.
+     It does NOT create a public URL.
+     ===================================================== */
+
+  async function shareConversation(
+    options = {}
+  ) {
+    const messages =
+      Array.isArray(
+        options.messages
+      )
+        ? options.messages
+        : getConversation();
+
+    if (!messages.length) {
+      return false;
+    }
+
+    const content =
+      formatConversation(
+        messages
+      );
+
+    if (!content) {
       return false;
     }
 
     const title =
-      cleanText(
-        request.title ||
-        loaded.title ||
-        getConversationTitle(
-          conversationId
-        ) ||
-        "NEYO conversation",
-        120
-      ).trim();
-
-    const text =
-      formatConversation(
-        loaded.messages,
-        {
-          title
-        }
+      clean(
+        options.title,
+        200
+      ) ||
+      deriveConversationTitle(
+        messages
       );
 
-    if (!text) {
-      return false;
-    }
-
-    const payload = {
+    return shareContent({
       type:
         "conversation",
 
-      conversationId,
-
       title,
 
-      text,
-
-      messages:
-        cloneValue(
-          loaded.messages
-        )
-    };
-
-    metrics
-      .conversationShares +=
-      1;
-
-    return performShare(
-      payload,
-      {
-        preferNative:
-          request.preferNative !==
-          false,
-
-        allowModal:
-          request.allowModal !==
-          false
-      }
-    );
+      text:
+        content
+    });
   }
 
   /* =====================================================
-     MESSAGE SHARE EVENT
+     COPY CONVERSATION
+     ===================================================== */
 
-     Mark event detail handled synchronously for future
-     callers that inspect it.
+  async function copyConversation(
+    options = {}
+  ) {
+    const messages =
+      Array.isArray(
+        options.messages
+      )
+        ? options.messages
+        : getConversation();
 
-     Duplicate guard protects current message-actions.js
-     which also calls the direct API.
+    const content =
+      formatConversation(
+        messages
+      );
+
+    if (!content) {
+      return false;
+    }
+
+    const copied =
+      await writeClipboard(
+        content
+      );
+
+    if (copied) {
+      emit(
+        "neyo:share-copied",
+        {
+          type:
+            "conversation"
+        }
+      );
+    }
+
+    return copied;
+  }
+
+  /* =====================================================
+     MESSAGE ACTION EVENT
+
+     message-actions.js emits this.
      ===================================================== */
 
   window.addEventListener(
     "neyo:message-share-request",
     event => {
-      const detail =
-        event.detail ||
-        {};
+      const id =
+        event.detail?.id ||
+        event.detail
+          ?.message
+          ?.id;
 
-      detail.handled =
-        true;
-
-      void shareMessage(
-        detail
-      );
+      if (id) {
+        void shareMessage(
+          id
+        );
+      }
     }
   );
 
   /* =====================================================
      CONVERSATION SHARE EVENT
+
+     history-menu.js may use this later.
      ===================================================== */
 
   window.addEventListener(
     "neyo:conversation-share-request",
     event => {
-      const detail =
-        event.detail ||
-        {};
-
-      detail.handled =
-        true;
-
       void shareConversation(
-        detail
+        event.detail ||
+        {}
       );
     }
   );
 
   /* =====================================================
-     HISTORY SHARE COMPATIBILITY
+     LEGACY COMPATIBILITY
      ===================================================== */
 
   window.addEventListener(
-    "neyo:history-share-request",
+    "neyo:share-message-request",
     event => {
-      const detail =
-        event.detail ||
-        {};
+      const id =
+        event.detail
+          ?.messageId ||
+        event.detail
+          ?.id;
 
-      detail.handled =
-        true;
-
-      void shareConversation(
-        detail
-      );
-    }
-  );
-
-  /* =====================================================
-     GENERIC SHARE EVENT
-     ===================================================== */
-
-  window.addEventListener(
-    "neyo:share-request",
-    event => {
-      const detail =
-        event.detail ||
-        {};
-
-      if (
-        detail.type ===
-        "conversation"
-      ) {
-        void shareConversation(
-          detail
+      if (id) {
+        void shareMessage(
+          id
         );
-
-        return;
       }
+    }
+  );
 
-      void shareMessage(
-        detail
+  window.addEventListener(
+    "neyo:share-conversation-request",
+    event => {
+      void shareConversation(
+        event.detail ||
+        {}
       );
     }
   );
-
-  /* =====================================================
-     KEYBOARD
-
-     Escape closes modal.
-     Tab stays within modal.
-     ===================================================== */
-
-  document.addEventListener(
-    "keydown",
-    event => {
-      if (
-        !isModalOpen()
-      ) {
-        return;
-      }
-
-      if (
-        event.key ===
-        "Escape"
-      ) {
-        event.preventDefault();
-
-        closeModal();
-
-        return;
-      }
-
-      if (
-        event.key !==
-        "Tab"
-      ) {
-        return;
-      }
-
-      const focusables =
-        Array
-          .from(
-            modalPanel
-              ?.querySelectorAll(
-                [
-                  "button:not([disabled]):not([hidden])",
-                  "textarea:not([disabled])",
-                  '[tabindex]:not([tabindex="-1"])'
-                ].join(",")
-              ) ||
-            []
-          )
-          .filter(
-            element =>
-              element instanceof
-                HTMLElement &&
-              !element.hidden
-          );
-
-      if (
-        focusables.length ===
-        0
-      ) {
-        event.preventDefault();
-
-        return;
-      }
-
-      const first =
-        focusables[0];
-
-      const last =
-        focusables[
-          focusables.length -
-          1
-        ];
-
-      if (
-        event.shiftKey &&
-        document.activeElement ===
-          first
-      ) {
-        event.preventDefault();
-
-        last.focus();
-
-        return;
-      }
-
-      if (
-        !event.shiftKey &&
-        document.activeElement ===
-          last
-      ) {
-        event.preventDefault();
-
-        first.focus();
-      }
-    }
-  );
-
-  /* =====================================================
-     CONVERSATION SWITCH
-
-     A share preview from previous conversation should not
-     remain open after navigation.
-     ===================================================== */
-
-  for (
-    const eventName
-    of [
-      "neyo:chat-new",
-      "neyo:chat-state-loaded"
-    ]
-  ) {
-    window.addEventListener(
-      eventName,
-      () => {
-        if (
-          isModalOpen()
-        ) {
-          closeModal({
-            restoreFocus:
-              false
-          });
-        }
-      }
-    );
-  }
 
   /* =====================================================
      PUBLIC API
@@ -2375,8 +1201,7 @@ After neo.js removal this file continues unchanged.
 
   const api =
     Object.freeze({
-      __controller:
-        true,
+      __controller: true,
 
       version:
         VERSION,
@@ -2384,82 +1209,23 @@ After neo.js removal this file continues unchanged.
       active:
         true,
 
-      legacyScriptPresent,
-
-      legacyOwnerActive:
-        false,
-
-      /*
-       * Message
-       */
-
       shareMessage,
-
-      /*
-       * Conversation
-       */
 
       shareConversation,
 
-      shareCurrentConversation,
+      copyMessage,
 
-      /*
-       * Generic compatibility alias
-       */
-
-      open(
-        request = {}
-      ) {
-        if (
-          request.type ===
-            "conversation" ||
-          request.conversationId
-        ) {
-          return shareConversation(
-            request
-          );
-        }
-
-        return shareMessage(
-          request
-        );
-      },
-
-      /*
-       * Modal
-       */
-
-      openModal,
-
-      close:
-        closeModal,
-
-      closeModal,
-
-      isOpen:
-        isModalOpen,
-
-      /*
-       * Clipboard / native
-       */
-
-      copyText,
-
-      nativeShare,
-
-      canNativeShare,
-
-      /*
-       * Formatting
-       */
+      copyConversation,
 
       formatMessage,
 
       formatConversation,
 
-      /*
-       * State
-       */
+      canNativeShare,
+
+      isSharing() {
+        return state.active;
+      },
 
       getState() {
         return {
@@ -2469,28 +1235,31 @@ After neo.js removal this file continues unchanged.
           active:
             true,
 
-          legacyScriptPresent,
+          sharing:
+            state.active,
 
-          legacyOwnerActive:
-            false,
+          nativeShareSupported:
+            canNativeShare(),
 
-          modalOpen:
-            isModalOpen(),
+          lastType:
+            state.lastType,
 
-          shareInProgress,
-
-          currentType:
-            currentPayload
-              ?.type ||
-            null,
-
-          nativeShareAvailable:
-            typeof navigator
-              .share ===
-            "function",
+          lastMessageId:
+            state.lastMessageId,
 
           metrics: {
-            ...metrics
+            nativeShares:
+              state.nativeShares,
+
+            clipboardFallbacks:
+              state
+                .clipboardFallbacks,
+
+            cancelled:
+              state.cancelled,
+
+            failures:
+              state.failures
           }
         };
       }
@@ -2527,25 +1296,10 @@ After neo.js removal this file continues unchanged.
       active:
         true,
 
-      nativeShare:
-        typeof navigator
-          .share ===
-        "function",
+      nativeShareSupported:
+        canNativeShare(),
 
-      clipboard:
-        Boolean(
-          navigator.clipboard
-        ),
-
-      conversationShare:
-        true,
-
-      fallbackModal:
-        true,
-
-      legacyScriptPresent,
-
-      legacyOwnerActive:
+      publicLinkSharing:
         false
     }
   );

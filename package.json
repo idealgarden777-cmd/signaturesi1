@@ -1,22 +1,36 @@
 {
-  "name": "signaturesi-neyo",
-  "version": "1.0.0",
+  "name": "signaturesi-neyo-beta",
+  "version": "2.0.0-beta.1",
   "private": true,
   "type": "module",
+  "description": "Neyo Beta — clean rewrite of the Signaturesi Neyo experience.",
+
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "check": "npm run check:syntax && npm run build",
+    "check:syntax": "node scripts/check-syntax.js",
+    "test": "node --test",
+    "test:smoke": "node --test tests/smoke/*.test.js"
   },
+
   "dependencies": {
     "@google/genai": "^1.27.0",
     "@supabase/supabase-js": "^2.57.4",
+    "dompurify": "^3.2.6",
     "jszip": "^3.10.1",
-    "mammoth": "^1.9.1",
-    "pdf-parse": "1.1.1",
+    "mammoth": "^1.10.0",
+    "marked": "^16.2.1",
+    "pdf-parse": "^1.1.1",
     "xlsx": "^0.18.5"
   },
+
   "devDependencies": {
     "vite": "^7.0.0"
+  },
+
+  "engines": {
+    "node": ">=20"
   }
 }

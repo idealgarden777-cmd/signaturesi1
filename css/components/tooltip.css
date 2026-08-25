@@ -65,6 +65,12 @@ Purpose:
     white-space:
         normal;
 
+    overflow-wrap:
+        anywhere;
+
+    word-break:
+        normal;
+
     text-align:
         center;
 
@@ -218,19 +224,6 @@ body.dark-mode
 
 
 /* =========================================================
-   LONG TEXT SAFETY
-   ========================================================= */
-
-.neo-tooltip {
-    overflow-wrap:
-        anywhere;
-
-    word-break:
-        normal;
-}
-
-
-/* =========================================================
    SMALL SCREENS
    ========================================================= */
 
@@ -267,25 +260,6 @@ body.dark-mode
 
     .neo-tooltip {
         display:
-            none !important;
-    }
-
-}
-
-
-/* =========================================================
-   REDUCED MOTION
-   ========================================================= */
-
-@media (
-    prefers-reduced-motion: reduce
-) {
-
-    .neo-tooltip {
-        transition:
-            opacity 80ms linear;
-
-        transform:
             none !important;
     }
 

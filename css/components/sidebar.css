@@ -18,9 +18,7 @@
    10 Dark Mode
    11 Density
    12 Mobile Drawer
-   13 Reduced Motion
 
-   Legacy neo-v3.css remains disabled during migration.
    ========================================================= */
 
 
@@ -595,24 +593,6 @@ body[data-neyo-sidebar-density="comfortable"] .history-item {
    ========================================================= */
 
 @media (max-width: 767px) {
-    :root {
-        --mobile-drawer-width: min(82vw, 292px);
-        --mobile-bg: #ffffff;
-        --mobile-surface: #ffffff;
-        --mobile-soft: #f4f4f4;
-        --mobile-border: rgba(0, 0, 0, 0.09);
-        --mobile-text: #171717;
-        --mobile-muted: #737373;
-    }
-
-    body.dark-mode {
-        --mobile-bg: #000000;
-        --mobile-surface: #171717;
-        --mobile-soft: #212121;
-        --mobile-border: rgba(255, 255, 255, 0.10);
-        --mobile-text: #f5f5f5;
-        --mobile-muted: rgba(255, 255, 255, 0.58);
-    }
 
     /* Drawer */
     .sidebar {
@@ -779,28 +759,6 @@ body[data-neyo-sidebar-density="comfortable"] .history-item {
 
 
 /* =========================================================
-   13 — REDUCED MOTION
-   ========================================================= */
-
-@media (prefers-reduced-motion: reduce) {
-    .sidebar,
-    .sidebar-scrim,
-    .history-item,
-    .new-chat-btn,
-    .sidebar-personality-btn,
-    .user-profile-btn,
-    .history-item-actions,
-    .history-action-btn {
-        transition-duration: 0.01ms !important;
-    }
-
-    .history-skeleton-line {
-        animation: none !important;
-    }
-}
-
-
-/* =========================================================
    SIDEBAR CONTENT SCROLLBAR
    ========================================================= */
 
@@ -845,98 +803,8 @@ body.dark-mode .sidebar-content::-webkit-scrollbar-thumb:hover {
     border: 2px solid transparent;
     background-clip: padding-box;
 }
-/* =========================================================
-   NEYO SIDEBAR — ZERO SHIFT / ZERO ZOOM INTERACTIONS
-   ========================================================= */
-
-.sidebar .brand-button,
-.sidebar .icon-btn,
-.sidebar .new-chat-btn,
-.sidebar .sidebar-personality-btn,
-.sidebar .history-item,
-.sidebar .history-three-dot,
-.sidebar .user-profile-btn,
-.sidebar .popup-item {
-    transform: none !important;
-    scale: 1 !important;
-
-    margin-top: 0 !important;
-    margin-bottom: 0 !important;
-
-    translate: none !important;
-
-    box-sizing: border-box !important;
-
-    vertical-align: middle !important;
-
-    transition:
-        background-color 140ms ease,
-        color 140ms ease,
-        opacity 140ms ease,
-        border-color 140ms ease !important;
-}
 
 
-/* Never move on hover / focus / click */
-.sidebar .brand-button:hover,
-.sidebar .brand-button:focus,
-.sidebar .brand-button:active,
-
-.sidebar .icon-btn:hover,
-.sidebar .icon-btn:focus,
-.sidebar .icon-btn:active,
-
-.sidebar .new-chat-btn:hover,
-.sidebar .new-chat-btn:focus,
-.sidebar .new-chat-btn:active,
-
-.sidebar .sidebar-personality-btn:hover,
-.sidebar .sidebar-personality-btn:focus,
-.sidebar .sidebar-personality-btn:active,
-
-.sidebar .history-item:hover,
-.sidebar .history-item:focus,
-.sidebar .history-item:active,
-
-.sidebar .history-three-dot:hover,
-.sidebar .history-three-dot:focus,
-.sidebar .history-three-dot:active,
-
-.sidebar .user-profile-btn:hover,
-.sidebar .user-profile-btn:focus,
-.sidebar .user-profile-btn:active,
-
-.sidebar .popup-item:hover,
-.sidebar .popup-item:focus,
-.sidebar .popup-item:active {
-    transform: none !important;
-    scale: 1 !important;
-    translate: none !important;
-
-    margin-top: 0 !important;
-    margin-bottom: 0 !important;
-}
-
-
-/* Lock icon position too */
-.sidebar button svg,
-.sidebar button i,
-.sidebar .history-three-dot svg,
-.sidebar .history-three-dot i,
-.sidebar .popup-item svg,
-.sidebar .popup-item i {
-    transform: none !important;
-    translate: none !important;
-}
-
-
-/* Prevent active press animation */
-.sidebar button:active,
-.sidebar .history-three-dot:active,
-.sidebar .popup-item:active {
-    top: auto !important;
-    bottom: auto !important;
-}
 /* =========================================================
    SIDEBAR — LOCK BUTTON POSITION
    NO VERTICAL JUMP / NO PRESS SHIFT / NO SCALE
@@ -1011,5 +879,6 @@ body.dark-mode .sidebar-content::-webkit-scrollbar-thumb:hover {
     transition:
         background-color 140ms ease,
         color 140ms ease,
-        opacity 140ms ease !important;
+        opacity 140ms ease,
+        border-color 140ms ease !important;
 }

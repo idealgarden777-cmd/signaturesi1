@@ -13,9 +13,6 @@ Includes:
 - Dark mode
 - Mobile sticky header
 - Safe-area support
-- Reduced motion
-
-Legacy neo-v3.css remains loaded during migration.
 =========================================================
 */
 
@@ -34,7 +31,7 @@ Legacy neo-v3.css remains loaded during migration.
     flex: 0 0 auto;
 
     background:
-        var(--bg-main, #ffffff);
+        var(--neyo-bg, #ffffff);
 
     border-bottom:
         1px solid rgba(0, 0, 0, 0.06);
@@ -144,7 +141,7 @@ Legacy neo-v3.css remains loaded during migration.
 
 body.dark-mode .top-bar {
     background:
-        var(--bg-main, #212121);
+        var(--neyo-bg, #171717);
 
     border-bottom-color:
         rgba(255, 255, 255, 0.06);
@@ -160,7 +157,7 @@ body.dark-mode
 body.dark-mode
 .top-bar .icon-btn:hover,
 body.dark-mode
-.model-badge:hover {
+.top-bar .model-badge:hover {
     background:
         rgba(255, 255, 255, 0.06) !important;
 }
@@ -171,11 +168,6 @@ body.dark-mode
    ========================================================= */
 
 @media (min-width: 768px) {
-
-    :root {
-        --neo-topbar-height: 56px;
-    }
-
 
     .top-bar {
         height:
@@ -188,7 +180,7 @@ body.dark-mode
             0
             28px
             0
-            24px !important;
+            37px !important;
     }
 
 
@@ -247,8 +239,7 @@ body.dark-mode
     #sidebarToggleBtn:hover,
     #topBarDarkModeToggle:hover {
         background:
-            rgba(0, 0, 0, 0.055)
-            !important;
+            rgba(0, 0, 0, 0.055) !important;
     }
 
 
@@ -259,8 +250,21 @@ body.dark-mode
     body.dark-mode
     .model-badge:hover {
         background:
-            rgba(255, 255, 255, 0.06)
-            !important;
+            rgba(255, 255, 255, 0.06) !important;
+    }
+
+
+    body:not(.sidebar-collapsed)
+    #sidebarToggleBtn {
+        display:
+            none !important;
+    }
+
+
+    body.sidebar-collapsed
+    #sidebarToggleBtn {
+        display:
+            inline-flex !important;
     }
 
 }
@@ -455,46 +459,4 @@ body.dark-mode
             !important;
     }
 
-}
-
-
-/* =========================================================
-   REDUCED MOTION
-   ========================================================= */
-
-@media (prefers-reduced-motion: reduce) {
-
-    .top-bar,
-    .top-bar .icon-btn,
-    .top-bar .model-badge {
-        transition-duration:
-            0.01ms !important;
-    }
-
-}
-/* =========================================================
-   DESKTOP SIDEBAR TOGGLE VISIBILITY
-   ========================================================= */
-
-@media (min-width: 768px) {
-
-    body:not(.sidebar-collapsed)
-    #sidebarToggleBtn {
-        display: none !important;
-    }
-
-    body.sidebar-collapsed
-    #sidebarToggleBtn {
-        display: inline-flex !important;
-    }
-
-}
-/* =========================================================
-   DESKTOP TOPBAR — LEFT EDGE BREATHING
-   ========================================================= */
-
-@media (min-width: 768px) {
-    .top-bar {
-        padding-left: 37px !important;
-    }
 }

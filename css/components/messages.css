@@ -14,8 +14,6 @@ Includes:
 - Dark mode
 - Mobile behavior
 - Appearance text sizing
-
-Legacy neo-v3.css remains loaded during migration.
 =========================================================
 */
 
@@ -698,18 +696,4 @@ body[data-neyo-text-size="large"]
         max-width: 92% !important;
     }
 
-}
-
-
-/* =========================================================
-   REDUCED MOTION
-   ========================================================= */
-
-@media (prefers-reduced-motion: reduce) {
-
-    .message.user .edit-btn-cancel,
-    .message.user .edit-btn-save {
-        transition-duration:
-            0.01ms !important;
-    }
 }

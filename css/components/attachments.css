@@ -39,10 +39,12 @@ Goals:
         rgba(0, 0, 0, 0.055);
 
     --attachment-text:
-        var(--text-primary, #1d1d1f);
+        var(--neyo-text, #1d1d1f);
 
     --attachment-muted:
-        var(--text-secondary, #6e6e73);
+        var(--neyo-text-secondary, #6e6e73);
+
+    position: relative;
 }
 
 
@@ -187,11 +189,6 @@ Goals:
 /* =====================================================
    4. DRAG OVERLAY
    ===================================================== */
-
-#composerWrapper {
-    position: relative;
-}
-
 
 .drag-drop-overlay {
     position: absolute;
@@ -1329,29 +1326,5 @@ body.dark-mode
 
         -webkit-tap-highlight-color:
             transparent;
-    }
-}
-
-
-/* =====================================================
-   29. REDUCED MOTION
-   ===================================================== */
-
-@media (prefers-reduced-motion: reduce) {
-
-    .attachment-popup-item,
-
-    .attachment-chip,
-
-    .attachment-chip-remove,
-
-    .attachment-chip-retry,
-
-    .attachment-chip-progress span,
-
-    .drag-drop-overlay {
-
-        transition:
-            none !important;
     }
 }

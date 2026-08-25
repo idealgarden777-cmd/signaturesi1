@@ -14,9 +14,6 @@ Includes:
 - Mobile layout
 - Keyboard-height safety
 - Interface backgrounds
-- Reduced motion
-
-Legacy neo-v3.css remains loaded during migration.
 =========================================================
 */
 
@@ -72,7 +69,7 @@ Legacy neo-v3.css remains loaded during migration.
 .conversation-column {
     width: 100%;
 
-    max-width: 760px;
+    max-width: var(--neyo-content-balanced);
 
     min-width: 0;
 
@@ -100,19 +97,19 @@ Legacy neo-v3.css remains loaded during migration.
 
 body[data-neyo-content-width="compact"]
 .conversation-column {
-    max-width: 640px !important;
+    max-width: var(--neyo-content-compact) !important;
 }
 
 
 body[data-neyo-content-width="balanced"]
 .conversation-column {
-    max-width: 760px !important;
+    max-width: var(--neyo-content-balanced) !important;
 }
 
 
 body[data-neyo-content-width="wide"]
 .conversation-column {
-    max-width: 900px !important;
+    max-width: var(--neyo-content-wide) !important;
 }
 /* =========================================================
    INTERFACE BACKGROUNDS
@@ -342,41 +339,6 @@ body.dark-mode
 
         scroll-padding-bottom:
             92px !important;
-    }
-
-}
-
-
-/* =========================================================
-   MOTION SETTING
-   ========================================================= */
-
-body[data-neyo-motion="reduced"] *,
-body[data-neyo-motion="reduced"] *::before,
-body[data-neyo-motion="reduced"] *::after {
-    scroll-behavior:
-        auto !important;
-
-    transition-duration:
-        0.01ms !important;
-
-    animation-duration:
-        0.01ms !important;
-}
-
-
-/* =========================================================
-   REDUCED MOTION
-   ========================================================= */
-
-@media (prefers-reduced-motion: reduce) {
-
-    .app-shell,
-    .scroll-area,
-    .conversation-column,
-    .chat-messages {
-        scroll-behavior:
-            auto !important;
     }
 
 }

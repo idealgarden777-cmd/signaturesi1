@@ -12,7 +12,6 @@ Includes:
 - Dark mode
 - Mobile horizontal scrolling
 - Small-height keyboard behavior
-- Reduced motion
 =========================================================
 */
 
@@ -224,12 +223,6 @@ body.dark-mode
     }
 
 
-    .live-suggestions:empty {
-        display:
-            none !important;
-    }
-
-
     .live-suggestions::-webkit-scrollbar {
         display:
             none;
@@ -269,7 +262,7 @@ body.dark-mode
         white-space:
             nowrap !important;
     }
-} 
+}
 /* =========================================================
    MOBILE KEYBOARD / SHORT HEIGHT
    ========================================================= */
@@ -284,31 +277,4 @@ and
             none !important;
     }
 
-}
-
-
-/* =========================================================
-   REDUCED MOTION
-   ========================================================= */
-
-@media (prefers-reduced-motion: reduce) {
-
-    .suggestion-chip {
-        transition-duration:
-            0.01ms !important;
-
-        transform:
-            none !important;
-    }
-
-}
-
-
-body[data-neyo-motion="reduced"]
-.suggestion-chip {
-    transition-duration:
-        0.01ms !important;
-
-    transform:
-        none !important;
 }

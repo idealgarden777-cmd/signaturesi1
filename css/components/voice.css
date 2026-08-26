@@ -17,7 +17,6 @@ GOALS
 - Stable composer geometry
 - Desktop / tablet / mobile safe
 - Dark mode
-- Reduced motion
 - No conflict with composer-scrollbar.css
 =========================================================
 */
@@ -35,10 +34,6 @@ GOALS
 
     --voice-bar-idle-height: 3px;
     --voice-bar-max-height: 24px;
-
-    --voice-stop-size: 36px;
-
-    --voice-edge-x: 10px;
 
     --voice-muted-opacity: 0.34;
     --voice-active-opacity: 0.92;
@@ -159,7 +154,7 @@ textarea#chatInput {
     overflow: hidden;
 
     color:
-        var(--text-primary);
+        var(--neyo-text, #171717);
 
     box-sizing: border-box;
 
@@ -219,7 +214,7 @@ textarea#chatInput {
 #glassInputContainer
 .wave-dots-bar.is-speaking {
     color:
-        var(--text-primary);
+        var(--neyo-text, #171717);
 }
 
 
@@ -295,7 +290,7 @@ textarea#chatInput {
         rgba(0, 0, 0, 0.055);
 
     color:
-        var(--text-primary);
+        var(--neyo-text, #171717);
 
     cursor: pointer;
 
@@ -414,35 +409,6 @@ textarea#chatInput {
 
 
 /* =========================================================
-   11. DO NOT MOVE COMPOSER CONTROLS
-   Voice UI must respect fixed composer geometry.
-   ========================================================= */
-
-#glassInputContainer
-.composer-input-row.is-transcribing
-#sendBtn {
-    position: absolute !important;
-
-    top: 50% !important;
-    bottom: auto !important;
-
-    right: 8px !important;
-
-    transform:
-        translateY(-50%) !important;
-}
-
-
-/* Voice container reserves send space */
-
-#glassInputContainer
-.composer-input-row.is-transcribing
-.voice-transcribe-container {
-    padding-right: 54px;
-}
-
-
-/* =========================================================
    12. COMPACT / DEFAULT COMPOSER
    Exact vertical centering.
    ========================================================= */
@@ -543,8 +509,6 @@ body.dark-mode
         --voice-height: 40px;
 
         --voice-bar-gap: 2.8px;
-
-        --voice-stop-size: 36px;
     }
 
 }
@@ -563,8 +527,6 @@ body.dark-mode
         --voice-bar-gap: 2.5px;
 
         --voice-bar-max-height: 22px;
-
-        --voice-stop-size: 34px;
     }
 
 
@@ -601,13 +563,6 @@ body.dark-mode
 
     #glassInputContainer
     .composer-input-row.is-transcribing
-    #sendBtn {
-        right: 7px !important;
-    }
-
-
-    #glassInputContainer
-    .composer-input-row.is-transcribing
     .voice-transcribe-container::before {
         width: 5px;
         height: 5px;
@@ -627,8 +582,6 @@ body.dark-mode
     #glassInputContainer {
         --voice-bar-width: 2.5px;
         --voice-bar-gap: 2px;
-
-        --voice-stop-size: 32px;
     }
 
 
@@ -653,8 +606,6 @@ body.dark-mode
 
     #glassInputContainer {
         --voice-height: 36px;
-
-        --voice-stop-size: 32px;
 
         --voice-bar-max-height: 20px;
     }
@@ -684,69 +635,8 @@ body.dark-mode
 
 
 /* =========================================================
-   20. REDUCED MOTION
-   Real microphone updates remain functional,
-   decorative pulse is removed.
-   ========================================================= */
-
-@media (prefers-reduced-motion: reduce) {
-
-    #glassInputContainer
-    .composer-input-row.is-transcribing
-    .voice-transcribe-container::before {
-        animation: none;
-    }
-
-
-    #glassInputContainer
-    .wave-dots-bar span {
-        transition:
-            opacity 80ms ease !important;
-    }
-
-
-    #glassInputContainer
-    .stop-recording-btn {
-        transition:
-            background-color 120ms ease,
-            color 120ms ease !important;
-    }
-
-}
-
-
-/* =========================================================
    FIX — STOP BUTTON MUST SHOW DURING TRANSCRIPTION
    ========================================================= */
-
-#glassInputContainer
-.composer-input-row.is-transcribing
-#stopRecBtn {
-    display: inline-flex !important;
-
-    visibility: visible !important;
-    opacity: 1 !important;
-
-    pointer-events: auto !important;
-
-    position: relative !important;
-
-    width: var(--voice-stop-size) !important;
-    height: var(--voice-stop-size) !important;
-
-    min-width: var(--voice-stop-size) !important;
-    min-height: var(--voice-stop-size) !important;
-
-    max-width: var(--voice-stop-size) !important;
-    max-height: var(--voice-stop-size) !important;
-
-    flex: 0 0 var(--voice-stop-size) !important;
-
-    margin: 0 !important;
-
-    z-index: 40 !important;
-}
-
 
 /* Normal state = stop button hidden */
 
@@ -777,268 +667,6 @@ body.dark-mode
 }
 
 
-/* =========================================================
-   NEYO — TRANSCRIBE RIGHT-SIDE CONTROL FIX
-   Stop button sits BEFORE send, never underneath it.
-   ========================================================= */
-
-#glassInputContainer {
-    --voice-send-right: 8px;
-    --voice-send-size: 40px;
-
-    --voice-stop-size: 34px;
-    --voice-right-gap: 8px;
-}
-
-
-/* ---------------------------------------------------------
-   SEND — fixed right anchor
-   --------------------------------------------------------- */
-
-#glassInputContainer
-.composer-input-row.is-transcribing
-#sendBtn {
-    position: absolute !important;
-
-    top: 50% !important;
-    bottom: auto !important;
-
-    right:
-        var(--voice-send-right) !important;
-
-    left: auto !important;
-
-    transform:
-        translateY(-50%) !important;
-
-    z-index: 40 !important;
-}
-
-
-/* ---------------------------------------------------------
-   STOP — fixed immediately before send
-   --------------------------------------------------------- */
-
-#glassInputContainer
-.composer-input-row.is-transcribing
-#stopRecBtn {
-    display: inline-flex !important;
-
-    position: absolute !important;
-
-    top: 50% !important;
-    bottom: auto !important;
-
-    right:
-        calc(
-            var(--voice-send-right) +
-            var(--voice-send-size) +
-            var(--voice-right-gap)
-        ) !important;
-
-    left: auto !important;
-
-    width:
-        var(--voice-stop-size) !important;
-
-    height:
-        var(--voice-stop-size) !important;
-
-    min-width:
-        var(--voice-stop-size) !important;
-
-    min-height:
-        var(--voice-stop-size) !important;
-
-    max-width:
-        var(--voice-stop-size) !important;
-
-    max-height:
-        var(--voice-stop-size) !important;
-
-    margin: 0 !important;
-    padding: 0 !important;
-
-    transform:
-        translateY(-50%) !important;
-
-    visibility: visible !important;
-    opacity: 1 !important;
-
-    pointer-events: auto !important;
-
-    z-index: 41 !important;
-}
-
-
-/* ---------------------------------------------------------
-   WAVEFORM
-   Reserve space for BOTH stop + send
-   --------------------------------------------------------- */
-
-#glassInputContainer
-.composer-input-row.is-transcribing
-.voice-transcribe-container {
-    position: absolute !important;
-
-    top: 50% !important;
-
-    left: 12px !important;
-
-    right:
-        calc(
-            var(--voice-send-right) +
-            var(--voice-send-size) +
-            var(--voice-right-gap) +
-            var(--voice-stop-size) +
-            var(--voice-right-gap)
-        ) !important;
-
-    height: 40px !important;
-
-    min-width: 0 !important;
-
-    padding: 0 !important;
-    margin: 0 !important;
-
-    transform:
-        translateY(-50%) !important;
-
-    overflow: hidden !important;
-}
-
-
-/* ---------------------------------------------------------
-   WAVE BARS
-   --------------------------------------------------------- */
-
-#glassInputContainer
-.composer-input-row.is-transcribing
-.wave-dots-bar {
-    width: 100% !important;
-    min-width: 0 !important;
-
-    flex: 1 1 auto !important;
-
-    padding:
-        0
-        8px !important;
-
-    overflow: hidden !important;
-}
-
-
-/* Stop button belongs to outer composer positioning,
-   so don't let its old container flow reserve space. */
-
-#glassInputContainer
-.composer-input-row.is-transcribing
-.voice-transcribe-container
-#stopRecBtn {
-    flex: none !important;
-}
-
-
-/* =========================================================
-   MOBILE
-   ========================================================= */
-
-@media (max-width: 767px) {
-
-    #glassInputContainer {
-        --voice-send-right: 7px;
-        --voice-send-size: 38px;
-
-        --voice-stop-size: 32px;
-        --voice-right-gap: 6px;
-    }
-
-
-    #glassInputContainer
-    .composer-input-row.is-transcribing
-    .voice-transcribe-container {
-        left: 8px !important;
-
-        height: 38px !important;
-    }
-}
-/* =========================================================
-   STOP BUTTON — TIGHT TO SEND
-   ========================================================= */
-
-#glassInputContainer {
-    --voice-send-right: 7px;
-    --voice-send-size: 40px;
-
-    --voice-stop-size: 32px;
-    --voice-stop-gap: 4px;
-}
-
-#glassInputContainer
-.composer-input-row.is-transcribing
-#sendBtn {
-    right:
-        var(--voice-send-right) !important;
-}
-
-#glassInputContainer
-.composer-input-row.is-transcribing
-#stopRecBtn {
-    right:
-        calc(
-            var(--voice-send-right) +
-            var(--voice-send-size) +
-            var(--voice-stop-gap)
-        ) !important;
-
-    width:
-        var(--voice-stop-size) !important;
-
-    height:
-        var(--voice-stop-size) !important;
-
-    min-width:
-        var(--voice-stop-size) !important;
-
-    min-height:
-        var(--voice-stop-size) !important;
-
-    max-width:
-        var(--voice-stop-size) !important;
-
-    max-height:
-        var(--voice-stop-size) !important;
-}
-
-
-/* Waveform reserves only the exact right-side control width */
-
-#glassInputContainer
-.composer-input-row.is-transcribing
-.voice-transcribe-container {
-    right:
-        calc(
-            var(--voice-send-right) +
-            var(--voice-send-size) +
-            var(--voice-stop-gap) +
-            var(--voice-stop-size) +
-            6px
-        ) !important;
-}
-
-
-/* Mobile */
-
-@media (max-width: 767px) {
-
-    #glassInputContainer {
-        --voice-send-right: 6px;
-        --voice-send-size: 38px;
-
-        --voice-stop-size: 30px;
-        --voice-stop-gap: 4px;
-    }
-}
 /* =========================================================
    FINAL — STOP BUTTON NEXT TO SEND
    ========================================================= */

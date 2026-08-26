@@ -17,15 +17,7 @@ Purpose:
    ========================================================= */
 
 .send-btn {
-    position: relative !important;
-
-    display: inline-flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-
     overflow: hidden !important;
-
-    transform: none !important;
 }
 
 
@@ -35,26 +27,6 @@ Purpose:
 
 .send-btn.is-generating {
     cursor: pointer !important;
-    transform: none !important;
-}
-
-
-/* Keep button dimensions exactly unchanged */
-
-.send-btn.is-generating,
-.send-btn.is-generating:hover,
-.send-btn.is-generating:active {
-    width: 40px !important;
-    height: 40px !important;
-
-    min-width: 40px !important;
-    min-height: 40px !important;
-
-    flex: 0 0 40px !important;
-
-    border-radius: 999px !important;
-
-    transform: none !important;
 }
 
 
@@ -151,19 +123,6 @@ body.dark-mode
 
 @media (max-width: 767px) {
 
-    .send-btn.is-generating,
-    .send-btn.is-generating:hover,
-    .send-btn.is-generating:active {
-        width: 40px !important;
-        height: 40px !important;
-
-        min-width: 40px !important;
-        min-height: 40px !important;
-
-        flex: 0 0 40px !important;
-    }
-
-
     .send-stop-square {
         width: 9px !important;
         height: 9px !important;
@@ -174,19 +133,6 @@ body.dark-mode
         flex: 0 0 9px !important;
 
         border-radius: 2px !important;
-    }
-
-}
-
-
-/* =========================================================
-   REDUCED MOTION
-   ========================================================= */
-
-@media (prefers-reduced-motion: reduce) {
-
-    .send-stop-square {
-        transition: none !important;
     }
 
 }

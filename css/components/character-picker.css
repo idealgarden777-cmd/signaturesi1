@@ -1440,34 +1440,3 @@ body.dark
       0.76
     );
 }
-
-
-/* =====================================================
-   REDUCED MOTION
-   ===================================================== */
-
-@media (
-  prefers-reduced-motion: reduce
-) {
-
-  .character-picker-shell,
-  .character-picker-panel,
-  .character-picker-card,
-  .character-picker-face,
-  .character-picker-check,
-  .character-picker-close {
-    transition-duration:
-      1ms !important;
-
-    animation:
-      none !important;
-  }
-
-
-  .character-picker-panel,
-  .character-picker-card,
-  .character-picker-face {
-    transform:
-      none !important;
-  }
-}

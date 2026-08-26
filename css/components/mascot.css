@@ -1224,10 +1224,8 @@ through a CSS variable if available.
   --face-radius:
     47%;
 
-  transform:
-    scale(
-      0.97
-    );
+  --face-scale:
+    0.97;
 }
 
 
@@ -1594,42 +1592,5 @@ and
   .neyo-mascot-face {
     --face-radius:
       27px;
-  }
-}
-
-
-/* =====================================================
-   REDUCED MOTION
-   ===================================================== */
-
-@media (
-  prefers-reduced-motion:
-    reduce
-) {
-
-  #neyoMascot,
-
-  #neyoMascot
-  .neyo-mascot-face,
-
-  #neyoMascot
-  .neyo-eye,
-
-  #neyoMascot
-  .neyo-eye-core,
-
-  #neyoMascot
-  .neyo-mouth,
-
-  #neyoMascot
-  .neyo-mouth::before,
-
-  #neyoMascot
-  .neyo-mouth-bar {
-    animation:
-      none !important;
-
-    transition-duration:
-      0.01ms !important;
   }
 }

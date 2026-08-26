@@ -228,17 +228,6 @@ PRODUCTION / RESPONSIVE / WIDTH‑STABLE VERSION
     z-index: 19 !important;
 }
 
-#glassInputContainer #composerExpandBtn {
-    top: 8px !important;
-    right: 8px !important;
-    width: 26px !important;
-    height: 26px !important;
-    min-width: 26px !important;
-    min-height: 26px !important;
-    z-index: 35 !important;
-    transition: opacity 140ms ease, transform 180ms cubic-bezier(0.22,1,0.36,1), background-color 140ms ease !important;
-}
-
 /* ===== CUSTOM SCROLLBAR ===== */
 #glassInputContainer .composer-custom-scrollbar {
     position: absolute !important;
@@ -288,21 +277,6 @@ body.dark-mode #glassInputContainer .composer-custom-scrollbar-thumb {
 }
 
 /* ===== RESPONSIVE ===== */
-@media (min-width: 768px) and (max-width: 1100px) {
-    #glassInputContainer {
-        --neyo-pill-height: 56px;
-        --neyo-pill-radius: 28px;
-        --neyo-control-size: 40px;
-        --neyo-control-bottom: 8px;
-        --neyo-edge-x: 8px;
-        --neyo-control-gap: 6px;
-        --neyo-rail-height: 56px;
-        --neyo-oneline-left: 56px;
-        --neyo-oneline-right: 96px;
-        --neyo-text-left: 14px;
-        --neyo-text-right: 20px;
-    }
-}
 @media (max-width: 767px) {
     #glassInputContainer {
         --neyo-pill-height: 54px;
@@ -340,7 +314,6 @@ body.dark-mode #glassInputContainer .composer-custom-scrollbar-thumb {
     }
     #glassInputContainer:not(.is-writing-expanded) .composer-custom-scrollbar { top: 10px !important; }
     #glassInputContainer.is-writing-expanded .composer-custom-scrollbar { top: 38px !important; }
-    #glassInputContainer #composerExpandBtn { top: 7px !important; right: 7px !important; }
 }
 @media (max-height: 520px) and (orientation: landscape) {
     #glassInputContainer {
@@ -378,55 +351,14 @@ body.dark-mode #glassInputContainer .composer-custom-scrollbar-thumb {
         --neyo-scrollbar-right: 5px;
     }
 }
-@media (min-width: 1440px) {
-    #glassInputContainer {
-        --neyo-pill-height: 56px;
-        --neyo-pill-radius: 28px;
-        --neyo-control-size: 40px;
-        --neyo-control-bottom: 8px;
-        --neyo-edge-x: 8px;
-        --neyo-control-gap: 6px;
-        --neyo-rail-height: 56px;
-    }
-}
 
-/* ===== COMPACT PILL POLISH ===== */
-#glassInputContainer:not(.is-writing-expanded):not(.composer-multiline) #attachBtn { left: 6px !important; }
-#glassInputContainer:not(.is-writing-expanded):not(.composer-multiline) #sendBtn { right: 6px !important; }
-#glassInputContainer:not(.is-writing-expanded):not(.composer-multiline) #micBtn { right: 52px !important; }
-#glassInputContainer:not(.is-writing-expanded):not(.composer-multiline) textarea#chatInput {
-    padding-left: 52px !important;
-    padding-right: 94px !important;
-}
-@media (max-width: 767px) {
-    #glassInputContainer:not(.is-writing-expanded):not(.composer-multiline) #attachBtn { left: 5px !important; }
-    #glassInputContainer:not(.is-writing-expanded):not(.composer-multiline) #sendBtn { right: 5px !important; }
-    #glassInputContainer:not(.is-writing-expanded):not(.composer-multiline) #micBtn { right: 49px !important; }
-    #glassInputContainer:not(.is-writing-expanded):not(.composer-multiline) textarea#chatInput {
-        padding-left: 49px !important;
-        padding-right: 89px !important;
-    }
-}
-
-/* ===== TOUCH & REDUCED MOTION ===== */
+/* ===== TOUCH ===== */
 @media (pointer: coarse) {
     #glassInputContainer #attachBtn,
     #glassInputContainer #micBtn,
     #glassInputContainer #sendBtn {
         touch-action: manipulation !important;
         -webkit-tap-highlight-color: transparent;
-    }
-}
-@media (prefers-reduced-motion: reduce) {
-    #glassInputContainer,
-    #glassInputContainer textarea#chatInput,
-    #glassInputContainer #attachBtn,
-    #glassInputContainer #micBtn,
-    #glassInputContainer #sendBtn,
-    #glassInputContainer #composerExpandBtn,
-    #glassInputContainer .composer-custom-scrollbar,
-    #glassInputContainer .composer-custom-scrollbar-thumb {
-        transition: none !important;
     }
 }
 

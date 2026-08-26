@@ -221,25 +221,6 @@ After neo.js is removed this file continues unchanged.
   }
 
   /* =====================================================
-     LEGACY TELEMETRY
-
-     Informational only.
-     ===================================================== */
-
-  const legacyScriptPresent =
-    Array
-      .from(
-        document.scripts || []
-      )
-      .some(
-        script =>
-          /(?:^|\/)neo\.js(?:\?|$)/
-            .test(
-              script.src || ""
-            )
-      );
-
-  /* =====================================================
      STATES
      ===================================================== */
 
@@ -354,9 +335,6 @@ After neo.js is removed this file continues unchanged.
       0,
 
     transcriptInsertions:
-      0,
-
-    legacyMicClicksBlocked:
       0,
 
     lastOpenedAt:
@@ -2551,22 +2529,6 @@ After neo.js is removed this file continues unchanged.
     dictationActive =
       false;
 
-    /*
-     * New voice.js emits neyo:voice-transcript.
-     * This direct insertion is only a compatibility
-     * safety net when an older engine simply returns text.
-     */
-
-    if (
-      typeof result ===
-        "string" &&
-      result.trim()
-    ) {
-      insertTranscript(
-        result
-      );
-    }
-
     return result;
   }
 
@@ -2647,14 +2609,6 @@ After neo.js is removed this file continues unchanged.
       consume(
         event
       );
-
-      if (
-        legacyScriptPresent
-      ) {
-        metrics
-          .legacyMicClicksBlocked +=
-          1;
-      }
 
       /*
        * Existing voice conversation:
@@ -3271,11 +3225,7 @@ After neo.js is removed this file continues unchanged.
 
       setEnergy(
         clamp(
-          (
-            rms -
-            0.01
-          ) /
-          0.12
+          (rms - 0.01) / 0.12
         )
       );
     }
@@ -3376,11 +3326,6 @@ After neo.js is removed this file continues unchanged.
       active:
         true,
 
-      legacyScriptPresent,
-
-      legacyOwnerActive:
-        false,
-
       /*
        * Shell
        */
@@ -3477,11 +3422,6 @@ After neo.js is removed this file continues unchanged.
           active:
             true,
 
-          legacyScriptPresent,
-
-          legacyOwnerActive:
-            false,
-
           open:
             isOpen(),
 
@@ -3556,11 +3496,6 @@ After neo.js is removed this file continues unchanged.
 
       active:
         true,
-
-      legacyScriptPresent,
-
-      legacyOwnerActive:
-        false,
 
       liveVoice:
         true,

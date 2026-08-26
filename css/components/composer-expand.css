@@ -160,22 +160,6 @@ It never uses legacy:
 
 
 /* =========================================================
-   EMPTY COMPOSER
-   Critical compact-state guarantee
-   ========================================================= */
-
-.glass-input-container:not(
-    .is-writing-expanded
-)
-textarea#chatInput:placeholder-shown {
-    height: 38px !important;
-
-    min-height: 38px !important;
-    max-height: 38px !important;
-}
-
-
-/* =========================================================
    WRITING EXPANDED STATE
    ========================================================= */
 
@@ -311,12 +295,15 @@ textarea#chatInput {
    ========================================================= */
 
 .glass-input-container.is-writing-expanded
+.composer-input-row:not(.is-transcribing)
 .attach-btn,
 
 .glass-input-container.is-writing-expanded
+.composer-input-row:not(.is-transcribing)
 .mic-btn,
 
 .glass-input-container.is-writing-expanded
+.composer-input-row:not(.is-transcribing)
 .send-btn {
     flex: 0 0 auto !important;
 

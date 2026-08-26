@@ -751,6 +751,19 @@ Does NOT own:
       return false;
     }
 
+    // Guard against mismatched dispatchId (e.g., regenerate/edit)
+    const acceptedDispatchId =
+      String(
+        eventDetail.dispatchId || ""
+      );
+
+    if (
+      acceptedDispatchId &&
+      acceptedDispatchId !== pending.id
+    ) {
+      return false;
+    }
+
     state.acceptedDispatchId =
       pending.id;
 
@@ -1179,27 +1192,14 @@ Does NOT own:
      ATTACHMENT EVENTS
      ===================================================== */
 
-  const attachmentEvents = [
+  window.addEventListener(
     "neyo:attachments-change",
-    "neyo:attachment-ready",
-    "neyo:attachment-error",
-    "neyo:attachment-removed",
-    "neyo:attachment-processing-complete"
-  ];
+    () => {
+      classifyAttachments();
 
-  for (
-    const eventName
-    of attachmentEvents
-  ) {
-    window.addEventListener(
-      eventName,
-      () => {
-        classifyAttachments();
-
-        renderButton();
-      }
-    );
-  }
+      renderButton();
+    }
+  );
 
   /* =====================================================
      CHAT ACCEPTANCE
@@ -1367,6 +1367,18 @@ Does NOT own:
   );
 
   /* =====================================================
+     REFRESH (canonical)
+     ===================================================== */
+
+  function refresh() {
+    classifyAttachments();
+
+    renderButton();
+
+    return true;
+  }
+
+  /* =====================================================
      PUBLIC API
      ===================================================== */
 
@@ -1392,21 +1404,10 @@ Does NOT own:
 
       canSend,
 
-      refresh() {
-        classifyAttachments();
+      refresh,
 
-        renderButton();
-
-        return true;
-      },
-
-      update() {
-        classifyAttachments();
-
-        renderButton();
-
-        return true;
-      },
+      // Compatibility alias
+      update: refresh,
 
       setGenerating(value) {
         state.generating =
@@ -1419,6 +1420,9 @@ Does NOT own:
             false;
 
           state.pendingDispatch =
+            null;
+
+          state.acceptedDispatchId =
             null;
         }
 

@@ -28,19 +28,19 @@ DOES NOT OWN:
 .voice-mode-shell {
   --vm-bg:
     var(
-      --bg-primary,
+      --neyo-bg,
       #ffffff
     );
 
   --vm-text:
     var(
-      --text-primary,
+      --neyo-text,
       #111111
     );
 
   --vm-muted:
     var(
-      --text-secondary,
+      --neyo-text-secondary,
       #727272
     );
 
@@ -96,9 +96,6 @@ DOES NOT OWN:
       0,
       0.12
     );
-
-  --vm-wave:
-    currentColor;
 
   color:
     var(
@@ -1381,18 +1378,6 @@ is later wired by JS.
 
 .voice-mode-stage:has(
   #neyoMascot[
-    data-phase="idle"
-  ]
-) {
-  --vm-wave:
-    var(
-      --vm-muted
-    );
-}
-
-
-.voice-mode-stage:has(
-  #neyoMascot[
     data-phase="listening"
   ]
 )
@@ -1861,32 +1846,5 @@ and
 
     min-height:
       44px;
-  }
-}
-
-
-/* =====================================================
-   REDUCED MOTION
-   ===================================================== */
-
-@media (
-  prefers-reduced-motion:
-    reduce
-) {
-
-  .voice-mode-shell,
-  .voice-mode-camera-preview,
-  .voice-mode-status,
-  .voice-mode-control,
-  .voice-mode-mascot-slot::after,
-  .voice-mode-waveform span {
-    transition:
-      none !important;
-  }
-
-
-  .voice-mode-mascot-slot::after {
-    animation:
-      none !important;
   }
 }

@@ -138,23 +138,6 @@ After neo.js removal this file continues unchanged.
   }
 
   /* =====================================================
-     LEGACY TELEMETRY ONLY
-     ===================================================== */
-
-  const legacyScriptPresent =
-    Array
-      .from(
-        document.scripts || []
-      )
-      .some(
-        script =>
-          /(?:^|\/)neo\.js(?:\?|$)/
-            .test(
-              script.src || ""
-            )
-      );
-
-  /* =====================================================
      CONFIG
      ===================================================== */
 
@@ -1286,14 +1269,8 @@ After neo.js removal this file continues unchanged.
         card.setAttribute(
           "aria-label",
           selected
-            ? `${
-                character?.name ||
-                "Character"
-              }, selected`
-            : `Choose ${
-                character?.name ||
-                "character"
-              }`
+            ? `${character?.name || "Character"}, selected`
+            : `Choose ${character?.name || "character"}`
         );
 
         card.tabIndex =
@@ -2113,11 +2090,6 @@ After neo.js removal this file continues unchanged.
       active:
         true,
 
-      legacyScriptPresent,
-
-      legacyOwnerActive:
-        false,
-
       /*
        * Dialog
        */
@@ -2178,11 +2150,6 @@ After neo.js removal this file continues unchanged.
 
           active:
             true,
-
-          legacyScriptPresent,
-
-          legacyOwnerActive:
-            false,
 
           open:
             isOpen(),
@@ -2272,12 +2239,7 @@ After neo.js removal this file continues unchanged.
         characters.length,
 
       selectedId:
-        activeCharacterId,
-
-      legacyScriptPresent,
-
-      legacyOwnerActive:
-        false
+        activeCharacterId
     }
   );
 })();

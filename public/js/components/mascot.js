@@ -159,23 +159,6 @@ After neo.js removal this file continues unchanged.
     );
 
   /* =====================================================
-     LEGACY TELEMETRY ONLY
-     ===================================================== */
-
-  const legacyScriptPresent =
-    Array
-      .from(
-        document.scripts || []
-      )
-      .some(
-        script =>
-          /(?:^|\/)neo\.js(?:\?|$)/
-            .test(
-              script.src || ""
-            )
-      );
-
-  /* =====================================================
      CONFIG
      ===================================================== */
 
@@ -3082,14 +3065,13 @@ After neo.js removal this file continues unchanged.
       state.mood =
         "surprised";
 
-      setPhase(
-        "interrupted"
-      );
-
       /*
-       * voice.js follows with listening state.
-       * No timer needed here.
+       * voice.js has already returned transport
+       * state to listening before this event.
        */
+      setPhase(
+        "listening"
+      );
     }
   );
 
@@ -3207,11 +3189,6 @@ After neo.js removal this file continues unchanged.
 
   window.addEventListener(
     "neyo:voice-camera",
-    syncCameraEvent
-  );
-
-  window.addEventListener(
-    "neyo:voice-camera-change",
     syncCameraEvent
   );
 
@@ -3621,11 +3598,6 @@ After neo.js removal this file continues unchanged.
       active:
         true,
 
-      legacyScriptPresent,
-
-      legacyOwnerActive:
-        false,
-
       /*
        * Lifecycle
        */
@@ -3712,11 +3684,6 @@ After neo.js removal this file continues unchanged.
             state.visible,
 
           reducedMotion,
-
-          legacyScriptPresent,
-
-          legacyOwnerActive:
-            false,
 
           characterId:
             state.characterId,
@@ -3847,12 +3814,7 @@ After neo.js removal this file continues unchanged.
       character:
         state.characterId,
 
-      reducedMotion,
-
-      legacyScriptPresent,
-
-      legacyOwnerActive:
-        false
+      reducedMotion
     }
   );
 })();

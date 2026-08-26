@@ -154,10 +154,7 @@ Does NOT own:
       null,
 
     resizeTimer:
-      null,
-
-    destroyed:
-      false
+      null
   };
 
   /* =====================================================
@@ -595,12 +592,6 @@ Does NOT own:
     reason = "user"
   } = {}) {
     if (
-      state.destroyed
-    ) {
-      return false;
-    }
-
-    if (
       state.expanded
     ) {
       if (focus) {
@@ -630,12 +621,6 @@ Does NOT own:
     focus = true,
     reason = "user"
   } = {}) {
-    if (
-      state.destroyed
-    ) {
-      return false;
-    }
-
     if (
       !state.expanded
     ) {
@@ -681,12 +666,6 @@ Does NOT own:
   function refresh({
     reason = "refresh"
   } = {}) {
-    if (
-      state.destroyed
-    ) {
-      return false;
-    }
-
     if (
       state.expanded
     ) {
@@ -1112,37 +1091,6 @@ Does NOT own:
   }
 
   /* =====================================================
-     DESTROY
-     ===================================================== */
-
-  function destroy() {
-    if (
-      state.destroyed
-    ) {
-      return false;
-    }
-
-    state.destroyed =
-      true;
-
-    if (
-      state.resizeTimer !==
-      null
-    ) {
-      clearTimeout(
-        state.resizeTimer
-      );
-
-      state.resizeTimer =
-        null;
-    }
-
-    clearExpandedHeight();
-
-    return true;
-  }
-
-  /* =====================================================
      PUBLIC API
      ===================================================== */
 
@@ -1173,9 +1121,7 @@ Does NOT own:
         return state.height;
       },
 
-      getState,
-
-      destroy
+      getState
     });
 
   Object.defineProperty(

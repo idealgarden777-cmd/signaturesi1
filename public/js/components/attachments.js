@@ -1247,7 +1247,6 @@ Does NOT own:
       item =>
         [
           "queued",
-          "compressing",
           "authorizing",
           "uploading",
           "uploaded",
@@ -1380,9 +1379,6 @@ Does NOT own:
     ) {
       case "queued":
         return "Preparing";
-
-      case "compressing":
-        return "Optimizing";
 
       case "authorizing":
         return "Preparing";
@@ -3377,7 +3373,7 @@ Does NOT own:
     composerWrapper
       ?.classList
       .toggle(
-        "is-file-dragging",
+        "is-dragging",
         state.dragging
       );
 

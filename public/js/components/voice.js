@@ -170,23 +170,6 @@ After neo.js removal this file continues unchanged.
     });
 
   /* =====================================================
-     TELEMETRY ONLY
-     ===================================================== */
-
-  const legacyScriptPresent =
-    Array
-      .from(
-        document.scripts || []
-      )
-      .some(
-        script =>
-          /(?:^|\/)neo\.js(?:\?|$)/
-            .test(
-              script.src || ""
-            )
-      );
-
-  /* =====================================================
      LIVE SESSION STATE
      ===================================================== */
 
@@ -3875,11 +3858,6 @@ After neo.js removal this file continues unchanged.
       active:
         true,
 
-      legacyScriptPresent,
-
-      legacyOwnerActive:
-        false,
-
       /*
        * Gemini Live
        */
@@ -4043,11 +4021,6 @@ After neo.js removal this file continues unchanged.
 
           transcribing,
 
-          legacyScriptPresent,
-
-          legacyOwnerActive:
-            false,
-
           metrics: {
             ...metrics
           }
@@ -4096,12 +4069,7 @@ After neo.js removal this file continues unchanged.
         true,
 
       dictationFallback:
-        true,
-
-      legacyScriptPresent,
-
-      legacyOwnerActive:
-        false
+        true
     }
   );
 })();

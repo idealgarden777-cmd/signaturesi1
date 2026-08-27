@@ -1,538 +1,544 @@
 /*
 =========================================================
-NEO — SEND COMPATIBILITY FACADE
-Production v2 — Thin Bridge
-
-Purpose:
-- Preserve window.NeyoSend compatibility
-- Delegate Send / Stop to NeyoSendState
-- Provide a stable compatibility surface while old code
-  and newer modular code coexist
+NEYO — SEND ORCHESTRATOR
 
 Owns:
-- Compatibility API only
+- Send button click
+- Enter-to-send
+- Composer → upload → chat flow
+- Send busy state
+- Composer reset after success
+- Attachment clear after success
+- Stop generation button state bridge
 
 Does NOT own:
-- #sendBtn
-- #chatInput
-- Enter / Shift+Enter
-- Send / Stop visual state
-- /api/chat
-- AbortController
-- Conversation state
-- Attachment upload
-- Attachment cleanup
-- Composer clearing
+- Chat API
+- File upload implementation
+- Attachment picker
 - Message rendering
-- Topbar / model selector
+- Composer resize logic
 =========================================================
 */
 
 (() => {
-  "use strict";
+    "use strict";
 
-  const VERSION =
-    "neo-send-facade-production-v2";
 
-  if (
-    window.NeyoSend
-      ?.__controller === true
-  ) {
-    return;
-  }
+    /* =====================================================
+       ELEMENTS
+       ===================================================== */
 
-  /* =====================================================
-     EVENTS
-     ===================================================== */
+    const chatInput =
+        document.getElementById(
+            "chatInput"
+        );
 
-  function emit(
-    name,
-    detail = {}
-  ) {
-    window.dispatchEvent(
-      new CustomEvent(
-        name,
-        {
-          detail
-        }
-      )
-    );
-  }
+    const sendBtn =
+        document.getElementById(
+            "sendBtn"
+        );
 
-  /* =====================================================
-     CONTROLLER
-     ===================================================== */
-
-  function controller() {
-    const value =
-      window.NeyoSendState;
 
     if (
-      value &&
-      typeof value === "object" &&
-      value.__controller === true
+        !chatInput ||
+        !sendBtn
     ) {
-      return value;
+        return;
     }
 
-    return null;
-  }
 
-  /* =====================================================
-     SEND
-     ===================================================== */
+    /* =====================================================
+       STATE
+       ===================================================== */
 
-  function send() {
-    const owner =
-      controller();
+    let sending =
+        false;
 
-    if (!owner) {
-      emit(
-        "neyo:send-facade-error",
-        {
-          action:
-            "send",
 
-          reason:
-            "send-state-unavailable"
-        }
-      );
+    /* =====================================================
+       HELPERS
+       ===================================================== */
 
-      return false;
-    }
+    const emit = (
+        name,
+        detail = {}
+    ) => {
 
-    try {
-      if (
-        typeof owner.send ===
-        "function"
-      ) {
-        return (
-          owner.send() !==
-          false
+        window.dispatchEvent(
+            new CustomEvent(
+                name,
+                {
+                    detail
+                }
+            )
         );
-      }
 
-      if (
-        typeof owner.requestSend ===
-        "function"
-      ) {
-        return (
-          owner.requestSend() !==
-          false
-        );
-      }
-
-    } catch (error) {
-      console.error(
-        "[NEO Send] Send delegation failed:",
-        error
-      );
-
-      emit(
-        "neyo:send-facade-error",
-        {
-          action:
-            "send",
-
-          reason:
-            "delegation-failed",
-
-          error
-        }
-      );
-
-      return false;
-    }
-
-    return false;
-  }
-
-  /* =====================================================
-     STOP
-     ===================================================== */
-
-  function stop() {
-    const owner =
-      controller();
-
-    if (!owner) {
-      emit(
-        "neyo:send-facade-error",
-        {
-          action:
-            "stop",
-
-          reason:
-            "send-state-unavailable"
-        }
-      );
-
-      return false;
-    }
-
-    try {
-      if (
-        typeof owner.stop ===
-        "function"
-      ) {
-        return (
-          owner.stop() !==
-          false
-        );
-      }
-
-      if (
-        typeof owner.requestStop ===
-        "function"
-      ) {
-        return (
-          owner.requestStop() !==
-          false
-        );
-      }
-
-    } catch (error) {
-      console.error(
-        "[NEO Send] Stop delegation failed:",
-        error
-      );
-
-      emit(
-        "neyo:send-facade-error",
-        {
-          action:
-            "stop",
-
-          reason:
-            "delegation-failed",
-
-          error
-        }
-      );
-
-      return false;
-    }
-
-    return false;
-  }
-
-  /* =====================================================
-     REQUEST SEND
-     ===================================================== */
-
-  function requestSend() {
-    const owner =
-      controller();
-
-    if (!owner) {
-      return false;
-    }
-
-    try {
-      if (
-        typeof owner.requestSend ===
-        "function"
-      ) {
-        return (
-          owner.requestSend() !==
-          false
-        );
-      }
-
-      return send();
-
-    } catch (error) {
-      console.error(
-        "[NEO Send] requestSend failed:",
-        error
-      );
-
-      return false;
-    }
-  }
-
-  /* =====================================================
-     REQUEST STOP
-     ===================================================== */
-
-  function requestStop() {
-    const owner =
-      controller();
-
-    if (!owner) {
-      return false;
-    }
-
-    try {
-      if (
-        typeof owner.requestStop ===
-        "function"
-      ) {
-        return (
-          owner.requestStop() !==
-          false
-        );
-      }
-
-      return stop();
-
-    } catch (error) {
-      console.error(
-        "[NEO Send] requestStop failed:",
-        error
-      );
-
-      return false;
-    }
-  }
-
-  /* =====================================================
-     CAN SEND
-     ===================================================== */
-
-  function canSend() {
-    const owner =
-      controller();
-
-    if (!owner) {
-      return false;
-    }
-
-    try {
-      if (
-        typeof owner.canSend ===
-        "function"
-      ) {
-        return Boolean(
-          owner.canSend()
-        );
-      }
-
-      return false;
-
-    } catch {
-      return false;
-    }
-  }
-
-  /* =====================================================
-     REFRESH
-     ===================================================== */
-
-  function refresh() {
-    const owner =
-      controller();
-
-    if (!owner) {
-      return false;
-    }
-
-    try {
-      if (
-        typeof owner.refresh ===
-        "function"
-      ) {
-        return (
-          owner.refresh() !==
-          false
-        );
-      }
-
-      if (
-        typeof owner.update ===
-        "function"
-      ) {
-        return (
-          owner.update() !==
-          false
-        );
-      }
-
-    } catch (error) {
-      console.error(
-        "[NEO Send] Refresh delegation failed:",
-        error
-      );
-
-      return false;
-    }
-
-    return false;
-  }
-
-  /* =====================================================
-     GENERATION STATE
-     ===================================================== */
-
-  function isGenerating() {
-    const owner =
-      controller();
-
-    if (!owner) {
-      return false;
-    }
-
-    try {
-      if (
-        typeof owner.isGenerating ===
-        "function"
-      ) {
-        return Boolean(
-          owner.isGenerating()
-        );
-      }
-
-      const state =
-        owner.getState?.();
-
-      return Boolean(
-        state?.generating
-      );
-
-    } catch {
-      return false;
-    }
-  }
-
-  /* =====================================================
-     STATE
-     ===================================================== */
-
-  function getState() {
-    const owner =
-      controller();
-
-    let ownerState = null;
-
-    try {
-      ownerState =
-        owner?.getState?.() ||
-        null;
-    } catch {}
-
-    return {
-      version:
-        VERSION,
-
-      active:
-        Boolean(owner),
-
-      delegated:
-        true,
-
-      owner:
-        owner
-          ? "NeyoSendState"
-          : null,
-
-      canSend:
-        canSend(),
-
-      generating:
-        isGenerating(),
-
-      ownerState
     };
-  }
 
-  /* =====================================================
-     PUBLIC API
-     ===================================================== */
 
-  const api =
-    Object.freeze({
-      __controller:
-        true,
+    const getText = () => {
 
-      version:
-        VERSION,
+        return String(
+            chatInput.value || ""
+        ).trim();
 
-      active:
-        true,
+    };
 
-      /*
-       * Main compatibility names
-       */
 
-      send,
+    const getAttachments = () => {
 
-      sendMessage:
-        send,
+        return (
+            window.NeyoAttachments
+                ?.getFiles?.() ||
+            []
+        );
 
-      submit:
-        send,
+    };
 
-      requestSend,
 
-      /*
-       * Stop compatibility
-       */
+    const hasContent = () => {
 
-      stop,
+        return (
+            getText().length > 0 ||
+            getAttachments().length > 0
+        );
 
-      stopGeneration:
-        stop,
+    };
 
-      requestStop,
 
-      /*
-       * State
-       */
+    /* =====================================================
+       BUTTON STATE
+       ===================================================== */
 
-      canSend,
+    const updateSendButton = () => {
 
-      isGenerating,
+        const generating =
+            window.NeyoChat
+                ?.isGenerating?.() ||
+            false;
 
-      refresh,
 
-      update:
-        refresh,
+        const enabled =
+            hasContent() &&
+            !sending &&
+            !generating;
 
-      getState,
 
-      getOwner() {
-        return controller();
-      }
-    });
+        sendBtn.disabled =
+            !enabled;
 
-  Object.defineProperty(
-    window,
-    "NeyoSend",
-    {
-      value:
-        api,
 
-      writable:
-        false,
+        sendBtn.classList.toggle(
+            "is-ready",
+            enabled
+        );
 
-      configurable:
-        true,
 
-      enumerable:
-        true
-    }
-  );
+        sendBtn.classList.toggle(
+            "is-busy",
+            sending ||
+            generating
+        );
 
-  /* =====================================================
-     READY
-     ===================================================== */
 
-  emit(
-    "neyo:send-ready",
-    {
-      version:
-        VERSION,
+        sendBtn.setAttribute(
+            "aria-disabled",
+            String(!enabled)
+        );
 
-      active:
-        true,
+    };
 
-      facade:
-        true,
 
-      owner:
-        controller()
-          ? "NeyoSendState"
-          : null
-    }
-  );
+    /* =====================================================
+       RESET COMPOSER
+       ===================================================== */
+
+    const resetComposer = () => {
+
+        window.dispatchEvent(
+            new CustomEvent(
+                "neyo:composer-reset"
+            )
+        );
+
+
+        window.NeyoAttachments
+            ?.clear?.();
+
+
+        updateSendButton();
+
+    };
+
+
+    /* =====================================================
+       UPLOAD ATTACHMENTS
+       ===================================================== */
+
+    const prepareAttachments =
+        async () => {
+
+            const attachments =
+                getAttachments();
+
+
+            if (!attachments.length) {
+                return [];
+            }
+
+
+            const uploaded =
+                attachments.filter(
+                    file =>
+                        Boolean(
+                            file?.path
+                        )
+                );
+
+
+            const pending =
+                attachments.filter(
+                    file =>
+                        !file?.path
+                );
+
+
+            if (!pending.length) {
+                return uploaded;
+            }
+
+
+            if (
+                !window.NeyoUpload
+                    ?.uploadFiles
+            ) {
+
+                throw new Error(
+                    "Upload service is not available."
+                );
+
+            }
+
+
+            const newUploads =
+                await window
+                    .NeyoUpload
+                    .uploadFiles(
+                        pending
+                    );
+
+
+            return [
+                ...uploaded,
+                ...newUploads
+            ];
+
+        };
+
+
+    /* =====================================================
+       SEND
+       ===================================================== */
+
+    const sendMessage =
+        async () => {
+
+            if (sending) {
+                return null;
+            }
+
+
+            if (
+                window.NeyoChat
+                    ?.isGenerating?.()
+            ) {
+                return null;
+            }
+
+
+            const text =
+                getText();
+
+
+            const attachments =
+                getAttachments();
+
+
+            if (
+                !text &&
+                attachments.length === 0
+            ) {
+
+                updateSendButton();
+
+                return null;
+
+            }
+
+
+            if (
+                !window.NeyoChat
+                    ?.send
+            ) {
+
+                throw new Error(
+                    "Chat service is not available."
+                );
+
+            }
+
+
+            sending =
+                true;
+
+
+            updateSendButton();
+
+
+            emit(
+                "neyo:send-start",
+                {
+                    text,
+
+                    attachmentCount:
+                        attachments.length
+                }
+            );
+
+
+            try {
+
+                const uploadedFiles =
+                    await prepareAttachments();
+
+
+                const result =
+                    await window
+                        .NeyoChat
+                        .send({
+                            text,
+                            attachments:
+                                uploadedFiles
+                        });
+
+
+                if (!result) {
+
+                    updateSendButton();
+
+                    return null;
+
+                }
+
+
+                resetComposer();
+
+
+                emit(
+                    "neyo:send-success",
+                    {
+                        result
+                    }
+                );
+
+
+                return result;
+
+            }
+
+            catch (error) {
+
+                emit(
+                    "neyo:send-error",
+                    {
+                        error
+                    }
+                );
+
+
+                window.NeyoNotifications
+                    ?.error?.(
+                        error?.message ||
+                        "Message could not be sent."
+                    );
+
+
+                throw error;
+
+            }
+
+            finally {
+
+                sending =
+                    false;
+
+
+                updateSendButton();
+
+
+                emit(
+                    "neyo:send-end"
+                );
+
+            }
+
+        };
+
+
+    /* =====================================================
+       SEND BUTTON
+       ===================================================== */
+
+    sendBtn.addEventListener(
+        "click",
+        event => {
+
+            event.preventDefault();
+
+
+            sendMessage()
+                .catch(
+                    error => {
+
+                        console.error(
+                            "Send failed:",
+                            error
+                        );
+
+                    }
+                );
+
+        }
+    );
+
+
+    /* =====================================================
+       ENTER TO SEND
+       ===================================================== */
+
+    chatInput.addEventListener(
+        "keydown",
+        event => {
+
+            if (
+                event.key !== "Enter" ||
+                event.shiftKey ||
+                event.isComposing
+            ) {
+                return;
+            }
+
+
+            event.preventDefault();
+
+
+            sendMessage()
+                .catch(
+                    error => {
+
+                        console.error(
+                            "Send failed:",
+                            error
+                        );
+
+                    }
+                );
+
+        }
+    );
+
+
+    /* =====================================================
+       INPUT STATE
+       ===================================================== */
+
+    chatInput.addEventListener(
+        "input",
+        updateSendButton
+    );
+
+
+    window.addEventListener(
+        "neyo:attachments-change",
+        updateSendButton
+    );
+
+
+    window.addEventListener(
+        "neyo:chat-send-start",
+        updateSendButton
+    );
+
+
+    window.addEventListener(
+        "neyo:chat-send-end",
+        updateSendButton
+    );
+
+
+    window.addEventListener(
+        "neyo:composer-change",
+        updateSendButton
+    );
+
+
+    /* =====================================================
+       PUBLIC SEND REQUEST
+       ===================================================== */
+
+    window.addEventListener(
+        "neyo:send-request",
+        () => {
+
+            sendMessage()
+                .catch(
+                    error => {
+
+                        console.error(
+                            "Send failed:",
+                            error
+                        );
+
+                    }
+                );
+
+        }
+    );
+
+
+    /* =====================================================
+       INITIAL STATE
+       ===================================================== */
+
+    updateSendButton();
+
+
+    /* =====================================================
+       PUBLIC API
+       ===================================================== */
+
+    window.NeyoSend =
+        Object.freeze({
+
+            send:
+                sendMessage,
+
+            refresh:
+                updateSendButton,
+
+            canSend:
+                () =>
+                    hasContent() &&
+                    !sending &&
+                    !(
+                        window.NeyoChat
+                            ?.isGenerating?.()
+                    ),
+
+            isSending:
+                () =>
+                    sending
+
+        });
+
 })();

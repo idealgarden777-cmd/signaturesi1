@@ -1,692 +1,578 @@
 /*
 =========================================================
-NEO — REGENERATE
-Production v3 — Exact Turn Coordinator
-
-Baseline:
-- Old working Regenerate button behavior
-- Current message-actions.js routing
-- Current NeyoChat.regenerate()
+NEYO — REGENERATE COMPONENT
 
 Owns:
-- Regenerate request coordination
-- Exact assistant target validation
-- Duplicate regenerate protection
-- Temporary target busy state
-- Regenerate lifecycle events
+- Regenerate assistant response
+- Resolve target assistant message
+- Find previous user message
+- Trim conversation to regeneration point
+- Re-send previous user message
+- Regenerate lifecycle state
+- Public regenerate API
 
 Does NOT own:
-- /api/chat
-- Conversation mutation
-- Message deletion
-- Message rendering
-- Thinking UI
-- Send / Stop
-- Assistant action button creation
+- Chat API implementation
+- Message DOM rendering
+- Message action buttons
+- History persistence
 =========================================================
 */
 
 (() => {
-  "use strict";
+    "use strict";
 
-  const VERSION =
-    "neo-regenerate-production-v3";
 
-  if (
-    window.NeyoRegenerate
-      ?.__controller === true
-  ) {
-    return;
-  }
+    /* =====================================================
+       STATE
+       ===================================================== */
 
-  /* =====================================================
-     STATE
-     ===================================================== */
+    let regenerating =
+        false;
 
-  const state = {
-    active: false,
 
-    messageId: null,
+    /* =====================================================
+       HELPERS
+       ===================================================== */
 
-    element: null,
-
-    startedAt: null,
-
-    lastResult: null
-  };
-
-  /* =====================================================
-     EVENTS
-     ===================================================== */
-
-  function emit(
-    name,
-    detail = {}
-  ) {
-    window.dispatchEvent(
-      new CustomEvent(
+    const emit = (
         name,
-        {
-          detail
-        }
-      )
-    );
-  }
-
-  /* =====================================================
-     HELPERS
-     ===================================================== */
-
-  function cleanId(value) {
-    return String(
-      value ?? ""
-    ).trim();
-  }
-
-  function chatController() {
-    const controller =
-      window.NeyoChat;
-
-    return (
-      controller &&
-      controller.__controller === true
-    )
-      ? controller
-      : null;
-  }
-
-  function messagesController() {
-    const controller =
-      window.NeyoMessages;
-
-    return (
-      controller &&
-      controller.__controller === true
-    )
-      ? controller
-      : null;
-  }
-
-  /* =====================================================
-     MESSAGE LOOKUP
-     ===================================================== */
-
-  function getMessage(
-    messageId
-  ) {
-    const id =
-      cleanId(messageId);
-
-    if (!id) {
-      return null;
-    }
-
-    try {
-      return (
-        chatController()
-          ?.getMessage
-          ?.(id) ||
-        null
-      );
-    } catch {
-      return null;
-    }
-  }
-
-  function getElement(
-    messageId,
-    suppliedElement = null
-  ) {
-    if (
-      suppliedElement instanceof
-        HTMLElement
-    ) {
-      return suppliedElement;
-    }
-
-    try {
-      const element =
-        messagesController()
-          ?.getElement
-          ?.(messageId);
-
-      return (
-        element instanceof
-          HTMLElement
-      )
-        ? element
-        : null;
-
-    } catch {
-      return null;
-    }
-  }
-
-  /* =====================================================
-     GENERATION STATE
-     ===================================================== */
-
-  function isGenerating() {
-    try {
-      return Boolean(
-        chatController()
-          ?.isGenerating
-          ?.()
-      );
-    } catch {
-      return false;
-    }
-  }
-
-  /* =====================================================
-     BUSY TARGET UI
-
-     message-actions.js owns actual buttons.
-     We only temporarily mark the clicked target.
-     ===================================================== */
-
-  function setTargetBusy(
-    element,
-    busy
-  ) {
-    if (
-      !(element instanceof
-        HTMLElement)
-    ) {
-      return;
-    }
-
-    element.classList.toggle(
-      "is-regenerating",
-      Boolean(busy)
-    );
-
-    const button =
-      element.querySelector(
-        ".regen-msg-btn"
-      );
-
-    if (!button) {
-      return;
-    }
-
-    button.disabled =
-      Boolean(busy);
-
-    button.setAttribute(
-      "aria-disabled",
-      String(
-        Boolean(busy)
-      )
-    );
-
-    button.classList.toggle(
-      "is-loading",
-      Boolean(busy)
-    );
-  }
-
-  /* =====================================================
-     RESET
-     ===================================================== */
-
-  function reset() {
-    if (state.element) {
-      setTargetBusy(
-        state.element,
-        false
-      );
-    }
-
-    state.active =
-      false;
-
-    state.messageId =
-      null;
-
-    state.element =
-      null;
-
-    state.startedAt =
-      null;
-  }
-
-  /* =====================================================
-     VALIDATE TARGET
-     ===================================================== */
-
-  function validateTarget(
-    messageId
-  ) {
-    const id =
-      cleanId(messageId);
-
-    if (!id) {
-      return {
-        valid: false,
-        reason:
-          "missing-message-id"
-      };
-    }
-
-    const message =
-      getMessage(id);
-
-    if (!message) {
-      return {
-        valid: false,
-        reason:
-          "message-not-found"
-      };
-    }
-
-    if (
-      message.role !==
-      "assistant"
-    ) {
-      return {
-        valid: false,
-        reason:
-          "target-not-assistant"
-      };
-    }
-
-    if (
-      message.error === true
-    ) {
-      return {
-        valid: false,
-        reason:
-          "target-is-error"
-      };
-    }
-
-    if (
-      message.streaming === true
-    ) {
-      return {
-        valid: false,
-        reason:
-          "target-still-streaming"
-      };
-    }
-
-    return {
-      valid: true,
-      message
-    };
-  }
-
-  /* =====================================================
-     REGENERATE
-     ===================================================== */
-
-  async function regenerate({
-    messageId,
-    element = null
-  } = {}) {
-    const id =
-      cleanId(messageId);
-
-    if (state.active) {
-      emit(
-        "neyo:regenerate-blocked",
-        {
-          messageId: id,
-
-          reason:
-            "regenerate-already-active"
-        }
-      );
-
-      return false;
-    }
-
-    if (isGenerating()) {
-      emit(
-        "neyo:regenerate-blocked",
-        {
-          messageId: id,
-
-          reason:
-            "chat-generating"
-        }
-      );
-
-      return false;
-    }
-
-    const validation =
-      validateTarget(id);
-
-    if (!validation.valid) {
-      emit(
-        "neyo:regenerate-error",
-        {
-          messageId: id,
-
-          reason:
-            validation.reason
-        }
-      );
-
-      return false;
-    }
-
-    const chat =
-      chatController();
-
-    if (
-      !chat ||
-      typeof chat.regenerate !==
-        "function"
-    ) {
-      emit(
-        "neyo:regenerate-error",
-        {
-          messageId: id,
-
-          reason:
-            "chat-controller-unavailable"
-        }
-      );
-
-      return false;
-    }
-
-    const targetElement =
-      getElement(
-        id,
-        element
-      );
-
-    state.active =
-      true;
-
-    state.messageId =
-      id;
-
-    state.element =
-      targetElement;
-
-    state.startedAt =
-      Date.now();
-
-    state.lastResult =
-      null;
-
-    setTargetBusy(
-      targetElement,
-      true
-    );
-
-    emit(
-      "neyo:regenerate-start",
-      {
-        messageId: id,
-
-        message:
-          validation.message
-      }
-    );
-
-    try {
-      /*
-       * NeyoChat owns:
-       * - exact preceding user turn resolution
-       * - truncation
-       * - request
-       * - assistant replacement
-       */
-
-      const result =
-        await chat.regenerate({
-          messageId: id
-        });
-
-      state.lastResult =
-        result;
-
-      emit(
-        "neyo:regenerate-complete",
-        {
-          messageId: id,
-
-          result
-        }
-      );
-
-      return (
-        result !== null &&
-        result !== false
-      );
-
-    } catch (error) {
-      console.error(
-        "[NEO Regenerate] Failed:",
-        error
-      );
-
-      emit(
-        "neyo:regenerate-error",
-        {
-          messageId: id,
-
-          error
-        }
-      );
-
-      return false;
-
-    } finally {
-      reset();
-    }
-  }
-
-  /* =====================================================
-     MESSAGE ACTION EVENT
-     ===================================================== */
-
-  window.addEventListener(
-    "neyo:message-regenerate-request",
-    event => {
-      const detail =
-        event.detail || {};
-
-      void regenerate({
-        messageId:
-          detail.messageId ||
-          detail.id,
-
-        element:
-          detail.element ||
-          null
-      });
-    }
-  );
-
-  /* =====================================================
-     LEGACY COMPATIBILITY
-     ===================================================== */
-
-  window.addEventListener(
-    "neyo:regenerate-request",
-    event => {
-      const detail =
-        event.detail || {};
-
-      void regenerate({
-        messageId:
-          detail.messageId ||
-          detail.id,
-
-        element:
-          detail.element ||
-          null
-      });
-    }
-  );
-
-  /* =====================================================
-     NAVIGATION SAFETY
-     ===================================================== */
-
-  function cancelLocalState() {
-    if (!state.active) {
-      return;
-    }
-
-    reset();
-  }
-
-  window.addEventListener(
-    "neyo:chat-new",
-    cancelLocalState
-  );
-
-  window.addEventListener(
-    "neyo:chat-state-loaded",
-    cancelLocalState
-  );
-
-  window.addEventListener(
-    "neyo:messages-cleared",
-    cancelLocalState
-  );
-
-  /* =====================================================
-     CHAT LIFECYCLE SAFETY
-     ===================================================== */
-
-  window.addEventListener(
-    "neyo:chat-aborted",
-    () => {
-      if (state.active) {
-        reset();
-      }
-    }
-  );
-
-  window.addEventListener(
-    "neyo:chat-error",
-    () => {
-      if (state.active) {
-        reset();
-      }
-    }
-  );
-
-  window.addEventListener(
-    "neyo:chat-limit-reached",
-    () => {
-      if (state.active) {
-        reset();
-      }
-    }
-  );
-
-  /* =====================================================
-     PUBLIC API
-     ===================================================== */
-
-  const api =
-    Object.freeze({
-      __controller:
-        true,
-
-      version:
-        VERSION,
-
-      active:
-        true,
-
-      regenerate,
-
-      request(
-        messageId,
-        options = {}
-      ) {
-        return regenerate({
-          messageId,
-
-          element:
-            options.element ||
-            null
-        });
-      },
-
-      isActive() {
-        return state.active;
-      },
-
-      getMessageId() {
-        return (
-          state.messageId ||
-          null
-        );
-      },
-
-      getState() {
-        return {
-          version:
-            VERSION,
-
-          active:
-            true,
-
-          regenerating:
-            state.active,
-
-          messageId:
-            state.messageId,
-
-          startedAt:
-            state.startedAt,
-
-          hasResult:
-            Boolean(
-              state.lastResult
+        detail = {}
+    ) => {
+
+        window.dispatchEvent(
+            new CustomEvent(
+                name,
+                {
+                    detail
+                }
             )
+        );
+
+    };
+
+
+    const getConversation = () => {
+
+        return (
+            window.NeyoChat
+                ?.getConversation?.() ||
+            []
+        );
+
+    };
+
+
+    const getMessageIndex = (
+        message,
+        suppliedIndex = null
+    ) => {
+
+        if (
+            Number.isInteger(
+                suppliedIndex
+            )
+        ) {
+            return suppliedIndex;
+        }
+
+
+        if (
+            !(message instanceof HTMLElement)
+        ) {
+            return null;
+        }
+
+
+        const value =
+            Number(
+                message.dataset
+                    .msgIndex
+            );
+
+
+        return Number.isInteger(
+            value
+        )
+            ? value
+            : null;
+
+    };
+
+
+    /* =====================================================
+       FIND REGENERATION POINT
+       ===================================================== */
+
+    const resolveRegeneration =
+        (
+            message,
+            suppliedIndex = null
+        ) => {
+
+            const conversation =
+                getConversation();
+
+
+            if (!conversation.length) {
+                return null;
+            }
+
+
+            let assistantIndex =
+                getMessageIndex(
+                    message,
+                    suppliedIndex
+                );
+
+
+            /*
+            If DOM index is unavailable,
+            regenerate the latest assistant.
+            */
+
+            if (
+                assistantIndex === null ||
+                assistantIndex < 0 ||
+                assistantIndex >=
+                    conversation.length
+            ) {
+
+                assistantIndex =
+                    -1;
+
+
+                for (
+                    let i =
+                        conversation.length - 1;
+                    i >= 0;
+                    i--
+                ) {
+
+                    if (
+                        conversation[i]
+                            ?.role ===
+                        "assistant"
+                    ) {
+
+                        assistantIndex =
+                            i;
+
+                        break;
+
+                    }
+
+                }
+
+            }
+
+
+            if (
+                assistantIndex < 0
+            ) {
+                return null;
+            }
+
+
+            /*
+            Find the user message that produced
+            this assistant response.
+            */
+
+            let userIndex =
+                -1;
+
+
+            for (
+                let i =
+                    assistantIndex - 1;
+                i >= 0;
+                i--
+            ) {
+
+                if (
+                    conversation[i]
+                        ?.role ===
+                    "user"
+                ) {
+
+                    userIndex =
+                        i;
+
+                    break;
+
+                }
+
+            }
+
+
+            if (
+                userIndex < 0
+            ) {
+                return null;
+            }
+
+
+            const userMessage =
+                conversation[
+                    userIndex
+                ];
+
+
+            return {
+                conversation,
+                assistantIndex,
+                userIndex,
+                userMessage
+            };
+
         };
-      }
-    });
 
-  Object.defineProperty(
-    window,
-    "NeyoRegenerate",
-    {
-      value:
-        api,
 
-      writable:
-        false,
+    /* =====================================================
+       REGENERATE
+       ===================================================== */
 
-      configurable:
-        true,
+    const regenerate =
+        async ({
+            message = null,
+            index = null
+        } = {}) => {
 
-      enumerable:
-        true
-    }
-  );
+            if (regenerating) {
+                return null;
+            }
 
-  /* =====================================================
-     READY
-     ===================================================== */
 
-  emit(
-    "neyo:regenerate-ready",
-    {
-      version:
-        VERSION,
+            if (
+                window.NeyoChat
+                    ?.isGenerating?.()
+            ) {
+                return null;
+            }
 
-      active:
-        true,
 
-      exactTurn:
-        true,
+            if (
+                !window.NeyoChat
+                    ?.send ||
+                !window.NeyoChat
+                    ?.loadConversation
+            ) {
 
-      conversationOwner:
-        "NeyoChat"
-    }
-  );
+                throw new Error(
+                    "Chat service is not available."
+                );
+
+            }
+
+
+            const target =
+                resolveRegeneration(
+                    message,
+                    index
+                );
+
+
+            if (!target) {
+
+                emit(
+                    "neyo:regenerate-error",
+                    {
+                        reason:
+                            "target-not-found"
+                    }
+                );
+
+
+                return null;
+
+            }
+
+
+            const {
+                conversation,
+                userIndex,
+                userMessage
+            } = target;
+
+
+            const conversationId =
+                window.NeyoChat
+                    ?.getConversationId?.() ||
+                null;
+
+
+            /*
+            Keep everything BEFORE the user
+            message being regenerated.
+
+            NeyoChat.send() will add the user
+            message again, then the new assistant
+            response.
+            */
+
+            const preservedMessages =
+                conversation.slice(
+                    0,
+                    userIndex
+                );
+
+
+            const text =
+                String(
+                    userMessage
+                        ?.content ||
+                    ""
+                );
+
+
+            const attachments =
+                Array.isArray(
+                    userMessage
+                        ?.attachments
+                )
+                    ? userMessage
+                        .attachments
+                    : [];
+
+
+            regenerating =
+                true;
+
+
+            emit(
+                "neyo:regenerate-start",
+                {
+                    message,
+                    index:
+                        target
+                            .assistantIndex,
+
+                    userIndex,
+
+                    text,
+                    attachments
+                }
+            );
+
+
+            try {
+
+                /*
+                Restore chat state to the point
+                immediately before the original
+                user request.
+                */
+
+                window.NeyoChat
+                    .loadConversation({
+                        conversationId,
+                        messages:
+                            preservedMessages
+                    });
+
+
+                /*
+                Tell renderer/history UI that
+                messages after this point should
+                be removed before the replacement
+                response appears.
+                */
+
+                emit(
+                    "neyo:messages-truncate-request",
+                    {
+                        fromIndex:
+                            userIndex
+                    }
+                );
+
+
+                const result =
+                    await window
+                        .NeyoChat
+                        .send({
+                            text,
+                            attachments
+                        });
+
+
+                if (!result) {
+
+                    /*
+                    Restore original state if
+                    regeneration did not complete.
+                    */
+
+                    window.NeyoChat
+                        .loadConversation({
+                            conversationId,
+                            messages:
+                                conversation
+                        });
+
+
+                    emit(
+                        "neyo:regenerate-cancelled",
+                        {
+                            message,
+                            index:
+                                target
+                                    .assistantIndex
+                        }
+                    );
+
+
+                    return null;
+
+                }
+
+
+                emit(
+                    "neyo:regenerate-success",
+                    {
+                        result,
+
+                        message,
+
+                        index:
+                            target
+                                .assistantIndex,
+
+                        userIndex
+                    }
+                );
+
+
+                return result;
+
+            }
+
+            catch (error) {
+
+                /*
+                Restore previous conversation state
+                on failure.
+                */
+
+                window.NeyoChat
+                    .loadConversation({
+                        conversationId,
+                        messages:
+                            conversation
+                    });
+
+
+                emit(
+                    "neyo:regenerate-error",
+                    {
+                        error,
+                        message,
+                        index:
+                            target
+                                .assistantIndex
+                    }
+                );
+
+
+                window.NeyoNotifications
+                    ?.error?.(
+                        error?.message ||
+                        "Could not regenerate response."
+                    );
+
+
+                throw error;
+
+            }
+
+            finally {
+
+                regenerating =
+                    false;
+
+
+                emit(
+                    "neyo:regenerate-end"
+                );
+
+            }
+
+        };
+
+
+    /* =====================================================
+       MESSAGE ACTION EVENT
+       ===================================================== */
+
+    window.addEventListener(
+        "neyo:message-regenerate-request",
+        event => {
+
+            regenerate({
+                message:
+                    event.detail
+                        ?.message ||
+                    null,
+
+                index:
+                    event.detail
+                        ?.index ??
+                    null
+            }).catch(
+                error => {
+
+                    console.error(
+                        "Regenerate failed:",
+                        error
+                    );
+
+                }
+            );
+
+        }
+    );
+
+
+    /* =====================================================
+       DIRECT REQUEST
+       ===================================================== */
+
+    window.addEventListener(
+        "neyo:regenerate-request",
+        event => {
+
+            regenerate(
+                event.detail ||
+                {}
+            ).catch(
+                error => {
+
+                    console.error(
+                        "Regenerate failed:",
+                        error
+                    );
+
+                }
+            );
+
+        }
+    );
+
+
+    /* =====================================================
+       PUBLIC API
+       ===================================================== */
+
+    window.NeyoRegenerate =
+        Object.freeze({
+
+            regenerate,
+
+            isRegenerating:
+                () =>
+                    regenerating
+
+        });
+
 })();

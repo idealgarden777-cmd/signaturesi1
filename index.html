@@ -9,7 +9,10 @@
   <meta name="theme-color" content="#ffffff">
   <meta name="referrer" content="strict-origin-when-cross-origin">
 
+  <!-- Monetag Verification (kept) -->
   <meta name="monetag" content="5c03c9d12ef5dab45df4b58c864f5ae9">
+
+  <!-- Monetag Onclick Tag — REMOVED (now handled by ads.js for Free users only) -->
 
   <meta http-equiv="Content-Security-Policy" content="
     default-src 'self';
@@ -26,15 +29,10 @@
       https://fonts.gstatic.com
       https://cdn.jsdelivr.net;
     img-src 'self' data: blob:
-      https://ajglvfoqiyrrisuoxecu.supabase.co
-      https://ujclhweqqifgoiscvqmd.supabase.co;
-    media-src 'self' blob: data:;
+      https://ajglvfoqiyrrisuoxecu.supabase.co;
     connect-src 'self'
       https://accounts.signaturesi.com
       https://ajglvfoqiyrrisuoxecu.supabase.co
-      https://ujclhweqqifgoiscvqmd.supabase.co
-      https://generativelanguage.googleapis.com
-      wss://generativelanguage.googleapis.com
       https://cdn.jsdelivr.net
       https://unpkg.com
       https://cdnjs.cloudflare.com
@@ -52,9 +50,10 @@
     rel="stylesheet"
   >
 
-  <!-- Styles -->
+  <!-- Styles — Final Order (legacy temporarily disabled) -->
   <link rel="stylesheet" href="/neo.css?v=82">
   <link rel="stylesheet" href="/neo-ui-v2.css?v=2">
+  <!-- <link rel="stylesheet" href="/neo-v3.css?v=46"> -->   <!-- ⛔️ DISABLED FOR MIGRATION TEST -->
 
   <!-- Tokens & Foundation -->
   <link rel="stylesheet" href="/css/components/tokens.css?v=1">
@@ -65,7 +64,7 @@
   <link rel="stylesheet" href="/css/components/attachments.css?v=1">
   <link rel="stylesheet" href="/css/components/composer.css?v=1">
   <link rel="stylesheet" href="/css/components/composer-expand.css?v=2">
-  <link rel="stylesheet" href="/css/components/composer-scrollbar.css?v=1">
+  <link rel="stylesheet" href="/css/components/composer-scrollbar.css?v=1"> <!-- ✅ ADDED -->
   <link rel="stylesheet" href="/css/components/suggestions.css?v=1">
   <link rel="stylesheet" href="/css/components/voice.css?v=1">
   <link rel="stylesheet" href="/css/components/drag-drop.css?v=1">
@@ -75,29 +74,24 @@
   <link rel="stylesheet" href="/css/components/hero.css?v=1">
 
   <!-- Sidebar & Topbar -->
-  <link rel="stylesheet" href="/css/components/sidebar.css?v=17">
+  <link rel="stylesheet" href="/css/components/sidebar.css?v=17">   <!-- ✅ UPDATED to v17 -->
   <link rel="stylesheet" href="/css/components/topbar.css?v=1">
 
   <!-- Menus -->
   <link rel="stylesheet" href="/css/components/model-menu.css?v=1">
-  <link rel="stylesheet" href="/css/components/menus.css?v=2">
+  <link rel="stylesheet" href="/css/components/menus.css?v=2">   <!-- ✅ v2 with fixed positioning -->
 
   <!-- Settings & Modal -->
   <link rel="stylesheet" href="/css/components/settings.css?v=1">
   <link rel="stylesheet" href="/css/components/modal.css?v=1">
 
-  <!-- Appearance Modes & Responsive -->
+  <!-- Appearance Modes & Responsive (LAST) -->
   <link rel="stylesheet" href="/css/components/interface-modes.css?v=1">
   <link rel="stylesheet" href="/css/components/responsive.css?v=1">
 
   <!-- Send State Component -->
   <link rel="stylesheet" href="/css/components/send-state.css?v=2">
   <link rel="stylesheet" href="/css/components/mobile-shell.css?v=2">
-
-  <!-- Voice Mode + Mascot -->
-  <link rel="stylesheet" href="/css/components/voice-mode.css?v=4">
-  <link rel="stylesheet" href="/css/components/mascot.css?v=7">
-  <link rel="stylesheet" href="/css/components/character-picker.css?v=1">
 
   <!-- KaTeX -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css">
@@ -109,6 +103,9 @@
   <script src="https://unpkg.com/lucide@latest"></script>
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.8/purify.min.js"></script>
+
+  <!-- Monetag Vignette - NOW LOADED VIA ads.js MODULE, NOT INLINE -->
+  <!-- Inline script removed to ensure Pro users stay ad-free -->
 </head>
 
 <body>
@@ -341,7 +338,7 @@
         <div class="glass-input-container" id="glassInputContainer">
           <div class="attached-chips-wrapper" id="attachedChipsWrapper"></div>
 
-          <!-- Expand button -->
+          <!-- EXPAND BUTTON -->
           <button
             class="composer-expand-btn"
             id="composerExpandBtn"
@@ -448,7 +445,7 @@
     </div>
   </div>
 
-  <!-- Settings -->
+  <!-- NEYO SETTINGS V1 — WITH PROFILE RESTORED -->
   <div class="neo-settings-overlay" id="neoSettingsOverlay" aria-hidden="true">
     <div class="neo-settings-modal" role="dialog" aria-modal="true" aria-label="NEYO Settings">
       <aside class="neo-settings-sidebar">
@@ -465,7 +462,7 @@
           <i data-lucide="x" size="20"></i>
         </button>
 
-        <!-- Navigation -->
+        <!-- Navigation – Profile restored after General -->
         <button class="neo-settings-tab active" type="button" data-settings-tab="general">
           <i data-lucide="settings-2" size="17"></i>
           <span>General</span>
@@ -536,14 +533,14 @@
 
       <section class="neo-settings-content">
 
-        <!-- General -->
+        <!-- PANEL: GENERAL — V1 FINAL -->
         <div class="neo-settings-panel active" id="settingsPanelGeneral">
           <div class="neo-settings-panel-header">
             <h2>General</h2>
             <p>Control how NEYO behaves across your workspace.</p>
           </div>
 
-          <!-- Quick Controls -->
+          <!-- QUICK CONTROLS -->
           <div class="neo-settings-section">
             <span class="neo-settings-section-title">Quick Controls</span>
 
@@ -679,7 +676,7 @@
             </div>
           </div>
 
-          <!-- General Preferences -->
+          <!-- GENERAL PREFERENCES -->
           <div class="neo-settings-section">
             <span class="neo-settings-section-title">General Preferences</span>
 
@@ -884,7 +881,7 @@
           </div>
         </div>
 
-        <!-- Profile -->
+        <!-- PANEL: PROFILE – EXISTING (UNCHANGED) -->
         <div class="neo-settings-panel" id="settingsPanelProfile">
           <h2>Profile</h2>
           <div class="profile-editor-card">
@@ -949,7 +946,7 @@
           </div>
         </div>
 
-        <!-- Notifications -->
+        <!-- PANEL: NOTIFICATIONS – EXISTING -->
         <div class="neo-settings-panel" id="settingsPanelNotifications">
           <h2>Notifications</h2>
           <div class="notification-center" id="notificationCenter">
@@ -961,7 +958,7 @@
           </div>
         </div>
 
-        <!-- Personalities -->
+        <!-- PANEL: PERSONALITIES – EXISTING -->
         <div class="neo-settings-panel" id="settingsPanelPersonalities">
           <h2>NEYO Personalities</h2>
           <p class="settings-subtitle">Choose how NEYO should respond. Custom personality is Pro only.</p>
@@ -1005,7 +1002,7 @@
           </div>
         </div>
 
-        <!-- Billing -->
+        <!-- PANEL: BILLING – EXISTING -->
         <div class="neo-settings-panel" id="settingsPanelBilling">
           <h2>Billing</h2>
           <div class="settings-row">
@@ -1025,7 +1022,7 @@
           </div>
         </div>
 
-        <!-- Appearance -->
+        <!-- PANEL: APPEARANCE – V1 (NEW) -->
         <div class="neo-settings-panel" id="settingsPanelAppearance">
 
           <div class="neo-settings-panel-header">
@@ -1033,7 +1030,7 @@
             <p>Personalize how NEYO looks and feels.</p>
           </div>
 
-          <!-- Live Preview -->
+          <!-- LIVE PREVIEW -->
           <div class="appearance-preview" id="appearancePreview">
             <div class="appearance-preview-window">
 
@@ -1054,7 +1051,7 @@
             </div>
           </div>
 
-          <!-- Visual Style -->
+          <!-- VISUAL STYLE -->
           <div class="neo-settings-section">
             <span class="neo-settings-section-title">Visual Style</span>
 
@@ -1096,7 +1093,7 @@
             </div>
           </div>
 
-          <!-- Display -->
+          <!-- DISPLAY -->
           <div class="neo-settings-section">
             <span class="neo-settings-section-title">Display</span>
 
@@ -1136,7 +1133,7 @@
             </div>
           </div>
 
-          <!-- Motion -->
+          <!-- MOTION -->
           <div class="neo-settings-section">
             <span class="neo-settings-section-title">Motion</span>
             <div class="settings-row">
@@ -1153,7 +1150,7 @@
 
         </div>
 
-        <!-- Workspace -->
+        <!-- PANEL: WORKSPACE – PLACEHOLDER -->
         <div class="neo-settings-panel" id="settingsPanelWorkspace">
           <div class="neo-settings-panel-header">
             <h2>Workspace</h2>
@@ -1166,7 +1163,7 @@
           </div>
         </div>
 
-        <!-- Privacy -->
+        <!-- PANEL: PRIVACY – PLACEHOLDER -->
         <div class="neo-settings-panel" id="settingsPanelPrivacy">
           <div class="neo-settings-panel-header">
             <h2>Privacy</h2>
@@ -1179,7 +1176,7 @@
           </div>
         </div>
 
-        <!-- Memory -->
+        <!-- PANEL: MEMORY – PLACEHOLDER -->
         <div class="neo-settings-panel" id="settingsPanelMemory">
           <div class="neo-settings-panel-header">
             <h2>Memory</h2>
@@ -1192,7 +1189,7 @@
           </div>
         </div>
 
-        <!-- Files -->
+        <!-- PANEL: FILES – PLACEHOLDER -->
         <div class="neo-settings-panel" id="settingsPanelFiles">
           <div class="neo-settings-panel-header">
             <h2>Files</h2>
@@ -1205,7 +1202,7 @@
           </div>
         </div>
 
-        <!-- Accessibility -->
+        <!-- PANEL: ACCESSIBILITY – PLACEHOLDER -->
         <div class="neo-settings-panel" id="settingsPanelAccessibility">
           <div class="neo-settings-panel-header">
             <h2>Accessibility</h2>
@@ -1218,7 +1215,7 @@
           </div>
         </div>
 
-        <!-- Keyboard -->
+        <!-- PANEL: KEYBOARD – PLACEHOLDER -->
         <div class="neo-settings-panel" id="settingsPanelKeyboard">
           <div class="neo-settings-panel-header">
             <h2>Keyboard</h2>
@@ -1231,7 +1228,7 @@
           </div>
         </div>
 
-        <!-- About -->
+        <!-- PANEL: ABOUT – PLACEHOLDER -->
         <div class="neo-settings-panel" id="settingsPanelAbout">
           <div class="neo-settings-panel-header">
             <h2>About</h2>
@@ -1248,7 +1245,7 @@
     </div>
   </div>
 
-  <!-- Upgrade Modal -->
+  <!-- Upgrade Modal (unchanged) -->
   <div class="modal-overlay" id="upgradeModal">
     <div class="modal-card">
       <button
@@ -1302,256 +1299,42 @@
     </div>
   </div>
 
-  <!-- Voice Mode -->
-  <div
-    id="neyoVoiceMode"
-    class="voice-mode-shell"
-    aria-hidden="true"
-  >
-    <div
-      class="voice-mode-stage"
-      role="dialog"
-      aria-label="NEYO voice conversation"
-    >
+  <!-- ========================================================= -->
+  <!-- SCRIPTS — FULL ORDER WITH SEND-STATE RESTORED & ADS v3   -->
+  <!-- ========================================================= -->
 
-      <!-- Mascot -->
-      <div class="voice-mode-mascot-slot">
-
-        <div
-          id="neyoMascot"
-          data-phase="idle"
-          data-tone="friendly"
-          data-eye="arc"
-          data-mouth="smile"
-          data-muted="false"
-          data-speaker="on"
-          data-camera="off"
-        >
-
-          <div class="neyo-mascot-face">
-
-            <div class="neyo-mascot-features">
-
-              <!-- Left eye -->
-              <div
-                id="neyoMascotLeftEye"
-                class="neyo-eye neyo-eye-left"
-              >
-                <span class="neyo-eye-core"></span>
-              </div>
-
-              <!-- Right eye -->
-              <div
-                id="neyoMascotRightEye"
-                class="neyo-eye neyo-eye-right"
-              >
-                <span class="neyo-eye-core"></span>
-              </div>
-
-              <!-- Mouth -->
-              <div
-                id="neyoMascotMouth"
-                class="neyo-mouth"
-              >
-                <span class="neyo-mouth-bar"></span>
-                <span class="neyo-mouth-bar"></span>
-                <span class="neyo-mouth-bar"></span>
-                <span class="neyo-mouth-bar"></span>
-                <span class="neyo-mouth-bar"></span>
-              </div>
-
-            </div>
-
-          </div>
-
-        </div>
-
-        <!-- Camera preview -->
-        <div
-          id="neyoCameraPreview"
-          class="voice-mode-camera-preview"
-          aria-hidden="true"
-        >
-          <video
-            id="neyoCameraVideo"
-            autoplay
-            muted
-            playsinline
-          ></video>
-        </div>
-
-      </div>
-
-      <!-- Status -->
-      <div
-        id="neyoMascotStatus"
-        class="voice-mode-status"
-        aria-live="polite"
-      >
-        Ready
-      </div>
-
-      <!-- Controls -->
-      <div class="voice-mode-controls">
-
-        <button
-          id="voiceModeMicBtn"
-          class="voice-mode-control is-active"
-          type="button"
-          aria-label="Mute microphone"
-          aria-pressed="true"
-        ></button>
-
-        <button
-          id="voiceModeCameraBtn"
-          class="voice-mode-control"
-          type="button"
-          aria-label="Turn camera on"
-          aria-pressed="false"
-        ></button>
-
-        <button
-          id="voiceModeSpeakerBtn"
-          class="voice-mode-control is-active"
-          type="button"
-          aria-label="Turn speaker off"
-          aria-pressed="true"
-        ></button>
-
-        <!-- Character button -->
-        <button
-          id="characterPickerBtn"
-          class="voice-mode-control"
-          type="button"
-          aria-label="Choose character"
-          aria-haspopup="dialog"
-          aria-controls="characterPicker"
-        >
-          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <rect
-              x="5"
-              y="5"
-              width="14"
-              height="14"
-              rx="5"
-              stroke="currentColor"
-              stroke-width="1.8"
-            />
-            <path
-              d="M9 10h.01M15 10h.01"
-              stroke="currentColor"
-              stroke-width="2.2"
-              stroke-linecap="round"
-            />
-            <path
-              d="M9 15c1.8 1.2 4.2 1.2 6 0"
-              stroke="currentColor"
-              stroke-width="1.7"
-              stroke-linecap="round"
-            />
-          </svg>
-        </button>
-
-        <button
-          id="voiceModeEndBtn"
-          class="voice-mode-control voice-mode-end"
-          type="button"
-          aria-label="End voice conversation"
-        ></button>
-
-      </div>
-
-    </div>
-
-    <!-- Character Picker -->
-    <div
-      id="characterPicker"
-      class="character-picker-shell"
-      aria-hidden="true"
-    >
-      <section
-        class="character-picker-panel"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="characterPickerTitle"
-      >
-        <header class="character-picker-header">
-
-          <div class="character-picker-heading">
-            <h2
-              id="characterPickerTitle"
-              class="character-picker-title"
-            >
-              Choose a character
-            </h2>
-
-            <p class="character-picker-subtitle">
-              Pick who you want to talk with.
-            </p>
-          </div>
-
-          <button
-            id="characterPickerCloseBtn"
-            class="character-picker-close"
-            type="button"
-            aria-label="Close character picker"
-          >
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path
-                d="M7 7l10 10M17 7L7 17"
-                stroke="currentColor"
-                stroke-width="1.8"
-                stroke-linecap="round"
-              />
-            </svg>
-          </button>
-
-        </header>
-
-        <div
-          id="characterPickerList"
-          class="character-picker-list"
-          role="listbox"
-          aria-label="Available characters"
-        ></div>
-      </section>
-    </div>
-
-  </div>
-
-  <!-- Application -->
+  <!-- Main working app -->
   <script src="/neo.js?v=86"></script>
 
-  <!-- Core UI -->
+  <!-- Model menu (v5) -->
   <script type="module" src="/js/components/model-menu.js?v=5"></script>
+
+  <!-- Profile (v3) -->
   <script type="module" src="/js/components/profile.js?v=3"></script>
+
+  <!-- Checkout (v4) -->
   <script type="module" src="/js/components/checkout.js?v=4"></script>
 
-  <!-- Composer -->
+  <!-- Composer expand (restored) -->
   <script type="module" src="/js/components/composer-expand.js?v=2"></script>
+
+  <!-- Composer scrollbar (NEW) -->
   <script type="module" src="/js/components/composer-scrollbar.js?v=1"></script>
 
-  <!-- Characters -->
-  <script type="module" src="/js/characters/neyo.js?v=1"></script>
-  <script type="module" src="/js/characters/zadi.js?v=1"></script>
-  <script type="module" src="/js/characters/wizi.js?v=1"></script>
+  <!-- Voice — MediaRecorder + Gemini transcription (✅ FIXED: NOW LOADED) -->
+  <script type="module" src="/js/components/voice.js?v=20"></script>
 
-  <!-- Voice & Mascot -->
-  <script type="module" src="/js/components/voice.js?v=104"></script>
-  <script type="module" src="/js/components/mascot.js?v=7"></script>
-  <script type="module" src="/js/components/mascot-intelligence.js?v=1"></script>
-  <script type="module" src="/js/components/voice-mode.js?v=4"></script>
-  <script type="module" src="/js/components/character-picker.js?v=1"></script>
-
-  <!-- UI Utilities -->
+  <!-- Native tooltips (restored) -->
   <script type="module" src="/js/components/native-tooltips.js?v=1"></script>
   <script type="module" src="/js/components/tooltip-registry.js?v=2"></script>
+
+  <!-- Send state (restored, v2) -->
   <script type="module" src="/js/components/send-state.js?v=2"></script>
 
-  <!-- Services -->
+  <!-- Ads module (v3) — handles Monetag Vignette + Onclick for Free users only -->
   <script type="module" src="/js/components/ads.js?v=3"></script>
 
-  <!-- Mobile -->
+  <!-- Mobile viewport fixes only -->
   <script type="module" src="/js/components/mobile-viewport.js?v=1"></script>
   <script type="module" src="/js/components/mobile-keyboard.js?v=1"></script>
 

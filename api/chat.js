@@ -21,6 +21,11 @@ const MAX_URL_CONTEXT_SOURCES = 5;
 const DDG_USER_AGENT =
     "NEO/1.0 (https://signaturesi.com; contact@signaturesi.com)";
 
+
+// ================================================================
+// NEO SYSTEM INSTRUCTION
+// ================================================================
+
 const NEO_RESPONSE_FORMAT = `
 You are NEYO, a natural, intelligent conversational assistant.
 
@@ -80,113 +85,159 @@ Bad response:
 "Bilkul honest jawab deta hoon! Here are several observations about your personality and professional background..."
 `;
 
-function cleanString(str, max = MAX_MESSAGE_LENGTH) {
-    if (typeof str !== "string") return "";
+
+// ================================================================
+// HELPERS
+// ================================================================
+
+function cleanString(
+    str,
+    max = MAX_MESSAGE_LENGTH
+) {
+    if (
+        typeof str !==
+        "string"
+    ) {
+        return "";
+    }
 
     return str
-        .replace(/\r\n?/g, "\n")
-        .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "")
+        .replace(
+            /\r\n?/g,
+            "\n"
+        )
+        .replace(
+            /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g,
+            ""
+        )
         .trim()
-        .slice(0, max);
+        .slice(
+            0,
+            max
+        );
 }
 
-function cleanEnv(value) {
-    return typeof value === "string"
+
+function cleanEnv(
+    value
+) {
+    return typeof value ===
+        "string"
         ? value.trim()
         : "";
 }
+
 
 function validAttachmentList(
     attachments,
     userId,
     max = MAX_ATTACHMENTS
 ) {
-    if (!Array.isArray(attachments)) {
+    if (
+        !Array.isArray(
+            attachments
+        )
+    ) {
         return [];
     }
 
     return attachments
-        .slice(0, max)
-        .map(file => ({
-            provider:
-                "supabase",
+        .slice(
+            0,
+            max
+        )
+        .map(
+            file => ({
+                provider:
+                    "supabase",
 
-            bucket:
-                UPLOAD_BUCKET,
+                bucket:
+                    UPLOAD_BUCKET,
 
-            path:
-                String(
-                    file.path || ""
-                ).trim(),
+                path:
+                    String(
+                        file.path ||
+                        ""
+                    ).trim(),
 
-            name:
-                String(
-                    file.name ||
-                    "Attached file"
-                )
-                    .replace(
-                        /[\\/]/g,
-                        "-"
+                name:
+                    String(
+                        file.name ||
+                        "Attached file"
                     )
-                    .slice(
-                        0,
-                        180
-                    ),
+                        .replace(
+                            /[\\/]/g,
+                            "-"
+                        )
+                        .slice(
+                            0,
+                            180
+                        ),
 
-            mimeType:
-                String(
-                    file.mimeType ||
-                    file.type ||
-                    "application/octet-stream"
-                )
-                    .slice(
-                        0,
-                        120
-                    ),
-
-            type:
-                String(
-                    file.mimeType ||
-                    file.type ||
-                    "application/octet-stream"
-                )
-                    .slice(
-                        0,
-                        120
-                    ),
-
-            category:
-                String(
-                    file.category ||
-                    "text"
-                )
-                    .toLowerCase()
-                    .slice(
-                        0,
-                        20
-                    ),
-
-            size:
-                Number.isFinite(
-                    Number(file.size)
-                )
-                    ? Math.max(
-                        0,
-                        Number(file.size)
+                mimeType:
+                    String(
+                        file.mimeType ||
+                        file.type ||
+                        "application/octet-stream"
                     )
-                    : 0
-        }))
+                        .slice(
+                            0,
+                            120
+                        ),
+
+                type:
+                    String(
+                        file.mimeType ||
+                        file.type ||
+                        "application/octet-stream"
+                    )
+                        .slice(
+                            0,
+                            120
+                        ),
+
+                category:
+                    String(
+                        file.category ||
+                        "text"
+                    )
+                        .toLowerCase()
+                        .slice(
+                            0,
+                            20
+                        ),
+
+                size:
+                    Number.isFinite(
+                        Number(
+                            file.size
+                        )
+                    )
+                        ? Math.max(
+                            0,
+                            Number(
+                                file.size
+                            )
+                        )
+                        : 0
+            })
+        )
         .filter(
             file =>
                 file.path &&
                 file.path.startsWith(
                     `users/${userId}/`
                 ) &&
-                !file.path.includes("..")
+                !file.path.includes(
+                    ".."
+                )
         );
 }
 
-function extractUrlsFromText(text) {
+
+function extractUrlsFromText(
+    text
+) {
     if (!text) {
         return [];
     }
@@ -203,27 +254,40 @@ function extractUrlsFromText(text) {
         url => {
             try {
                 const parsed =
-                    new URL(url);
+                    new URL(
+                        url
+                    );
 
                 return (
                     parsed.protocol ===
                         "https:" &&
-                    !parsed.hostname.includes(
-                        "localhost"
-                    ) &&
-                    !parsed.hostname.match(
-                        /^127\.\d+\.\d+\.\d+$/
-                    ) &&
-                    !parsed.hostname.match(
-                        /^192\.168\./
-                    ) &&
-                    !parsed.hostname.match(
-                        /^10\./
-                    ) &&
-                    !parsed.hostname.match(
-                        /^172\.(1[6-9]|2[0-9]|3[0-1])\./
-                    )
+
+                    !parsed.hostname
+                        .includes(
+                            "localhost"
+                        ) &&
+
+                    !parsed.hostname
+                        .match(
+                            /^127\.\d+\.\d+\.\d+$/
+                        ) &&
+
+                    !parsed.hostname
+                        .match(
+                            /^192\.168\./
+                        ) &&
+
+                    !parsed.hostname
+                        .match(
+                            /^10\./
+                        ) &&
+
+                    !parsed.hostname
+                        .match(
+                            /^172\.(1[6-9]|2[0-9]|3[0-1])\./
+                        )
                 );
+
             } catch {
                 return false;
             }
@@ -231,21 +295,33 @@ function extractUrlsFromText(text) {
     );
 }
 
-function normalizeUrl(url) {
+
+function normalizeUrl(
+    url
+) {
     try {
         const parsed =
-            new URL(url);
+            new URL(
+                url
+            );
 
-        parsed.search = "";
-        parsed.hash = "";
+        parsed.search =
+            "";
+
+        parsed.hash =
+            "";
 
         return parsed.toString();
+
     } catch {
         return url;
     }
 }
 
-function deduplicateUrls(urls) {
+
+function deduplicateUrls(
+    urls
+) {
     const seen =
         new Set();
 
@@ -273,6 +349,11 @@ function deduplicateUrls(urls) {
     );
 }
 
+
+// ================================================================
+// DUCKDUCKGO SEARCH
+// ================================================================
+
 function normalizeDuckDuckGoUrl(
     rawHref
 ) {
@@ -288,8 +369,11 @@ function normalizeDuckDuckGoUrl(
             );
 
         let destination =
-            parsed.searchParams
-                .get("uddg");
+            parsed
+                .searchParams
+                .get(
+                    "uddg"
+                );
 
         if (destination) {
             destination =
@@ -327,7 +411,8 @@ function normalizeDuckDuckGoUrl(
             return null;
         }
 
-        finalUrl.hash = "";
+        finalUrl.hash =
+            "";
 
         [
             "utm_source",
@@ -337,7 +422,8 @@ function normalizeDuckDuckGoUrl(
             "utm_content"
         ].forEach(
             key => {
-                finalUrl.searchParams
+                finalUrl
+                    .searchParams
                     .delete(
                         key
                     );
@@ -345,10 +431,12 @@ function normalizeDuckDuckGoUrl(
         );
 
         return finalUrl.href;
+
     } catch {
         return null;
     }
 }
+
 
 async function searchDuckDuckGo(
     query,
@@ -356,7 +444,8 @@ async function searchDuckDuckGo(
 ) {
     const cleanQuery =
         String(
-            query || ""
+            query ||
+            ""
         ).trim();
 
     if (!cleanQuery) {
@@ -384,7 +473,7 @@ async function searchDuckDuckGo(
                             "User-Agent":
                                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
 
-                            "Accept":
+                            Accept:
                                 "text/html,application/xhtml+xml",
 
                             "Accept-Language":
@@ -396,7 +485,9 @@ async function searchDuckDuckGo(
                     }
                 );
 
-            if (!response.ok) {
+            if (
+                !response.ok
+            ) {
                 console.warn(
                     "DuckDuckGo HTTP error:",
                     response.status,
@@ -420,9 +511,12 @@ async function searchDuckDuckGo(
 
             if (
                 !html ||
-                html.length < 500 ||
+                html.length <
+                    500 ||
                 /captcha|unusual traffic|anomaly/i
-                    .test(html)
+                    .test(
+                        html
+                    )
             ) {
                 console.warn(
                     "DuckDuckGo returned blocked or empty HTML."
@@ -431,7 +525,9 @@ async function searchDuckDuckGo(
                 continue;
             }
 
-            const results = [];
+            const results =
+                [];
+
             const seen =
                 new Set();
 
@@ -460,7 +556,9 @@ async function searchDuckDuckGo(
                             /<a\s+[^>]*href="([^"]+)"[^>]*>([^<]*)<\/a>/i
                         );
 
-                    if (!anchorMatch) {
+                    if (
+                        !anchorMatch
+                    ) {
                         continue;
                     }
 
@@ -482,7 +580,9 @@ async function searchDuckDuckGo(
 
                     if (
                         !url ||
-                        seen.has(url) ||
+                        seen.has(
+                            url
+                        ) ||
                         !title
                     ) {
                         continue;
@@ -503,7 +603,9 @@ async function searchDuckDuckGo(
                                 .trim()
                             : "";
 
-                    seen.add(url);
+                    seen.add(
+                        url
+                    );
 
                     results.push({
                         url,
@@ -538,7 +640,9 @@ async function searchDuckDuckGo(
                             /<a\s+[^>]*href="([^"]+)"[^>]*>([^<]*)<\/a>/i
                         );
 
-                    if (!linkMatch) {
+                    if (
+                        !linkMatch
+                    ) {
                         continue;
                     }
 
@@ -560,7 +664,9 @@ async function searchDuckDuckGo(
 
                     if (
                         !url ||
-                        seen.has(url) ||
+                        seen.has(
+                            url
+                        ) ||
                         !title
                     ) {
                         continue;
@@ -568,7 +674,7 @@ async function searchDuckDuckGo(
 
                     const snippetMatch =
                         tr.match(
-                            /<td[^>]*class="result-snippet"[^>]*>([\s\S]*?)<\/td>/i
+                            /<td[^>]*class="result-snippet"[^>]*>([^<]*)<\/td>/i
                         );
 
                     const snippet =
@@ -581,7 +687,9 @@ async function searchDuckDuckGo(
                                 .trim()
                             : "";
 
-                    seen.add(url);
+                    seen.add(
+                        url
+                    );
 
                     results.push({
                         url,
@@ -591,12 +699,18 @@ async function searchDuckDuckGo(
                 }
             }
 
+            console.log(
+                "DuckDuckGo parsed results:",
+                results.length
+            );
+
             if (
                 results.length >
                 0
             ) {
                 return results;
             }
+
         } catch (
             error
         ) {
@@ -610,261 +724,1170 @@ async function searchDuckDuckGo(
     return [];
 }
 
-async function fetchUrlText(
-    url,
-    maxChars = 12000
+
+// ================================================================
+// SEARCH PLANNER
+// ================================================================
+
+async function createSmartSearchPlan(
+    query
 ) {
+    const planningPrompt = `
+You are a search planner. Given a user's question, generate 2–3 specific web search queries to find the most accurate and current information.
+
+Return ONLY a JSON object with the following structure:
+{
+  "mode": "web",
+  "queries": ["query1", "query2", "query3"],
+  "entity": "main entity name (if any)",
+  "preferredPageTypes": ["type1", "type2"],
+  "avoidPageTypes": ["type1", "type2"]
+}
+
+Rules:
+- Queries should be specific and include context like current year, latest, or real-time if relevant.
+- Prefer queries that target direct profiles, official pages, or real-time data sources.
+- Avoid queries that return generic lists or homepages.
+- If the question is about a person, include their full name.
+- If about a company, include the official name.
+- Return only JSON, no other text.
+
+User question: ${query}
+`;
+
     try {
         const response =
-            await fetch(
-                url,
-                {
-                    method:
-                        "GET",
-
-                    headers: {
-                        "User-Agent":
-                            DDG_USER_AGENT,
-
-                        "Accept":
-                            "text/html,text/plain,application/xhtml+xml"
-                    },
-
-                    redirect:
-                        "follow"
-                }
+            await callGeminiForJson(
+                planningPrompt
             );
 
-        if (!response.ok) {
-            return "";
-        }
+        const text =
+            response
+                ?.candidates?.[0]
+                ?.content
+                ?.parts?.[0]
+                ?.text ||
+            "";
 
-        const contentType =
-            String(
-                response.headers
-                    .get(
-                        "content-type"
-                    ) || ""
-            ).toLowerCase();
+        const jsonMatch =
+            text.match(
+                /\{[\s\S]*\}/
+            );
 
         if (
-            !contentType.includes(
-                "text/html"
-            ) &&
-            !contentType.includes(
-                "text/plain"
-            ) &&
-            !contentType.includes(
-                "application/xhtml+xml"
-            )
+            jsonMatch
         ) {
-            return "";
+            return JSON.parse(
+                jsonMatch[0]
+            );
         }
 
-        let html =
-            await response.text();
+        return {
+            mode:
+                "web",
 
-        html =
-            html
-                .replace(
-                    /<script[\s\S]*?<\/script>/gi,
-                    " "
-                )
-                .replace(
-                    /<style[\s\S]*?<\/style>/gi,
-                    " "
-                )
-                .replace(
-                    /<noscript[\s\S]*?<\/noscript>/gi,
-                    " "
-                )
-                .replace(
-                    /<svg[\s\S]*?<\/svg>/gi,
-                    " "
-                )
-                .replace(
-                    /<[^>]+>/g,
-                    " "
-                )
-                .replace(
-                    /&nbsp;/gi,
-                    " "
-                )
-                .replace(
-                    /&amp;/gi,
-                    "&"
-                )
-                .replace(
-                    /&quot;/gi,
-                    '"'
-                )
-                .replace(
-                    /&#39;/gi,
-                    "'"
-                )
-                .replace(
-                    /\s+/g,
-                    " "
-                )
-                .trim();
+            queries: [
+                query,
+                `${query} latest`,
+                `${query} 2026`
+            ],
 
-        return html.slice(
-            0,
-            maxChars
-        );
-    } catch {
-        return "";
-    }
-}
+            entity:
+                "",
 
-function buildSearchContext(
-    results
-) {
-    return results
-        .map(
-            (
-                result,
-                index
-            ) => {
-                return [
-                    `[Source ${index + 1}]`,
-                    `Title: ${result.title}`,
-                    `URL: ${result.url}`,
-                    result.snippet
-                        ? `Snippet: ${result.snippet}`
-                        : "",
-                    result.content
-                        ? `Content: ${result.content}`
-                        : ""
-                ]
-                    .filter(Boolean)
-                    .join("\n");
-            }
-        )
-        .join(
-            "\n\n"
-        );
-}
+            preferredPageTypes: [
+                "direct profile",
+                "official page",
+                "real-time"
+            ],
 
-function normalizeIntelligence(
-    value
-) {
-    const normalized =
-        String(
-            value || "standard"
-        )
-            .trim()
-            .toLowerCase();
+            avoidPageTypes: [
+                "generic list",
+                "homepage",
+                "social media"
+            ]
+        };
 
-    if (
-        [
-            "standard",
-            "high"
-        ].includes(
-            normalized
-        )
+    } catch (
+        error
     ) {
-        return normalized;
-    }
-
-    return "standard";
-}
-
-function normalizeLanguage(
-    value
-) {
-    const normalized =
-        String(
-            value || "auto"
-        )
-            .trim()
-            .toLowerCase();
-
-    return normalized
-        .slice(
-            0,
-            40
-        ) || "auto";
-}
-
-function normalizePersonality(
-    value
-) {
-    const normalized =
-        String(
-            value || "neyo"
-        )
-            .trim()
-            .toLowerCase();
-
-    return normalized
-        .slice(
-            0,
-            50
-        ) || "neyo";
-}
-
-function normalizePrivateChat(
-    value
-) {
-    return value === true;
-}
-
-function buildPreferenceInstruction(
-    preferences = {}
-) {
-    const parts = [];
-
-    if (
-        preferences.intelligence ===
-        "high"
-    ) {
-        parts.push(
-            "Use deeper reasoning and more thorough analysis when useful, while keeping the final answer concise and readable."
+        console.warn(
+            "Search planning failed, using fallback:",
+            error
         );
-    }
 
-    if (
-        preferences.language &&
-        preferences.language !==
-        "auto"
-    ) {
-        parts.push(
-            `Preferred response language: ${preferences.language}.`
-        );
-    }
+        return {
+            mode:
+                "web",
 
-    if (
-        preferences.personality &&
-        preferences.personality !==
-        "neyo"
-    ) {
-        parts.push(
-            `Preferred personality/style preset: ${preferences.personality}.`
-        );
-    }
+            queries: [
+                query,
+                `${query} latest`,
+                `${query} 2026`
+            ],
 
-    return parts.join(
-        "\n"
-    );
+            entity:
+                "",
+
+            preferredPageTypes: [
+                "direct profile",
+                "official page",
+                "real-time"
+            ],
+
+            avoidPageTypes: [
+                "generic list",
+                "homepage",
+                "social media"
+            ]
+        };
+    }
 }
 
-async function uploadSupabaseFileToGemini(
-    file
+
+async function callGeminiForJson(
+    prompt
 ) {
     if (
         !GEMINI_API_KEY
     ) {
         throw new Error(
-            "Gemini API key is missing."
+            "Gemini API key missing"
         );
     }
 
+    const url =
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`;
+
+    const body = {
+        contents: [
+            {
+                role:
+                    "user",
+
+                parts: [
+                    {
+                        text:
+                            prompt
+                    }
+                ]
+            }
+        ],
+
+        generationConfig: {
+            temperature:
+                0.2,
+
+            maxOutputTokens:
+                512
+        }
+    };
+
+    const response =
+        await fetch(
+            url,
+            {
+                method:
+                    "POST",
+
+                headers: {
+                    "Content-Type":
+                        "application/json"
+                },
+
+                body:
+                    JSON.stringify(
+                        body
+                    )
+            }
+        );
+
+    const data =
+        await response
+            .json()
+            .catch(
+                () => ({})
+            );
+
+    if (
+        !response.ok
+    ) {
+        throw new Error(
+            data
+                ?.error
+                ?.message ||
+            "Planning API error"
+        );
+    }
+
+    return data;
+}
+
+
+// ================================================================
+// RESULT RANKING
+// ================================================================
+
+function rankSearchResults(
+    results,
+    plan
+) {
+    return results
+        .map(
+            item => {
+                let score =
+                    0;
+
+                const title =
+                    (
+                        item.title ||
+                        ""
+                    ).toLowerCase();
+
+                const url =
+                    (
+                        item.url ||
+                        ""
+                    ).toLowerCase();
+
+                const domain =
+                    url
+                        .replace(
+                            /^https?:\/\//,
+                            ""
+                        )
+                        .split(
+                            "/"
+                        )[0] ||
+                    "";
+
+                if (
+                    plan.entity &&
+                    title.includes(
+                        plan.entity
+                            .toLowerCase()
+                    )
+                ) {
+                    score +=
+                        35;
+                }
+
+                if (
+                    url.includes(
+                        "/profile/"
+                    )
+                ) {
+                    score +=
+                        30;
+                } else if (
+                    url.includes(
+                        "/real-time"
+                    )
+                ) {
+                    score +=
+                        25;
+                } else if (
+                    url.includes(
+                        "/latest"
+                    )
+                ) {
+                    score +=
+                        20;
+                } else if (
+                    url.includes(
+                        "/today"
+                    )
+                ) {
+                    score +=
+                        15;
+                }
+
+                if (
+                    domain.includes(
+                        "bloomberg"
+                    )
+                ) {
+                    score +=
+                        25;
+                } else if (
+                    domain.includes(
+                        "forbes"
+                    )
+                ) {
+                    score +=
+                        20;
+                } else if (
+                    domain.includes(
+                        "reuters"
+                    ) ||
+                    domain.includes(
+                        "apnews"
+                    )
+                ) {
+                    score +=
+                        18;
+                } else if (
+                    domain.includes(
+                        "wsj"
+                    ) ||
+                    domain.includes(
+                        "ft"
+                    )
+                ) {
+                    score +=
+                        15;
+                } else if (
+                    domain.includes(
+                        "wikipedia"
+                    )
+                ) {
+                    score +=
+                        10;
+                } else if (
+                    domain.includes(
+                        "twitter"
+                    ) ||
+                    domain.includes(
+                        "facebook"
+                    ) ||
+                    domain.includes(
+                        "instagram"
+                    )
+                ) {
+                    score -=
+                        50;
+                } else if (
+                    domain.includes(
+                        "reddit"
+                    ) ||
+                    domain.includes(
+                        "quora"
+                    )
+                ) {
+                    score -=
+                        20;
+                } else if (
+                    domain.includes(
+                        "youtube"
+                    )
+                ) {
+                    score -=
+                        10;
+                }
+
+                if (
+                    url.includes(
+                        "/worlds-billionaires"
+                    )
+                ) {
+                    score -=
+                        20;
+                }
+
+                if (
+                    url.includes(
+                        "/list/"
+                    )
+                ) {
+                    score -=
+                        15;
+                }
+
+                if (
+                    url.includes(
+                        "/home/"
+                    )
+                ) {
+                    score -=
+                        30;
+                }
+
+                if (
+                    url.includes(
+                        "/search"
+                    )
+                ) {
+                    score -=
+                        25;
+                }
+
+                const yearMatch =
+                    url.match(
+                        /20[2-9][0-9]/
+                    );
+
+                if (
+                    yearMatch
+                ) {
+                    score +=
+                        10;
+                }
+
+                if (
+                    item.snippet &&
+                    item.snippet.length >
+                        100
+                ) {
+                    score +=
+                        5;
+                }
+
+                return {
+                    ...item,
+
+                    score:
+                        Math.max(
+                            0,
+                            score
+                        )
+                };
+            }
+        )
+        .sort(
+            (
+                a,
+                b
+            ) =>
+                b.score -
+                a.score
+        )
+        .slice(
+            0,
+            10
+        );
+}
+
+
+// ================================================================
+// FOCUSED RETRY SEARCH
+// ================================================================
+
+async function runFocusedSearch(
+    plan,
+    rankedResults
+) {
+    const domains =
+        rankedResults
+            .slice(
+                0,
+                3
+            )
+            .map(
+                result => {
+                    try {
+                        const url =
+                            new URL(
+                                result.url
+                            );
+
+                        return url.hostname
+                            .replace(
+                                /^www\./,
+                                ""
+                            );
+
+                    } catch {
+                        return null;
+                    }
+                }
+            )
+            .filter(
+                Boolean
+            );
+
+    const extraQueries =
+        [];
+
+    const entity =
+        plan.entity ||
+        "";
+
+    domains.forEach(
+        domain => {
+            if (
+                domain
+            ) {
+                extraQueries.push(
+                    `site:${domain} "${entity}"`
+                );
+            }
+        }
+    );
+
+    if (
+        extraQueries.length ===
+        0
+    ) {
+        extraQueries.push(
+            `"${entity}" profile`
+        );
+    }
+
+    const searchPromises =
+        extraQueries
+            .slice(
+                0,
+                2
+            )
+            .map(
+                query =>
+                    searchDuckDuckGo(
+                        query
+                    )
+            );
+
+    const results =
+        await Promise.all(
+            searchPromises
+        );
+
+    return results.flat();
+}
+
+
+// ================================================================
+// GENERAL PREFERENCE HELPERS
+// ================================================================
+
+function normalizeIntelligence(
+    value
+) {
+    return value ===
+        "maximum"
+        ? "maximum"
+        : "standard";
+}
+
+
+function normalizeLanguage(
+    value
+) {
+    const allowed = [
+        "auto",
+        "english",
+        "urdu",
+        "roman-urdu"
+    ];
+
+    return allowed.includes(
+        value
+    )
+        ? value
+        : "auto";
+}
+
+
+function normalizePersonality(
+    value
+) {
+    const allowed = [
+        "neyo",
+        "zadi",
+        "wizi"
+    ];
+
+    return allowed.includes(
+        value
+    )
+        ? value
+        : "neyo";
+}
+
+
+function normalizePrivateChat(
+    value
+) {
+    return value ===
+        true;
+}
+
+
+// ================================================================
+// DYNAMIC SYSTEM INSTRUCTION BUILDER
+// ================================================================
+
+function buildSystemInstruction({
+    intelligence = "standard",
+    language = "auto",
+    personality = "neyo"
+} = {}) {
+    const intelligenceInstruction =
+        intelligence ===
+        "maximum"
+            ? `
+INTELLIGENCE MODE — MAXIMUM
+- Use deeper analysis for difficult requests.
+- Check assumptions, edge cases, constraints, and internal consistency before answering.
+- Prefer correctness and completeness over speed.
+- For simple requests, remain concise and do not over-explain.
+`
+            : `
+INTELLIGENCE MODE — STANDARD
+- Prioritize fast, clear, accurate responses.
+- Use deeper analysis only when the task actually requires it.
+- Avoid unnecessary complexity.
+`;
+
+    const languageInstructions = {
+        auto: `
+LANGUAGE
+- Detect the user's language naturally.
+- Match the user's language unless they explicitly request another language.
+`,
+
+        english: `
+LANGUAGE
+- Respond in English by default.
+- Preserve quoted or technical text when another language is necessary.
+`,
+
+        urdu: `
+LANGUAGE
+- Respond in natural Urdu script by default.
+- Keep technical names and code in their appropriate original form.
+`,
+
+        "roman-urdu": `
+LANGUAGE
+- Respond in natural Roman Urdu by default.
+- Keep code, APIs, technical identifiers, and product names unchanged.
+`
+    };
+
+    const personalityInstructions = {
+        neyo: `
+PERSONALITY — NEYO
+- Balanced, intelligent, practical, and composed.
+- Strong at thinking, writing, decision support, and everyday work.
+- Balance speed with useful reasoning.
+`,
+
+        zadi: `
+PERSONALITY — ZADI
+- Creative, expressive, imaginative, and polished.
+- Strong at writing, branding, ideation, storytelling, and creative exploration.
+- Do not sacrifice factual accuracy for creativity.
+`,
+
+        wizi: `
+PERSONALITY — WIZI
+- Research-oriented, analytical, careful, and evidence-conscious.
+- Strong at investigation, comparison, technical analysis, and structured reasoning.
+- Clearly distinguish verified information from uncertainty.
+`
+    };
+
+    return `
+${NEO_RESPONSE_FORMAT}
+
+${intelligenceInstruction}
+
+${languageInstructions[language]}
+
+${personalityInstructions[personality]}
+`.trim();
+}
+
+
+// ================================================================
+// GENERATION CONFIG BUILDER
+// ================================================================
+
+function getGenerationConfig(
+    intelligence,
+    isDeepResearch
+) {
+    if (
+        isDeepResearch
+    ) {
+        return {
+            temperature:
+                0.5,
+
+            maxOutputTokens:
+                8192
+        };
+    }
+
+    if (
+        intelligence ===
+        "maximum"
+    ) {
+        return {
+            temperature:
+                0.55,
+
+            maxOutputTokens:
+                8192
+        };
+    }
+
+    return {
+        temperature:
+            0.65,
+
+        maxOutputTokens:
+            4096
+    };
+}
+
+
+// ================================================================
+// GEMINI URL CONTEXT CALL
+// ================================================================
+
+async function callGeminiUrlContext(
+    query,
+    urls,
+    model,
+    isDeepResearch,
+    preferences
+) {
+    if (
+        !GEMINI_API_KEY
+    ) {
+        throw new Error(
+            "Gemini API key missing"
+        );
+    }
+
+    const url =
+        `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`;
+
+    const contextPrompt = `
+Read only these URLs and answer the user's question based on their content:
+
+${urls
+    .map(
+        (
+            item,
+            index
+        ) =>
+            `${index + 1}. ${item}`
+    )
+    .join(
+        "\n"
+    )}
+
+Original question: ${query}
+
+Rules:
+- Extract only the requested information from these URLs.
+- If a URL cannot be accessed, note that.
+- Do not search the web or add information from other sources.
+- Cite the source for each piece of information.
+- If multiple sources show different values, explain the difference.
+- Be concise and answer the actual question first.
+- If the answer is not found in any URL, say "I could not verify this from the provided sources."
+`;
+
+    const body = {
+        systemInstruction: {
+            parts: [
+                {
+                    text:
+                        buildSystemInstruction(
+                            preferences
+                        )
+                }
+            ]
+        },
+
+        contents: [
+            {
+                role:
+                    "user",
+
+                parts: [
+                    {
+                        text:
+                            contextPrompt
+                    }
+                ]
+            }
+        ],
+
+        tools: [
+            {
+                url_context:
+                    {}
+            }
+        ],
+
+        generationConfig:
+            getGenerationConfig(
+                preferences.intelligence,
+                isDeepResearch
+            )
+    };
+
+    const response =
+        await fetch(
+            url,
+            {
+                method:
+                    "POST",
+
+                headers: {
+                    "Content-Type":
+                        "application/json"
+                },
+
+                body:
+                    JSON.stringify(
+                        body
+                    )
+            }
+        );
+
+    const data =
+        await response
+            .json()
+            .catch(
+                () => ({})
+            );
+
+    if (
+        !response.ok
+    ) {
+        console.error(
+            "Gemini URL Context error:",
+            data
+        );
+
+        throw new Error(
+            data
+                ?.error
+                ?.message ||
+            "Gemini API error"
+        );
+    }
+
+    return data;
+}
+
+
+// ================================================================
+// SMART WEB ANSWER
+// ================================================================
+
+async function smartWebAnswer(
+    query,
+    model,
+    isDeepResearch,
+    preferences
+) {
+    const plan =
+        await createSmartSearchPlan(
+            query
+        );
+
+    const searchResults =
+        await Promise.all(
+            plan.queries
+                .slice(
+                    0,
+                    3
+                )
+                .map(
+                    searchQuery =>
+                        searchDuckDuckGo(
+                            searchQuery
+                        )
+                )
+        );
+
+    let allResults =
+        searchResults.flat();
+
+    let ranked =
+        rankSearchResults(
+            allResults,
+            plan
+        );
+
+    if (
+        ranked.length ===
+        0
+    ) {
+        const retryResults =
+            await runFocusedSearch(
+                plan,
+                ranked
+            );
+
+        const combined = [
+            ...ranked,
+            ...retryResults
+        ];
+
+        ranked =
+            rankSearchResults(
+                combined,
+                plan
+            );
+    }
+
+    const urls =
+        ranked
+            .filter(
+                item =>
+                    item?.url
+            )
+            .slice(
+                0,
+                5
+            )
+            .map(
+                item =>
+                    item.url
+            );
+
+    if (
+        urls.length ===
+        0
+    ) {
+        console.warn(
+            "No usable DuckDuckGo URLs found.",
+            {
+                query,
+                plan,
+                searchResultCount:
+                    allResults.length
+            }
+        );
+
+        throw new Error(
+            "I could not find usable pages for this request."
+        );
+    }
+
+    const geminiResponse =
+        await callGeminiUrlContext(
+            query,
+            urls,
+            model,
+            isDeepResearch,
+            preferences
+        );
+
+    const reply =
+        geminiResponse
+            ?.candidates?.[0]
+            ?.content
+            ?.parts?.[0]
+            ?.text ||
+        "";
+
+    const urlMetadata =
+        geminiResponse
+            ?.candidates?.[0]
+            ?.url_context_metadata
+            ?.url_metadata ||
+        [];
+
+    const sources =
+        urlMetadata
+            .filter(
+                item =>
+                    item
+                        .url_retrieval_status ===
+                    "URL_RETRIEVAL_STATUS_SUCCESS"
+            )
+            .map(
+                item => ({
+                    title:
+                        item.url ||
+                        "Source",
+
+                    url:
+                        item.url,
+
+                    status:
+                        "success"
+                })
+            );
+
+    const finalSources =
+        sources.length >
+        0
+            ? sources
+            : urls.map(
+                sourceUrl => ({
+                    title:
+                        new URL(
+                            sourceUrl
+                        )
+                            .hostname
+                            .replace(
+                                /^www\./,
+                                ""
+                            ),
+
+                    url:
+                        sourceUrl,
+
+                    status:
+                        "success"
+                })
+            );
+
+    return {
+        reply:
+            reply ||
+            "No reply generated.",
+
+        sources:
+            finalSources,
+
+        usedUrlContext:
+            true
+    };
+}
+
+
+// ================================================================
+// STANDARD GEMINI CALL
+// ================================================================
+
+async function callGemini(
+    messages,
+    model,
+    isDeepResearch,
+    preferences
+) {
+    if (
+        !GEMINI_API_KEY
+    ) {
+        throw new Error(
+            "Gemini API key missing"
+        );
+    }
+
+    const url =
+        `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`;
+
+    const body = {
+        systemInstruction: {
+            parts: [
+                {
+                    text:
+                        buildSystemInstruction(
+                            preferences
+                        )
+                }
+            ]
+        },
+
+        contents:
+            messages,
+
+        generationConfig:
+            getGenerationConfig(
+                preferences.intelligence,
+                isDeepResearch
+            )
+    };
+
+    const response =
+        await fetch(
+            url,
+            {
+                method:
+                    "POST",
+
+                headers: {
+                    "Content-Type":
+                        "application/json"
+                },
+
+                body:
+                    JSON.stringify(
+                        body
+                    )
+            }
+        );
+
+    const data =
+        await response
+            .json()
+            .catch(
+                () => ({})
+            );
+
+    if (
+        !response.ok
+    ) {
+        console.error(
+            "Gemini API error:",
+            data
+        );
+
+        throw new Error(
+            data
+                ?.error
+                ?.message ||
+            "Gemini API error"
+        );
+    }
+
+    return data;
+}
+
+
+// ================================================================
+// GEMINI FILE UPLOAD HELPERS
+// ================================================================
+
+async function deleteGeminiFile(
+    apiKey,
+    fileName
+) {
+    if (
+        !fileName ||
+        !apiKey
+    ) {
+        return;
+    }
+
+    const safeName =
+        String(
+            fileName
+        ).replace(
+            /^\/+/,
+            ""
+        );
+
+    try {
+        await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/${safeName}?key=${encodeURIComponent(apiKey)}`,
+            {
+                method:
+                    "DELETE"
+            }
+        );
+
+    } catch (
+        error
+    ) {
+        console.warn(
+            "Gemini temporary file deletion failed:",
+            error
+        );
+    }
+}
+
+
+async function uploadSupabaseFileToGemini(
+    file
+) {
     const {
-        data,
+        data:
+            storedFile,
         error
     } =
-        await supabase.storage
+        await supabase
+            .storage
             .from(
                 file.bucket ||
                 UPLOAD_BUCKET
@@ -873,29 +1896,36 @@ async function uploadSupabaseFileToGemini(
                 file.path
             );
 
-    if (error) {
+    if (
+        error ||
+        !storedFile
+    ) {
         throw new Error(
-            error.message ||
-            "Unable to download attachment."
+            error?.message ||
+            `Unable to read ${file.name}.`
         );
     }
 
+    const mimeType =
+        file.mimeType ||
+        storedFile.type ||
+        "application/octet-stream";
+
     const bytes =
-        Buffer.from(
-            await data.arrayBuffer()
-        );
+        await storedFile
+            .arrayBuffer();
 
     const startResponse =
         await fetch(
-            "https://generativelanguage.googleapis.com/upload/v1beta/files?key=" +
-            encodeURIComponent(
-                GEMINI_API_KEY
-            ),
+            `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${encodeURIComponent(GEMINI_API_KEY)}`,
             {
                 method:
                     "POST",
 
                 headers: {
+                    "Content-Type":
+                        "application/json",
+
                     "X-Goog-Upload-Protocol":
                         "resumable",
 
@@ -904,42 +1934,52 @@ async function uploadSupabaseFileToGemini(
 
                     "X-Goog-Upload-Header-Content-Length":
                         String(
-                            bytes.length
+                            bytes.byteLength
                         ),
 
                     "X-Goog-Upload-Header-Content-Type":
-                        file.mimeType ||
-                        "application/octet-stream",
-
-                    "Content-Type":
-                        "application/json"
+                        mimeType
                 },
 
                 body:
                     JSON.stringify({
                         file: {
-                            display_name:
-                                file.name
+                            displayName:
+                                file.name ||
+                                "NEO attachment"
                         }
                     })
             }
         );
 
-    if (!startResponse.ok) {
+    if (
+        !startResponse.ok
+    ) {
+        const details =
+            await startResponse
+                .text()
+                .catch(
+                    () => ""
+                );
+
         throw new Error(
-            "Unable to initialize Gemini file upload."
+            details ||
+            "Gemini upload initialization failed."
         );
     }
 
     const uploadUrl =
-        startResponse.headers
+        startResponse
+            .headers
             .get(
                 "x-goog-upload-url"
             );
 
-    if (!uploadUrl) {
+    if (
+        !uploadUrl
+    ) {
         throw new Error(
-            "Gemini upload URL missing."
+            "Gemini upload URL was not returned."
         );
     }
 
@@ -953,7 +1993,7 @@ async function uploadSupabaseFileToGemini(
                 headers: {
                     "Content-Length":
                         String(
-                            bytes.length
+                            bytes.byteLength
                         ),
 
                     "X-Goog-Upload-Offset":
@@ -968,328 +2008,158 @@ async function uploadSupabaseFileToGemini(
             }
         );
 
-    if (
-        !uploadResponse.ok
-    ) {
-        throw new Error(
-            "Gemini file upload failed."
-        );
-    }
-
-    const payload =
-        await uploadResponse.json();
-
-    return payload.file || null;
-}
-
-async function deleteGeminiFile(
-    apiKey,
-    fileName
-) {
-    if (
-        !apiKey ||
-        !fileName
-    ) {
-        return;
-    }
-
-    try {
-        await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/${fileName}?key=${encodeURIComponent(apiKey)}`,
-            {
-                method:
-                    "DELETE"
-            }
-        );
-    } catch {}
-}
-
-function buildGeminiBody(
-    contents,
-    isDeepResearch = false,
-    preferences = {}
-) {
-    const preferenceInstruction =
-        buildPreferenceInstruction(
-            preferences
-        );
-
-    return {
-        systemInstruction: {
-            parts: [
-                {
-                    text:
-                        `${NEO_RESPONSE_FORMAT}\n\n${preferenceInstruction}`
-                }
-            ]
-        },
-
-        contents,
-
-        generationConfig: {
-            temperature:
-                isDeepResearch
-                    ? 0.45
-                    : (
-                        preferences.intelligence ===
-                        "high"
-                            ? 0.5
-                            : 0.65
-                    ),
-
-            topP:
-                0.95,
-
-            maxOutputTokens:
-                isDeepResearch
-                    ? 8192
-                    : 4096
-        }
-    };
-}
-
-async function callGemini(
-    messages,
-    model,
-    isDeepResearch = false,
-    preferences = {}
-) {
-    if (!GEMINI_API_KEY) {
-        throw new Error(
-            "Gemini API key is missing."
-        );
-    }
-
-    const response =
-        await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`,
-            {
-                method:
-                    "POST",
-
-                headers: {
-                    "Content-Type":
-                        "application/json"
-                },
-
-                body:
-                    JSON.stringify(
-                        buildGeminiBody(
-                            messages,
-                            isDeepResearch,
-                            preferences
-                        )
-                    )
-            }
-        );
-
-    const data =
-        await response
+    const uploadData =
+        await uploadResponse
             .json()
             .catch(
                 () => ({})
             );
 
-    if (!response.ok) {
-        throw new Error(
-            data?.error
-                ?.message ||
-            `Gemini request failed (${response.status}).`
-        );
-    }
-
-    return data;
-}
-
-async function callGeminiUrlContext(
-    query,
-    urls,
-    model,
-    isDeepResearch = false,
-    preferences = {}
-) {
-    const contextParts = [];
-
-    for (
-        const url
-        of urls
+    if (
+        !uploadResponse.ok
     ) {
-        const content =
-            await fetchUrlText(
-                url
-            );
-
-        contextParts.push(
-            {
-                url,
-                content
-            }
+        throw new Error(
+            uploadData
+                ?.error
+                ?.message ||
+            "Gemini file upload failed."
         );
     }
 
-    const context =
-        contextParts
-            .map(
-                (
-                    item,
-                    index
-                ) =>
-                    `[URL ${index + 1}]
-${item.url}
-
-${item.content}`
-            )
-            .join(
-                "\n\n"
-            );
-
-    const messages = [
-        {
-            role:
-                "user",
-
-            parts: [
-                {
-                    text:
-                        `${query}
-
-Use the following live URL context when relevant. Do not invent information beyond the supplied context.
-
-${context}`
-                }
-            ]
-        }
-    ];
-
-    return callGemini(
-        messages,
-        model,
-        isDeepResearch,
-        preferences
-    );
-}
-
-async function smartWebAnswer(
-    query,
-    model,
-    isDeepResearch = false,
-    preferences = {}
-) {
-    const results =
-        await searchDuckDuckGo(
-            query,
-            isDeepResearch
-                ? 10
-                : 6
-        );
+    const geminiFile =
+        uploadData?.file;
 
     if (
-        results.length ===
-        0
+        !geminiFile?.name ||
+        !geminiFile?.uri
     ) {
         throw new Error(
-            "No web results found."
+            "Gemini file information was not returned."
         );
     }
 
-    const enriched = [];
-
-    for (
-        const result
-        of results.slice(
-            0,
-            isDeepResearch
-                ? 8
-                : 5
-        )
+    if (
+        geminiFile.state ===
+        "PROCESSING"
     ) {
-        const content =
-            await fetchUrlText(
-                result.url,
-                isDeepResearch
-                    ? 16000
-                    : 9000
-            );
-
-        enriched.push({
-            ...result,
-            content
-        });
+        return await waitForGeminiFile(
+            geminiFile.name,
+            mimeType
+        );
     }
 
-    const context =
-        buildSearchContext(
-            enriched
+    if (
+        geminiFile.state ===
+        "FAILED"
+    ) {
+        throw new Error(
+            `Gemini could not process ${file.name}.`
         );
-
-    const messages = [
-        {
-            role:
-                "user",
-
-            parts: [
-                {
-                    text:
-                        `${query}
-
-You have fresh web search context below. Answer using it when relevant. Prefer the newest and most trustworthy source. If sources conflict, say so. Do not invent facts.
-
-${context}`
-                }
-            ]
-        }
-    ];
-
-    const response =
-        await callGemini(
-            messages,
-            model,
-            isDeepResearch,
-            preferences
-        );
-
-    const reply =
-        response
-            ?.candidates?.[0]
-            ?.content
-            ?.parts?.[0]
-            ?.text ||
-        "";
+    }
 
     return {
-        reply,
+        name:
+            geminiFile.name,
 
-        sources:
-            enriched.map(
-                result => ({
-                    title:
-                        result.title,
+        uri:
+            geminiFile.uri,
 
-                    url:
-                        result.url,
-
-                    snippet:
-                        result.snippet
-                })
-            ),
-
-        usedUrlContext:
-            true
+        mimeType:
+            geminiFile.mimeType ||
+            mimeType
     };
 }
 
+
+async function waitForGeminiFile(
+    fileName,
+    fallbackMimeType
+) {
+    for (
+        let attempt = 0;
+        attempt < 60;
+        attempt += 1
+    ) {
+        await new Promise(
+            resolve =>
+                setTimeout(
+                    resolve,
+                    2000
+                )
+        );
+
+        const response =
+            await fetch(
+                `https://generativelanguage.googleapis.com/v1beta/${fileName}?key=${encodeURIComponent(GEMINI_API_KEY)}`
+            );
+
+        const data =
+            await response
+                .json()
+                .catch(
+                    () => ({})
+                );
+
+        if (
+            !response.ok
+        ) {
+            throw new Error(
+                data
+                    ?.error
+                    ?.message ||
+                "Unable to check Gemini file status."
+            );
+        }
+
+        if (
+            data.state ===
+            "ACTIVE"
+        ) {
+            return {
+                name:
+                    data.name,
+
+                uri:
+                    data.uri,
+
+                mimeType:
+                    data.mimeType ||
+                    fallbackMimeType
+            };
+        }
+
+        if (
+            data.state ===
+            "FAILED"
+        ) {
+            throw new Error(
+                "Gemini could not process this file."
+            );
+        }
+    }
+
+    throw new Error(
+        "Gemini file processing timed out."
+    );
+}
+
+
+// ================================================================
+// SAVE MESSAGE
+// ================================================================
+
 async function saveMessage(
-    supabaseClient,
+    supabase,
     conversationId,
     role,
     content,
-    attachments = [],
-    sources = []
+    attachments,
+    sources
 ) {
     const {
         error
     } =
-        await supabaseClient
+        await supabase
             .from(
                 "chat_messages"
             )
@@ -1299,73 +2169,93 @@ async function saveMessage(
 
                 role,
 
-                content,
+                content:
+                    cleanString(
+                        content,
+                        MAX_MESSAGE_LENGTH
+                    ),
 
                 attachments:
-                    Array.isArray(
-                        attachments
-                    )
-                        ? attachments
-                        : [],
+                    attachments ||
+                    [],
 
                 sources:
-                    Array.isArray(
-                        sources
-                    )
-                        ? sources
-                        : []
+                    sources ||
+                    []
             });
 
-    if (error) {
+    if (
+        error
+    ) {
         throw new Error(
             error.message
         );
     }
 }
 
-export default async function handler(
+
+// ================================================================
+// MAIN HANDLER
+// ================================================================
+
+export default async (
     req,
     res
-) {
-    if (
-        req.method !==
-        "POST"
-    ) {
-        res.setHeader(
-            "Allow",
-            "POST"
-        );
+) => {
+    const geminiFiles =
+        [];
 
-        return res
-            .status(405)
-            .json({
-                error:
-                    "Method not allowed"
-            });
-    }
+    let userId =
+        null;
 
-    let geminiFiles = [];
-    let reservedType = null;
-    let userId = null;
-    let isPro = false;
+    let reservedType =
+        null;
+
+    let isPro =
+        false;
+
 
     try {
-        const user =
+        // ============================================================
+        // AUTH
+        // IMPORTANT:
+        // lib/auth.js returns auth.userId
+        // ============================================================
+
+        const auth =
             await getAuthenticatedUser(
                 req
             );
 
-        if (!user?.id) {
+        if (
+            !auth?.userId
+        ) {
             return res
-                .status(401)
+                .status(
+                    401
+                )
                 .json({
                     error:
-                        "UNAUTHORIZED"
+                        "Authentication required. Please log in."
                 });
         }
 
+        const user = {
+            id:
+                auth.userId,
+
+            username:
+                auth.username ||
+                "user"
+        };
+
         userId =
             user.id;
+
+
+        // ============================================================
+        // REQUEST
+        // ============================================================
 
         const {
             messages,
@@ -1373,7 +2263,9 @@ export default async function handler(
             isDeepResearch,
             title
         } =
-            req.body || {};
+            req.body ||
+            {};
+
 
         const preferences = {
             intelligence:
@@ -1395,11 +2287,13 @@ export default async function handler(
                 )
         };
 
+
         const privateChat =
             normalizePrivateChat(
                 req.body
                     ?.privateChat
             );
+
 
         if (
             !Array.isArray(
@@ -1409,29 +2303,41 @@ export default async function handler(
                 0
         ) {
             return res
-                .status(400)
+                .status(
+                    400
+                )
                 .json({
                     error:
                         "Messages array required"
                 });
         }
 
+
         const lastMsg =
             messages[
-                messages.length - 1
+                messages.length -
+                1
             ];
+
 
         if (
             lastMsg?.role !==
             "user"
         ) {
             return res
-                .status(400)
+                .status(
+                    400
+                )
                 .json({
                     error:
                         "Last message must be user"
                 });
         }
+
+
+        // ============================================================
+        // CREDIT RESERVATION
+        // ============================================================
 
         const {
             data:
@@ -1448,22 +2354,29 @@ export default async function handler(
                     }
                 );
 
-        if (reserveError) {
+
+        if (
+            reserveError
+        ) {
             console.error(
                 "Credit reservation failed:",
                 reserveError
             );
 
             return res
-                .status(500)
+                .status(
+                    500
+                )
                 .json({
                     error:
                         "Unable to check message credits."
                 });
         }
 
+
         reservedType =
             reserveResult;
+
 
         if (
             ![
@@ -1480,12 +2393,15 @@ export default async function handler(
             );
         }
 
+
         if (
             reservedType ===
             "limit"
         ) {
             return res
-                .status(429)
+                .status(
+                    429
+                )
                 .json({
                     error:
                         "MESSAGE_LIMIT_REACHED",
@@ -1495,9 +2411,15 @@ export default async function handler(
                 });
         }
 
+
         isPro =
             reservedType ===
             "pro";
+
+
+        // ============================================================
+        // ATTACHMENTS
+        // ============================================================
 
         const receivedAttachments =
             Array.isArray(
@@ -1512,32 +2434,39 @@ export default async function handler(
                     []
                 );
 
-        let attachments =
+
+        const attachments =
             validAttachmentList(
                 receivedAttachments,
                 user.id
             );
+
+
+        // ============================================================
+        // GEMINI HISTORY
+        // ============================================================
 
         const history =
             messages.slice(
                 -MAX_HISTORY_MESSAGES
             );
 
+
         const geminiMessages =
             history
                 .map(
-                    msg => ({
+                    message => ({
                         role:
-                            msg.role ===
+                            message.role ===
                             "assistant"
                                 ? "model"
-                                : msg.role,
+                                : message.role,
 
                         parts: [
                             {
                                 text:
                                     cleanString(
-                                        msg.content ||
+                                        message.content ||
                                         ""
                                     )
                             }
@@ -1554,6 +2483,11 @@ export default async function handler(
                             ?.length
                 );
 
+
+        // ============================================================
+        // GEMINI ATTACHMENTS
+        // ============================================================
+
         if (
             attachments.length >
                 0 &&
@@ -1565,6 +2499,7 @@ export default async function handler(
                     1
                 ];
 
+
             if (
                 !lastGeminiMessage
             ) {
@@ -1573,14 +2508,17 @@ export default async function handler(
                 );
             }
 
+
             const originalText =
                 cleanString(
                     lastMsg.content ||
                     "Please analyze the attached file."
                 );
 
+
             const attachmentParts =
                 [];
+
 
             for (
                 const file
@@ -1591,15 +2529,18 @@ export default async function handler(
                         file
                     );
 
+
                 if (
                     !geminiFile?.uri
                 ) {
                     continue;
                 }
 
+
                 geminiFiles.push(
                     geminiFile.name
                 );
+
 
                 attachmentParts.push({
                     fileData: {
@@ -1614,23 +2555,28 @@ export default async function handler(
                 });
             }
 
-            lastGeminiMessage.parts =
-                [
-                    {
-                        text:
-                            originalText
-                    },
-                    ...attachmentParts
-                ];
+
+            lastGeminiMessage.parts = [
+                {
+                    text:
+                        originalText
+                },
+
+                ...attachmentParts
+            ];
         }
+
+
+        // ============================================================
+        // CONVERSATION PERSISTENCE
+        // ============================================================
 
         let convId =
             privateChat
                 ? null
-                : (
-                    conversationId ||
-                    null
-                );
+                : conversationId ||
+                    null;
+
 
         if (
             !privateChat &&
@@ -1662,21 +2608,27 @@ export default async function handler(
                     )
                     .single();
 
-            if (convError) {
+
+            if (
+                convError
+            ) {
                 throw new Error(
                     convError.message
                 );
             }
 
+
             convId =
                 newConv.id;
         }
+
 
         const userText =
             cleanString(
                 lastMsg.content ||
                 ""
             );
+
 
         if (
             !privateChat
@@ -1691,6 +2643,11 @@ export default async function handler(
                 []
             );
         }
+
+
+        // ============================================================
+        // MODEL
+        // ============================================================
 
         const model =
             isPro
@@ -1709,9 +2666,15 @@ export default async function handler(
                     "gemini-3.1-flash-lite"
                 );
 
+
+        // ============================================================
+        // SEARCH DECISION
+        // ============================================================
+
         const lowerQuery =
             userText
                 .toLowerCase();
+
 
         const isCurrentQuery =
             /\b(current|now|latest|today|this month|july|august|202[4-9]|real[- ]time)\b/
@@ -1719,11 +2682,13 @@ export default async function handler(
                     lowerQuery
                 );
 
+
         const isCompareQuery =
             /\b(compare|difference|versus|vs|different|which|between)\b/
                 .test(
                     lowerQuery
                 );
+
 
         const isSpecificQuery =
             /\b(how much|what is|value|price|net worth|population|weather|stock|price|rate|exchange|who|which company|where is)\b/
@@ -1731,25 +2696,40 @@ export default async function handler(
                     lowerQuery
                 );
 
+
         const hasUrl =
             extractUrlsFromText(
                 userText
             ).length >
             0;
 
-        let reply = "";
-        let sources = [];
+
+        let reply =
+            "";
+
+        let sources =
+            [];
+
         let usedUrlContext =
             false;
 
-        if (hasUrl) {
+
+        // ============================================================
+        // DIRECT URL CONTEXT
+        // ============================================================
+
+        if (
+            hasUrl
+        ) {
             const urls =
                 extractUrlsFromText(
                     userText
-                ).slice(
-                    0,
-                    MAX_URL_CONTEXT_SOURCES
-                );
+                )
+                    .slice(
+                        0,
+                        MAX_URL_CONTEXT_SOURCES
+                    );
+
 
             try {
                 const contextResponse =
@@ -1761,6 +2741,7 @@ export default async function handler(
                         preferences
                     );
 
+
                 reply =
                     contextResponse
                         ?.candidates?.[0]
@@ -1769,12 +2750,14 @@ export default async function handler(
                         ?.text ||
                     "";
 
+
                 const metadata =
                     contextResponse
                         ?.candidates?.[0]
                         ?.url_context_metadata
                         ?.url_metadata ||
                     [];
+
 
                 sources =
                     metadata
@@ -1797,6 +2780,7 @@ export default async function handler(
                                     "success"
                             })
                         );
+
 
                 if (
                     sources.length ===
@@ -1823,8 +2807,10 @@ export default async function handler(
                         );
                 }
 
+
                 usedUrlContext =
                     true;
+
             } catch (
                 error
             ) {
@@ -1833,11 +2819,17 @@ export default async function handler(
                     error
                 );
             }
+
         } else if (
             isCurrentQuery ||
             isCompareQuery ||
             isSpecificQuery
         ) {
+
+            // ========================================================
+            // SMART WEB SEARCH
+            // ========================================================
+
             try {
                 const result =
                     await smartWebAnswer(
@@ -1847,16 +2839,20 @@ export default async function handler(
                         preferences
                     );
 
+
                 reply =
                     result.reply;
+
 
                 sources =
                     result.sources ||
                     [];
 
+
                 usedUrlContext =
                     result.usedUrlContext ||
                     false;
+
             } catch (
                 error
             ) {
@@ -1867,7 +2863,14 @@ export default async function handler(
             }
         }
 
-        if (!reply) {
+
+        // ============================================================
+        // NORMAL GEMINI FALLBACK
+        // ============================================================
+
+        if (
+            !reply
+        ) {
             const geminiResponse =
                 await callGemini(
                     geminiMessages,
@@ -1875,6 +2878,7 @@ export default async function handler(
                     isDeepResearch,
                     preferences
                 );
+
 
             reply =
                 geminiResponse
@@ -1884,12 +2888,20 @@ export default async function handler(
                     ?.text ||
                 "";
 
-            if (!reply) {
+
+            if (
+                !reply
+            ) {
                 throw new Error(
                     "Gemini returned empty response"
                 );
             }
         }
+
+
+        // ============================================================
+        // SAVE ASSISTANT
+        // ============================================================
 
         if (
             !privateChat
@@ -1903,6 +2915,11 @@ export default async function handler(
                 sources
             );
         }
+
+
+        // ============================================================
+        // RESPONSE
+        // ============================================================
 
         return res.json({
             reply,
@@ -1926,6 +2943,7 @@ export default async function handler(
                 reservedType
         });
 
+
     } catch (
         error
     ) {
@@ -1933,6 +2951,11 @@ export default async function handler(
             "Chat error:",
             error
         );
+
+
+        // ============================================================
+        // CREDIT REFUND
+        // ============================================================
 
         if (
             userId &&
@@ -1959,7 +2982,10 @@ export default async function handler(
                         }
                     );
 
-            if (refundError) {
+
+            if (
+                refundError
+            ) {
                 console.error(
                     "Credit refund failed:",
                     refundError
@@ -1967,15 +2993,25 @@ export default async function handler(
             }
         }
 
+
         return res
-            .status(500)
+            .status(
+                500
+            )
             .json({
                 error:
                     error.message ||
                     "Unable to complete request."
             });
 
+
     } finally {
+
+        // ============================================================
+        // DELETE ONLY TEMPORARY GEMINI FILES
+        // Never delete Supabase original attachment.
+        // ============================================================
+
         if (
             geminiFiles.length >
                 0 &&
@@ -1992,4 +3028,4 @@ export default async function handler(
             );
         }
     }
-}
+};

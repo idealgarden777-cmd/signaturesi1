@@ -2232,3 +2232,42 @@ Does NOT own:
         }
     );
 })();
+/* =====================================================
+   INITIAL HISTORY LOAD
+   ===================================================== */
+
+const bootHistory = () => {
+
+    loadHistory()
+        .catch(
+            error => {
+
+                console.warn(
+                    "[NEYO History] Initial load failed:",
+                    error
+                );
+
+            }
+        );
+
+};
+
+
+if (
+    document.readyState ===
+    "loading"
+) {
+
+    document.addEventListener(
+        "DOMContentLoaded",
+        bootHistory,
+        {
+            once: true
+        }
+    );
+
+} else {
+
+    bootHistory();
+
+}

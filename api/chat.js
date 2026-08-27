@@ -1,107 +1,122 @@
 import { createClient } from "@supabase/supabase-js";
-import { getAuthenticatedUser } from "../lib/auth.js";
 
-const supabase = createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY,
-    {
-        auth: {
-            persistSession: false,
-            autoRefreshToken: false
+import {
+    getAuthenticatedUser
+} from "../lib/auth.js";
+
+
+/* =========================================================
+   SUPABASE
+   ========================================================= */
+
+const supabase =
+    createClient(
+        process.env.SUPABASE_URL,
+        process.env.SUPABASE_SERVICE_ROLE_KEY,
+        {
+            auth: {
+                persistSession:
+                    false,
+
+                autoRefreshToken:
+                    false
+            }
         }
-    }
-);
+    );
 
-const GEMINI_API_KEY = cleanEnv(process.env.GEMINI_API_KEY);
-const UPLOAD_BUCKET = "neo-uploads";
-const MAX_ATTACHMENTS = 5;
-const MAX_MESSAGE_LENGTH = 50000;
-const MAX_HISTORY_MESSAGES = 50;
-const MAX_URL_CONTEXT_SOURCES = 5;
+
+/* =========================================================
+   CONFIG
+   ========================================================= */
+
+const GEMINI_API_KEY =
+    cleanEnv(
+        process.env.GEMINI_API_KEY
+    );
+
+
+const ATTACHMENT_BUCKET =
+    "neyo-attachments";
+
+
+const MAX_ATTACHMENTS =
+    5;
+
+
+const MAX_MESSAGE_LENGTH =
+    50000;
+
+
+const MAX_HISTORY_MESSAGES =
+    50;
+
+
+const MAX_URL_CONTEXT_SOURCES =
+    5;
+
+
 const DDG_USER_AGENT =
-    "NEO/1.0 (https://signaturesi.com; contact@signaturesi.com)";
+    "NEYO/1.0 (https://signaturesi.com)";
 
 
-// ================================================================
-// NEO SYSTEM INSTRUCTION
-// ================================================================
+/* =========================================================
+   SYSTEM INSTRUCTION
+   ========================================================= */
 
-const NEO_RESPONSE_FORMAT = `
+const NEYO_RESPONSE_FORMAT = `
 You are NEYO, a natural, intelligent conversational assistant.
 
 VOICE AND TONE
 - Match the user's language, tone, and level of formality.
 - When the user writes Roman Urdu, respond in natural Roman Urdu.
 - Sound human, direct, calm, and confident.
-- Avoid generic openings such as:
-  "Bilkul honest jawab deta hoon",
-  "Great question",
-  "Certainly",
-  or "As an AI".
-- Do not sound corporate, scripted, overly cheerful, or robotic.
-- Use emojis only when they genuinely fit the user's tone, with a maximum of one.
-- Do not repeat the user's question before answering.
-- Do not end every answer with a question or invitation.
-
-ORGANIZATION
-- Keep the structure proportional to the request.
-- For simple questions, use one or two natural paragraphs.
-- Use headings only when the answer has genuinely different sections.
-- Avoid excessive bullet points, checkmarks, numbered lists, and separators.
-- Prefer short paragraphs over template-style lists.
-- Do not restate the same idea in multiple sections.
-
-ACCURACY AND JUDGMENT
-- Do not invent the user's education, job, personality, background, or intentions.
-- Only make personal inferences when directly supported by the conversation.
-- Clearly label uncertain observations as impressions, not facts.
-- Avoid exaggerated certainty.
+- Do not sound robotic or scripted.
+- Do not repeat the user's question unnecessarily.
 - Answer the actual question first.
 
-WRITING QUALITY
-- Use clean, valid GitHub-flavored Markdown.
-- Put every heading on its own line.
-- Put each list item on its own line.
-- Use bold only for short labels or genuinely important phrases.
-- Never bold entire paragraphs.
-- Use fenced code blocks with the correct language.
-- Use [Website name](https://example.com) for links.
-- Keep paragraphs readable and naturally paced.
+ORGANIZATION
+- Keep simple answers concise.
+- Use structure only when useful.
+- Avoid excessive headings or repeated points.
 
-MATH AND SCIENCE
+ACCURACY
+- Do not invent facts.
+- Clearly distinguish uncertainty from verified information.
+- If information cannot be verified, say so.
+
+FILES
+- When files are attached, inspect and answer based on the attached content.
+- Do not claim to have read a file if file access failed.
+
+WRITING
+- Use clean Markdown.
+- Use fenced code blocks when needed.
+- Keep paragraphs readable.
+
+MATH
 - Use \\( ... \\) for inline mathematics.
-- Use \\[ ... \\] for display equations.
-- Put major equations on separate lines.
-- Explain important symbols clearly after the equation.
-- Never expose raw LaTeX without delimiters.
-
-STYLE EXAMPLE
-User: "Kya meri baaton se main human lagta hoon?"
-
-Good response:
-"Haan, bilkul. Aapka style direct, spontaneous aur feedback-driven hai, jo natural human conversation jaisa lagta hai. Aap kabhi formal ho jate ho, lekin overall bot-like feel nahi aati."
-
-Bad response:
-"Bilkul honest jawab deta hoon! Here are several observations about your personality and professional background..."
+- Use \\[ ... \\] for display mathematics.
 `;
 
 
-// ================================================================
-// HELPERS
-// ================================================================
+/* =========================================================
+   GENERAL HELPERS
+   ========================================================= */
 
 function cleanString(
-    str,
+    value,
     max = MAX_MESSAGE_LENGTH
 ) {
+
     if (
-        typeof str !==
+        typeof value !==
         "string"
     ) {
         return "";
     }
 
-    return str
+
+    return value
         .replace(
             /\r\n?/g,
             "\n"
@@ -115,24 +130,73 @@ function cleanString(
             0,
             max
         );
+
 }
 
 
 function cleanEnv(
     value
 ) {
+
     return typeof value ===
         "string"
         ? value.trim()
         : "";
+
 }
 
+
+function sanitizePathSegment(
+    value
+) {
+
+    return String(
+        value ?? ""
+    )
+        .trim()
+        .replace(
+            /[^a-zA-Z0-9._-]+/g,
+            "_"
+        )
+        .replace(
+            /_+/g,
+            "_"
+        )
+        .replace(
+            /^[._-]+/,
+            ""
+        )
+        .replace(
+            /[._-]+$/,
+            ""
+        )
+        .slice(
+            0,
+            180
+        );
+
+}
+
+
+/* =========================================================
+   ATTACHMENTS
+
+   IMPORTANT:
+   upload.js creates:
+   users/<userId>/<uploadId>/<filename>
+
+   chat.js must preserve:
+   uploadId
+   bucket
+   path
+   ========================================================= */
 
 function validAttachmentList(
     attachments,
     userId,
     max = MAX_ATTACHMENTS
 ) {
+
     if (
         !Array.isArray(
             attachments
@@ -141,254 +205,408 @@ function validAttachmentList(
         return [];
     }
 
-    return attachments
-        .slice(
+
+    const safeUserId =
+        sanitizePathSegment(
+            userId
+        );
+
+
+    const output =
+        [];
+
+
+    const seen =
+        new Set();
+
+
+    for (
+        const raw
+        of attachments.slice(
             0,
             max
         )
-        .map(
-            file => ({
-                provider:
-                    "supabase",
+    ) {
 
-                bucket:
-                    UPLOAD_BUCKET,
+        if (
+            !raw ||
+            typeof raw !==
+                "object"
+        ) {
+            continue;
+        }
 
-                path:
-                    String(
-                        file.path ||
-                        ""
-                    ).trim(),
 
-                name:
-                    String(
-                        file.name ||
-                        "Attached file"
-                    )
-                        .replace(
-                            /[\\/]/g,
-                            "-"
-                        )
-                        .slice(
-                            0,
-                            180
-                        ),
+        const uploadId =
+            cleanString(
+                raw.uploadId ||
+                raw.upload_id ||
+                raw.id ||
+                "",
+                128
+            );
 
-                mimeType:
-                    String(
-                        file.mimeType ||
-                        file.type ||
-                        "application/octet-stream"
-                    )
-                        .slice(
-                            0,
-                            120
-                        ),
 
-                type:
-                    String(
-                        file.mimeType ||
-                        file.type ||
-                        "application/octet-stream"
-                    )
-                        .slice(
-                            0,
-                            120
-                        ),
+        const bucket =
+            cleanString(
+                raw.bucket ||
+                ATTACHMENT_BUCKET,
+                128
+            );
 
-                category:
-                    String(
-                        file.category ||
-                        "text"
-                    )
-                        .toLowerCase()
-                        .slice(
-                            0,
-                            20
-                        ),
 
-                size:
-                    Number.isFinite(
-                        Number(
-                            file.size
-                        )
-                    )
-                        ? Math.max(
-                            0,
-                            Number(
-                                file.size
-                            )
-                        )
-                        : 0
-            })
-        )
-        .filter(
-            file =>
-                file.path &&
-                file.path.startsWith(
-                    `users/${userId}/`
-                ) &&
-                !file.path.includes(
-                    ".."
+        const path =
+            cleanString(
+                raw.path ||
+                "",
+                1024
+            );
+
+
+        const name =
+            cleanString(
+                raw.name ||
+                "Attached file",
+                220
+            )
+                .replace(
+                    /[\\/]/g,
+                    "-"
+                );
+
+
+        const mime =
+            cleanString(
+                raw.mime ||
+                raw.mimeType ||
+                raw.type ||
+                "application/octet-stream",
+                180
+            )
+                .toLowerCase();
+
+
+        const extension =
+            cleanString(
+                raw.extension ||
+                "",
+                32
+            )
+                .replace(
+                    /^\./,
+                    ""
                 )
+                .toLowerCase();
+
+
+        const category =
+            cleanString(
+                raw.category ||
+                "unknown",
+                40
+            )
+                .toLowerCase();
+
+
+        const size =
+            Number.isFinite(
+                Number(
+                    raw.size
+                )
+            )
+                ? Math.max(
+                    0,
+                    Number(
+                        raw.size
+                    )
+                )
+                : 0;
+
+
+        /*
+        -----------------------------------------------------
+        Bucket must match upload/process APIs.
+        -----------------------------------------------------
+        */
+
+        if (
+            bucket !==
+            ATTACHMENT_BUCKET
+        ) {
+
+            console.warn(
+                "[NEYO Chat] Invalid attachment bucket:",
+                bucket
+            );
+
+            continue;
+
+        }
+
+
+        if (
+            !uploadId ||
+            !path
+        ) {
+
+            console.warn(
+                "[NEYO Chat] Attachment metadata incomplete:",
+                {
+                    uploadId,
+                    path,
+                    name
+                }
+            );
+
+            continue;
+
+        }
+
+
+        if (
+            path.startsWith(
+                "/"
+            ) ||
+            path.includes(
+                "\\"
+            ) ||
+            path.includes(
+                ".."
+            )
+        ) {
+
+            console.warn(
+                "[NEYO Chat] Invalid attachment path:",
+                path
+            );
+
+            continue;
+
+        }
+
+
+        const safeUploadId =
+            sanitizePathSegment(
+                uploadId
+            );
+
+
+        const requiredPrefix =
+            `users/${safeUserId}/${safeUploadId}/`;
+
+
+        if (
+            !path.startsWith(
+                requiredPrefix
+            )
+        ) {
+
+            console.warn(
+                "[NEYO Chat] Attachment ownership mismatch:",
+                {
+                    path,
+                    requiredPrefix
+                }
+            );
+
+            continue;
+
+        }
+
+
+        const key =
+            `${uploadId}:${path}`;
+
+
+        if (
+            seen.has(
+                key
+            )
+        ) {
+            continue;
+        }
+
+
+        seen.add(
+            key
         );
+
+
+        output.push({
+
+            id:
+                cleanString(
+                    raw.id ||
+                    "",
+                    128
+                ) ||
+                uploadId,
+
+            uploadId,
+
+            provider:
+                "supabase",
+
+            bucket,
+
+            path,
+
+            name,
+
+            mime,
+
+            mimeType:
+                mime,
+
+            type:
+                mime,
+
+            extension,
+
+            category,
+
+            size
+
+        });
+
+    }
+
+
+    return output;
+
 }
 
+
+/* =========================================================
+   URL HELPERS
+   ========================================================= */
 
 function extractUrlsFromText(
     text
 ) {
+
     if (!text) {
         return [];
     }
 
-    const urlRegex =
-        /https?:\/\/[^\s<>"']+/g;
 
     const matches =
         text.match(
-            urlRegex
-        ) || [];
+            /https?:\/\/[^\s<>"']+/g
+        ) ||
+        [];
+
 
     return matches.filter(
         url => {
+
             try {
+
                 const parsed =
                     new URL(
                         url
                     );
 
-                return (
-                    parsed.protocol ===
-                        "https:" &&
 
-                    !parsed.hostname
-                        .includes(
-                            "localhost"
-                        ) &&
+                if (
+                    ![
+                        "http:",
+                        "https:"
+                    ].includes(
+                        parsed.protocol
+                    )
+                ) {
+                    return false;
+                }
 
-                    !parsed.hostname
-                        .match(
-                            /^127\.\d+\.\d+\.\d+$/
-                        ) &&
 
-                    !parsed.hostname
-                        .match(
-                            /^192\.168\./
-                        ) &&
+                const hostname =
+                    parsed.hostname
+                        .toLowerCase();
 
-                    !parsed.hostname
-                        .match(
-                            /^10\./
-                        ) &&
 
-                    !parsed.hostname
-                        .match(
-                            /^172\.(1[6-9]|2[0-9]|3[0-1])\./
+                if (
+                    hostname ===
+                        "localhost" ||
+                    hostname.startsWith(
+                        "127."
+                    ) ||
+                    hostname.startsWith(
+                        "10."
+                    ) ||
+                    hostname.startsWith(
+                        "192.168."
+                    ) ||
+                    /^172\.(1[6-9]|2[0-9]|3[0-1])\./
+                        .test(
+                            hostname
                         )
-                );
+                ) {
+                    return false;
+                }
+
+
+                return true;
 
             } catch {
+
                 return false;
-            }
-        }
-    );
-}
 
-
-function normalizeUrl(
-    url
-) {
-    try {
-        const parsed =
-            new URL(
-                url
-            );
-
-        parsed.search =
-            "";
-
-        parsed.hash =
-            "";
-
-        return parsed.toString();
-
-    } catch {
-        return url;
-    }
-}
-
-
-function deduplicateUrls(
-    urls
-) {
-    const seen =
-        new Set();
-
-    return urls.filter(
-        url => {
-            const normalized =
-                normalizeUrl(
-                    url
-                );
-
-            if (
-                seen.has(
-                    normalized
-                )
-            ) {
-                return false;
             }
 
-            seen.add(
-                normalized
-            );
-
-            return true;
         }
     );
+
 }
 
-
-// ================================================================
-// DUCKDUCKGO SEARCH
-// ================================================================
 
 function normalizeDuckDuckGoUrl(
     rawHref
 ) {
+
     if (!rawHref) {
         return null;
     }
 
+
     try {
+
         const parsed =
             new URL(
                 rawHref,
                 "https://duckduckgo.com"
             );
 
+
         let destination =
-            parsed
-                .searchParams
+            parsed.searchParams
                 .get(
                     "uddg"
                 );
 
-        if (destination) {
+
+        if (
+            destination
+        ) {
+
             destination =
                 decodeURIComponent(
                     destination
                 );
+
         } else {
+
             destination =
                 parsed.href;
+
         }
+
 
         const finalUrl =
             new URL(
                 destination
             );
+
 
         if (
             ![
@@ -401,6 +619,7 @@ function normalizeDuckDuckGoUrl(
             return null;
         }
 
+
         if (
             finalUrl.hostname
                 .toLowerCase()
@@ -411,8 +630,10 @@ function normalizeDuckDuckGoUrl(
             return null;
         }
 
+
         finalUrl.hash =
             "";
+
 
         [
             "utm_source",
@@ -422,1067 +643,512 @@ function normalizeDuckDuckGoUrl(
             "utm_content"
         ].forEach(
             key => {
+
                 finalUrl
                     .searchParams
                     .delete(
                         key
                     );
+
             }
         );
+
 
         return finalUrl.href;
 
     } catch {
+
         return null;
+
     }
+
 }
 
+
+/* =========================================================
+   DUCKDUCKGO
+   ========================================================= */
 
 async function searchDuckDuckGo(
     query,
-    limit = 10
+    limit = 8
 ) {
-    const cleanQuery =
-        String(
-            query ||
-            ""
-        ).trim();
 
-    if (!cleanQuery) {
+    const cleanQuery =
+        cleanString(
+            query,
+            500
+        );
+
+
+    if (
+        !cleanQuery
+    ) {
         return [];
     }
 
-    const endpoints = [
-        `https://html.duckduckgo.com/html/?q=${encodeURIComponent(cleanQuery)}`,
-        `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(cleanQuery)}`
-    ];
 
-    for (
-        const endpoint
-        of endpoints
-    ) {
-        try {
-            const response =
-                await fetch(
-                    endpoint,
-                    {
-                        method:
-                            "GET",
+    const endpoint =
+        `https://html.duckduckgo.com/html/?q=${encodeURIComponent(cleanQuery)}`;
 
-                        headers: {
-                            "User-Agent":
-                                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-
-                            Accept:
-                                "text/html,application/xhtml+xml",
-
-                            "Accept-Language":
-                                "en-US,en;q=0.9"
-                        },
-
-                        redirect:
-                            "follow"
-                    }
-                );
-
-            if (
-                !response.ok
-            ) {
-                console.warn(
-                    "DuckDuckGo HTTP error:",
-                    response.status,
-                    endpoint
-                );
-
-                continue;
-            }
-
-            const html =
-                await response.text();
-
-            console.log(
-                "DuckDuckGo response:",
-                {
-                    endpoint,
-                    htmlLength:
-                        html.length
-                }
-            );
-
-            if (
-                !html ||
-                html.length <
-                    500 ||
-                /captcha|unusual traffic|anomaly/i
-                    .test(
-                        html
-                    )
-            ) {
-                console.warn(
-                    "DuckDuckGo returned blocked or empty HTML."
-                );
-
-                continue;
-            }
-
-            const results =
-                [];
-
-            const seen =
-                new Set();
-
-            const resultBlocks =
-                html.split(
-                    /<div class="result[^"]*">/gi
-                );
-
-            if (
-                resultBlocks.length >
-                1
-            ) {
-                for (
-                    const block
-                    of resultBlocks
-                ) {
-                    if (
-                        results.length >=
-                        limit
-                    ) {
-                        break;
-                    }
-
-                    const anchorMatch =
-                        block.match(
-                            /<a\s+[^>]*href="([^"]+)"[^>]*>([^<]*)<\/a>/i
-                        );
-
-                    if (
-                        !anchorMatch
-                    ) {
-                        continue;
-                    }
-
-                    const rawHref =
-                        anchorMatch[1];
-
-                    const title =
-                        anchorMatch[2]
-                            .replace(
-                                /<[^>]*>/g,
-                                ""
-                            )
-                            .trim();
-
-                    const url =
-                        normalizeDuckDuckGoUrl(
-                            rawHref
-                        );
-
-                    if (
-                        !url ||
-                        seen.has(
-                            url
-                        ) ||
-                        !title
-                    ) {
-                        continue;
-                    }
-
-                    const snippetMatch =
-                        block.match(
-                            /<div\s+class="result__snippet"[^>]*>([^<]*)<\/div>/i
-                        );
-
-                    const snippet =
-                        snippetMatch
-                            ? snippetMatch[1]
-                                .replace(
-                                    /<[^>]*>/g,
-                                    ""
-                                )
-                                .trim()
-                            : "";
-
-                    seen.add(
-                        url
-                    );
-
-                    results.push({
-                        url,
-                        title,
-                        snippet
-                    });
-                }
-            }
-
-            if (
-                results.length ===
-                0
-            ) {
-                const trs =
-                    html.split(
-                        /<tr\s*>/gi
-                    );
-
-                for (
-                    const tr
-                    of trs
-                ) {
-                    if (
-                        results.length >=
-                        limit
-                    ) {
-                        break;
-                    }
-
-                    const linkMatch =
-                        tr.match(
-                            /<a\s+[^>]*href="([^"]+)"[^>]*>([^<]*)<\/a>/i
-                        );
-
-                    if (
-                        !linkMatch
-                    ) {
-                        continue;
-                    }
-
-                    const rawHref =
-                        linkMatch[1];
-
-                    const title =
-                        linkMatch[2]
-                            .replace(
-                                /<[^>]*>/g,
-                                ""
-                            )
-                            .trim();
-
-                    const url =
-                        normalizeDuckDuckGoUrl(
-                            rawHref
-                        );
-
-                    if (
-                        !url ||
-                        seen.has(
-                            url
-                        ) ||
-                        !title
-                    ) {
-                        continue;
-                    }
-
-                    const snippetMatch =
-                        tr.match(
-                            /<td[^>]*class="result-snippet"[^>]*>([^<]*)<\/td>/i
-                        );
-
-                    const snippet =
-                        snippetMatch
-                            ? snippetMatch[1]
-                                .replace(
-                                    /<[^>]*>/g,
-                                    ""
-                                )
-                                .trim()
-                            : "";
-
-                    seen.add(
-                        url
-                    );
-
-                    results.push({
-                        url,
-                        title,
-                        snippet
-                    });
-                }
-            }
-
-            console.log(
-                "DuckDuckGo parsed results:",
-                results.length
-            );
-
-            if (
-                results.length >
-                0
-            ) {
-                return results;
-            }
-
-        } catch (
-            error
-        ) {
-            console.warn(
-                "DuckDuckGo search failed:",
-                error
-            );
-        }
-    }
-
-    return [];
-}
-
-
-// ================================================================
-// SEARCH PLANNER
-// ================================================================
-
-async function createSmartSearchPlan(
-    query
-) {
-    const planningPrompt = `
-You are a search planner. Given a user's question, generate 2–3 specific web search queries to find the most accurate and current information.
-
-Return ONLY a JSON object with the following structure:
-{
-  "mode": "web",
-  "queries": ["query1", "query2", "query3"],
-  "entity": "main entity name (if any)",
-  "preferredPageTypes": ["type1", "type2"],
-  "avoidPageTypes": ["type1", "type2"]
-}
-
-Rules:
-- Queries should be specific and include context like current year, latest, or real-time if relevant.
-- Prefer queries that target direct profiles, official pages, or real-time data sources.
-- Avoid queries that return generic lists or homepages.
-- If the question is about a person, include their full name.
-- If about a company, include the official name.
-- Return only JSON, no other text.
-
-User question: ${query}
-`;
 
     try {
+
         const response =
-            await callGeminiForJson(
-                planningPrompt
+            await fetch(
+                endpoint,
+                {
+
+                    method:
+                        "GET",
+
+                    headers: {
+
+                        "User-Agent":
+                            "Mozilla/5.0",
+
+                        Accept:
+                            "text/html",
+
+                        "Accept-Language":
+                            "en-US,en;q=0.9"
+
+                    },
+
+                    redirect:
+                        "follow"
+
+                }
             );
 
-        const text =
-            response
-                ?.candidates?.[0]
-                ?.content
-                ?.parts?.[0]
-                ?.text ||
-            "";
-
-        const jsonMatch =
-            text.match(
-                /\{[\s\S]*\}/
-            );
 
         if (
-            jsonMatch
+            !response.ok
         ) {
-            return JSON.parse(
-                jsonMatch[0]
-            );
+            return [];
         }
 
-        return {
-            mode:
-                "web",
 
-            queries: [
-                query,
-                `${query} latest`,
-                `${query} 2026`
-            ],
+        const html =
+            await response
+                .text();
 
-            entity:
-                "",
 
-            preferredPageTypes: [
-                "direct profile",
-                "official page",
-                "real-time"
-            ],
+        if (
+            !html ||
+            html.length <
+                500
+        ) {
+            return [];
+        }
 
-            avoidPageTypes: [
-                "generic list",
-                "homepage",
-                "social media"
-            ]
-        };
+
+        const results =
+            [];
+
+
+        const seen =
+            new Set();
+
+
+        const blocks =
+            html.split(
+                /<div class="result[^"]*">/gi
+            );
+
+
+        for (
+            const block
+            of blocks
+        ) {
+
+            if (
+                results.length >=
+                limit
+            ) {
+                break;
+            }
+
+
+            const anchor =
+                block.match(
+                    /<a\s+[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/i
+                );
+
+
+            if (
+                !anchor
+            ) {
+                continue;
+            }
+
+
+            const url =
+                normalizeDuckDuckGoUrl(
+                    anchor[1]
+                );
+
+
+            const title =
+                anchor[2]
+                    .replace(
+                        /<[^>]+>/g,
+                        " "
+                    )
+                    .replace(
+                        /\s+/g,
+                        " "
+                    )
+                    .trim();
+
+
+            if (
+                !url ||
+                !title ||
+                seen.has(
+                    url
+                )
+            ) {
+                continue;
+            }
+
+
+            const snippetMatch =
+                block.match(
+                    /class="result__snippet"[^>]*>([\s\S]*?)<\/(?:a|div)>/i
+                );
+
+
+            const snippet =
+                snippetMatch
+                    ? snippetMatch[1]
+                        .replace(
+                            /<[^>]+>/g,
+                            " "
+                        )
+                        .replace(
+                            /\s+/g,
+                            " "
+                        )
+                        .trim()
+                    : "";
+
+
+            seen.add(
+                url
+            );
+
+
+            results.push({
+
+                url,
+                title,
+                snippet
+
+            });
+
+        }
+
+
+        return results;
 
     } catch (
         error
     ) {
+
         console.warn(
-            "Search planning failed, using fallback:",
-            error
+            "[NEYO Web] DuckDuckGo failed:",
+            error?.message
         );
 
-        return {
-            mode:
-                "web",
 
-            queries: [
-                query,
-                `${query} latest`,
-                `${query} 2026`
-            ],
+        return [];
 
-            entity:
-                "",
-
-            preferredPageTypes: [
-                "direct profile",
-                "official page",
-                "real-time"
-            ],
-
-            avoidPageTypes: [
-                "generic list",
-                "homepage",
-                "social media"
-            ]
-        };
     }
+
 }
 
 
-async function callGeminiForJson(
-    prompt
+/* =========================================================
+   FETCH PAGE TEXT
+   ========================================================= */
+
+async function fetchUrlText(
+    url,
+    maxChars = 10000
 ) {
-    if (
-        !GEMINI_API_KEY
-    ) {
-        throw new Error(
-            "Gemini API key missing"
-        );
-    }
 
-    const url =
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`;
+    try {
 
-    const body = {
-        contents: [
-            {
-                role:
-                    "user",
+        const response =
+            await fetch(
+                url,
+                {
 
-                parts: [
-                    {
-                        text:
-                            prompt
-                    }
-                ]
-            }
-        ],
+                    method:
+                        "GET",
 
-        generationConfig: {
-            temperature:
-                0.2,
+                    headers: {
 
-            maxOutputTokens:
-                512
-        }
-    };
+                        "User-Agent":
+                            DDG_USER_AGENT,
 
-    const response =
-        await fetch(
-            url,
-            {
-                method:
-                    "POST",
+                        Accept:
+                            "text/html,text/plain,application/xhtml+xml"
 
-                headers: {
-                    "Content-Type":
-                        "application/json"
-                },
+                    },
 
-                body:
-                    JSON.stringify(
-                        body
-                    )
-            }
-        );
+                    redirect:
+                        "follow"
 
-    const data =
-        await response
-            .json()
-            .catch(
-                () => ({})
+                }
             );
 
-    if (
-        !response.ok
-    ) {
-        throw new Error(
-            data
-                ?.error
-                ?.message ||
-            "Planning API error"
-        );
-    }
 
-    return data;
-}
+        if (
+            !response.ok
+        ) {
+            return "";
+        }
 
 
-// ================================================================
-// RESULT RANKING
-// ================================================================
-
-function rankSearchResults(
-    results,
-    plan
-) {
-    return results
-        .map(
-            item => {
-                let score =
-                    0;
-
-                const title =
-                    (
-                        item.title ||
-                        ""
-                    ).toLowerCase();
-
-                const url =
-                    (
-                        item.url ||
-                        ""
-                    ).toLowerCase();
-
-                const domain =
-                    url
-                        .replace(
-                            /^https?:\/\//,
-                            ""
-                        )
-                        .split(
-                            "/"
-                        )[0] ||
-                    "";
-
-                if (
-                    plan.entity &&
-                    title.includes(
-                        plan.entity
-                            .toLowerCase()
-                    )
-                ) {
-                    score +=
-                        35;
-                }
-
-                if (
-                    url.includes(
-                        "/profile/"
-                    )
-                ) {
-                    score +=
-                        30;
-                } else if (
-                    url.includes(
-                        "/real-time"
-                    )
-                ) {
-                    score +=
-                        25;
-                } else if (
-                    url.includes(
-                        "/latest"
-                    )
-                ) {
-                    score +=
-                        20;
-                } else if (
-                    url.includes(
-                        "/today"
-                    )
-                ) {
-                    score +=
-                        15;
-                }
-
-                if (
-                    domain.includes(
-                        "bloomberg"
-                    )
-                ) {
-                    score +=
-                        25;
-                } else if (
-                    domain.includes(
-                        "forbes"
-                    )
-                ) {
-                    score +=
-                        20;
-                } else if (
-                    domain.includes(
-                        "reuters"
+        const contentType =
+            String(
+                response.headers
+                    .get(
+                        "content-type"
                     ) ||
-                    domain.includes(
-                        "apnews"
-                    )
-                ) {
-                    score +=
-                        18;
-                } else if (
-                    domain.includes(
-                        "wsj"
-                    ) ||
-                    domain.includes(
-                        "ft"
-                    )
-                ) {
-                    score +=
-                        15;
-                } else if (
-                    domain.includes(
-                        "wikipedia"
-                    )
-                ) {
-                    score +=
-                        10;
-                } else if (
-                    domain.includes(
-                        "twitter"
-                    ) ||
-                    domain.includes(
-                        "facebook"
-                    ) ||
-                    domain.includes(
-                        "instagram"
-                    )
-                ) {
-                    score -=
-                        50;
-                } else if (
-                    domain.includes(
-                        "reddit"
-                    ) ||
-                    domain.includes(
-                        "quora"
-                    )
-                ) {
-                    score -=
-                        20;
-                } else if (
-                    domain.includes(
-                        "youtube"
-                    )
-                ) {
-                    score -=
-                        10;
-                }
+                ""
+            )
+                .toLowerCase();
 
-                if (
-                    url.includes(
-                        "/worlds-billionaires"
-                    )
-                ) {
-                    score -=
-                        20;
-                }
 
-                if (
-                    url.includes(
-                        "/list/"
-                    )
-                ) {
-                    score -=
-                        15;
-                }
+        if (
+            !contentType.includes(
+                "text/"
+            ) &&
+            !contentType.includes(
+                "application/xhtml+xml"
+            )
+        ) {
+            return "";
+        }
 
-                if (
-                    url.includes(
-                        "/home/"
-                    )
-                ) {
-                    score -=
-                        30;
-                }
 
-                if (
-                    url.includes(
-                        "/search"
-                    )
-                ) {
-                    score -=
-                        25;
-                }
+        let text =
+            await response
+                .text();
 
-                const yearMatch =
-                    url.match(
-                        /20[2-9][0-9]/
-                    );
 
-                if (
-                    yearMatch
-                ) {
-                    score +=
-                        10;
-                }
+        text =
+            text
+                .replace(
+                    /<script[\s\S]*?<\/script>/gi,
+                    " "
+                )
+                .replace(
+                    /<style[\s\S]*?<\/style>/gi,
+                    " "
+                )
+                .replace(
+                    /<noscript[\s\S]*?<\/noscript>/gi,
+                    " "
+                )
+                .replace(
+                    /<svg[\s\S]*?<\/svg>/gi,
+                    " "
+                )
+                .replace(
+                    /<[^>]+>/g,
+                    " "
+                )
+                .replace(
+                    /&nbsp;/gi,
+                    " "
+                )
+                .replace(
+                    /&amp;/gi,
+                    "&"
+                )
+                .replace(
+                    /&quot;/gi,
+                    '"'
+                )
+                .replace(
+                    /&#39;/gi,
+                    "'"
+                )
+                .replace(
+                    /\s+/g,
+                    " "
+                )
+                .trim();
 
-                if (
-                    item.snippet &&
-                    item.snippet.length >
-                        100
-                ) {
-                    score +=
-                        5;
-                }
 
-                return {
-                    ...item,
-
-                    score:
-                        Math.max(
-                            0,
-                            score
-                        )
-                };
-            }
-        )
-        .sort(
-            (
-                a,
-                b
-            ) =>
-                b.score -
-                a.score
-        )
-        .slice(
+        return text.slice(
             0,
-            10
+            maxChars
         );
-}
 
+    } catch {
 
-// ================================================================
-// FOCUSED RETRY SEARCH
-// ================================================================
+        return "";
 
-async function runFocusedSearch(
-    plan,
-    rankedResults
-) {
-    const domains =
-        rankedResults
-            .slice(
-                0,
-                3
-            )
-            .map(
-                result => {
-                    try {
-                        const url =
-                            new URL(
-                                result.url
-                            );
-
-                        return url.hostname
-                            .replace(
-                                /^www\./,
-                                ""
-                            );
-
-                    } catch {
-                        return null;
-                    }
-                }
-            )
-            .filter(
-                Boolean
-            );
-
-    const extraQueries =
-        [];
-
-    const entity =
-        plan.entity ||
-        "";
-
-    domains.forEach(
-        domain => {
-            if (
-                domain
-            ) {
-                extraQueries.push(
-                    `site:${domain} "${entity}"`
-                );
-            }
-        }
-    );
-
-    if (
-        extraQueries.length ===
-        0
-    ) {
-        extraQueries.push(
-            `"${entity}" profile`
-        );
     }
 
-    const searchPromises =
-        extraQueries
-            .slice(
-                0,
-                2
-            )
-            .map(
-                query =>
-                    searchDuckDuckGo(
-                        query
-                    )
-            );
-
-    const results =
-        await Promise.all(
-            searchPromises
-        );
-
-    return results.flat();
 }
 
 
-// ================================================================
-// GENERAL PREFERENCE HELPERS
-// ================================================================
+/* =========================================================
+   PREFERENCES
+   ========================================================= */
 
 function normalizeIntelligence(
     value
 ) {
-    return value ===
+
+    const clean =
+        String(
+            value ||
+            "standard"
+        )
+            .trim()
+            .toLowerCase();
+
+
+    return [
+        "standard",
+        "high",
         "maximum"
-        ? "maximum"
+    ].includes(
+        clean
+    )
+        ? clean
         : "standard";
+
 }
 
 
 function normalizeLanguage(
     value
 ) {
-    const allowed = [
-        "auto",
-        "english",
-        "urdu",
-        "roman-urdu"
-    ];
 
-    return allowed.includes(
-        value
+    return cleanString(
+        String(
+            value ||
+            "auto"
+        ),
+        40
     )
-        ? value
-        : "auto";
+        .toLowerCase() ||
+        "auto";
+
 }
 
 
 function normalizePersonality(
     value
 ) {
-    const allowed = [
-        "neyo",
-        "zadi",
-        "wizi"
-    ];
 
-    return allowed.includes(
-        value
+    return cleanString(
+        String(
+            value ||
+            "neyo"
+        ),
+        50
     )
-        ? value
-        : "neyo";
+        .toLowerCase() ||
+        "neyo";
+
 }
 
 
 function normalizePrivateChat(
     value
 ) {
+
     return value ===
         true;
+
 }
 
 
-// ================================================================
-// DYNAMIC SYSTEM INSTRUCTION BUILDER
-// ================================================================
+/* =========================================================
+   SYSTEM BUILDER
+   ========================================================= */
 
-function buildSystemInstruction({
-    intelligence = "standard",
-    language = "auto",
-    personality = "neyo"
-} = {}) {
-    const intelligenceInstruction =
-        intelligence ===
-        "maximum"
-            ? `
-INTELLIGENCE MODE — MAXIMUM
-- Use deeper analysis for difficult requests.
-- Check assumptions, edge cases, constraints, and internal consistency before answering.
-- Prefer correctness and completeness over speed.
-- For simple requests, remain concise and do not over-explain.
-`
-            : `
-INTELLIGENCE MODE — STANDARD
-- Prioritize fast, clear, accurate responses.
-- Use deeper analysis only when the task actually requires it.
-- Avoid unnecessary complexity.
-`;
-
-    const languageInstructions = {
-        auto: `
-LANGUAGE
-- Detect the user's language naturally.
-- Match the user's language unless they explicitly request another language.
-`,
-
-        english: `
-LANGUAGE
-- Respond in English by default.
-- Preserve quoted or technical text when another language is necessary.
-`,
-
-        urdu: `
-LANGUAGE
-- Respond in natural Urdu script by default.
-- Keep technical names and code in their appropriate original form.
-`,
-
-        "roman-urdu": `
-LANGUAGE
-- Respond in natural Roman Urdu by default.
-- Keep code, APIs, technical identifiers, and product names unchanged.
-`
-    };
-
-    const personalityInstructions = {
-        neyo: `
-PERSONALITY — NEYO
-- Balanced, intelligent, practical, and composed.
-- Strong at thinking, writing, decision support, and everyday work.
-- Balance speed with useful reasoning.
-`,
-
-        zadi: `
-PERSONALITY — ZADI
-- Creative, expressive, imaginative, and polished.
-- Strong at writing, branding, ideation, storytelling, and creative exploration.
-- Do not sacrifice factual accuracy for creativity.
-`,
-
-        wizi: `
-PERSONALITY — WIZI
-- Research-oriented, analytical, careful, and evidence-conscious.
-- Strong at investigation, comparison, technical analysis, and structured reasoning.
-- Clearly distinguish verified information from uncertainty.
-`
-    };
-
-    return `
-${NEO_RESPONSE_FORMAT}
-
-${intelligenceInstruction}
-
-${languageInstructions[language]}
-
-${personalityInstructions[personality]}
-`.trim();
-}
-
-
-// ================================================================
-// GENERATION CONFIG BUILDER
-// ================================================================
-
-function getGenerationConfig(
-    intelligence,
-    isDeepResearch
+function buildSystemInstruction(
+    preferences = {}
 ) {
-    if (
-        isDeepResearch
-    ) {
-        return {
-            temperature:
-                0.5,
 
-            maxOutputTokens:
-                8192
-        };
-    }
+    const extra =
+        [];
+
 
     if (
-        intelligence ===
-        "maximum"
+        preferences.intelligence ===
+            "high" ||
+        preferences.intelligence ===
+            "maximum"
     ) {
-        return {
-            temperature:
-                0.55,
 
-            maxOutputTokens:
-                8192
-        };
+        extra.push(
+            "Use deeper reasoning for difficult requests while keeping the final response readable."
+        );
+
     }
+
+
+    if (
+        preferences.language &&
+        preferences.language !==
+            "auto"
+    ) {
+
+        extra.push(
+            `Preferred response language: ${preferences.language}.`
+        );
+
+    }
+
+
+    if (
+        preferences.personality &&
+        preferences.personality !==
+            "neyo"
+    ) {
+
+        extra.push(
+            `Preferred personality preset: ${preferences.personality}.`
+        );
+
+    }
+
+
+    return [
+        NEYO_RESPONSE_FORMAT,
+        ...extra
+    ].join(
+        "\n\n"
+    );
+
+}
+
+
+/* =========================================================
+   GEMINI BODY
+   ========================================================= */
+
+function buildGeminiBody(
+    contents,
+    isDeepResearch = false,
+    preferences = {}
+) {
 
     return {
-        temperature:
-            0.65,
 
-        maxOutputTokens:
-            4096
-    };
-}
-
-
-// ================================================================
-// GEMINI URL CONTEXT CALL
-// ================================================================
-
-async function callGeminiUrlContext(
-    query,
-    urls,
-    model,
-    isDeepResearch,
-    preferences
-) {
-    if (
-        !GEMINI_API_KEY
-    ) {
-        throw new Error(
-            "Gemini API key missing"
-        );
-    }
-
-    const url =
-        `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`;
-
-    const contextPrompt = `
-Read only these URLs and answer the user's question based on their content:
-
-${urls
-    .map(
-        (
-            item,
-            index
-        ) =>
-            `${index + 1}. ${item}`
-    )
-    .join(
-        "\n"
-    )}
-
-Original question: ${query}
-
-Rules:
-- Extract only the requested information from these URLs.
-- If a URL cannot be accessed, note that.
-- Do not search the web or add information from other sources.
-- Cite the source for each piece of information.
-- If multiple sources show different values, explain the difference.
-- Be concise and answer the actual question first.
-- If the answer is not found in any URL, say "I could not verify this from the provided sources."
-`;
-
-    const body = {
         systemInstruction: {
+
             parts: [
                 {
                     text:
@@ -1491,322 +1157,93 @@ Rules:
                         )
                 }
             ]
+
         },
 
-        contents: [
-            {
-                role:
-                    "user",
 
-                parts: [
-                    {
-                        text:
-                            contextPrompt
-                    }
-                ]
-            }
-        ],
+        contents,
 
-        tools: [
-            {
-                url_context:
-                    {}
-            }
-        ],
 
-        generationConfig:
-            getGenerationConfig(
-                preferences.intelligence,
+        generationConfig: {
+
+            temperature:
                 isDeepResearch
-            )
+                    ? 0.45
+                    : preferences
+                        .intelligence ===
+                        "maximum"
+                        ? 0.5
+                        : 0.65,
+
+            topP:
+                0.95,
+
+            maxOutputTokens:
+                (
+                    isDeepResearch ||
+                    preferences
+                        .intelligence ===
+                        "maximum"
+                )
+                    ? 8192
+                    : 4096
+
+        }
+
     };
 
-    const response =
-        await fetch(
-            url,
-            {
-                method:
-                    "POST",
-
-                headers: {
-                    "Content-Type":
-                        "application/json"
-                },
-
-                body:
-                    JSON.stringify(
-                        body
-                    )
-            }
-        );
-
-    const data =
-        await response
-            .json()
-            .catch(
-                () => ({})
-            );
-
-    if (
-        !response.ok
-    ) {
-        console.error(
-            "Gemini URL Context error:",
-            data
-        );
-
-        throw new Error(
-            data
-                ?.error
-                ?.message ||
-            "Gemini API error"
-        );
-    }
-
-    return data;
 }
 
 
-// ================================================================
-// SMART WEB ANSWER
-// ================================================================
-
-async function smartWebAnswer(
-    query,
-    model,
-    isDeepResearch,
-    preferences
-) {
-    const plan =
-        await createSmartSearchPlan(
-            query
-        );
-
-    const searchResults =
-        await Promise.all(
-            plan.queries
-                .slice(
-                    0,
-                    3
-                )
-                .map(
-                    searchQuery =>
-                        searchDuckDuckGo(
-                            searchQuery
-                        )
-                )
-        );
-
-    let allResults =
-        searchResults.flat();
-
-    let ranked =
-        rankSearchResults(
-            allResults,
-            plan
-        );
-
-    if (
-        ranked.length ===
-        0
-    ) {
-        const retryResults =
-            await runFocusedSearch(
-                plan,
-                ranked
-            );
-
-        const combined = [
-            ...ranked,
-            ...retryResults
-        ];
-
-        ranked =
-            rankSearchResults(
-                combined,
-                plan
-            );
-    }
-
-    const urls =
-        ranked
-            .filter(
-                item =>
-                    item?.url
-            )
-            .slice(
-                0,
-                5
-            )
-            .map(
-                item =>
-                    item.url
-            );
-
-    if (
-        urls.length ===
-        0
-    ) {
-        console.warn(
-            "No usable DuckDuckGo URLs found.",
-            {
-                query,
-                plan,
-                searchResultCount:
-                    allResults.length
-            }
-        );
-
-        throw new Error(
-            "I could not find usable pages for this request."
-        );
-    }
-
-    const geminiResponse =
-        await callGeminiUrlContext(
-            query,
-            urls,
-            model,
-            isDeepResearch,
-            preferences
-        );
-
-    const reply =
-        geminiResponse
-            ?.candidates?.[0]
-            ?.content
-            ?.parts?.[0]
-            ?.text ||
-        "";
-
-    const urlMetadata =
-        geminiResponse
-            ?.candidates?.[0]
-            ?.url_context_metadata
-            ?.url_metadata ||
-        [];
-
-    const sources =
-        urlMetadata
-            .filter(
-                item =>
-                    item
-                        .url_retrieval_status ===
-                    "URL_RETRIEVAL_STATUS_SUCCESS"
-            )
-            .map(
-                item => ({
-                    title:
-                        item.url ||
-                        "Source",
-
-                    url:
-                        item.url,
-
-                    status:
-                        "success"
-                })
-            );
-
-    const finalSources =
-        sources.length >
-        0
-            ? sources
-            : urls.map(
-                sourceUrl => ({
-                    title:
-                        new URL(
-                            sourceUrl
-                        )
-                            .hostname
-                            .replace(
-                                /^www\./,
-                                ""
-                            ),
-
-                    url:
-                        sourceUrl,
-
-                    status:
-                        "success"
-                })
-            );
-
-    return {
-        reply:
-            reply ||
-            "No reply generated.",
-
-        sources:
-            finalSources,
-
-        usedUrlContext:
-            true
-    };
-}
-
-
-// ================================================================
-// STANDARD GEMINI CALL
-// ================================================================
+/* =========================================================
+   GEMINI CALL
+   ========================================================= */
 
 async function callGemini(
     messages,
     model,
-    isDeepResearch,
-    preferences
+    isDeepResearch = false,
+    preferences = {}
 ) {
+
     if (
         !GEMINI_API_KEY
     ) {
+
         throw new Error(
-            "Gemini API key missing"
+            "Gemini API key is missing."
         );
+
     }
 
-    const url =
-        `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`;
-
-    const body = {
-        systemInstruction: {
-            parts: [
-                {
-                    text:
-                        buildSystemInstruction(
-                            preferences
-                        )
-                }
-            ]
-        },
-
-        contents:
-            messages,
-
-        generationConfig:
-            getGenerationConfig(
-                preferences.intelligence,
-                isDeepResearch
-            )
-    };
 
     const response =
         await fetch(
-            url,
+            `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`,
             {
+
                 method:
                     "POST",
 
                 headers: {
+
                     "Content-Type":
                         "application/json"
+
                 },
 
                 body:
                     JSON.stringify(
-                        body
+                        buildGeminiBody(
+                            messages,
+                            isDeepResearch,
+                            preferences
+                        )
                     )
+
             }
         );
+
 
     const data =
         await response
@@ -1815,52 +1252,62 @@ async function callGemini(
                 () => ({})
             );
 
+
     if (
         !response.ok
     ) {
+
         console.error(
-            "Gemini API error:",
+            "[NEYO Gemini]",
             data
         );
+
 
         throw new Error(
             data
                 ?.error
                 ?.message ||
-            "Gemini API error"
+            `Gemini request failed (${response.status}).`
         );
+
     }
 
+
     return data;
+
 }
 
 
-// ================================================================
-// GEMINI FILE UPLOAD HELPERS
-// ================================================================
+/* =========================================================
+   GEMINI TEMP FILE DELETE
+   ========================================================= */
 
 async function deleteGeminiFile(
-    apiKey,
     fileName
 ) {
+
     if (
-        !fileName ||
-        !apiKey
+        !GEMINI_API_KEY ||
+        !fileName
     ) {
         return;
     }
 
+
     const safeName =
         String(
             fileName
-        ).replace(
-            /^\/+/,
-            ""
-        );
+        )
+            .replace(
+                /^\/+/,
+                ""
+            );
+
 
     try {
+
         await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/${safeName}?key=${encodeURIComponent(apiKey)}`,
+            `https://generativelanguage.googleapis.com/v1beta/${safeName}?key=${encodeURIComponent(GEMINI_API_KEY)}`,
             {
                 method:
                     "DELETE"
@@ -1870,17 +1317,46 @@ async function deleteGeminiFile(
     } catch (
         error
     ) {
+
         console.warn(
-            "Gemini temporary file deletion failed:",
-            error
+            "[NEYO Gemini] Temp file delete failed:",
+            error?.message
         );
+
     }
+
 }
 
+
+/* =========================================================
+   DOWNLOAD FROM SUPABASE + UPLOAD TO GEMINI
+   ========================================================= */
 
 async function uploadSupabaseFileToGemini(
     file
 ) {
+
+    if (
+        !file?.bucket ||
+        !file?.path
+    ) {
+
+        throw new Error(
+            `Attachment "${file?.name || "file"}" is missing storage metadata.`
+        );
+
+    }
+
+
+    /*
+    ---------------------------------------------------------
+    CRITICAL:
+    Use attachment.bucket directly.
+
+    DO NOT replace it with neo-uploads.
+    ---------------------------------------------------------
+    */
+
     const {
         data:
             storedFile,
@@ -1889,42 +1365,85 @@ async function uploadSupabaseFileToGemini(
         await supabase
             .storage
             .from(
-                file.bucket ||
-                UPLOAD_BUCKET
+                file.bucket
             )
             .download(
                 file.path
             );
 
+
     if (
         error ||
         !storedFile
     ) {
+
+        console.error(
+            "[NEYO Attachment] Storage download failed:",
+            {
+                bucket:
+                    file.bucket,
+
+                path:
+                    file.path,
+
+                name:
+                    file.name,
+
+                error:
+                    error?.message
+            }
+        );
+
+
         throw new Error(
             error?.message ||
-            `Unable to read ${file.name}.`
+            `Unable to read attachment "${file.name}".`
         );
+
     }
+
+
+    const bytes =
+        Buffer.from(
+            await storedFile
+                .arrayBuffer()
+        );
+
+
+    if (
+        bytes.length ===
+        0
+    ) {
+
+        throw new Error(
+            `Attachment "${file.name}" is empty.`
+        );
+
+    }
+
 
     const mimeType =
         file.mimeType ||
+        file.mime ||
         storedFile.type ||
         "application/octet-stream";
 
-    const bytes =
-        await storedFile
-            .arrayBuffer();
+
+    /*
+    ---------------------------------------------------------
+    Gemini resumable upload start
+    ---------------------------------------------------------
+    */
 
     const startResponse =
         await fetch(
             `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${encodeURIComponent(GEMINI_API_KEY)}`,
             {
+
                 method:
                     "POST",
 
                 headers: {
-                    "Content-Type":
-                        "application/json",
 
                     "X-Goog-Upload-Protocol":
                         "resumable",
@@ -1934,27 +1453,38 @@ async function uploadSupabaseFileToGemini(
 
                     "X-Goog-Upload-Header-Content-Length":
                         String(
-                            bytes.byteLength
+                            bytes.length
                         ),
 
                     "X-Goog-Upload-Header-Content-Type":
-                        mimeType
+                        mimeType,
+
+                    "Content-Type":
+                        "application/json"
+
                 },
 
                 body:
                     JSON.stringify({
+
                         file: {
-                            displayName:
+
+                            display_name:
                                 file.name ||
-                                "NEO attachment"
+                                "NEYO attachment"
+
                         }
+
                     })
+
             }
         );
+
 
     if (
         !startResponse.ok
     ) {
+
         const details =
             await startResponse
                 .text()
@@ -1962,11 +1492,14 @@ async function uploadSupabaseFileToGemini(
                     () => ""
                 );
 
+
         throw new Error(
             details ||
-            "Gemini upload initialization failed."
+            "Unable to initialize Gemini file upload."
         );
+
     }
+
 
     const uploadUrl =
         startResponse
@@ -1975,25 +1508,37 @@ async function uploadSupabaseFileToGemini(
                 "x-goog-upload-url"
             );
 
+
     if (
         !uploadUrl
     ) {
+
         throw new Error(
-            "Gemini upload URL was not returned."
+            "Gemini upload URL missing."
         );
+
     }
+
+
+    /*
+    ---------------------------------------------------------
+    Send actual bytes
+    ---------------------------------------------------------
+    */
 
     const uploadResponse =
         await fetch(
             uploadUrl,
             {
+
                 method:
                     "POST",
 
                 headers: {
+
                     "Content-Length":
                         String(
-                            bytes.byteLength
+                            bytes.length
                         ),
 
                     "X-Goog-Upload-Offset":
@@ -2001,63 +1546,87 @@ async function uploadSupabaseFileToGemini(
 
                     "X-Goog-Upload-Command":
                         "upload, finalize"
+
                 },
 
                 body:
                     bytes
+
             }
         );
 
-    const uploadData =
+
+    const payload =
         await uploadResponse
             .json()
             .catch(
                 () => ({})
             );
 
+
     if (
         !uploadResponse.ok
     ) {
+
         throw new Error(
-            uploadData
+            payload
                 ?.error
                 ?.message ||
             "Gemini file upload failed."
         );
+
     }
 
+
     const geminiFile =
-        uploadData?.file;
+        payload?.file;
+
 
     if (
         !geminiFile?.name ||
         !geminiFile?.uri
     ) {
+
         throw new Error(
             "Gemini file information was not returned."
         );
+
     }
+
+
+    /*
+    ---------------------------------------------------------
+    Wait while Gemini processes file
+    ---------------------------------------------------------
+    */
 
     if (
         geminiFile.state ===
         "PROCESSING"
     ) {
-        return await waitForGeminiFile(
+
+        return waitForGeminiFile(
             geminiFile.name,
             mimeType
         );
+
     }
+
 
     if (
         geminiFile.state ===
         "FAILED"
     ) {
+
         throw new Error(
-            `Gemini could not process ${file.name}.`
+            `Gemini could not process "${file.name}".`
         );
+
     }
 
+
     return {
+
         name:
             geminiFile.name,
 
@@ -2067,19 +1636,27 @@ async function uploadSupabaseFileToGemini(
         mimeType:
             geminiFile.mimeType ||
             mimeType
+
     };
+
 }
 
+
+/* =========================================================
+   WAIT FOR GEMINI FILE
+   ========================================================= */
 
 async function waitForGeminiFile(
     fileName,
     fallbackMimeType
 ) {
+
     for (
         let attempt = 0;
         attempt < 60;
         attempt += 1
     ) {
+
         await new Promise(
             resolve =>
                 setTimeout(
@@ -2088,10 +1665,12 @@ async function waitForGeminiFile(
                 )
         );
 
+
         const response =
             await fetch(
                 `https://generativelanguage.googleapis.com/v1beta/${fileName}?key=${encodeURIComponent(GEMINI_API_KEY)}`
             );
+
 
         const data =
             await response
@@ -2100,22 +1679,28 @@ async function waitForGeminiFile(
                     () => ({})
                 );
 
+
         if (
             !response.ok
         ) {
+
             throw new Error(
                 data
                     ?.error
                     ?.message ||
                 "Unable to check Gemini file status."
             );
+
         }
+
 
         if (
             data.state ===
             "ACTIVE"
         ) {
+
             return {
+
                 name:
                     data.name,
 
@@ -2125,37 +1710,345 @@ async function waitForGeminiFile(
                 mimeType:
                     data.mimeType ||
                     fallbackMimeType
+
             };
+
         }
+
 
         if (
             data.state ===
             "FAILED"
         ) {
+
             throw new Error(
-                "Gemini could not process this file."
+                "Gemini could not process the attachment."
             );
+
         }
+
     }
+
 
     throw new Error(
         "Gemini file processing timed out."
     );
+
 }
 
 
-// ================================================================
-// SAVE MESSAGE
-// ================================================================
+/* =========================================================
+   WEB SEARCH ANSWER
+   ========================================================= */
+
+async function smartWebAnswer(
+    query,
+    model,
+    isDeepResearch,
+    preferences
+) {
+
+    const results =
+        await searchDuckDuckGo(
+            query,
+            isDeepResearch
+                ? 8
+                : 5
+        );
+
+
+    if (
+        results.length ===
+        0
+    ) {
+
+        throw new Error(
+            "No usable web results found."
+        );
+
+    }
+
+
+    const enriched =
+        [];
+
+
+    for (
+        const result
+        of results
+    ) {
+
+        const content =
+            await fetchUrlText(
+                result.url,
+                isDeepResearch
+                    ? 14000
+                    : 8000
+            );
+
+
+        enriched.push({
+
+            ...result,
+            content
+
+        });
+
+    }
+
+
+    const context =
+        enriched
+            .map(
+                (
+                    source,
+                    index
+                ) => [
+
+                    `[Source ${index + 1}]`,
+
+                    `Title: ${source.title}`,
+
+                    `URL: ${source.url}`,
+
+                    source.snippet
+                        ? `Snippet: ${source.snippet}`
+                        : "",
+
+                    source.content
+                        ? `Content: ${source.content}`
+                        : ""
+
+                ]
+                    .filter(
+                        Boolean
+                    )
+                    .join(
+                        "\n"
+                    )
+            )
+            .join(
+                "\n\n"
+            );
+
+
+    const response =
+        await callGemini(
+            [
+                {
+
+                    role:
+                        "user",
+
+                    parts: [
+                        {
+
+                            text:
+`${query}
+
+Use the fresh web context below when relevant.
+Do not invent information.
+If sources conflict, explain that.
+
+${context}`
+
+                        }
+                    ]
+
+                }
+            ],
+            model,
+            isDeepResearch,
+            preferences
+        );
+
+
+    return {
+
+        reply:
+            response
+                ?.candidates?.[0]
+                ?.content
+                ?.parts?.[0]
+                ?.text ||
+            "",
+
+        sources:
+            enriched.map(
+                source => ({
+
+                    title:
+                        source.title,
+
+                    url:
+                        source.url,
+
+                    snippet:
+                        source.snippet
+
+                })
+            ),
+
+        usedUrlContext:
+            true
+
+    };
+
+}
+
+
+/* =========================================================
+   DIRECT URL CONTEXT
+   ========================================================= */
+
+async function callGeminiUrlContext(
+    query,
+    urls,
+    model,
+    isDeepResearch,
+    preferences
+) {
+
+    const contexts =
+        [];
+
+
+    for (
+        const url
+        of urls
+    ) {
+
+        const content =
+            await fetchUrlText(
+                url,
+                12000
+            );
+
+
+        contexts.push({
+
+            url,
+            content
+
+        });
+
+    }
+
+
+    const context =
+        contexts
+            .map(
+                (
+                    item,
+                    index
+                ) =>
+`[URL ${index + 1}]
+${item.url}
+
+${item.content}`
+            )
+            .join(
+                "\n\n"
+            );
+
+
+    return callGemini(
+        [
+            {
+
+                role:
+                    "user",
+
+                parts: [
+                    {
+
+                        text:
+`${query}
+
+Use the following URL content when relevant.
+Do not invent information outside the supplied context.
+
+${context}`
+
+                    }
+                ]
+
+            }
+        ],
+        model,
+        isDeepResearch,
+        preferences
+    );
+
+}
+
+
+/* =========================================================
+   SAVE MESSAGE
+   ========================================================= */
 
 async function saveMessage(
-    supabase,
     conversationId,
     role,
     content,
-    attachments,
-    sources
+    attachments = [],
+    sources = []
 ) {
+
+    if (
+        !conversationId
+    ) {
+        return;
+    }
+
+
+    const payload = {
+
+        conversation_id:
+            conversationId,
+
+        role,
+
+        content:
+            cleanString(
+                content
+            )
+
+    };
+
+
+    /*
+    Keep attachments if schema supports it.
+    */
+
+    if (
+        Array.isArray(
+            attachments
+        ) &&
+        attachments.length >
+            0
+    ) {
+
+        payload.attachments =
+            attachments;
+
+    }
+
+
+    if (
+        Array.isArray(
+            sources
+        ) &&
+        sources.length >
+            0
+    ) {
+
+        payload.sources =
+            sources;
+
+    }
+
+
     const {
         error
     } =
@@ -2163,99 +2056,161 @@ async function saveMessage(
             .from(
                 "chat_messages"
             )
-            .insert({
-                conversation_id:
-                    conversationId,
+            .insert(
+                payload
+            );
 
-                role,
-
-                content:
-                    cleanString(
-                        content,
-                        MAX_MESSAGE_LENGTH
-                    ),
-
-                attachments:
-                    attachments ||
-                    [],
-
-                sources:
-                    sources ||
-                    []
-            });
 
     if (
         error
     ) {
-        throw new Error(
-            error.message
-        );
+
+        /*
+        Compatibility fallback if old schema
+        does not have attachments/sources columns.
+        */
+
+        if (
+            /attachments|sources/i
+                .test(
+                    error.message ||
+                    ""
+                )
+        ) {
+
+            const {
+                error:
+                    fallbackError
+            } =
+                await supabase
+                    .from(
+                        "chat_messages"
+                    )
+                    .insert({
+
+                        conversation_id:
+                            conversationId,
+
+                        role,
+
+                        content:
+                            cleanString(
+                                content
+                            )
+
+                    });
+
+
+            if (
+                fallbackError
+            ) {
+                throw fallbackError;
+            }
+
+
+            return;
+
+        }
+
+
+        throw error;
+
     }
+
 }
 
 
-// ================================================================
-// MAIN HANDLER
-// ================================================================
+/* =========================================================
+   HANDLER
+   ========================================================= */
 
-export default async (
+export default async function handler(
     req,
     res
-) => {
+) {
+
+    if (
+        req.method !==
+        "POST"
+    ) {
+
+        res.setHeader(
+            "Allow",
+            "POST"
+        );
+
+
+        return res
+            .status(
+                405
+            )
+            .json({
+
+                error:
+                    "Method not allowed"
+
+            });
+
+    }
+
+
     const geminiFiles =
         [];
+
 
     let userId =
         null;
 
+
     let reservedType =
         null;
 
-    let isPro =
-        false;
-
 
     try {
-        // ============================================================
-        // AUTH
-        // IMPORTANT:
-        // lib/auth.js returns auth.userId
-        // ============================================================
+
+        /* =================================================
+           AUTH
+           ================================================= */
 
         const auth =
             await getAuthenticatedUser(
                 req
             );
 
+
         if (
             !auth?.userId
         ) {
+
             return res
                 .status(
                     401
                 )
                 .json({
+
                     error:
                         "Authentication required. Please log in."
+
                 });
+
         }
 
-        const user = {
-            id:
-                auth.userId,
-
-            username:
-                auth.username ||
-                "user"
-        };
 
         userId =
-            user.id;
+            auth.userId;
 
 
-        // ============================================================
-        // REQUEST
-        // ============================================================
+        /* =================================================
+           BODY
+           ================================================= */
+
+        const body =
+            req.body &&
+            typeof req.body ===
+                "object"
+                ? req.body
+                : {};
+
 
         const {
             messages,
@@ -2263,36 +2218,7 @@ export default async (
             isDeepResearch,
             title
         } =
-            req.body ||
-            {};
-
-
-        const preferences = {
-            intelligence:
-                normalizeIntelligence(
-                    req.body
-                        ?.intelligence
-                ),
-
-            language:
-                normalizeLanguage(
-                    req.body
-                        ?.language
-                ),
-
-            personality:
-                normalizePersonality(
-                    req.body
-                        ?.personality
-                )
-        };
-
-
-        const privateChat =
-            normalizePrivateChat(
-                req.body
-                    ?.privateChat
-            );
+            body;
 
 
         if (
@@ -2302,14 +2228,18 @@ export default async (
             messages.length ===
                 0
         ) {
+
             return res
                 .status(
                     400
                 )
                 .json({
+
                     error:
                         "Messages array required"
+
                 });
+
         }
 
 
@@ -2321,23 +2251,54 @@ export default async (
 
 
         if (
-            lastMsg?.role !==
-            "user"
+            !lastMsg ||
+            lastMsg.role !==
+                "user"
         ) {
+
             return res
                 .status(
                     400
                 )
                 .json({
+
                     error:
                         "Last message must be user"
+
                 });
+
         }
 
 
-        // ============================================================
-        // CREDIT RESERVATION
-        // ============================================================
+        const preferences = {
+
+            intelligence:
+                normalizeIntelligence(
+                    body.intelligence
+                ),
+
+            language:
+                normalizeLanguage(
+                    body.language
+                ),
+
+            personality:
+                normalizePersonality(
+                    body.personality
+                )
+
+        };
+
+
+        const privateChat =
+            normalizePrivateChat(
+                body.privateChat
+            );
+
+
+        /* =================================================
+           CREDIT
+           ================================================= */
 
         const {
             data:
@@ -2349,8 +2310,10 @@ export default async (
                 .rpc(
                     "reserve_message",
                     {
+
                         p_user_id:
                             userId
+
                     }
                 );
 
@@ -2358,19 +2321,24 @@ export default async (
         if (
             reserveError
         ) {
+
             console.error(
-                "Credit reservation failed:",
+                "[NEYO Credit]",
                 reserveError
             );
+
 
             return res
                 .status(
                     500
                 )
                 .json({
+
                     error:
                         "Unable to check message credits."
+
                 });
+
         }
 
 
@@ -2388,9 +2356,11 @@ export default async (
                 reservedType
             )
         ) {
+
             throw new Error(
                 "Invalid credit reservation response."
             );
+
         }
 
 
@@ -2398,53 +2368,77 @@ export default async (
             reservedType ===
             "limit"
         ) {
+
             return res
                 .status(
                     429
                 )
                 .json({
+
                     error:
                         "MESSAGE_LIMIT_REACHED",
 
                     creditsRemaining:
                         0
+
                 });
+
         }
 
 
-        isPro =
+        const isPro =
             reservedType ===
             "pro";
 
 
-        // ============================================================
-        // ATTACHMENTS
-        // ============================================================
+        /* =================================================
+           ATTACHMENTS
+           ================================================= */
 
-        const receivedAttachments =
+        const rawAttachments =
             Array.isArray(
-                req.body
-                    .attachments
+                body.attachments
             )
-                ? req.body
-                    .attachments
-                : (
-                    lastMsg
-                        ?.attachments ||
-                    []
-                );
+                ? body.attachments
+                : Array.isArray(
+                    lastMsg.attachments
+                )
+                    ? lastMsg.attachments
+                    : [];
 
 
         const attachments =
             validAttachmentList(
-                receivedAttachments,
-                user.id
+                rawAttachments,
+                userId
             );
 
 
-        // ============================================================
-        // GEMINI HISTORY
-        // ============================================================
+        console.log(
+            "[NEYO Chat] Attachments:",
+            attachments.map(
+                item => ({
+
+                    uploadId:
+                        item.uploadId,
+
+                    bucket:
+                        item.bucket,
+
+                    path:
+                        item.path,
+
+                    name:
+                        item.name
+
+                })
+            )
+        );
+
+
+        /* =================================================
+           GEMINI HISTORY
+           ================================================= */
 
         const history =
             messages.slice(
@@ -2456,43 +2450,77 @@ export default async (
             history
                 .map(
                     message => ({
+
                         role:
                             message.role ===
-                            "assistant"
+                                "assistant"
                                 ? "model"
-                                : message.role,
+                                : "user",
 
                         parts: [
                             {
+
                                 text:
                                     cleanString(
                                         message.content ||
                                         ""
                                     )
+
                             }
                         ]
+
                     })
                 )
                 .filter(
                     message =>
-                        message
-                            .parts[0]
-                            .text ||
-                        message
-                            .attachments
-                            ?.length
+                        Boolean(
+                            message
+                                .parts?.[0]
+                                ?.text
+                        )
                 );
 
 
-        // ============================================================
-        // GEMINI ATTACHMENTS
-        // ============================================================
+        /*
+        Last user message may be attachment-only.
+        Ensure message exists.
+        */
 
         if (
             attachments.length >
                 0 &&
-            GEMINI_API_KEY
+            geminiMessages.length ===
+                0
         ) {
+
+            geminiMessages.push({
+
+                role:
+                    "user",
+
+                parts: [
+                    {
+
+                        text:
+                            "Please analyze the attached file or files."
+
+                    }
+                ]
+
+            });
+
+        }
+
+
+        /* =================================================
+           ATTACH FILES TO LAST USER MESSAGE
+           ================================================= */
+
+        if (
+            attachments.length >
+                0
+        ) {
+
             const lastGeminiMessage =
                 geminiMessages[
                     geminiMessages.length -
@@ -2503,17 +2531,12 @@ export default async (
             if (
                 !lastGeminiMessage
             ) {
+
                 throw new Error(
                     "Unable to prepare attachment message."
                 );
+
             }
-
-
-            const originalText =
-                cleanString(
-                    lastMsg.content ||
-                    "Please analyze the attached file."
-                );
 
 
             const attachmentParts =
@@ -2524,6 +2547,7 @@ export default async (
                 const file
                 of attachments
             ) {
+
                 const geminiFile =
                     await uploadSupabaseFileToGemini(
                         file
@@ -2543,7 +2567,9 @@ export default async (
 
 
                 attachmentParts.push({
+
                     fileData: {
+
                         mimeType:
                             geminiFile
                                 .mimeType,
@@ -2551,57 +2577,92 @@ export default async (
                         fileUri:
                             geminiFile
                                 .uri
+
                     }
+
                 });
+
             }
 
 
+            if (
+                attachmentParts.length ===
+                0
+            ) {
+
+                throw new Error(
+                    "No attached files could be prepared."
+                );
+
+            }
+
+
+            const originalText =
+                cleanString(
+                    lastMsg.content ||
+                    ""
+                ) ||
+                "Please analyze the attached file or files.";
+
+
             lastGeminiMessage.parts = [
+
                 {
                     text:
                         originalText
                 },
 
                 ...attachmentParts
+
             ];
+
         }
 
 
-        // ============================================================
-        // CONVERSATION PERSISTENCE
-        // ============================================================
+        /* =================================================
+           CONVERSATION
+           ================================================= */
 
         let convId =
             privateChat
                 ? null
-                : conversationId ||
-                    null;
+                : cleanString(
+                    conversationId ||
+                    "",
+                    128
+                ) ||
+                null;
 
 
         if (
             !privateChat &&
             !convId
         ) {
+
             const {
                 data:
-                    newConv,
+                    newConversation,
                 error:
-                    convError
+                    conversationError
             } =
                 await supabase
                     .from(
                         "chat_conversations"
                     )
                     .insert({
+
                         user_id:
-                            user.id,
+                            userId,
 
                         title:
                             cleanString(
                                 title ||
+                                lastMsg.content ||
                                 "New conversation",
                                 100
-                            )
+                            ) ||
+                            "New conversation"
+
                     })
                     .select(
                         "id"
@@ -2610,18 +2671,21 @@ export default async (
 
 
             if (
-                convError
+                conversationError
             ) {
-                throw new Error(
-                    convError.message
-                );
+                throw conversationError;
             }
 
 
             convId =
-                newConv.id;
+                newConversation.id;
+
         }
 
+
+        /* =================================================
+           SAVE USER MESSAGE
+           ================================================= */
 
         const userText =
             cleanString(
@@ -2633,8 +2697,8 @@ export default async (
         if (
             !privateChat
         ) {
+
             await saveMessage(
-                supabase,
                 convId,
                 "user",
                 userText ||
@@ -2642,12 +2706,13 @@ export default async (
                 attachments,
                 []
             );
+
         }
 
 
-        // ============================================================
-        // MODEL
-        // ============================================================
+        /* =================================================
+           MODEL
+           ================================================= */
 
         const model =
             isPro
@@ -2667,60 +2732,53 @@ export default async (
                 );
 
 
-        // ============================================================
-        // SEARCH DECISION
-        // ============================================================
+        /* =================================================
+           WEB / NORMAL DECISION
+           ================================================= */
 
         const lowerQuery =
             userText
                 .toLowerCase();
 
 
-        const isCurrentQuery =
-            /\b(current|now|latest|today|this month|july|august|202[4-9]|real[- ]time)\b/
-                .test(
-                    lowerQuery
-                );
-
-
-        const isCompareQuery =
-            /\b(compare|difference|versus|vs|different|which|between)\b/
-                .test(
-                    lowerQuery
-                );
-
-
-        const isSpecificQuery =
-            /\b(how much|what is|value|price|net worth|population|weather|stock|price|rate|exchange|who|which company|where is)\b/
-                .test(
-                    lowerQuery
-                );
-
-
         const hasUrl =
             extractUrlsFromText(
                 userText
-            ).length >
+            )
+                .length >
             0;
+
+
+        const isCurrentQuery =
+            /\b(current|now|latest|today|real[- ]time|this week|this month|202[4-9])\b/
+                .test(
+                    lowerQuery
+                );
 
 
         let reply =
             "";
 
+
         let sources =
             [];
+
 
         let usedUrlContext =
             false;
 
 
-        // ============================================================
-        // DIRECT URL CONTEXT
-        // ============================================================
+        /*
+        Attachments take priority.
+        Do not launch web search for attached files.
+        */
 
         if (
+            attachments.length ===
+                0 &&
             hasUrl
         ) {
+
             const urls =
                 extractUrlsFromText(
                     userText
@@ -2732,7 +2790,8 @@ export default async (
 
 
             try {
-                const contextResponse =
+
+                const response =
                     await callGeminiUrlContext(
                         userText,
                         urls,
@@ -2743,7 +2802,7 @@ export default async (
 
 
                 reply =
-                    contextResponse
+                    response
                         ?.candidates?.[0]
                         ?.content
                         ?.parts?.[0]
@@ -2751,61 +2810,20 @@ export default async (
                     "";
 
 
-                const metadata =
-                    contextResponse
-                        ?.candidates?.[0]
-                        ?.url_context_metadata
-                        ?.url_metadata ||
-                    [];
-
-
                 sources =
-                    metadata
-                        .filter(
-                            item =>
-                                item
-                                    .url_retrieval_status ===
-                                "URL_RETRIEVAL_STATUS_SUCCESS"
-                        )
-                        .map(
-                            item => ({
-                                title:
-                                    item.url ||
-                                    "Source",
+                    urls.map(
+                        url => ({
 
-                                url:
-                                    item.url,
-
-                                status:
-                                    "success"
-                            })
-                        );
-
-
-                if (
-                    sources.length ===
-                    0
-                ) {
-                    sources =
-                        urls.map(
-                            url => ({
-                                title:
-                                    new URL(
-                                        url
-                                    )
-                                        .hostname
-                                        .replace(
-                                            /^www\./,
-                                            ""
-                                        ),
-
+                            title:
                                 url,
 
-                                status:
-                                    "success"
-                            })
-                        );
-                }
+                            url,
+
+                            status:
+                                "success"
+
+                        })
+                    );
 
 
                 usedUrlContext =
@@ -2814,23 +2832,22 @@ export default async (
             } catch (
                 error
             ) {
+
                 console.warn(
-                    "Direct URL Context failed:",
-                    error
+                    "[NEYO URL Context]",
+                    error?.message
                 );
+
             }
 
         } else if (
-            isCurrentQuery ||
-            isCompareQuery ||
-            isSpecificQuery
+            attachments.length ===
+                0 &&
+            isCurrentQuery
         ) {
 
-            // ========================================================
-            // SMART WEB SEARCH
-            // ========================================================
-
             try {
+
                 const result =
                     await smartWebAnswer(
                         userText,
@@ -2850,28 +2867,31 @@ export default async (
 
 
                 usedUrlContext =
-                    result.usedUrlContext ||
-                    false;
+                    true;
 
             } catch (
                 error
             ) {
+
                 console.warn(
-                    "Smart web search failed, falling back to normal Gemini:",
-                    error
+                    "[NEYO Search]",
+                    error?.message
                 );
+
             }
+
         }
 
 
-        // ============================================================
-        // NORMAL GEMINI FALLBACK
-        // ============================================================
+        /* =================================================
+           NORMAL / ATTACHMENT GEMINI
+           ================================================= */
 
         if (
             !reply
         ) {
-            const geminiResponse =
+
+            const response =
                 await callGemini(
                     geminiMessages,
                     model,
@@ -2881,81 +2901,109 @@ export default async (
 
 
             reply =
-                geminiResponse
+                response
                     ?.candidates?.[0]
                     ?.content
-                    ?.parts?.[0]
-                    ?.text ||
+                    ?.parts
+                    ?.map(
+                        part =>
+                            part?.text ||
+                            ""
+                    )
+                    .join(
+                        ""
+                    )
+                    .trim() ||
                 "";
 
 
             if (
                 !reply
             ) {
+
                 throw new Error(
-                    "Gemini returned empty response"
+                    "Gemini returned an empty response."
                 );
+
             }
+
         }
 
 
-        // ============================================================
-        // SAVE ASSISTANT
-        // ============================================================
+        /* =================================================
+           SAVE ASSISTANT
+           ================================================= */
 
         if (
             !privateChat
         ) {
+
             await saveMessage(
-                supabase,
                 convId,
                 "assistant",
                 reply,
                 [],
                 sources
             );
+
         }
 
 
-        // ============================================================
-        // RESPONSE
-        // ============================================================
+        /* =================================================
+           SUCCESS
+           ================================================= */
 
-        return res.json({
-            reply,
+        return res
+            .status(
+                200
+            )
+            .json({
 
-            conversationId:
-                privateChat
-                    ? null
-                    : convId,
+                reply,
 
-            privateChat,
+                conversationId:
+                    privateChat
+                        ? null
+                        : convId,
 
-            usedUrlContext,
+                privateChat,
 
-            sources:
-                sources.length >
-                0
-                    ? sources
-                    : undefined,
+                usedUrlContext,
 
-            creditType:
-                reservedType
-        });
+                sources:
+                    sources.length >
+                    0
+                        ? sources
+                        : undefined,
+
+                creditType:
+                    reservedType,
+
+                attachmentsProcessed:
+                    attachments.length
+
+            });
 
 
     } catch (
         error
     ) {
+
         console.error(
-            "Chat error:",
-            error
+            "[NEYO Chat Error]",
+            {
+                message:
+                    error?.message,
+
+                stack:
+                    error?.stack
+            }
         );
 
 
-        // ============================================================
-        // CREDIT REFUND
-        // ============================================================
+        /* =================================================
+           REFUND FREE / REWARD CREDIT
+           ================================================= */
 
         if (
             userId &&
@@ -2966,66 +3014,95 @@ export default async (
                     "reward"
             )
         ) {
-            const {
-                error:
-                    refundError
-            } =
-                await supabase
-                    .rpc(
-                        "refund_message",
-                        {
-                            p_user_id:
-                                userId,
 
-                            p_type:
-                                reservedType
-                        }
+            try {
+
+                const {
+                    error:
+                        refundError
+                } =
+                    await supabase
+                        .rpc(
+                            "refund_message",
+                            {
+
+                                p_user_id:
+                                    userId,
+
+                                p_type:
+                                    reservedType
+
+                            }
+                        );
+
+
+                if (
+                    refundError
+                ) {
+
+                    console.error(
+                        "[NEYO Credit Refund]",
+                        refundError
                     );
 
+                }
 
-            if (
-                refundError
+            } catch (
+                refundFailure
             ) {
+
                 console.error(
-                    "Credit refund failed:",
-                    refundError
+                    "[NEYO Credit Refund]",
+                    refundFailure?.message
                 );
+
             }
+
         }
 
+
+        /*
+        Return useful storage error instead of hiding
+        "Object not found".
+        */
 
         return res
             .status(
                 500
             )
             .json({
+
                 error:
-                    error.message ||
+                    error?.message ||
                     "Unable to complete request."
+
             });
 
 
     } finally {
 
-        // ============================================================
-        // DELETE ONLY TEMPORARY GEMINI FILES
-        // Never delete Supabase original attachment.
-        // ============================================================
+        /* =================================================
+           DELETE GEMINI TEMP FILES ONLY
+
+           Supabase attachment is NEVER deleted here.
+           ================================================= */
 
         if (
             geminiFiles.length >
-                0 &&
-            GEMINI_API_KEY
+                0
         ) {
-            await Promise.all(
+
+            await Promise.allSettled(
                 geminiFiles.map(
                     fileName =>
                         deleteGeminiFile(
-                            GEMINI_API_KEY,
                             fileName
                         )
                 )
             );
+
         }
+
     }
-};
+
+}

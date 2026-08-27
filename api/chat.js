@@ -15,11 +15,8 @@ const supabase =
         process.env.SUPABASE_SERVICE_ROLE_KEY,
         {
             auth: {
-                persistSession:
-                    false,
-
-                autoRefreshToken:
-                    false
+                persistSession: false,
+                autoRefreshToken: false
             }
         }
     );
@@ -55,52 +52,39 @@ const MAX_URL_CONTEXT_SOURCES =
     5;
 
 
-const DDG_USER_AGENT =
-    "NEYO/1.0 (https://signaturesi.com)";
-
-
 /* =========================================================
-   SYSTEM INSTRUCTION
+   SYSTEM
    ========================================================= */
 
 const NEYO_RESPONSE_FORMAT = `
 You are NEYO, a natural, intelligent conversational assistant.
 
 VOICE AND TONE
-- Match the user's language, tone, and level of formality.
+- Match the user's language and tone.
 - When the user writes Roman Urdu, respond in natural Roman Urdu.
-- Sound human, direct, calm, and confident.
+- Be direct, useful, calm, and confident.
 - Do not sound robotic or scripted.
-- Do not repeat the user's question unnecessarily.
-- Answer the actual question first.
+- Answer the actual request first.
 
-ORGANIZATION
-- Keep simple answers concise.
-- Use structure only when useful.
-- Avoid excessive headings or repeated points.
+FILES
+- When files are attached, inspect the attached files and answer based on them.
+- Never claim that no file was attached when valid file content is available.
+- If file access genuinely fails, explain that clearly.
 
 ACCURACY
 - Do not invent facts.
-- Clearly distinguish uncertainty from verified information.
-- If information cannot be verified, say so.
-
-FILES
-- When files are attached, inspect and answer based on the attached content.
-- Do not claim to have read a file if file access failed.
+- Clearly identify uncertainty.
+- Prefer correctness over guessing.
 
 WRITING
 - Use clean Markdown.
-- Use fenced code blocks when needed.
-- Keep paragraphs readable.
-
-MATH
-- Use \\( ... \\) for inline mathematics.
-- Use \\[ ... \\] for display mathematics.
+- Use fenced code blocks for code.
+- Keep simple answers concise.
 `;
 
 
 /* =========================================================
-   GENERAL HELPERS
+   HELPERS
    ========================================================= */
 
 function cleanString(
@@ -146,49 +130,17 @@ function cleanEnv(
 }
 
 
-function sanitizePathSegment(
-    value
-) {
-
-    return String(
-        value ?? ""
-    )
-        .trim()
-        .replace(
-            /[^a-zA-Z0-9._-]+/g,
-            "_"
-        )
-        .replace(
-            /_+/g,
-            "_"
-        )
-        .replace(
-            /^[._-]+/,
-            ""
-        )
-        .replace(
-            /[._-]+$/,
-            ""
-        )
-        .slice(
-            0,
-            180
-        );
-
-}
-
-
 /* =========================================================
    ATTACHMENTS
 
-   IMPORTANT:
-   upload.js creates:
-   users/<userId>/<uploadId>/<filename>
+   Expected upload path:
 
-   chat.js must preserve:
-   uploadId
-   bucket
-   path
+   users/<authenticatedUserId>/<uploadId>/<filename>
+
+   IMPORTANT:
+   - Do not rebuild path.
+   - Do not force a different bucket.
+   - uploadId is useful but not required for chat access.
    ========================================================= */
 
 function validAttachmentList(
@@ -207,17 +159,22 @@ function validAttachmentList(
 
 
     const safeUserId =
-        sanitizePathSegment(
-            userId
-        );
+        String(
+            userId ||
+            ""
+        ).trim();
 
 
-    const output =
-        [];
+    const userPrefix =
+        `users/${safeUserId}/`;
 
 
     const seen =
         new Set();
+
+
+    const output =
+        [];
 
 
     for (
@@ -237,16 +194,6 @@ function validAttachmentList(
         }
 
 
-        const uploadId =
-            cleanString(
-                raw.uploadId ||
-                raw.upload_id ||
-                raw.id ||
-                "",
-                128
-            );
-
-
         const bucket =
             cleanString(
                 raw.bucket ||
@@ -263,16 +210,21 @@ function validAttachmentList(
             );
 
 
+        const uploadId =
+            cleanString(
+                raw.uploadId ||
+                raw.upload_id ||
+                "",
+                128
+            );
+
+
         const name =
             cleanString(
                 raw.name ||
                 "Attached file",
                 220
-            )
-                .replace(
-                    /[\\/]/g,
-                    "-"
-                );
+            );
 
 
         const mime =
@@ -309,25 +261,13 @@ function validAttachmentList(
 
 
         const size =
-            Number.isFinite(
+            Math.max(
+                0,
                 Number(
                     raw.size
-                )
-            )
-                ? Math.max(
-                    0,
-                    Number(
-                        raw.size
-                    )
-                )
-                : 0;
+                ) || 0
+            );
 
-
-        /*
-        -----------------------------------------------------
-        Bucket must match upload/process APIs.
-        -----------------------------------------------------
-        */
 
         if (
             bucket !==
@@ -335,25 +275,9 @@ function validAttachmentList(
         ) {
 
             console.warn(
-                "[NEYO Chat] Invalid attachment bucket:",
-                bucket
-            );
-
-            continue;
-
-        }
-
-
-        if (
-            !uploadId ||
-            !path
-        ) {
-
-            console.warn(
-                "[NEYO Chat] Attachment metadata incomplete:",
+                "[NEYO Chat] Wrong attachment bucket:",
                 {
-                    uploadId,
-                    path,
+                    bucket,
                     name
                 }
             );
@@ -364,19 +288,27 @@ function validAttachmentList(
 
 
         if (
-            path.startsWith(
-                "/"
-            ) ||
-            path.includes(
-                "\\"
-            ) ||
-            path.includes(
-                ".."
-            )
+            !path
         ) {
 
             console.warn(
-                "[NEYO Chat] Invalid attachment path:",
+                "[NEYO Chat] Attachment has no storage path:",
+                name
+            );
+
+            continue;
+
+        }
+
+
+        if (
+            path.startsWith("/") ||
+            path.includes("\\") ||
+            path.includes("..")
+        ) {
+
+            console.warn(
+                "[NEYO Chat] Unsafe attachment path:",
                 path
             );
 
@@ -385,27 +317,22 @@ function validAttachmentList(
         }
 
 
-        const safeUploadId =
-            sanitizePathSegment(
-                uploadId
-            );
-
-
-        const requiredPrefix =
-            `users/${safeUserId}/${safeUploadId}/`;
-
+        /*
+        Only allow current authenticated user's files.
+        */
 
         if (
             !path.startsWith(
-                requiredPrefix
+                userPrefix
             )
         ) {
 
             console.warn(
-                "[NEYO Chat] Attachment ownership mismatch:",
+                "[NEYO Chat] Attachment user mismatch:",
                 {
                     path,
-                    requiredPrefix
+                    expectedPrefix:
+                        userPrefix
                 }
             );
 
@@ -414,13 +341,13 @@ function validAttachmentList(
         }
 
 
-        const key =
-            `${uploadId}:${path}`;
+        const dedupeKey =
+            `${bucket}:${path}`;
 
 
         if (
             seen.has(
-                key
+                dedupeKey
             )
         ) {
             continue;
@@ -428,7 +355,7 @@ function validAttachmentList(
 
 
         seen.add(
-            key
+            dedupeKey
         );
 
 
@@ -440,9 +367,12 @@ function validAttachmentList(
                     "",
                     128
                 ) ||
-                uploadId,
+                uploadId ||
+                null,
 
-            uploadId,
+            uploadId:
+                uploadId ||
+                null,
 
             provider:
                 "supabase",
@@ -470,6 +400,26 @@ function validAttachmentList(
         });
 
     }
+
+
+    console.log(
+        "[NEYO Chat] Accepted attachments:",
+        output.map(
+            item => ({
+                name:
+                    item.name,
+
+                uploadId:
+                    item.uploadId,
+
+                bucket:
+                    item.bucket,
+
+                path:
+                    item.path
+            })
+        )
+    );
 
 
     return output;
@@ -508,6 +458,11 @@ function extractUrlsFromText(
                     );
 
 
+                const host =
+                    parsed.hostname
+                        .toLowerCase();
+
+
                 if (
                     ![
                         "http:",
@@ -520,26 +475,21 @@ function extractUrlsFromText(
                 }
 
 
-                const hostname =
-                    parsed.hostname
-                        .toLowerCase();
-
-
                 if (
-                    hostname ===
+                    host ===
                         "localhost" ||
-                    hostname.startsWith(
+                    host.startsWith(
                         "127."
                     ) ||
-                    hostname.startsWith(
+                    host.startsWith(
                         "10."
                     ) ||
-                    hostname.startsWith(
+                    host.startsWith(
                         "192.168."
                     ) ||
                     /^172\.(1[6-9]|2[0-9]|3[0-1])\./
                         .test(
-                            hostname
+                            host
                         )
                 ) {
                     return false;
@@ -560,445 +510,6 @@ function extractUrlsFromText(
 }
 
 
-function normalizeDuckDuckGoUrl(
-    rawHref
-) {
-
-    if (!rawHref) {
-        return null;
-    }
-
-
-    try {
-
-        const parsed =
-            new URL(
-                rawHref,
-                "https://duckduckgo.com"
-            );
-
-
-        let destination =
-            parsed.searchParams
-                .get(
-                    "uddg"
-                );
-
-
-        if (
-            destination
-        ) {
-
-            destination =
-                decodeURIComponent(
-                    destination
-                );
-
-        } else {
-
-            destination =
-                parsed.href;
-
-        }
-
-
-        const finalUrl =
-            new URL(
-                destination
-            );
-
-
-        if (
-            ![
-                "http:",
-                "https:"
-            ].includes(
-                finalUrl.protocol
-            )
-        ) {
-            return null;
-        }
-
-
-        if (
-            finalUrl.hostname
-                .toLowerCase()
-                .includes(
-                    "duckduckgo.com"
-                )
-        ) {
-            return null;
-        }
-
-
-        finalUrl.hash =
-            "";
-
-
-        [
-            "utm_source",
-            "utm_medium",
-            "utm_campaign",
-            "utm_term",
-            "utm_content"
-        ].forEach(
-            key => {
-
-                finalUrl
-                    .searchParams
-                    .delete(
-                        key
-                    );
-
-            }
-        );
-
-
-        return finalUrl.href;
-
-    } catch {
-
-        return null;
-
-    }
-
-}
-
-
-/* =========================================================
-   DUCKDUCKGO
-   ========================================================= */
-
-async function searchDuckDuckGo(
-    query,
-    limit = 8
-) {
-
-    const cleanQuery =
-        cleanString(
-            query,
-            500
-        );
-
-
-    if (
-        !cleanQuery
-    ) {
-        return [];
-    }
-
-
-    const endpoint =
-        `https://html.duckduckgo.com/html/?q=${encodeURIComponent(cleanQuery)}`;
-
-
-    try {
-
-        const response =
-            await fetch(
-                endpoint,
-                {
-
-                    method:
-                        "GET",
-
-                    headers: {
-
-                        "User-Agent":
-                            "Mozilla/5.0",
-
-                        Accept:
-                            "text/html",
-
-                        "Accept-Language":
-                            "en-US,en;q=0.9"
-
-                    },
-
-                    redirect:
-                        "follow"
-
-                }
-            );
-
-
-        if (
-            !response.ok
-        ) {
-            return [];
-        }
-
-
-        const html =
-            await response
-                .text();
-
-
-        if (
-            !html ||
-            html.length <
-                500
-        ) {
-            return [];
-        }
-
-
-        const results =
-            [];
-
-
-        const seen =
-            new Set();
-
-
-        const blocks =
-            html.split(
-                /<div class="result[^"]*">/gi
-            );
-
-
-        for (
-            const block
-            of blocks
-        ) {
-
-            if (
-                results.length >=
-                limit
-            ) {
-                break;
-            }
-
-
-            const anchor =
-                block.match(
-                    /<a\s+[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/i
-                );
-
-
-            if (
-                !anchor
-            ) {
-                continue;
-            }
-
-
-            const url =
-                normalizeDuckDuckGoUrl(
-                    anchor[1]
-                );
-
-
-            const title =
-                anchor[2]
-                    .replace(
-                        /<[^>]+>/g,
-                        " "
-                    )
-                    .replace(
-                        /\s+/g,
-                        " "
-                    )
-                    .trim();
-
-
-            if (
-                !url ||
-                !title ||
-                seen.has(
-                    url
-                )
-            ) {
-                continue;
-            }
-
-
-            const snippetMatch =
-                block.match(
-                    /class="result__snippet"[^>]*>([\s\S]*?)<\/(?:a|div)>/i
-                );
-
-
-            const snippet =
-                snippetMatch
-                    ? snippetMatch[1]
-                        .replace(
-                            /<[^>]+>/g,
-                            " "
-                        )
-                        .replace(
-                            /\s+/g,
-                            " "
-                        )
-                        .trim()
-                    : "";
-
-
-            seen.add(
-                url
-            );
-
-
-            results.push({
-
-                url,
-                title,
-                snippet
-
-            });
-
-        }
-
-
-        return results;
-
-    } catch (
-        error
-    ) {
-
-        console.warn(
-            "[NEYO Web] DuckDuckGo failed:",
-            error?.message
-        );
-
-
-        return [];
-
-    }
-
-}
-
-
-/* =========================================================
-   FETCH PAGE TEXT
-   ========================================================= */
-
-async function fetchUrlText(
-    url,
-    maxChars = 10000
-) {
-
-    try {
-
-        const response =
-            await fetch(
-                url,
-                {
-
-                    method:
-                        "GET",
-
-                    headers: {
-
-                        "User-Agent":
-                            DDG_USER_AGENT,
-
-                        Accept:
-                            "text/html,text/plain,application/xhtml+xml"
-
-                    },
-
-                    redirect:
-                        "follow"
-
-                }
-            );
-
-
-        if (
-            !response.ok
-        ) {
-            return "";
-        }
-
-
-        const contentType =
-            String(
-                response.headers
-                    .get(
-                        "content-type"
-                    ) ||
-                ""
-            )
-                .toLowerCase();
-
-
-        if (
-            !contentType.includes(
-                "text/"
-            ) &&
-            !contentType.includes(
-                "application/xhtml+xml"
-            )
-        ) {
-            return "";
-        }
-
-
-        let text =
-            await response
-                .text();
-
-
-        text =
-            text
-                .replace(
-                    /<script[\s\S]*?<\/script>/gi,
-                    " "
-                )
-                .replace(
-                    /<style[\s\S]*?<\/style>/gi,
-                    " "
-                )
-                .replace(
-                    /<noscript[\s\S]*?<\/noscript>/gi,
-                    " "
-                )
-                .replace(
-                    /<svg[\s\S]*?<\/svg>/gi,
-                    " "
-                )
-                .replace(
-                    /<[^>]+>/g,
-                    " "
-                )
-                .replace(
-                    /&nbsp;/gi,
-                    " "
-                )
-                .replace(
-                    /&amp;/gi,
-                    "&"
-                )
-                .replace(
-                    /&quot;/gi,
-                    '"'
-                )
-                .replace(
-                    /&#39;/gi,
-                    "'"
-                )
-                .replace(
-                    /\s+/g,
-                    " "
-                )
-                .trim();
-
-
-        return text.slice(
-            0,
-            maxChars
-        );
-
-    } catch {
-
-        return "";
-
-    }
-
-}
-
-
 /* =========================================================
    PREFERENCES
    ========================================================= */
@@ -1007,7 +518,7 @@ function normalizeIntelligence(
     value
 ) {
 
-    const clean =
+    const normalized =
         String(
             value ||
             "standard"
@@ -1016,15 +527,20 @@ function normalizeIntelligence(
             .toLowerCase();
 
 
-    return [
-        "standard",
-        "high",
-        "maximum"
-    ].includes(
-        clean
-    )
-        ? clean
-        : "standard";
+    if (
+        [
+            "standard",
+            "high",
+            "maximum"
+        ].includes(
+            normalized
+        )
+    ) {
+        return normalized;
+    }
+
+
+    return "standard";
 
 }
 
@@ -1081,8 +597,9 @@ function buildSystemInstruction(
     preferences = {}
 ) {
 
-    const extra =
-        [];
+    const parts = [
+        NEYO_RESPONSE_FORMAT
+    ];
 
 
     if (
@@ -1092,8 +609,8 @@ function buildSystemInstruction(
             "maximum"
     ) {
 
-        extra.push(
-            "Use deeper reasoning for difficult requests while keeping the final response readable."
+        parts.push(
+            "Use deeper reasoning when the task requires it."
         );
 
     }
@@ -1105,7 +622,7 @@ function buildSystemInstruction(
             "auto"
     ) {
 
-        extra.push(
+        parts.push(
             `Preferred response language: ${preferences.language}.`
         );
 
@@ -1118,17 +635,14 @@ function buildSystemInstruction(
             "neyo"
     ) {
 
-        extra.push(
+        parts.push(
             `Preferred personality preset: ${preferences.personality}.`
         );
 
     }
 
 
-    return [
-        NEYO_RESPONSE_FORMAT,
-        ...extra
-    ].join(
+    return parts.join(
         "\n\n"
     );
 
@@ -1160,17 +674,14 @@ function buildGeminiBody(
 
         },
 
-
         contents,
-
 
         generationConfig: {
 
             temperature:
                 isDeepResearch
                     ? 0.45
-                    : preferences
-                        .intelligence ===
+                    : preferences.intelligence ===
                         "maximum"
                         ? 0.5
                         : 0.65,
@@ -1181,8 +692,7 @@ function buildGeminiBody(
             maxOutputTokens:
                 (
                     isDeepResearch ||
-                    preferences
-                        .intelligence ===
+                    preferences.intelligence ===
                         "maximum"
                 )
                     ? 8192
@@ -1196,7 +706,7 @@ function buildGeminiBody(
 
 
 /* =========================================================
-   GEMINI CALL
+   GEMINI
    ========================================================= */
 
 async function callGemini(
@@ -1226,10 +736,8 @@ async function callGemini(
                     "POST",
 
                 headers: {
-
                     "Content-Type":
                         "application/json"
-
                 },
 
                 body:
@@ -1319,325 +827,11 @@ async function deleteGeminiFile(
     ) {
 
         console.warn(
-            "[NEYO Gemini] Temp file delete failed:",
+            "[NEYO Gemini] Temp cleanup failed:",
             error?.message
         );
 
     }
-
-}
-
-
-/* =========================================================
-   DOWNLOAD FROM SUPABASE + UPLOAD TO GEMINI
-   ========================================================= */
-
-async function uploadSupabaseFileToGemini(
-    file
-) {
-
-    if (
-        !file?.bucket ||
-        !file?.path
-    ) {
-
-        throw new Error(
-            `Attachment "${file?.name || "file"}" is missing storage metadata.`
-        );
-
-    }
-
-
-    /*
-    ---------------------------------------------------------
-    CRITICAL:
-    Use attachment.bucket directly.
-
-    DO NOT replace it with neo-uploads.
-    ---------------------------------------------------------
-    */
-
-    const {
-        data:
-            storedFile,
-        error
-    } =
-        await supabase
-            .storage
-            .from(
-                file.bucket
-            )
-            .download(
-                file.path
-            );
-
-
-    if (
-        error ||
-        !storedFile
-    ) {
-
-        console.error(
-            "[NEYO Attachment] Storage download failed:",
-            {
-                bucket:
-                    file.bucket,
-
-                path:
-                    file.path,
-
-                name:
-                    file.name,
-
-                error:
-                    error?.message
-            }
-        );
-
-
-        throw new Error(
-            error?.message ||
-            `Unable to read attachment "${file.name}".`
-        );
-
-    }
-
-
-    const bytes =
-        Buffer.from(
-            await storedFile
-                .arrayBuffer()
-        );
-
-
-    if (
-        bytes.length ===
-        0
-    ) {
-
-        throw new Error(
-            `Attachment "${file.name}" is empty.`
-        );
-
-    }
-
-
-    const mimeType =
-        file.mimeType ||
-        file.mime ||
-        storedFile.type ||
-        "application/octet-stream";
-
-
-    /*
-    ---------------------------------------------------------
-    Gemini resumable upload start
-    ---------------------------------------------------------
-    */
-
-    const startResponse =
-        await fetch(
-            `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${encodeURIComponent(GEMINI_API_KEY)}`,
-            {
-
-                method:
-                    "POST",
-
-                headers: {
-
-                    "X-Goog-Upload-Protocol":
-                        "resumable",
-
-                    "X-Goog-Upload-Command":
-                        "start",
-
-                    "X-Goog-Upload-Header-Content-Length":
-                        String(
-                            bytes.length
-                        ),
-
-                    "X-Goog-Upload-Header-Content-Type":
-                        mimeType,
-
-                    "Content-Type":
-                        "application/json"
-
-                },
-
-                body:
-                    JSON.stringify({
-
-                        file: {
-
-                            display_name:
-                                file.name ||
-                                "NEYO attachment"
-
-                        }
-
-                    })
-
-            }
-        );
-
-
-    if (
-        !startResponse.ok
-    ) {
-
-        const details =
-            await startResponse
-                .text()
-                .catch(
-                    () => ""
-                );
-
-
-        throw new Error(
-            details ||
-            "Unable to initialize Gemini file upload."
-        );
-
-    }
-
-
-    const uploadUrl =
-        startResponse
-            .headers
-            .get(
-                "x-goog-upload-url"
-            );
-
-
-    if (
-        !uploadUrl
-    ) {
-
-        throw new Error(
-            "Gemini upload URL missing."
-        );
-
-    }
-
-
-    /*
-    ---------------------------------------------------------
-    Send actual bytes
-    ---------------------------------------------------------
-    */
-
-    const uploadResponse =
-        await fetch(
-            uploadUrl,
-            {
-
-                method:
-                    "POST",
-
-                headers: {
-
-                    "Content-Length":
-                        String(
-                            bytes.length
-                        ),
-
-                    "X-Goog-Upload-Offset":
-                        "0",
-
-                    "X-Goog-Upload-Command":
-                        "upload, finalize"
-
-                },
-
-                body:
-                    bytes
-
-            }
-        );
-
-
-    const payload =
-        await uploadResponse
-            .json()
-            .catch(
-                () => ({})
-            );
-
-
-    if (
-        !uploadResponse.ok
-    ) {
-
-        throw new Error(
-            payload
-                ?.error
-                ?.message ||
-            "Gemini file upload failed."
-        );
-
-    }
-
-
-    const geminiFile =
-        payload?.file;
-
-
-    if (
-        !geminiFile?.name ||
-        !geminiFile?.uri
-    ) {
-
-        throw new Error(
-            "Gemini file information was not returned."
-        );
-
-    }
-
-
-    /*
-    ---------------------------------------------------------
-    Wait while Gemini processes file
-    ---------------------------------------------------------
-    */
-
-    if (
-        geminiFile.state ===
-        "PROCESSING"
-    ) {
-
-        return waitForGeminiFile(
-            geminiFile.name,
-            mimeType
-        );
-
-    }
-
-
-    if (
-        geminiFile.state ===
-        "FAILED"
-    ) {
-
-        throw new Error(
-            `Gemini could not process "${file.name}".`
-        );
-
-    }
-
-
-    return {
-
-        name:
-            geminiFile.name,
-
-        uri:
-            geminiFile.uri,
-
-        mimeType:
-            geminiFile.mimeType ||
-            mimeType
-
-    };
 
 }
 
@@ -1722,7 +916,7 @@ async function waitForGeminiFile(
         ) {
 
             throw new Error(
-                "Gemini could not process the attachment."
+                "Gemini could not process this attachment."
             );
 
         }
@@ -1738,159 +932,306 @@ async function waitForGeminiFile(
 
 
 /* =========================================================
-   WEB SEARCH ANSWER
+   SUPABASE → GEMINI FILE
    ========================================================= */
 
-async function smartWebAnswer(
-    query,
-    model,
-    isDeepResearch,
-    preferences
+async function uploadSupabaseFileToGemini(
+    file
 ) {
 
-    const results =
-        await searchDuckDuckGo(
-            query,
-            isDeepResearch
-                ? 8
-                : 5
+    if (
+        !file?.bucket ||
+        !file?.path
+    ) {
+
+        throw new Error(
+            `Attachment "${file?.name || "file"}" is missing storage metadata.`
+        );
+
+    }
+
+
+    console.log(
+        "[NEYO Attachment] Downloading:",
+        {
+            bucket:
+                file.bucket,
+
+            path:
+                file.path,
+
+            name:
+                file.name
+        }
+    );
+
+
+    const {
+        data:
+            storedFile,
+        error
+    } =
+        await supabase
+            .storage
+            .from(
+                file.bucket
+            )
+            .download(
+                file.path
+            );
+
+
+    if (
+        error ||
+        !storedFile
+    ) {
+
+        console.error(
+            "[NEYO Attachment] Download failed:",
+            {
+                bucket:
+                    file.bucket,
+
+                path:
+                    file.path,
+
+                error:
+                    error?.message
+            }
+        );
+
+
+        throw new Error(
+            error?.message ||
+            `Unable to read attachment "${file.name}".`
+        );
+
+    }
+
+
+    const bytes =
+        Buffer.from(
+            await storedFile
+                .arrayBuffer()
         );
 
 
     if (
-        results.length ===
+        bytes.length ===
         0
     ) {
 
         throw new Error(
-            "No usable web results found."
+            `Attachment "${file.name}" is empty.`
         );
 
     }
 
 
-    const enriched =
-        [];
+    const mimeType =
+        file.mime ||
+        file.mimeType ||
+        storedFile.type ||
+        "application/octet-stream";
 
 
-    for (
-        const result
-        of results
-    ) {
+    /* ---------------------------------------------
+       INIT GEMINI UPLOAD
+       --------------------------------------------- */
 
-        const content =
-            await fetchUrlText(
-                result.url,
-                isDeepResearch
-                    ? 14000
-                    : 8000
-            );
+    const startResponse =
+        await fetch(
+            `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${encodeURIComponent(GEMINI_API_KEY)}`,
+            {
 
+                method:
+                    "POST",
 
-        enriched.push({
+                headers: {
 
-            ...result,
-            content
+                    "X-Goog-Upload-Protocol":
+                        "resumable",
 
-        });
+                    "X-Goog-Upload-Command":
+                        "start",
 
-    }
+                    "X-Goog-Upload-Header-Content-Length":
+                        String(
+                            bytes.length
+                        ),
 
+                    "X-Goog-Upload-Header-Content-Type":
+                        mimeType,
 
-    const context =
-        enriched
-            .map(
-                (
-                    source,
-                    index
-                ) => [
+                    "Content-Type":
+                        "application/json"
 
-                    `[Source ${index + 1}]`,
+                },
 
-                    `Title: ${source.title}`,
+                body:
+                    JSON.stringify({
 
-                    `URL: ${source.url}`,
+                        file: {
 
-                    source.snippet
-                        ? `Snippet: ${source.snippet}`
-                        : "",
-
-                    source.content
-                        ? `Content: ${source.content}`
-                        : ""
-
-                ]
-                    .filter(
-                        Boolean
-                    )
-                    .join(
-                        "\n"
-                    )
-            )
-            .join(
-                "\n\n"
-            );
-
-
-    const response =
-        await callGemini(
-            [
-                {
-
-                    role:
-                        "user",
-
-                    parts: [
-                        {
-
-                            text:
-`${query}
-
-Use the fresh web context below when relevant.
-Do not invent information.
-If sources conflict, explain that.
-
-${context}`
+                            display_name:
+                                file.name ||
+                                "NEYO attachment"
 
                         }
-                    ]
 
-                }
-            ],
-            model,
-            isDeepResearch,
-            preferences
+                    })
+
+            }
         );
+
+
+    if (
+        !startResponse.ok
+    ) {
+
+        const text =
+            await startResponse
+                .text()
+                .catch(
+                    () => ""
+                );
+
+
+        throw new Error(
+            text ||
+            "Unable to initialize Gemini file upload."
+        );
+
+    }
+
+
+    const uploadUrl =
+        startResponse
+            .headers
+            .get(
+                "x-goog-upload-url"
+            );
+
+
+    if (
+        !uploadUrl
+    ) {
+
+        throw new Error(
+            "Gemini upload URL missing."
+        );
+
+    }
+
+
+    /* ---------------------------------------------
+       SEND BYTES
+       --------------------------------------------- */
+
+    const uploadResponse =
+        await fetch(
+            uploadUrl,
+            {
+
+                method:
+                    "POST",
+
+                headers: {
+
+                    "Content-Length":
+                        String(
+                            bytes.length
+                        ),
+
+                    "X-Goog-Upload-Offset":
+                        "0",
+
+                    "X-Goog-Upload-Command":
+                        "upload, finalize"
+
+                },
+
+                body:
+                    bytes
+
+            }
+        );
+
+
+    const payload =
+        await uploadResponse
+            .json()
+            .catch(
+                () => ({})
+            );
+
+
+    if (
+        !uploadResponse.ok
+    ) {
+
+        throw new Error(
+            payload
+                ?.error
+                ?.message ||
+            "Gemini file upload failed."
+        );
+
+    }
+
+
+    const geminiFile =
+        payload?.file;
+
+
+    if (
+        !geminiFile?.name ||
+        !geminiFile?.uri
+    ) {
+
+        throw new Error(
+            "Gemini file information was not returned."
+        );
+
+    }
+
+
+    if (
+        geminiFile.state ===
+        "PROCESSING"
+    ) {
+
+        return waitForGeminiFile(
+            geminiFile.name,
+            mimeType
+        );
+
+    }
+
+
+    if (
+        geminiFile.state ===
+        "FAILED"
+    ) {
+
+        throw new Error(
+            `Gemini could not process "${file.name}".`
+        );
+
+    }
 
 
     return {
 
-        reply:
-            response
-                ?.candidates?.[0]
-                ?.content
-                ?.parts?.[0]
-                ?.text ||
-            "",
+        name:
+            geminiFile.name,
 
-        sources:
-            enriched.map(
-                source => ({
+        uri:
+            geminiFile.uri,
 
-                    title:
-                        source.title,
-
-                    url:
-                        source.url,
-
-                    snippet:
-                        source.snippet
-
-                })
-            ),
-
-        usedUrlContext:
-            true
+        mimeType:
+            geminiFile.mimeType ||
+            mimeType
 
     };
 
@@ -1898,8 +1239,94 @@ ${context}`
 
 
 /* =========================================================
-   DIRECT URL CONTEXT
+   URL CONTEXT
    ========================================================= */
+
+async function fetchUrlText(
+    url,
+    maxChars = 12000
+) {
+
+    try {
+
+        const response =
+            await fetch(
+                url,
+                {
+                    redirect:
+                        "follow"
+                }
+            );
+
+
+        if (
+            !response.ok
+        ) {
+            return "";
+        }
+
+
+        const type =
+            String(
+                response.headers
+                    .get(
+                        "content-type"
+                    ) ||
+                ""
+            )
+                .toLowerCase();
+
+
+        if (
+            !type.includes(
+                "text/"
+            ) &&
+            !type.includes(
+                "application/xhtml+xml"
+            )
+        ) {
+            return "";
+        }
+
+
+        let text =
+            await response.text();
+
+
+        text =
+            text
+                .replace(
+                    /<script[\s\S]*?<\/script>/gi,
+                    " "
+                )
+                .replace(
+                    /<style[\s\S]*?<\/style>/gi,
+                    " "
+                )
+                .replace(
+                    /<[^>]+>/g,
+                    " "
+                )
+                .replace(
+                    /\s+/g,
+                    " "
+                )
+                .trim();
+
+
+        return text.slice(
+            0,
+            maxChars
+        );
+
+    } catch {
+
+        return "";
+
+    }
+
+}
+
 
 async function callGeminiUrlContext(
     query,
@@ -1909,7 +1336,7 @@ async function callGeminiUrlContext(
     preferences
 ) {
 
-    const contexts =
+    const contextParts =
         [];
 
 
@@ -1920,12 +1347,11 @@ async function callGeminiUrlContext(
 
         const content =
             await fetchUrlText(
-                url,
-                12000
+                url
             );
 
 
-        contexts.push({
+        contextParts.push({
 
             url,
             content
@@ -1936,16 +1362,13 @@ async function callGeminiUrlContext(
 
 
     const context =
-        contexts
+        contextParts
             .map(
                 (
                     item,
                     index
                 ) =>
-`[URL ${index + 1}]
-${item.url}
-
-${item.content}`
+                    `[URL ${index + 1}]\n${item.url}\n\n${item.content}`
             )
             .join(
                 "\n\n"
@@ -1966,7 +1389,6 @@ ${item.content}`
 `${query}
 
 Use the following URL content when relevant.
-Do not invent information outside the supplied context.
 
 ${context}`
 
@@ -2002,7 +1424,7 @@ async function saveMessage(
     }
 
 
-    const payload = {
+    const base = {
 
         conversation_id:
             conversationId,
@@ -2017,36 +1439,25 @@ async function saveMessage(
     };
 
 
-    /*
-    Keep attachments if schema supports it.
-    */
+    const full = {
 
-    if (
-        Array.isArray(
-            attachments
-        ) &&
-        attachments.length >
-            0
-    ) {
+        ...base,
 
-        payload.attachments =
-            attachments;
+        attachments:
+            Array.isArray(
+                attachments
+            )
+                ? attachments
+                : [],
 
-    }
+        sources:
+            Array.isArray(
+                sources
+            )
+                ? sources
+                : []
 
-
-    if (
-        Array.isArray(
-            sources
-        ) &&
-        sources.length >
-            0
-    ) {
-
-        payload.sources =
-            sources;
-
-    }
+    };
 
 
     const {
@@ -2057,71 +1468,61 @@ async function saveMessage(
                 "chat_messages"
             )
             .insert(
-                payload
+                full
             );
 
 
     if (
-        error
+        !error
+    ) {
+        return;
+    }
+
+
+    /*
+    Compatibility with old table schema.
+    */
+
+    if (
+        /attachments|sources/i
+            .test(
+                error.message ||
+                ""
+            )
     ) {
 
-        /*
-        Compatibility fallback if old schema
-        does not have attachments/sources columns.
-        */
+        const {
+            error:
+                fallbackError
+        } =
+            await supabase
+                .from(
+                    "chat_messages"
+                )
+                .insert(
+                    base
+                );
+
 
         if (
-            /attachments|sources/i
-                .test(
-                    error.message ||
-                    ""
-                )
+            fallbackError
         ) {
-
-            const {
-                error:
-                    fallbackError
-            } =
-                await supabase
-                    .from(
-                        "chat_messages"
-                    )
-                    .insert({
-
-                        conversation_id:
-                            conversationId,
-
-                        role,
-
-                        content:
-                            cleanString(
-                                content
-                            )
-
-                    });
-
-
-            if (
-                fallbackError
-            ) {
-                throw fallbackError;
-            }
-
-
-            return;
-
+            throw fallbackError;
         }
 
 
-        throw error;
+        return;
 
     }
+
+
+    throw error;
 
 }
 
 
 /* =========================================================
-   HANDLER
+   MAIN
    ========================================================= */
 
 export default async function handler(
@@ -2145,17 +1546,11 @@ export default async function handler(
                 405
             )
             .json({
-
                 error:
                     "Method not allowed"
-
             });
 
     }
-
-
-    const geminiFiles =
-        [];
 
 
     let userId =
@@ -2164,6 +1559,10 @@ export default async function handler(
 
     let reservedType =
         null;
+
+
+    const geminiFiles =
+        [];
 
 
     try {
@@ -2187,10 +1586,8 @@ export default async function handler(
                     401
                 )
                 .json({
-
                     error:
                         "Authentication required. Please log in."
-
                 });
 
         }
@@ -2212,21 +1609,17 @@ export default async function handler(
                 : {};
 
 
-        const {
-            messages,
-            conversationId,
-            isDeepResearch,
-            title
-        } =
-            body;
+        const messages =
+            Array.isArray(
+                body.messages
+            )
+                ? body.messages
+                : [];
 
 
         if (
-            !Array.isArray(
-                messages
-            ) ||
             messages.length ===
-                0
+            0
         ) {
 
             return res
@@ -2234,10 +1627,8 @@ export default async function handler(
                     400
                 )
                 .json({
-
                     error:
                         "Messages array required"
-
                 });
 
         }
@@ -2261,14 +1652,16 @@ export default async function handler(
                     400
                 )
                 .json({
-
                     error:
                         "Last message must be user"
-
                 });
 
         }
 
+
+        /* =================================================
+           PREFERENCES
+           ================================================= */
 
         const preferences = {
 
@@ -2310,10 +1703,8 @@ export default async function handler(
                 .rpc(
                     "reserve_message",
                     {
-
                         p_user_id:
                             userId
-
                     }
                 );
 
@@ -2333,10 +1724,8 @@ export default async function handler(
                     500
                 )
                 .json({
-
                     error:
                         "Unable to check message credits."
-
                 });
 
         }
@@ -2374,13 +1763,11 @@ export default async function handler(
                     429
                 )
                 .json({
-
                     error:
                         "MESSAGE_LIMIT_REACHED",
 
                     creditsRemaining:
                         0
-
                 });
 
         }
@@ -2392,19 +1779,48 @@ export default async function handler(
 
 
         /* =================================================
-           ATTACHMENTS
+           ATTACHMENT SOURCE
+
+           Prefer body.attachments.
+           Fall back to last message attachments.
            ================================================= */
 
-        const rawAttachments =
+        const bodyAttachments =
             Array.isArray(
                 body.attachments
             )
                 ? body.attachments
-                : Array.isArray(
-                    lastMsg.attachments
-                )
-                    ? lastMsg.attachments
-                    : [];
+                : [];
+
+
+        const messageAttachments =
+            Array.isArray(
+                lastMsg.attachments
+            )
+                ? lastMsg.attachments
+                : [];
+
+
+        const rawAttachments =
+            bodyAttachments.length >
+            0
+                ? bodyAttachments
+                : messageAttachments;
+
+
+        console.log(
+            "[NEYO Chat] Incoming attachment counts:",
+            {
+                body:
+                    bodyAttachments.length,
+
+                lastMessage:
+                    messageAttachments.length,
+
+                selected:
+                    rawAttachments.length
+            }
+        );
 
 
         const attachments =
@@ -2414,30 +1830,8 @@ export default async function handler(
             );
 
 
-        console.log(
-            "[NEYO Chat] Attachments:",
-            attachments.map(
-                item => ({
-
-                    uploadId:
-                        item.uploadId,
-
-                    bucket:
-                        item.bucket,
-
-                    path:
-                        item.path,
-
-                    name:
-                        item.name
-
-                })
-            )
-        );
-
-
         /* =================================================
-           GEMINI HISTORY
+           HISTORY FOR GEMINI
            ================================================= */
 
         const history =
@@ -2459,38 +1853,25 @@ export default async function handler(
 
                         parts: [
                             {
-
                                 text:
                                     cleanString(
                                         message.content ||
                                         ""
                                     )
-
                             }
                         ]
 
                     })
-                )
-                .filter(
-                    message =>
-                        Boolean(
-                            message
-                                .parts?.[0]
-                                ?.text
-                        )
                 );
 
 
         /*
-        Last user message may be attachment-only.
-        Ensure message exists.
+        Ensure last user message exists.
         */
 
         if (
-            attachments.length >
-                0 &&
             geminiMessages.length ===
-                0
+            0
         ) {
 
             geminiMessages.push({
@@ -2500,10 +1881,8 @@ export default async function handler(
 
                 parts: [
                     {
-
                         text:
-                            "Please analyze the attached file or files."
-
+                            "Please respond to the user."
                     }
                 ]
 
@@ -2513,12 +1892,12 @@ export default async function handler(
 
 
         /* =================================================
-           ATTACH FILES TO LAST USER MESSAGE
+           ATTACHMENT → GEMINI
            ================================================= */
 
         if (
             attachments.length >
-                0
+            0
         ) {
 
             const lastGeminiMessage =
@@ -2526,17 +1905,6 @@ export default async function handler(
                     geminiMessages.length -
                     1
                 ];
-
-
-            if (
-                !lastGeminiMessage
-            ) {
-
-                throw new Error(
-                    "Unable to prepare attachment message."
-                );
-
-            }
 
 
             const attachmentParts =
@@ -2571,12 +1939,10 @@ export default async function handler(
                     fileData: {
 
                         mimeType:
-                            geminiFile
-                                .mimeType,
+                            geminiFile.mimeType,
 
                         fileUri:
-                            geminiFile
-                                .uri
+                            geminiFile.uri
 
                     }
 
@@ -2597,24 +1963,34 @@ export default async function handler(
             }
 
 
-            const originalText =
+            const userText =
                 cleanString(
                     lastMsg.content ||
                     ""
                 ) ||
-                "Please analyze the attached file or files.";
+                "Please inspect the attached file and explain what it contains.";
+
+
+            lastGeminiMessage.role =
+                "user";
 
 
             lastGeminiMessage.parts = [
 
                 {
                     text:
-                        originalText
+                        userText
                 },
 
                 ...attachmentParts
 
             ];
+
+
+            console.log(
+                "[NEYO Chat] Gemini attachments prepared:",
+                attachmentParts.length
+            );
 
         }
 
@@ -2623,11 +1999,11 @@ export default async function handler(
            CONVERSATION
            ================================================= */
 
-        let convId =
+        let conversationId =
             privateChat
                 ? null
                 : cleanString(
-                    conversationId ||
+                    body.conversationId ||
                     "",
                     128
                 ) ||
@@ -2636,14 +2012,13 @@ export default async function handler(
 
         if (
             !privateChat &&
-            !convId
+            !conversationId
         ) {
 
             const {
                 data:
-                    newConversation,
-                error:
-                    conversationError
+                    conversation,
+                error
             } =
                 await supabase
                     .from(
@@ -2656,8 +2031,9 @@ export default async function handler(
 
                         title:
                             cleanString(
-                                title ||
+                                body.title ||
                                 lastMsg.content ||
+                                attachments[0]?.name ||
                                 "New conversation",
                                 100
                             ) ||
@@ -2671,20 +2047,20 @@ export default async function handler(
 
 
             if (
-                conversationError
+                error
             ) {
-                throw conversationError;
+                throw error;
             }
 
 
-            convId =
-                newConversation.id;
+            conversationId =
+                conversation.id;
 
         }
 
 
         /* =================================================
-           SAVE USER MESSAGE
+           SAVE USER
            ================================================= */
 
         const userText =
@@ -2699,10 +2075,10 @@ export default async function handler(
         ) {
 
             await saveMessage(
-                convId,
+                conversationId,
                 "user",
                 userText ||
-                    "Attachment",
+                "Attachment",
                 attachments,
                 []
             );
@@ -2718,43 +2094,21 @@ export default async function handler(
             isPro
                 ? (
                     cleanEnv(
-                        process.env
-                            .GEMINI_PRO_MODEL
+                        process.env.GEMINI_PRO_MODEL
                     ) ||
                     "gemini-3.5-flash-lite"
                 )
                 : (
                     cleanEnv(
-                        process.env
-                            .GEMINI_FREE_MODEL
+                        process.env.GEMINI_FREE_MODEL
                     ) ||
                     "gemini-3.1-flash-lite"
                 );
 
 
         /* =================================================
-           WEB / NORMAL DECISION
+           RESPONSE
            ================================================= */
-
-        const lowerQuery =
-            userText
-                .toLowerCase();
-
-
-        const hasUrl =
-            extractUrlsFromText(
-                userText
-            )
-                .length >
-            0;
-
-
-        const isCurrentQuery =
-            /\b(current|now|latest|today|real[- ]time|this week|this month|202[4-9])\b/
-                .test(
-                    lowerQuery
-                );
-
 
         let reply =
             "";
@@ -2768,60 +2122,63 @@ export default async function handler(
             false;
 
 
+        const urls =
+            extractUrlsFromText(
+                userText
+            );
+
+
         /*
-        Attachments take priority.
-        Do not launch web search for attached files.
+        Attached file takes priority over URL handling.
         */
 
         if (
             attachments.length ===
                 0 &&
-            hasUrl
+            urls.length >
+                0
         ) {
-
-            const urls =
-                extractUrlsFromText(
-                    userText
-                )
-                    .slice(
-                        0,
-                        MAX_URL_CONTEXT_SOURCES
-                    );
-
 
             try {
 
-                const response =
+                const urlResponse =
                     await callGeminiUrlContext(
                         userText,
-                        urls,
+                        urls.slice(
+                            0,
+                            MAX_URL_CONTEXT_SOURCES
+                        ),
                         model,
-                        isDeepResearch,
+                        Boolean(
+                            body.isDeepResearch
+                        ),
                         preferences
                     );
 
 
                 reply =
-                    response
+                    urlResponse
                         ?.candidates?.[0]
                         ?.content
-                        ?.parts?.[0]
-                        ?.text ||
+                        ?.parts
+                        ?.map(
+                            part =>
+                                part?.text ||
+                                ""
+                        )
+                        .join(
+                            ""
+                        )
+                        .trim() ||
                     "";
 
 
                 sources =
                     urls.map(
                         url => ({
-
                             title:
                                 url,
-
-                            url,
-
-                            status:
-                                "success"
-
+                            url
                         })
                     );
 
@@ -2834,47 +2191,7 @@ export default async function handler(
             ) {
 
                 console.warn(
-                    "[NEYO URL Context]",
-                    error?.message
-                );
-
-            }
-
-        } else if (
-            attachments.length ===
-                0 &&
-            isCurrentQuery
-        ) {
-
-            try {
-
-                const result =
-                    await smartWebAnswer(
-                        userText,
-                        model,
-                        isDeepResearch,
-                        preferences
-                    );
-
-
-                reply =
-                    result.reply;
-
-
-                sources =
-                    result.sources ||
-                    [];
-
-
-                usedUrlContext =
-                    true;
-
-            } catch (
-                error
-            ) {
-
-                console.warn(
-                    "[NEYO Search]",
+                    "[NEYO URL]",
                     error?.message
                 );
 
@@ -2883,25 +2200,27 @@ export default async function handler(
         }
 
 
-        /* =================================================
-           NORMAL / ATTACHMENT GEMINI
-           ================================================= */
+        /*
+        Normal Gemini call, including attachment requests.
+        */
 
         if (
             !reply
         ) {
 
-            const response =
+            const result =
                 await callGemini(
                     geminiMessages,
                     model,
-                    isDeepResearch,
+                    Boolean(
+                        body.isDeepResearch
+                    ),
                     preferences
                 );
 
 
             reply =
-                response
+                result
                     ?.candidates?.[0]
                     ?.content
                     ?.parts
@@ -2939,7 +2258,7 @@ export default async function handler(
         ) {
 
             await saveMessage(
-                convId,
+                conversationId,
                 "assistant",
                 reply,
                 [],
@@ -2964,11 +2283,9 @@ export default async function handler(
                 conversationId:
                     privateChat
                         ? null
-                        : convId,
+                        : conversationId,
 
                 privateChat,
-
-                usedUrlContext,
 
                 sources:
                     sources.length >
@@ -2976,10 +2293,15 @@ export default async function handler(
                         ? sources
                         : undefined,
 
+                usedUrlContext,
+
                 creditType:
                     reservedType,
 
-                attachmentsProcessed:
+                attachmentsReceived:
+                    rawAttachments.length,
+
+                attachmentsAccepted:
                     attachments.length
 
             });
@@ -3002,7 +2324,7 @@ export default async function handler(
 
 
         /* =================================================
-           REFUND FREE / REWARD CREDIT
+           REFUND
            ================================================= */
 
         if (
@@ -3017,54 +2339,22 @@ export default async function handler(
 
             try {
 
-                const {
-                    error:
-                        refundError
-                } =
-                    await supabase
-                        .rpc(
-                            "refund_message",
-                            {
+                await supabase
+                    .rpc(
+                        "refund_message",
+                        {
+                            p_user_id:
+                                userId,
 
-                                p_user_id:
-                                    userId,
-
-                                p_type:
-                                    reservedType
-
-                            }
-                        );
-
-
-                if (
-                    refundError
-                ) {
-
-                    console.error(
-                        "[NEYO Credit Refund]",
-                        refundError
+                            p_type:
+                                reservedType
+                        }
                     );
 
-                }
-
-            } catch (
-                refundFailure
-            ) {
-
-                console.error(
-                    "[NEYO Credit Refund]",
-                    refundFailure?.message
-                );
-
-            }
+            } catch {}
 
         }
 
-
-        /*
-        Return useful storage error instead of hiding
-        "Object not found".
-        */
 
         return res
             .status(
@@ -3081,15 +2371,14 @@ export default async function handler(
 
     } finally {
 
-        /* =================================================
-           DELETE GEMINI TEMP FILES ONLY
-
-           Supabase attachment is NEVER deleted here.
-           ================================================= */
+        /*
+        Delete Gemini temporary copies only.
+        Supabase originals stay intact.
+        */
 
         if (
             geminiFiles.length >
-                0
+            0
         ) {
 
             await Promise.allSettled(

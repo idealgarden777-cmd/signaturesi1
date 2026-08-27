@@ -172,7 +172,7 @@ Does NOT own:
 
           .replace(
             /\\\$\$([\s\S]*?)\\\$\$/g,
-            "$$$$1$$"
+            "$$$$$1$$$$"
           )
 
           .replace(
@@ -1122,7 +1122,13 @@ Does NOT own:
       let index = 2;
 
       while (
-        used.has(id)
+        used.has(id) ||
+        (
+          document.getElementById(id) &&
+          !root.contains(
+            document.getElementById(id)
+          )
+        )
       ) {
         id =
           `${base}-${index}`;

@@ -73,7 +73,6 @@
 
   <!-- Sidebar & Topbar -->
   <link rel="stylesheet" href="/css/components/sidebar.css?v=17">
-  <!-- ✅ UPDATED topbar.css to v2 to avoid caching issues -->
   <link rel="stylesheet" href="/css/components/topbar.css?v=2">
 
   <!-- Menus -->
@@ -240,7 +239,7 @@
         </button>
       </div>
 
-      <!-- CENTER: Model dropdown (exact center) -->
+      <!-- CENTER: Model dropdown (final naming) -->
       <div class="top-center">
         <div class="model-dropdown-wrapper">
           <div
@@ -249,17 +248,36 @@
             data-tooltip="Choose model"
             data-tooltip-position="bottom"
           >
-            <span class="model-name" id="currentModelDisplay">NEYO L1.0</span>
+            <span class="model-name" id="currentModelDisplay">NEYO</span>
             <i data-lucide="chevron-down" size="16" class="model-chevron"></i>
           </div>
+
           <div class="model-dropdown-menu" id="modelDropdownMenu">
-            <div class="model-option active" data-model="l1.0" id="optL10">
-              <div class="model-opt-info"><strong>NEYO L1.0</strong><small>Text & Images • Snappy Responses</small></div>
-              <i data-lucide="check" size="16" class="opt-check-icon"></i>
+            <div
+              class="model-option active"
+              data-model="l1.0"
+              id="optL10"
+            >
+              <div class="model-opt-info">
+                <strong>NEYO</strong>
+                <small>Limited chat • Basic features</small>
+              </div>
+
+              <i
+                data-lucide="check"
+                size="16"
+                class="opt-check-icon"
+              ></i>
             </div>
-            <div class="model-option pro-option" data-model="l1.2" id="optL12">
-              <div class="model-opt-info"><strong>NEYO L1.2 Pro</strong><small>Audio, Video, Deep Reasoning & 4K Tokens</small></div>
-              <span class="pro-tag">PRO</span>
+
+            <div
+              class="model-option pro-option"
+              data-model="l1.2"
+              id="optL12"
+            >
+              <div class="model-opt-info">
+                <strong>Leverage</strong>
+              </div>
             </div>
           </div>
         </div>
@@ -267,7 +285,6 @@
 
       <!-- RIGHT: Private Chat + Theme toggle -->
       <div class="top-right">
-        <!-- ✅ Fixed ID to match CSS selector -->
         <button
           class="icon-btn private-chat-btn"
           id="topBarPrivateChatBtn"

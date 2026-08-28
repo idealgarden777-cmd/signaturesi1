@@ -1707,6 +1707,9 @@ Does NOT own:
       action.title =
         "Retry";
 
+      action.dataset.tooltip =
+        "Retry attachment";
+
       action.setAttribute(
         "aria-label",
         "Retry attachment"
@@ -1728,6 +1731,9 @@ Does NOT own:
 
       action.title =
         "Remove";
+
+      action.dataset.tooltip =
+        "Remove attachment";
 
       action.setAttribute(
         "aria-label",

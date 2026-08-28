@@ -1,30 +1,24 @@
 /*
 =========================================================
 NEYO — SEND / STOP CONTROLLER
-FULL MODULAR RUNTIME v8.2
+FINAL SINGLE-OWNER VERSION
 
 FILE:
 public/js/components/send-state.js
 
 OWNS
 - #sendBtn
+- Send / Stop visual state
 - Enter to send
 - Shift+Enter newline
-- Send / Stop visual state
+- Ready attachment send eligibility
 - Dispatch to chat.js
-- Sent-ready attachment cleanup
 
 DOES NOT OWN
 - /api/chat
 - conversation state
-- message DOM
+- message rendering
 - attachment uploads
-- composer autosize
-
-IMPORTANT
-- Modular NeyoChat is authoritative.
-- neo.js may remain loaded for legacy UI/features.
-- neo.js must NOT disable this controller.
 =========================================================
 */
 
@@ -37,7 +31,7 @@ IMPORTANT
      ===================================================== */
 
   const VERSION =
-    "neyo-send-state-modular-v8.2-stop-square";
+    "neyo-send-state-final-v9";
 
 
   if (
@@ -73,36 +67,11 @@ IMPORTANT
     !chatInput
   ) {
     console.warn(
-      "[NEYO Send] Required composer DOM missing."
+      "[NEYO Send] Composer DOM missing."
     );
 
     return;
   }
-
-
-  /* =====================================================
-     OWNERSHIP
-     ===================================================== */
-
-  const legacyScriptPresent =
-    Array.from(
-      document.scripts || []
-    ).some(
-      script =>
-        /(?:^|\/)neo\.js(?:\?|$)/
-          .test(
-            script.src || ""
-          )
-    );
-
-
-  const modularChatReady =
-    window.NeyoChat
-      ?.__controller === true;
-
-
-  const active =
-    modularChatReady;
 
 
   /* =====================================================
@@ -114,10 +83,10 @@ IMPORTANT
     generating:
       false,
 
-    composing:
+    sending:
       false,
 
-    sending:
+    composing:
       false,
 
     readyAttachments:
@@ -139,201 +108,275 @@ IMPORTANT
      EVENTS
      ===================================================== */
 
-  const emit =
-    (
-      name,
-      detail = {}
-    ) => {
+  function emit(
+    name,
+    detail = {}
+  ) {
 
-      window.dispatchEvent(
-        new CustomEvent(
-          name,
-          {
-            detail
-          }
-        )
-      );
+    window.dispatchEvent(
+      new CustomEvent(
+        name,
+        {
+          detail
+        }
+      )
+    );
 
-    };
+  }
 
 
   /* =====================================================
      TEXT
      ===================================================== */
 
-  const getRawText =
-    () =>
-      String(
-        chatInput.value ||
-        ""
+  function getRawText() {
+
+    return String(
+      chatInput.value ||
+      ""
+    )
+      .replace(
+        /\r\n?/g,
+        "\n"
       )
-        .replace(
-          /\r\n?/g,
-          "\n"
-        )
-        .replace(
-          /\u0000/g,
-          ""
-        );
+      .replace(
+        /\u0000/g,
+        ""
+      );
+
+  }
 
 
-  const getText =
-    () =>
-      getRawText()
-        .trim();
+  function getText() {
+
+    return getRawText()
+      .trim();
+
+  }
 
 
-  const hasText =
-    () =>
-      getText()
-        .length >
-      0;
+  function hasText() {
+
+    return (
+      getText().length >
+      0
+    );
+
+  }
 
 
   /* =====================================================
      ATTACHMENTS
      ===================================================== */
 
-  const attachmentController =
-    () => {
+  function attachmentController() {
+
+    const controller =
+      window.NeyoAttachments;
+
+
+    return (
+      controller &&
+      typeof controller ===
+        "object"
+    )
+      ? controller
+      : null;
+
+  }
+
+
+  function getAllAttachments() {
+
+    try {
 
       const controller =
-        window.NeyoAttachments;
+        attachmentController();
 
 
-      return (
-        controller &&
-        typeof controller ===
-          "object"
+      if (!controller) {
+        return [];
+      }
+
+
+      const value =
+        controller.getAll?.() ??
+        controller.getFiles?.() ??
+        [];
+
+
+      return Array.isArray(
+        value
       )
-        ? controller
-        : null;
+        ? value
+        : [];
 
-    };
-
-
-  const getAllAttachments =
-    () => {
-
-      try {
-
-        const value =
-          attachmentController()
-            ?.getAll
-            ?.();
-
-
-        return Array.isArray(
-          value
-        )
-          ? value
-          : [];
-
-      } catch (
-        error
-      ) {
-
-        console.warn(
-          "[NEYO Send] Could not read attachments:",
-          error
-        );
-
-
-        return [];
-
-      }
-
-    };
-
-
-  const getReadyAttachments =
-    () => {
-
-      try {
-
-        const value =
-          attachmentController()
-            ?.getReady
-            ?.();
-
-
-        return Array.isArray(
-          value
-        )
-          ? value
-          : [];
-
-      } catch (
-        error
-      ) {
-
-        console.warn(
-          "[NEYO Send] Could not read ready attachments:",
-          error
-        );
-
-
-        return [];
-
-      }
-
-    };
-
-
-  function syncAttachments() {
-
-    const all =
-      getAllAttachments();
-
-
-    state.readyAttachments =
-      0;
-
-
-    state.pendingAttachments =
-      0;
-
-
-    state.failedAttachments =
-      0;
-
-
-    for (
-      const item
-      of all
+    } catch (
+      error
     ) {
 
-      if (
-        item?.ready === true &&
-        item?.status ===
-          "ready"
-      ) {
+      console.warn(
+        "[NEYO Send] Could not read attachments:",
+        error
+      );
 
-        state.readyAttachments +=
-          1;
 
-      } else if (
-        item?.status ===
-          "error"
-      ) {
-
-        state.failedAttachments +=
-          1;
-
-      } else {
-
-        state.pendingAttachments +=
-          1;
-
-      }
+      return [];
 
     }
 
   }
 
 
+  function getReadyAttachments() {
+
+    try {
+
+      const controller =
+        attachmentController();
+
+
+      if (!controller) {
+        return [];
+      }
+
+
+      const direct =
+        controller.getReady?.();
+
+
+      if (
+        Array.isArray(
+          direct
+        )
+      ) {
+        return direct;
+      }
+
+
+      return getAllAttachments()
+        .filter(
+          file => {
+
+            const status =
+              String(
+                file?.status ||
+                file?.state ||
+                ""
+              )
+                .trim()
+                .toLowerCase();
+
+
+            return (
+              status === "ready" ||
+              status === "complete" ||
+              status === "completed" ||
+              status === "processed"
+            );
+
+          }
+        );
+
+    } catch (
+      error
+    ) {
+
+      console.warn(
+        "[NEYO Send] Could not read ready attachments:",
+        error
+      );
+
+
+      return [];
+
+    }
+
+  }
+
+
+  function classifyAttachments() {
+
+    const all =
+      getAllAttachments();
+
+
+    let ready = 0;
+    let pending = 0;
+    let failed = 0;
+
+
+    for (
+      const file
+      of all
+    ) {
+
+      const status =
+        String(
+          file?.status ||
+          file?.state ||
+          ""
+        )
+          .trim()
+          .toLowerCase();
+
+
+      if (
+        status === "ready" ||
+        status === "complete" ||
+        status === "completed" ||
+        status === "processed"
+      ) {
+
+        ready += 1;
+
+        continue;
+
+      }
+
+
+      if (
+        status === "error" ||
+        status === "failed"
+      ) {
+
+        failed += 1;
+
+        continue;
+
+      }
+
+
+      pending += 1;
+
+    }
+
+
+    state.readyAttachments =
+      ready;
+
+
+    state.pendingAttachments =
+      pending;
+
+
+    state.failedAttachments =
+      failed;
+
+
+    return {
+      ready,
+      pending,
+      failed,
+      total:
+        all.length
+    };
+
+  }
+
+
   function removeSentAttachments(
-    sent
+    attachments
   ) {
 
     const controller =
@@ -345,7 +388,7 @@ IMPORTANT
       typeof controller.remove !==
         "function" ||
       !Array.isArray(
-        sent
+        attachments
       )
     ) {
       return;
@@ -353,13 +396,17 @@ IMPORTANT
 
 
     for (
-      const item
-      of sent
+      const file
+      of attachments
     ) {
 
-      if (
-        !item?.id
-      ) {
+      const id =
+        file?.id ||
+        file?.uploadId ||
+        null;
+
+
+      if (!id) {
         continue;
       }
 
@@ -367,7 +414,7 @@ IMPORTANT
       try {
 
         controller.remove(
-          item.id
+          id
         );
 
       } catch (
@@ -387,22 +434,63 @@ IMPORTANT
 
 
   /* =====================================================
-     ICONS
+     SEND ELIGIBILITY
      ===================================================== */
 
-  const refreshIcons =
-    () => {
+  function canSend() {
 
-      try {
+    if (
+      state.generating
+    ) {
+      return true;
+    }
 
-        window.lucide
-          ?.createIcons
-          ?.();
 
-      } catch {}
+    if (
+      state.sending
+    ) {
+      return false;
+    }
 
-    };
 
+    classifyAttachments();
+
+
+    if (
+      hasText()
+    ) {
+      return true;
+    }
+
+
+    return (
+      state.readyAttachments >
+      0
+    );
+
+  }
+
+
+  /* =====================================================
+     ICON HELPERS
+     ===================================================== */
+
+  function refreshIcons() {
+
+    try {
+
+      window.lucide
+        ?.createIcons
+        ?.();
+
+    } catch {}
+
+  }
+
+
+  /* =====================================================
+     SEND ICON
+     ===================================================== */
 
   function renderSendIcon() {
 
@@ -411,17 +499,14 @@ IMPORTANT
     );
 
 
-    sendBtn.setAttribute(
-      "aria-label",
-      "Send message"
+    sendBtn.removeAttribute(
+      "aria-busy"
     );
 
 
     sendBtn.setAttribute(
-      "aria-disabled",
-      String(
-        sendBtn.disabled
-      )
+      "aria-label",
+      "Send message"
     );
 
 
@@ -471,6 +556,10 @@ IMPORTANT
   }
 
 
+  /* =====================================================
+     STOP ICON
+     ===================================================== */
+
   function renderStopIcon() {
 
     sendBtn.disabled =
@@ -509,13 +598,17 @@ IMPORTANT
     );
 
 
-    /*
-     * Original solid STOP square.
-     * CSS already styles .send-stop-square.
-     */
+    sendBtn.removeAttribute(
+      "aria-busy"
+    );
+
 
     sendBtn.replaceChildren();
 
+
+    /*
+     * Old working solid STOP square.
+     */
 
     const square =
       document.createElement(
@@ -533,50 +626,38 @@ IMPORTANT
     );
 
 
+    /*
+     * Inline fallback guarantees visibility even if
+     * old CSS selector is missing.
+     */
+
+    square.style.display =
+      "block";
+
+    square.style.width =
+      "11px";
+
+    square.style.height =
+      "11px";
+
+    square.style.minWidth =
+      "11px";
+
+    square.style.minHeight =
+      "11px";
+
+    square.style.borderRadius =
+      "2.5px";
+
+    square.style.background =
+      "currentColor";
+
+    square.style.pointerEvents =
+      "none";
+
+
     sendBtn.appendChild(
       square
-    );
-
-  }
-
-
-  /* =====================================================
-     CAN SEND
-     ===================================================== */
-
-  function canSend() {
-
-    if (
-      !active
-    ) {
-      return false;
-    }
-
-
-    if (
-      state.generating
-    ) {
-      return true;
-    }
-
-
-    if (
-      state.sending
-    ) {
-      return false;
-    }
-
-
-    if (
-      hasText()
-    ) {
-      return true;
-    }
-
-
-    return (
-      state.readyAttachments >
-      0
     );
 
   }
@@ -586,41 +667,10 @@ IMPORTANT
      BUTTON UI
      ===================================================== */
 
-  function updateButton() {
+  function renderButton() {
 
-    syncAttachments();
+    classifyAttachments();
 
-
-    if (
-      !active
-    ) {
-
-      sendBtn.disabled =
-        true;
-
-
-      sendBtn.classList.remove(
-        "is-generating",
-        "is-ready"
-      );
-
-
-      sendBtn.classList.add(
-        "is-disabled"
-      );
-
-
-      renderSendIcon();
-
-
-      return false;
-
-    }
-
-
-    /* -----------------------------------------------------
-       GENERATING → STOP
-       ----------------------------------------------------- */
 
     if (
       state.generating
@@ -628,15 +678,10 @@ IMPORTANT
 
       renderStopIcon();
 
-
       return true;
 
     }
 
-
-    /* -----------------------------------------------------
-       NORMAL SEND STATE
-       ----------------------------------------------------- */
 
     const enabled =
       canSend();
@@ -646,8 +691,11 @@ IMPORTANT
       !enabled;
 
 
-    sendBtn.classList.remove(
-      "is-generating"
+    sendBtn.setAttribute(
+      "aria-disabled",
+      String(
+        !enabled
+      )
     );
 
 
@@ -690,10 +738,10 @@ IMPORTANT
 
 
   /* =====================================================
-     CLEAR TEXT
+     CLEAR COMPOSER
      ===================================================== */
 
-  function clearText() {
+  function clearComposer() {
 
     chatInput.value =
       "";
@@ -732,13 +780,12 @@ IMPORTANT
 
 
   /* =====================================================
-     STOP
+     STOP REQUEST
      ===================================================== */
 
-  function stopGeneration() {
+  function requestStop() {
 
     if (
-      !active ||
       !state.generating
     ) {
       return false;
@@ -746,7 +793,11 @@ IMPORTANT
 
 
     emit(
-      "neyo:chat-stop-request"
+      "neyo:chat-stop-request",
+      {
+        reason:
+          "user"
+      }
     );
 
 
@@ -756,30 +807,16 @@ IMPORTANT
 
 
   /* =====================================================
-     SEND
+     SEND REQUEST
      ===================================================== */
 
-  function sendMessage() {
-
-    if (
-      !active
-    ) {
-      return false;
-    }
-
-
-    syncAttachments();
-
-
-    /* -----------------------------------------------------
-       GENERATING → STOP
-       ----------------------------------------------------- */
+  function requestSend() {
 
     if (
       state.generating
     ) {
 
-      return stopGeneration();
+      return requestStop();
 
     }
 
@@ -799,30 +836,21 @@ IMPORTANT
       getReadyAttachments();
 
 
-    /* -----------------------------------------------------
-       NOTHING TO SEND
-       ----------------------------------------------------- */
-
     if (
       !text &&
       readyAttachments.length ===
         0
     ) {
 
-      updateButton();
-
+      renderButton();
 
       return false;
 
     }
 
 
-    /* -----------------------------------------------------
-       DUPLICATE SEND PROTECTION
-       ----------------------------------------------------- */
-
     const now =
-      performance.now();
+      Date.now();
 
 
     if (
@@ -830,7 +858,9 @@ IMPORTANT
         state.lastSendAt <
       180
     ) {
+
       return false;
+
     }
 
 
@@ -843,21 +873,18 @@ IMPORTANT
 
 
     /*
-     * IMPORTANT:
-     * Switch immediately to generating state so the solid
-     * Stop square appears without waiting for network work.
+     * Immediately enter STOP mode.
+     *
+     * This guarantees visual feedback before the
+     * backend/network request begins.
      */
 
     state.generating =
       true;
 
 
-    updateButton();
+    renderButton();
 
-
-    /* -----------------------------------------------------
-       CANONICAL SEND EVENT
-       ----------------------------------------------------- */
 
     emit(
       "neyo:chat-send-request",
@@ -872,45 +899,30 @@ IMPORTANT
     );
 
 
-    /* -----------------------------------------------------
-       CLEAR COMPOSER
-       ----------------------------------------------------- */
+    clearComposer();
 
-    clearText();
-
-
-    /*
-     * Remove only attachments that were actually sent.
-     */
 
     removeSentAttachments(
       readyAttachments
     );
 
 
-    /*
-     * Request has been dispatched.
-     * generating stays TRUE until chat response/error/abort.
-     */
-
     state.sending =
       false;
 
 
-    updateButton();
+    /*
+     * Do NOT set generating=false here.
+     *
+     * It stays true until:
+     * response
+     * error
+     * abort
+     * send-end
+     */
 
 
-    emit(
-      "neyo:composer-message-dispatched",
-      {
-
-        text,
-
-        attachmentCount:
-          readyAttachments.length
-
-      }
-    );
+    renderButton();
 
 
     return true;
@@ -926,8 +938,24 @@ IMPORTANT
     event
   ) {
 
+    const target =
+      event.target;
+
+
     if (
-      !active
+      !(
+        target instanceof
+        Element
+      )
+    ) {
+      return;
+    }
+
+
+    if (
+      !target.closest(
+        "#sendBtn"
+      )
     ) {
       return;
     }
@@ -942,82 +970,176 @@ IMPORTANT
     event.stopImmediatePropagation();
 
 
-    sendMessage();
+    if (
+      state.generating
+    ) {
+
+      requestStop();
+
+    } else {
+
+      requestSend();
+
+    }
 
   }
+
+
+  document.addEventListener(
+    "click",
+    handleSendClick,
+    true
+  );
+
+
+  /* =====================================================
+     IME
+     ===================================================== */
+
+  chatInput.addEventListener(
+    "compositionstart",
+    () => {
+
+      state.composing =
+        true;
+
+    }
+  );
+
+
+  chatInput.addEventListener(
+    "compositionend",
+    () => {
+
+      state.composing =
+        false;
+
+
+      renderButton();
+
+    }
+  );
 
 
   /* =====================================================
      KEYBOARD
      ===================================================== */
 
-  function handleKeyDown(
-    event
+  chatInput.addEventListener(
+    "keydown",
+    event => {
+
+      if (
+        event.key !==
+        "Enter"
+      ) {
+        return;
+      }
+
+
+      if (
+        event.isComposing ||
+        state.composing ||
+        event.keyCode ===
+          229
+      ) {
+        return;
+      }
+
+
+      if (
+        event.shiftKey
+      ) {
+        return;
+      }
+
+
+      if (
+        event.altKey ||
+        event.ctrlKey ||
+        event.metaKey
+      ) {
+        return;
+      }
+
+
+      /*
+       * Enter must NOT stop generation.
+       */
+
+      if (
+        state.generating
+      ) {
+
+        event.preventDefault();
+
+        return;
+
+      }
+
+
+      if (
+        !canSend()
+      ) {
+        return;
+      }
+
+
+      event.preventDefault();
+
+
+      event.stopPropagation();
+
+
+      event.stopImmediatePropagation();
+
+
+      requestSend();
+
+    },
+    true
+  );
+
+
+  /* =====================================================
+     INPUT
+     ===================================================== */
+
+  chatInput.addEventListener(
+    "input",
+    renderButton
+  );
+
+
+  /* =====================================================
+     ATTACHMENT EVENTS
+     ===================================================== */
+
+  for (
+    const eventName
+    of [
+
+      "neyo:attachments-change",
+
+      "neyo:attachment-ready",
+
+      "neyo:attachment-error",
+
+      "neyo:attachment-removed"
+
+    ]
   ) {
 
-    if (
-      !active ||
-      event.key !==
-        "Enter"
-    ) {
-      return;
-    }
-
-
-    if (
-      event.isComposing ||
-      state.composing ||
-      event.keyCode ===
-        229
-    ) {
-      return;
-    }
-
-
-    if (
-      event.shiftKey
-    ) {
-      return;
-    }
-
-
-    if (
-      event.altKey ||
-      event.ctrlKey ||
-      event.metaKey
-    ) {
-      return;
-    }
-
-
-    /*
-     * Enter never acts as Stop.
-     */
-
-    if (
-      state.generating ||
-      !canSend()
-    ) {
-      return;
-    }
-
-
-    event.preventDefault();
-
-
-    event.stopPropagation();
-
-
-    event.stopImmediatePropagation();
-
-
-    sendMessage();
+    window.addEventListener(
+      eventName,
+      renderButton
+    );
 
   }
 
 
   /* =====================================================
-     GENERATION STATE
+     GENERATION START
      ===================================================== */
 
   function generationStarted() {
@@ -1030,10 +1152,20 @@ IMPORTANT
       false;
 
 
-    updateButton();
+    renderButton();
 
   }
 
+
+  window.addEventListener(
+    "neyo:chat-send-start",
+    generationStarted
+  );
+
+
+  /* =====================================================
+     GENERATION FINISH
+     ===================================================== */
 
   function generationFinished() {
 
@@ -1045,107 +1177,36 @@ IMPORTANT
       false;
 
 
-    updateButton();
+    renderButton();
 
   }
 
 
-  /* =====================================================
-     LISTENERS
-     ===================================================== */
+  for (
+    const eventName
+    of [
 
-  if (
-    active
+      "neyo:chat-send-end",
+
+      "neyo:chat-response",
+
+      "neyo:chat-error",
+
+      "neyo:chat-aborted",
+
+      "neyo:chat-limit-reached",
+
+      "neyo:chat-new",
+
+      "neyo:chat-state-loaded"
+
+    ]
   ) {
 
-    sendBtn.addEventListener(
-      "click",
-      handleSendClick,
-      true
-    );
-
-
-    chatInput.addEventListener(
-      "compositionstart",
-      () => {
-
-        state.composing =
-          true;
-
-      }
-    );
-
-
-    chatInput.addEventListener(
-      "compositionend",
-      () => {
-
-        state.composing =
-          false;
-
-      }
-    );
-
-
-    chatInput.addEventListener(
-      "keydown",
-      handleKeyDown,
-      true
-    );
-
-
-    chatInput.addEventListener(
-      "input",
-      updateButton
-    );
-
-
-    for (
-      const eventName
-      of [
-        "neyo:attachments-change",
-        "neyo:attachment-ready",
-        "neyo:attachment-error",
-        "neyo:attachment-removed"
-      ]
-    ) {
-
-      window.addEventListener(
-        eventName,
-        updateButton
-      );
-
-    }
-
-
     window.addEventListener(
-      "neyo:chat-send-start",
-      generationStarted
+      eventName,
+      generationFinished
     );
-
-
-    for (
-      const eventName
-      of [
-        "neyo:chat-send-end",
-        "neyo:chat-response",
-        "neyo:chat-error",
-        "neyo:chat-aborted",
-        "neyo:chat-limit-reached",
-        "neyo:chat-new",
-        "neyo:chat-state-loaded"
-      ]
-    ) {
-
-      window.addEventListener(
-        eventName,
-        generationFinished
-      );
-
-    }
-
-
-    updateButton();
 
   }
 
@@ -1163,21 +1224,17 @@ IMPORTANT
       version:
         VERSION,
 
-      active,
-
-      legacyOwnerActive:
-        legacyScriptPresent,
-
-      modularChatReady,
+      active:
+        true,
 
       send:
-        sendMessage,
+        requestSend,
 
       stop:
-        stopGeneration,
+        requestStop,
 
       update:
-        updateButton,
+        renderButton,
 
       canSend,
 
@@ -1192,7 +1249,17 @@ IMPORTANT
           );
 
 
-        updateButton();
+        if (
+          !state.generating
+        ) {
+
+          state.sending =
+            false;
+
+        }
+
+
+        renderButton();
 
 
         return state.generating;
@@ -1202,7 +1269,7 @@ IMPORTANT
 
       getState() {
 
-        syncAttachments();
+        classifyAttachments();
 
 
         return {
@@ -1210,12 +1277,8 @@ IMPORTANT
           version:
             VERSION,
 
-          active,
-
-          legacyOwnerActive:
-            legacyScriptPresent,
-
-          modularChatReady,
+          active:
+            true,
 
           generating:
             state.generating,
@@ -1270,8 +1333,11 @@ IMPORTANT
 
 
   /* =====================================================
-     READY
+     INIT
      ===================================================== */
+
+  renderButton();
+
 
   emit(
     "neyo:send-state-ready",
@@ -1280,29 +1346,19 @@ IMPORTANT
       version:
         VERSION,
 
-      active,
-
-      legacyOwnerActive:
-        legacyScriptPresent,
-
-      modularChatReady
+      active:
+        true
 
     }
   );
 
 
   console.log(
-    "[NEYO Send] Ready",
+    "[NEYO Send] Final controller ready.",
     {
 
       version:
         VERSION,
-
-      active,
-
-      legacyScriptPresent,
-
-      modularChatReady,
 
       buttonOwner:
         "NeyoSendState",

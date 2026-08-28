@@ -825,3 +825,74 @@ body.dark-mode
     }
 
 }
+/* =====================================================
+   FINAL DROPDOWN POSITION FIX
+   Locks menu to true viewport center
+   Prevents legacy CSS positioning conflicts
+   ===================================================== */
+
+.model-dropdown-menu {
+    position: fixed !important;
+
+    top: 64px !important;
+
+    left: 50% !important;
+    right: auto !important;
+
+    margin: 0 !important;
+
+    transform:
+        translateX(-50%)
+        translateY(-4px)
+        !important;
+}
+
+
+.model-dropdown-menu.show,
+.model-dropdown-menu.open,
+.model-dropdown-menu.active,
+.model-dropdown-menu[aria-hidden="false"],
+.model-dropdown-wrapper.open
+.model-dropdown-menu {
+    transform:
+        translateX(-50%)
+        translateY(0)
+        !important;
+}
+
+
+/* =====================================================
+   MOBILE
+   ===================================================== */
+
+@media (max-width: 600px) {
+
+    .model-dropdown-menu {
+        top: 64px !important;
+
+        left: 50% !important;
+        right: auto !important;
+
+        width: 210px !important;
+        min-width: 210px !important;
+
+        transform:
+            translateX(-50%)
+            translateY(-4px)
+            !important;
+    }
+
+
+    .model-dropdown-menu.show,
+    .model-dropdown-menu.open,
+    .model-dropdown-menu.active,
+    .model-dropdown-menu[aria-hidden="false"],
+    .model-dropdown-wrapper.open
+    .model-dropdown-menu {
+        transform:
+            translateX(-50%)
+            translateY(0)
+            !important;
+    }
+
+}

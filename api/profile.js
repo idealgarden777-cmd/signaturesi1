@@ -323,10 +323,10 @@ export default async function handler(
 
 
         /* =================================================
-           RESPONSE
+           PLAN
            ================================================= */
 
-        const planType =
+        const rawPlanType =
             String(
                 user.plan_type ||
                 "free"
@@ -334,6 +334,28 @@ export default async function handler(
                 .trim()
                 .toLowerCase();
 
+
+        /*
+         * Database plans:
+         *
+         * free
+         * leverage
+         *
+         * Existing frontend compatibility:
+         *
+         * free      -> free
+         * leverage  -> pro
+         */
+
+        const planType =
+            rawPlanType === "leverage"
+                ? "pro"
+                : "free";
+
+
+        /* =================================================
+           RESPONSE
+           ================================================= */
 
         return res
             .status(200)
@@ -351,9 +373,7 @@ export default async function handler(
                         user.display_name,
 
                     planType:
-                        planType === "pro"
-                            ? "pro"
-                            : "free"
+                        planType
 
                 },
 

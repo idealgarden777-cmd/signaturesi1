@@ -12,8 +12,6 @@
   <!-- Monetag Verification (kept) -->
   <meta name="monetag" content="5c03c9d12ef5dab45df4b58c864f5ae9">
 
-  <!-- Monetag Onclick Tag — REMOVED (now handled by ads.js for Free users only) -->
-
   <meta http-equiv="Content-Security-Policy" content="
     default-src 'self';
     script-src 'self' 'unsafe-inline'
@@ -64,7 +62,7 @@
   <link rel="stylesheet" href="/css/components/attachments.css?v=1">
   <link rel="stylesheet" href="/css/components/composer.css?v=1">
   <link rel="stylesheet" href="/css/components/composer-expand.css?v=2">
-  <link rel="stylesheet" href="/css/components/composer-scrollbar.css?v=1"> <!-- ✅ ADDED -->
+  <link rel="stylesheet" href="/css/components/composer-scrollbar.css?v=1">
   <link rel="stylesheet" href="/css/components/suggestions.css?v=1">
   <link rel="stylesheet" href="/css/components/voice.css?v=1">
   <link rel="stylesheet" href="/css/components/drag-drop.css?v=1">
@@ -74,12 +72,12 @@
   <link rel="stylesheet" href="/css/components/hero.css?v=1">
 
   <!-- Sidebar & Topbar -->
-  <link rel="stylesheet" href="/css/components/sidebar.css?v=17">   <!-- ✅ UPDATED to v17 -->
+  <link rel="stylesheet" href="/css/components/sidebar.css?v=17">
   <link rel="stylesheet" href="/css/components/topbar.css?v=1">
 
   <!-- Menus -->
   <link rel="stylesheet" href="/css/components/model-menu.css?v=1">
-  <link rel="stylesheet" href="/css/components/menus.css?v=2">   <!-- ✅ v2 with fixed positioning -->
+  <link rel="stylesheet" href="/css/components/menus.css?v=2">
 
   <!-- Settings & Modal -->
   <link rel="stylesheet" href="/css/components/settings.css?v=1">
@@ -103,9 +101,6 @@
   <script src="https://unpkg.com/lucide@latest"></script>
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.8/purify.min.js"></script>
-
-  <!-- Monetag Vignette - NOW LOADED VIA ads.js MODULE, NOT INLINE -->
-  <!-- Inline script removed to ensure Pro users stay ad-free -->
 </head>
 
 <body>
@@ -1300,7 +1295,7 @@
   </div>
 
   <!-- ========================================================= -->
-  <!-- SCRIPTS — FULL ORDER WITH SEND-STATE RESTORED & ADS v3   -->
+  <!-- SCRIPTS — FULL ORDER WITH RESTORED MESSAGE ACTIONS       -->
   <!-- ========================================================= -->
 
   <!-- Main working app -->
@@ -1321,7 +1316,7 @@
   <!-- Composer scrollbar (NEW) -->
   <script type="module" src="/js/components/composer-scrollbar.js?v=1"></script>
 
-  <!-- Voice — MediaRecorder + Gemini transcription (✅ FIXED: NOW LOADED) -->
+  <!-- Voice — MediaRecorder + Gemini transcription -->
   <script type="module" src="/js/components/voice.js?v=20"></script>
 
   <!-- Native tooltips (restored) -->
@@ -1340,13 +1335,58 @@
 
   <script type="module" src="/js/components/message-renderer.js?v=3"></script>
 
+
+  <!-- ========================================================= -->
+  <!-- MESSAGE ACTIONS — RESTORE OLD WORKING BEHAVIOR             -->
+  <!-- ========================================================= -->
+
+  <!-- Copy / Share / Regenerate / Edit click handling -->
+  <script
+    type="module"
+    src="/js/components/message-actions.js?v=1"
+  ></script>
+
+  <!-- Original Edit message box -->
+  <script
+    type="module"
+    src="/js/components/message-edit.js?v=1"
+  ></script>
+
+  <!-- Original Regenerate behavior -->
+  <script
+    type="module"
+    src="/js/components/regenerate.js?v=1"
+  ></script>
+
+  <!-- Original Share behavior -->
+  <script
+    type="module"
+    src="/js/components/share.js?v=3"
+  ></script>
+
+
+  <!-- ========================================================= -->
+  <!-- HISTORY                                                   -->
+  <!-- ========================================================= -->
+
   <script type="module" src="/js/components/history.js?v=3"></script>
 
-  <!-- Send / Stop owner -->
-  <script type="module" src="/js/components/send-state.js?v=12"></script>
+
+  <!-- ========================================================= -->
+  <!-- SEND / STOP                                               -->
+  <!-- ========================================================= -->
+
+  <script
+    type="module"
+    src="/js/components/send-state.js?v=12"
+  ></script>
+
 
   <!-- Runtime must load after send-state -->
-  <script type="module" src="/js/components/chat-runtime.js?v=5"></script>
+  <script
+    type="module"
+    src="/js/components/chat-runtime.js?v=5"
+  ></script>
 
   <!-- Ads module (v3) — handles Monetag Vignette + Onclick for Free users only -->
   <script type="module" src="/js/components/ads.js?v=3"></script>

@@ -697,3 +697,182 @@ body[data-neyo-text-size="large"]
     }
 
 }
+/* =========================================================
+   MESSAGE ACTION BUTTONS
+   RESTORE ORIGINAL CLEAN ICON STYLE
+   ========================================================= */
+
+
+/* ---------------------------------------------------------
+   BOTH USER + ASSISTANT ACTION BUTTONS
+   --------------------------------------------------------- */
+
+.message .msg-action-btn,
+.message .user-action-btn {
+    width: 30px !important;
+    height: 30px !important;
+
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+
+    margin: 0 !important;
+    padding: 0 !important;
+
+    border: 0 !important;
+    outline: 0 !important;
+
+    border-radius: 8px !important;
+
+    background: transparent !important;
+    color: #777777 !important;
+
+    box-shadow: none !important;
+
+    cursor: pointer !important;
+
+    appearance: none !important;
+    -webkit-appearance: none !important;
+
+    transition:
+        background-color 120ms ease,
+        color 120ms ease !important;
+}
+
+
+/* Icon size / alignment */
+
+.message .msg-action-btn svg,
+.message .user-action-btn svg {
+    display: block !important;
+
+    width: 16px !important;
+    height: 16px !important;
+
+    stroke-width: 1.8 !important;
+
+    pointer-events: none !important;
+}
+
+
+/* User icons slightly smaller */
+
+.message.user .user-action-btn svg {
+    width: 15px !important;
+    height: 15px !important;
+}
+
+
+/* ---------------------------------------------------------
+   HOVER
+   --------------------------------------------------------- */
+
+.message .msg-action-btn:hover,
+.message .user-action-btn:hover {
+    background:
+        rgba(0, 0, 0, 0.055) !important;
+
+    color: #404040 !important;
+}
+
+
+/* ---------------------------------------------------------
+   ACTIVE
+   --------------------------------------------------------- */
+
+.message .msg-action-btn:active,
+.message .user-action-btn:active {
+    background:
+        rgba(0, 0, 0, 0.085) !important;
+
+    transform: none !important;
+}
+
+
+/* ---------------------------------------------------------
+   FOCUS
+   --------------------------------------------------------- */
+
+.message .msg-action-btn:focus,
+.message .user-action-btn:focus {
+    outline: none !important;
+    box-shadow: none !important;
+}
+
+
+.message .msg-action-btn:focus-visible,
+.message .user-action-btn:focus-visible {
+    outline:
+        2px solid rgba(0, 0, 0, 0.16) !important;
+
+    outline-offset: 1px !important;
+}
+
+
+/* ---------------------------------------------------------
+   ASSISTANT ACTION ROW
+   --------------------------------------------------------- */
+
+.message.assistant .message-actions {
+    display: flex !important;
+    align-items: center !important;
+
+    gap: 2px !important;
+
+    margin-top: 8px !important;
+    padding: 0 !important;
+}
+
+
+/* ---------------------------------------------------------
+   USER ACTION ROW
+   --------------------------------------------------------- */
+
+.message.user .user-msg-actions {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+
+    gap: 2px !important;
+
+    margin:
+        3px
+        3px
+        0
+        0 !important;
+
+    padding: 0 !important;
+}
+
+
+/* =========================================================
+   DARK MODE
+   ========================================================= */
+
+body.dark-mode
+.message .msg-action-btn,
+body.dark-mode
+.message .user-action-btn {
+    background: transparent !important;
+    color: #a7a7a7 !important;
+}
+
+
+body.dark-mode
+.message .msg-action-btn:hover,
+body.dark-mode
+.message .user-action-btn:hover {
+    background:
+        rgba(255, 255, 255, 0.08) !important;
+
+    color: #eeeeee !important;
+}
+
+
+body.dark-mode
+.message .msg-action-btn:active,
+body.dark-mode
+.message .user-action-btn:active {
+    background:
+        rgba(255, 255, 255, 0.12) !important;
+}

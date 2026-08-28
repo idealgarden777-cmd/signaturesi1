@@ -39,13 +39,13 @@ Legacy neo-v3.css remains loaded during migration.
     padding: 18px;
 
     background:
-        rgba(0, 0, 0, 0.42);
+        #ffffff !important;
 
     backdrop-filter:
-        none;
+        none !important;
 
     -webkit-backdrop-filter:
-        none;
+        none !important;
 
     opacity: 0;
     visibility: hidden;
@@ -586,6 +586,19 @@ Existing JS can keep whichever one it already uses.
    ========================================================= */
 
 body.dark-mode
+#upgradeModal {
+    background:
+        #0f0f0f !important;
+
+    backdrop-filter:
+        none !important;
+
+    -webkit-backdrop-filter:
+        none !important;
+}
+
+
+body.dark-mode
 #upgradeModal .modal-card {
     border-color:
         rgba(255, 255, 255, 0.09)
@@ -817,13 +830,13 @@ body.dark-mode
         max(54px, env(safe-area-inset-bottom));
 
     background:
-        rgba(245, 245, 245, 0.94);
+        #ffffff !important;
 
     backdrop-filter:
-        none;
+        none !important;
 
     -webkit-backdrop-filter:
-        none;
+        none !important;
 }
 
 
@@ -1393,13 +1406,13 @@ body.dark-mode
 body.dark-mode
 .leverage-upgrade-overlay {
     background:
-        rgba(15, 15, 15, 0.94);
+        #0f0f0f !important;
 
     backdrop-filter:
-        none;
+        none !important;
 
     -webkit-backdrop-filter:
-        none;
+        none !important;
 }
 
 

@@ -1,195 +1,212 @@
-/*
-=========================================================
-NEYO — SEND / STOP STATE
-FINAL HARDENED VERSION
-
-Purpose:
-- Send arrow → solid stop square while generating
-- Keep exact same button size
-- No layout shift
-- Prevent other CSS from hiding stop state
-- Light + dark mode safe
-=========================================================
-*/
-
-
-/* =========================================================
-   BASE SAFETY
-   ========================================================= */
-
-.send-btn {
-    overflow: hidden !important;
-}
-
-
-/* =========================================================
-   GENERATING STATE
-   ========================================================= */
-
-.send-btn.is-generating {
-    display: inline-flex !important;
-
-    align-items: center !important;
-    justify-content: center !important;
-
-    cursor: pointer !important;
-
-    opacity: 1 !important;
-
-    visibility: visible !important;
-
-    pointer-events: auto !important;
-}
-
-
-/* =========================================================
-   GENERATING + DISABLED SAFETY
-   ========================================================= */
-
-.send-btn.is-generating:disabled {
-    opacity: 1 !important;
-
-    pointer-events: auto !important;
-
-    cursor: pointer !important;
-}
-
-
-/* =========================================================
-   STOP SQUARE
-   ========================================================= */
-
-.send-btn.is-generating
-.send-stop-square {
-    display: block !important;
-
-    width: 11px !important;
-    height: 11px !important;
-
-    min-width: 11px !important;
-    min-height: 11px !important;
-
-    max-width: 11px !important;
-    max-height: 11px !important;
-
-    flex: 0 0 11px !important;
-
-    border: 0 !important;
-
-    border-radius: 2.5px !important;
-
-    background: currentColor !important;
-
-    color: inherit !important;
-
-    opacity: 1 !important;
-
-    visibility: visible !important;
-
-    pointer-events: none !important;
-
-    transform: none !important;
-
-    transition:
-        transform 120ms ease,
-        opacity 120ms ease !important;
-}
-
-
-/* =========================================================
-   REMOVE OLD SEND ICON DURING GENERATION
-   ========================================================= */
-
-.send-btn.is-generating svg,
-.send-btn.is-generating i {
-    display: none !important;
-
-    visibility: hidden !important;
-
-    pointer-events: none !important;
-}
-
-
-/* =========================================================
-   HOVER
-   ========================================================= */
-
-.send-btn.is-generating:hover
-.send-stop-square {
-    transform: scale(1.04) !important;
-}
-
-
-/* =========================================================
-   ACTIVE
-   ========================================================= */
-
-.send-btn.is-generating:active
-.send-stop-square {
-    transform: scale(0.92) !important;
-}
-
-
-/* =========================================================
-   FOCUS
-   ========================================================= */
-
-.send-btn.is-generating:focus-visible {
-    outline:
-        2px solid
-        var(
-            --focus-ring,
-            rgba(59, 130, 246, 0.45)
-        ) !important;
-
-    outline-offset: 2px !important;
-}
-
-
-/* =========================================================
-   LIGHT MODE
-   ========================================================= */
-
-body:not(.dark-mode)
-.send-btn.is-generating {
-    background: #111111 !important;
-
-    color: #ffffff !important;
-}
-
-
-/* =========================================================
-   DARK MODE
-   ========================================================= */
-
-body.dark-mode
-.send-btn.is-generating {
-    background: #f5f5f5 !important;
-
-    color: #111111 !important;
-}
-
-
-/* =========================================================
-   MOBILE
-   ========================================================= */
-
-@media (max-width: 767px) {
-
-    .send-btn.is-generating
-    .send-stop-square {
-        width: 10px !important;
-        height: 10px !important;
-
-        min-width: 10px !important;
-        min-height: 10px !important;
-
-        max-width: 10px !important;
-        max-height: 10px !important;
-
-        flex: 0 0 10px !important;
-
-        border-radius: 2px !important;
-    }
-
+/* 
+========================================================= 
+NEYO — SEND / STOP STATE 
+FINAL HARDENED VERSION 
+ 
+Purpose: 
+- Send arrow → solid stop square while generating 
+- Keep exact same button size 
+- No layout shift 
+- Prevent other CSS from hiding stop state 
+- Light + dark mode safe 
+- Soft light shadow, no heavy black shadow
+========================================================= 
+*/ 
+ 
+ 
+/* ========================================================= 
+   BASE SAFETY 
+   ========================================================= */ 
+ 
+.send-btn { 
+    overflow: hidden !important; 
+
+    box-shadow:
+        0 4px 14px rgba(255, 255, 255, 0.55),
+        0 1px 4px rgba(0, 0, 0, 0.06) !important;
+} 
+ 
+ 
+/* ========================================================= 
+   GENERATING STATE 
+   ========================================================= */ 
+ 
+.send-btn.is-generating { 
+    display: inline-flex !important; 
+ 
+    align-items: center !important; 
+    justify-content: center !important; 
+ 
+    cursor: pointer !important; 
+ 
+    opacity: 1 !important; 
+ 
+    visibility: visible !important; 
+ 
+    pointer-events: auto !important; 
+
+    box-shadow:
+        0 4px 14px rgba(255, 255, 255, 0.55),
+        0 1px 4px rgba(0, 0, 0, 0.06) !important;
+} 
+ 
+ 
+/* ========================================================= 
+   GENERATING + DISABLED SAFETY 
+   ========================================================= */ 
+ 
+.send-btn.is-generating:disabled { 
+    opacity: 1 !important; 
+ 
+    pointer-events: auto !important; 
+ 
+    cursor: pointer !important; 
+} 
+ 
+ 
+/* ========================================================= 
+   STOP SQUARE 
+   ========================================================= */ 
+ 
+.send-btn.is-generating 
+.send-stop-square { 
+    display: block !important; 
+ 
+    width: 11px !important; 
+    height: 11px !important; 
+ 
+    min-width: 11px !important; 
+    min-height: 11px !important; 
+ 
+    max-width: 11px !important; 
+    max-height: 11px !important; 
+ 
+    flex: 0 0 11px !important; 
+ 
+    border: 0 !important; 
+ 
+    border-radius: 2.5px !important; 
+ 
+    background: currentColor !important; 
+ 
+    color: inherit !important; 
+ 
+    opacity: 1 !important; 
+ 
+    visibility: visible !important; 
+ 
+    pointer-events: none !important; 
+ 
+    transform: none !important; 
+ 
+    transition: 
+        transform 120ms ease, 
+        opacity 120ms ease !important; 
+} 
+ 
+ 
+/* ========================================================= 
+   REMOVE OLD SEND ICON DURING GENERATION 
+   ========================================================= */ 
+ 
+.send-btn.is-generating svg, 
+.send-btn.is-generating i { 
+    display: none !important; 
+ 
+    visibility: hidden !important; 
+ 
+    pointer-events: none !important; 
+} 
+ 
+ 
+/* ========================================================= 
+   HOVER 
+   ========================================================= */ 
+ 
+.send-btn.is-generating:hover 
+.send-stop-square { 
+    transform: scale(1.04) !important; 
+} 
+ 
+ 
+/* ========================================================= 
+   ACTIVE 
+   ========================================================= */ 
+ 
+.send-btn.is-generating:active 
+.send-stop-square { 
+    transform: scale(0.92) !important; 
+} 
+ 
+ 
+/* ========================================================= 
+   FOCUS 
+   ========================================================= */ 
+ 
+.send-btn.is-generating:focus-visible { 
+    outline: 
+        2px solid 
+        var( 
+            --focus-ring, 
+            rgba(59, 130, 246, 0.45) 
+        ) !important; 
+ 
+    outline-offset: 2px !important; 
+} 
+ 
+ 
+/* ========================================================= 
+   LIGHT MODE 
+   ========================================================= */ 
+ 
+body:not(.dark-mode) 
+.send-btn.is-generating { 
+    background: #111111 !important; 
+ 
+    color: #ffffff !important; 
+
+    box-shadow:
+        0 5px 16px rgba(255, 255, 255, 0.70),
+        0 1px 4px rgba(0, 0, 0, 0.05) !important;
+} 
+ 
+ 
+/* ========================================================= 
+   DARK MODE 
+   ========================================================= */ 
+ 
+body.dark-mode 
+.send-btn.is-generating { 
+    background: #f5f5f5 !important; 
+ 
+    color: #111111 !important; 
+
+    box-shadow:
+        0 4px 14px rgba(255, 255, 255, 0.10),
+        0 1px 4px rgba(0, 0, 0, 0.18) !important;
+} 
+ 
+ 
+/* ========================================================= 
+   MOBILE 
+   ========================================================= */ 
+ 
+@media (max-width: 767px) { 
+ 
+    .send-btn.is-generating 
+    .send-stop-square { 
+        width: 10px !important; 
+        height: 10px !important; 
+ 
+        min-width: 10px !important; 
+        min-height: 10px !important; 
+ 
+        max-width: 10px !important; 
+        max-height: 10px !important; 
+ 
+        flex: 0 0 10px !important; 
+ 
+        border-radius: 2px !important; 
+    } 
+ 
 }

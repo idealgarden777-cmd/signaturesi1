@@ -1,21 +1,30 @@
 /*
 =========================================================
 NEYO — MESSAGE EDIT COMPONENT
+DIRECT WORKING RESTORE v2
 
-Owns:
+FILE:
+public/js/components/message-edit.js
+
+OWNS
+---------------------------------------------------------
 - User message edit mode
 - Edit textarea
 - Existing attachment preview
 - Cancel edit
-- Save & submit request
+- Save & Submit
+- Edited conversation truncation
+- Edited resend through canonical NeyoChat
 - Edit keyboard behavior
 - Public edit API
 
-Does NOT own:
-- Chat API
-- Message resend implementation
-- Attachment upload
-- History persistence
+DOES NOT OWN
+---------------------------------------------------------
+- /api/chat implementation
+- Normal message rendering
+- Normal Send button
+- History API
+- Attachment uploading
 =========================================================
 */
 
@@ -24,14 +33,23 @@ Does NOT own:
 
 
     /* =====================================================
-       STATE
+       VERSION
        ===================================================== */
 
-    let activeEdit = null;
+    const VERSION =
+        "neyo-message-edit-direct-v2";
 
 
     /* =====================================================
-       HELPERS
+       STATE
+       ===================================================== */
+
+    let activeEdit =
+        null;
+
+
+    /* =====================================================
+       EVENTS
        ===================================================== */
 
     const emit = (
@@ -51,56 +69,344 @@ Does NOT own:
     };
 
 
+    /* =====================================================
+       ICONS
+       ===================================================== */
+
     const refreshIcons = () => {
 
-        if (
-            window.lucide
-                ?.createIcons
-        ) {
+        try {
 
             window.lucide
-                .createIcons();
+                ?.createIcons
+                ?.();
+
+        } catch {}
+
+    };
+
+
+    /* =====================================================
+       TEXT
+       ===================================================== */
+
+    const clean = value => {
+
+        return String(
+            value ?? ""
+        )
+            .replace(
+                /\u0000/g,
+                ""
+            )
+            .replace(
+                /\r\n?/g,
+                "\n"
+            )
+            .trim();
+
+    };
+
+
+    /* =====================================================
+       CHAT
+       ===================================================== */
+
+    const getChat = () => {
+
+        const chat =
+            window.NeyoChat;
+
+
+        if (
+            !chat ||
+            chat.__controller !==
+                true
+        ) {
+
+            return null;
+
+        }
+
+
+        return chat;
+
+    };
+
+
+    const getConversation = () => {
+
+        try {
+
+            const messages =
+                getChat()
+                    ?.getConversation
+                    ?.();
+
+
+            return Array.isArray(
+                messages
+            )
+                ? messages
+                : [];
+
+        } catch {
+
+            return [];
 
         }
 
     };
 
 
+    /* =====================================================
+       MESSAGE ID
+       ===================================================== */
+
+    const getDomMessageId =
+        message => {
+
+            if (
+                !(message instanceof HTMLElement)
+            ) {
+                return "";
+            }
+
+
+            return clean(
+                message.dataset
+                    ?.neyoMessageId ||
+                message.dataset
+                    ?.messageId ||
+                ""
+            );
+
+        };
+
+
+    /* =====================================================
+       INDEX RESOLUTION
+       ===================================================== */
+
+    const resolveMessageIndex = (
+        message,
+        suppliedIndex,
+        originalText
+    ) => {
+
+        const conversation =
+            getConversation();
+
+
+        if (
+            Number.isInteger(
+                suppliedIndex
+            ) &&
+            suppliedIndex >= 0 &&
+            suppliedIndex <
+                conversation.length &&
+            conversation[
+                suppliedIndex
+            ]?.role ===
+                "user"
+        ) {
+
+            return suppliedIndex;
+
+        }
+
+
+        const id =
+            getDomMessageId(
+                message
+            );
+
+
+        if (id) {
+
+            const byId =
+                conversation.findIndex(
+                    item =>
+                        clean(
+                            item?.id
+                        ) === id
+                );
+
+
+            if (
+                byId >= 0 &&
+                conversation[
+                    byId
+                ]?.role ===
+                    "user"
+            ) {
+
+                return byId;
+
+            }
+
+        }
+
+
+        /*
+         * Final compatibility fallback.
+         * Prefer latest matching user message.
+         */
+
+        const text =
+            clean(
+                originalText
+            );
+
+
+        for (
+            let i =
+                conversation.length - 1;
+            i >= 0;
+            i--
+        ) {
+
+            const item =
+                conversation[i];
+
+
+            if (
+                item?.role ===
+                    "user" &&
+                clean(
+                    item.content
+                ) === text
+            ) {
+
+                return i;
+
+            }
+
+        }
+
+
+        return -1;
+
+    };
+
+
+    /* =====================================================
+       ATTACHMENTS
+       ===================================================== */
+
+    const resolveAttachments = (
+        suppliedAttachments,
+        index
+    ) => {
+
+        if (
+            Array.isArray(
+                suppliedAttachments
+            ) &&
+            suppliedAttachments.length >
+                0
+        ) {
+
+            return suppliedAttachments
+                .map(
+                    file => ({
+                        ...file
+                    })
+                );
+
+        }
+
+
+        const conversation =
+            getConversation();
+
+
+        if (
+            index >= 0 &&
+            index <
+                conversation.length &&
+            Array.isArray(
+                conversation[
+                    index
+                ]?.attachments
+            )
+        ) {
+
+            return conversation[
+                index
+            ].attachments
+                .map(
+                    file => ({
+                        ...file
+                    })
+                );
+
+        }
+
+
+        return [];
+
+    };
+
+
+    /* =====================================================
+       FILE HELPERS
+       ===================================================== */
+
     const getFileIcon =
         file => {
 
             const type =
-                String(
+                clean(
                     file?.mimeType ||
+                    file?.mime ||
                     file?.type ||
                     ""
-                ).toLowerCase();
+                )
+                    .toLowerCase();
+
+
+            const category =
+                clean(
+                    file?.category ||
+                    ""
+                )
+                    .toLowerCase();
 
 
             if (
+                category === "image" ||
                 type.startsWith(
                     "image/"
                 )
             ) {
+
                 return "image";
+
             }
 
 
             if (
+                category === "audio" ||
                 type.startsWith(
                     "audio/"
                 )
             ) {
-                return "music";
+
+                return "audio-lines";
+
             }
 
 
             if (
+                category === "video" ||
                 type.startsWith(
                     "video/"
                 )
             ) {
+
                 return "video";
+
             }
 
 
@@ -109,7 +415,9 @@ Does NOT own:
                     "pdf"
                 )
             ) {
+
                 return "file-text";
+
             }
 
 
@@ -122,25 +430,21 @@ Does NOT own:
         file => {
 
             const type =
-                String(
+                clean(
                     file?.mimeType ||
+                    file?.mime ||
                     file?.type ||
                     ""
-                ).toLowerCase();
-
-
-            if (
-                type.startsWith(
-                    "image/"
                 )
-            ) {
-                return true;
-            }
+                    .toLowerCase();
 
 
             return (
                 file?.category ===
-                "image"
+                    "image" ||
+                type.startsWith(
+                    "image/"
+                )
             );
 
         };
@@ -149,7 +453,7 @@ Does NOT own:
     const getAttachmentPreviewUrl =
         file => {
 
-            return (
+            return clean(
                 file?.previewUrl ||
                 file?.signedUrl ||
                 file?.url ||
@@ -157,142 +461,6 @@ Does NOT own:
             );
 
         };
-
-
-    /* =====================================================
-       RESTORE MESSAGE
-       ===================================================== */
-
-    const restoreMessage =
-        editState => {
-
-            if (
-                !editState?.message
-            ) {
-                return;
-            }
-
-
-            emit(
-                "neyo:user-message-restore-request",
-                {
-                    message:
-                        editState.message,
-
-                    text:
-                        editState.originalText,
-
-                    index:
-                        editState.index,
-
-                    attachments:
-                        editState.attachments
-                }
-            );
-
-        };
-
-
-    /* =====================================================
-       CANCEL
-       ===================================================== */
-
-    const cancelEdit = () => {
-
-        if (!activeEdit) {
-            return false;
-        }
-
-
-        const state =
-            activeEdit;
-
-
-        activeEdit =
-            null;
-
-
-        restoreMessage(
-            state
-        );
-
-
-        emit(
-            "neyo:message-edit-cancelled",
-            {
-                message:
-                    state.message,
-
-                index:
-                    state.index
-            }
-        );
-
-
-        return true;
-
-    };
-
-
-    /* =====================================================
-       SAVE
-       ===================================================== */
-
-    const saveEdit = () => {
-
-        if (!activeEdit) {
-            return false;
-        }
-
-
-        const textarea =
-            activeEdit.textarea;
-
-
-        const updatedText =
-            String(
-                textarea?.value ||
-                ""
-            ).trim();
-
-
-        if (!updatedText) {
-
-            textarea?.focus();
-
-            return false;
-
-        }
-
-
-        const state =
-            activeEdit;
-
-
-        emit(
-            "neyo:message-edit-submit",
-            {
-                message:
-                    state.message,
-
-                originalText:
-                    state.originalText,
-
-                text:
-                    updatedText,
-
-                index:
-                    state.index,
-
-                attachments:
-                    state.attachments
-            }
-        );
-
-
-        return true;
-
-    };
 
 
     /* =====================================================
@@ -308,14 +476,29 @@ Does NOT own:
             !wrapper ||
             !Array.isArray(
                 attachments
-            )
+            ) ||
+            attachments.length ===
+                0
         ) {
+
             return;
+
         }
 
 
         attachments.forEach(
             file => {
+
+                if (
+                    !file ||
+                    typeof file !==
+                        "object"
+                ) {
+
+                    return;
+
+                }
+
 
                 if (
                     isImageAttachment(
@@ -329,32 +512,31 @@ Does NOT own:
                         );
 
 
-                    if (!previewUrl) {
-                        return;
-                    }
+                    if (previewUrl) {
+
+                        const image =
+                            document.createElement(
+                                "img"
+                            );
 
 
-                    const image =
-                        document.createElement(
-                            "img"
+                        image.src =
+                            previewUrl;
+
+
+                        image.alt =
+                            file.name ||
+                            "Image";
+
+
+                        wrapper.appendChild(
+                            image
                         );
 
 
-                    image.src =
-                        previewUrl;
+                        return;
 
-
-                    image.alt =
-                        file?.name ||
-                        "Image";
-
-
-                    wrapper.appendChild(
-                        image
-                    );
-
-
-                    return;
+                    }
 
                 }
 
@@ -423,6 +605,394 @@ Does NOT own:
 
 
     /* =====================================================
+       RESTORE ORIGINAL DOM
+       ===================================================== */
+
+    const restoreOriginalDom =
+        editState => {
+
+            if (
+                !editState?.message ||
+                !Array.isArray(
+                    editState.originalNodes
+                )
+            ) {
+
+                return false;
+
+            }
+
+
+            /*
+             * Exact original message DOM nodes are restored.
+             * Nothing is reconstructed or redesigned.
+             */
+
+            editState.message
+                .replaceChildren(
+                    ...editState
+                        .originalNodes
+                );
+
+
+            refreshIcons();
+
+
+            return true;
+
+        };
+
+
+    /* =====================================================
+       CANCEL
+       ===================================================== */
+
+    const cancelEdit = () => {
+
+        if (!activeEdit) {
+
+            return false;
+
+        }
+
+
+        const state =
+            activeEdit;
+
+
+        activeEdit =
+            null;
+
+
+        restoreOriginalDom(
+            state
+        );
+
+
+        emit(
+            "neyo:message-edit-cancelled",
+            {
+
+                message:
+                    state.message,
+
+                index:
+                    state.index,
+
+                text:
+                    state.originalText,
+
+                attachments:
+                    state.attachments
+
+            }
+        );
+
+
+        return true;
+
+    };
+
+
+    /* =====================================================
+       SAVE / RESEND
+       ===================================================== */
+
+    const saveEdit =
+        async () => {
+
+            if (!activeEdit) {
+
+                return false;
+
+            }
+
+
+            const state =
+                activeEdit;
+
+
+            const updatedText =
+                clean(
+                    state.textarea
+                        ?.value
+                );
+
+
+            if (!updatedText) {
+
+                state.textarea
+                    ?.focus();
+
+
+                return false;
+
+            }
+
+
+            const chat =
+                getChat();
+
+
+            if (
+                !chat ||
+                typeof chat.send !==
+                    "function" ||
+                typeof chat.loadConversation !==
+                    "function" ||
+                typeof chat.getConversation !==
+                    "function"
+            ) {
+
+                console.error(
+                    "[NEYO Edit] Chat controller unavailable."
+                );
+
+
+                return false;
+
+            }
+
+
+            if (
+                chat.isGenerating?.()
+            ) {
+
+                return false;
+
+            }
+
+
+            const conversation =
+                chat.getConversation();
+
+
+            const index =
+                resolveMessageIndex(
+                    state.message,
+                    state.index,
+                    state.originalText
+                );
+
+
+            if (
+                index < 0 ||
+                index >=
+                    conversation.length
+            ) {
+
+                console.error(
+                    "[NEYO Edit] Original user message not found."
+                );
+
+
+                return false;
+
+            }
+
+
+            const attachments =
+                resolveAttachments(
+                    state.attachments,
+                    index
+                );
+
+
+            const conversationId =
+                chat.getConversationId
+                    ?.() ||
+                null;
+
+
+            /*
+             * Keep everything BEFORE edited user message.
+             *
+             * NeyoChat.send() will append:
+             * 1. edited user message
+             * 2. fresh assistant response
+             */
+
+            const preservedMessages =
+                conversation.slice(
+                    0,
+                    index
+                );
+
+
+            /*
+             * Edit UI is no longer active once canonical
+             * chat state takes over.
+             */
+
+            activeEdit =
+                null;
+
+
+            emit(
+                "neyo:message-edit-submit",
+                {
+
+                    message:
+                        state.message,
+
+                    originalText:
+                        state.originalText,
+
+                    text:
+                        updatedText,
+
+                    index,
+
+                    attachments
+
+                }
+            );
+
+
+            emit(
+                "neyo:message-edit-send-start",
+                {
+
+                    index,
+
+                    text:
+                        updatedText,
+
+                    attachments
+
+                }
+            );
+
+
+            try {
+
+                /*
+                 * Canonical state reset.
+                 *
+                 * loadConversation() also refreshes the
+                 * visible DOM through the existing messages
+                 * pipeline.
+                 */
+
+                chat.loadConversation({
+                    conversationId,
+                    messages:
+                        preservedMessages
+                });
+
+
+                /*
+                 * Canonical resend.
+                 */
+
+                const result =
+                    await chat.send({
+
+                        text:
+                            updatedText,
+
+                        attachments
+
+                    });
+
+
+                if (!result) {
+
+                    /*
+                     * If resend was rejected/cancelled,
+                     * restore the exact previous conversation.
+                     */
+
+                    chat.loadConversation({
+                        conversationId,
+                        messages:
+                            conversation
+                    });
+
+
+                    emit(
+                        "neyo:message-edit-send-cancelled",
+                        {
+                            index
+                        }
+                    );
+
+
+                    return false;
+
+                }
+
+
+                emit(
+                    "neyo:message-edit-complete-request",
+                    {
+                        index
+                    }
+                );
+
+
+                emit(
+                    "neyo:message-edit-success",
+                    {
+
+                        index,
+
+                        text:
+                            updatedText,
+
+                        result
+
+                    }
+                );
+
+
+                return true;
+
+            } catch (
+                error
+            ) {
+
+                console.error(
+                    "[NEYO Edit] Edited message send failed:",
+                    error
+                );
+
+
+                /*
+                 * Restore previous canonical state.
+                 */
+
+                try {
+
+                    chat.loadConversation({
+                        conversationId,
+                        messages:
+                            conversation
+                    });
+
+                } catch {}
+
+
+                emit(
+                    "neyo:message-edit-error",
+                    {
+
+                        index,
+
+                        error
+
+                    }
+                );
+
+
+                return false;
+
+            }
+
+        };
+
+
+    /* =====================================================
        START EDIT
        ===================================================== */
 
@@ -436,9 +1006,29 @@ Does NOT own:
         if (
             !(message instanceof HTMLElement)
         ) {
+
             return false;
+
         }
 
+
+        const chat =
+            getChat();
+
+
+        if (
+            chat?.isGenerating?.()
+        ) {
+
+            return false;
+
+        }
+
+
+        /*
+         * If another message is being edited,
+         * restore it first.
+         */
 
         if (
             activeEdit &&
@@ -451,22 +1041,63 @@ Does NOT own:
         }
 
 
+        if (
+            activeEdit?.message ===
+                message
+        ) {
+
+            return true;
+
+        }
+
+
         const originalText =
-            String(
-                text || ""
+            clean(
+                text ||
+                message
+                    .querySelector(
+                        ".message-content"
+                    )
+                    ?.innerText ||
+                ""
+            );
+
+
+        const resolvedIndex =
+            resolveMessageIndex(
+                message,
+                index,
+                originalText
             );
 
 
         const existingAttachments =
-            Array.isArray(
-                attachments
-            )
-                ? [...attachments]
-                : [];
+            resolveAttachments(
+                attachments,
+                resolvedIndex
+            );
+
+
+        /*
+         * IMPORTANT:
+         *
+         * Keep the exact current nodes.
+         * Cancel will restore these same nodes,
+         * not rebuild the message.
+         */
+
+        const originalNodes =
+            Array.from(
+                message.childNodes
+            );
 
 
         message.replaceChildren();
 
+
+        /* =================================================
+           EDIT BOX
+           ================================================= */
 
         const editBox =
             document.createElement(
@@ -477,6 +1108,10 @@ Does NOT own:
         editBox.className =
             "edit-message-box";
 
+
+        /* =================================================
+           ATTACHMENTS
+           ================================================= */
 
         const mediaWrapper =
             document.createElement(
@@ -494,10 +1129,23 @@ Does NOT own:
         );
 
 
-        editBox.appendChild(
+        if (
             mediaWrapper
-        );
+                .childNodes
+                .length >
+            0
+        ) {
 
+            editBox.appendChild(
+                mediaWrapper
+            );
+
+        }
+
+
+        /* =================================================
+           TEXTAREA
+           ================================================= */
 
         const textarea =
             document.createElement(
@@ -522,6 +1170,10 @@ Does NOT own:
             "Edit message"
         );
 
+
+        /* =================================================
+           ACTIONS
+           ================================================= */
 
         const actions =
             document.createElement(
@@ -586,6 +1238,10 @@ Does NOT own:
         );
 
 
+        /* =================================================
+           STATE
+           ================================================= */
+
         activeEdit = {
 
             message,
@@ -594,9 +1250,12 @@ Does NOT own:
 
             textarea,
 
+            originalNodes,
+
             originalText,
 
-            index,
+            index:
+                resolvedIndex,
 
             attachments:
                 existingAttachments
@@ -604,17 +1263,47 @@ Does NOT own:
         };
 
 
+        /* =================================================
+           CANCEL CLICK
+           ================================================= */
+
         cancelButton.addEventListener(
             "click",
-            cancelEdit
+            event => {
+
+                event.preventDefault();
+
+                event.stopPropagation();
+
+
+                cancelEdit();
+
+            }
         );
 
+
+        /* =================================================
+           SAVE CLICK
+           ================================================= */
 
         saveButton.addEventListener(
             "click",
-            saveEdit
+            event => {
+
+                event.preventDefault();
+
+                event.stopPropagation();
+
+
+                void saveEdit();
+
+            }
         );
 
+
+        /* =================================================
+           KEYBOARD
+           ================================================= */
 
         textarea.addEventListener(
             "keydown",
@@ -627,7 +1316,11 @@ Does NOT own:
 
                     event.preventDefault();
 
+                    event.stopPropagation();
+
+
                     cancelEdit();
+
 
                     return;
 
@@ -645,7 +1338,10 @@ Does NOT own:
 
                     event.preventDefault();
 
-                    saveEdit();
+                    event.stopPropagation();
+
+
+                    void saveEdit();
 
                 }
 
@@ -674,15 +1370,18 @@ Does NOT own:
         emit(
             "neyo:message-edit-started",
             {
+
                 message,
 
                 text:
                     originalText,
 
-                index,
+                index:
+                    resolvedIndex,
 
                 attachments:
                     existingAttachments
+
             }
         );
 
@@ -693,15 +1392,10 @@ Does NOT own:
 
 
     /* =====================================================
-       SUBMISSION RESULT
+       COMPLETE
        ===================================================== */
 
     const completeEdit = () => {
-
-        if (!activeEdit) {
-            return;
-        }
-
 
         activeEdit =
             null;
@@ -711,11 +1405,14 @@ Does NOT own:
             "neyo:message-edit-complete"
         );
 
+
+        return true;
+
     };
 
 
     /* =====================================================
-       LISTEN TO MESSAGE ACTIONS
+       EDIT REQUEST
        ===================================================== */
 
     window.addEventListener(
@@ -723,19 +1420,25 @@ Does NOT own:
         event => {
 
             startEdit({
+
                 message:
-                    event.detail?.message,
+                    event.detail
+                        ?.message,
 
                 text:
-                    event.detail?.text ||
+                    event.detail
+                        ?.text ||
                     "",
 
                 index:
-                    event.detail?.index,
+                    event.detail
+                        ?.index,
 
                 attachments:
-                    event.detail?.attachments ||
+                    event.detail
+                        ?.attachments ||
                     []
+
             });
 
         }
@@ -748,13 +1451,21 @@ Does NOT own:
 
     window.addEventListener(
         "neyo:message-edit-cancel-request",
-        cancelEdit
+        () => {
+
+            cancelEdit();
+
+        }
     );
 
 
     window.addEventListener(
         "neyo:message-edit-complete-request",
-        completeEdit
+        () => {
+
+            completeEdit();
+
+        }
     );
 
 
@@ -762,8 +1473,14 @@ Does NOT own:
        PUBLIC API
        ===================================================== */
 
-    window.NeyoMessageEdit =
+    const api =
         Object.freeze({
+
+            __controller:
+                true,
+
+            version:
+                VERSION,
 
             start:
                 startEdit,
@@ -787,34 +1504,83 @@ Does NOT own:
                 () => {
 
                     if (!activeEdit) {
+
                         return null;
+
                     }
 
 
                     return {
+
                         message:
-                            activeEdit.message,
+                            activeEdit
+                                .message,
 
                         text:
-                            activeEdit.textarea
+                            activeEdit
+                                .textarea
                                 ?.value ||
                             "",
 
                         originalText:
-                            activeEdit.originalText,
+                            activeEdit
+                                .originalText,
 
                         index:
-                            activeEdit.index,
+                            activeEdit
+                                .index,
 
                         attachments:
-                            [
-                                ...activeEdit
-                                    .attachments
-                            ]
+                            activeEdit
+                                .attachments
+                                .map(
+                                    file => ({
+                                        ...file
+                                    })
+                                )
+
                     };
 
                 }
 
         });
+
+
+    Object.defineProperty(
+        window,
+        "NeyoMessageEdit",
+        {
+
+            value:
+                api,
+
+            writable:
+                false,
+
+            configurable:
+                true,
+
+            enumerable:
+                true
+
+        }
+    );
+
+
+    emit(
+        "neyo:message-edit-ready",
+        {
+
+            version:
+                VERSION
+
+        }
+    );
+
+
+    console.log(
+        "[NEYO Edit] Ready.",
+        VERSION
+    );
 
 })();

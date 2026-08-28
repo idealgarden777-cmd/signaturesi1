@@ -1,6 +1,7 @@
 /*
 =========================================================
 NEYO — TOP BAR COMPONENT
+CENTERED MODEL + PRIVATE CHAT READY
 
 Purpose:
 Primary app header.
@@ -8,11 +9,19 @@ Primary app header.
 Includes:
 - Desktop header
 - Sidebar toggle
-- Model area alignment
+- Centered model selector
+- Private Chat button styling
 - Theme toggle
+- Animated theme icon
 - Dark mode
 - Mobile sticky header
 - Safe-area support
+
+IMPORTANT:
+- Model menu functionality remains owned by model-menu.js
+- Private Chat runtime remains owned by chat.js
+- Theme state remains owned by existing theme system
+- This file changes presentation only
 =========================================================
 */
 
@@ -22,6 +31,8 @@ Includes:
    ========================================================= */
 
 .top-bar {
+    position: relative;
+
     width: 100%;
 
     display: flex;
@@ -54,6 +65,32 @@ Includes:
 
 
 /* =========================================================
+   LEFT SIDE
+   ========================================================= */
+
+.top-left {
+    position: relative;
+
+    z-index: 4;
+}
+
+
+/* =========================================================
+   RIGHT SIDE
+   ========================================================= */
+
+.top-right {
+    position: relative;
+
+    z-index: 4;
+
+    justify-content: flex-end;
+
+    gap: 4px;
+}
+
+
+/* =========================================================
    ICON BUTTONS
    ========================================================= */
 
@@ -81,6 +118,9 @@ Includes:
 
     transform: none !important;
 
+    appearance: none;
+    -webkit-appearance: none;
+
     transition:
         background-color 140ms ease,
         color 140ms ease,
@@ -99,6 +139,19 @@ Includes:
 }
 
 
+.top-bar .icon-btn:focus {
+    outline: none;
+}
+
+
+.top-bar .icon-btn:focus-visible {
+    outline:
+        2px solid rgba(0, 0, 0, 0.15);
+
+    outline-offset: 1px;
+}
+
+
 /* =========================================================
    SIDEBAR TOGGLE
    ========================================================= */
@@ -109,7 +162,7 @@ Includes:
 
 
 /* =========================================================
-   MODEL AREA
+   MODEL AREA — BASE
    ========================================================= */
 
 .model-dropdown-wrapper {
@@ -127,11 +180,288 @@ Includes:
 
 
 /* =========================================================
-   RIGHT SIDE
+   PRIVATE CHAT BUTTON
    ========================================================= */
 
-.top-right {
+/*
+Expected HTML id:
+
+#topBarPrivateChatBtn
+
+The button may contain:
+
+.private-chat-icon
+.private-chat-label
+*/
+
+#topBarPrivateChatBtn {
+    width: auto;
+    height: 40px;
+
+    min-width: 40px;
+    min-height: 40px;
+
+    display: inline-flex;
+    align-items: center;
     justify-content: center;
+
+    gap: 7px;
+
+    margin: 0;
+    padding:
+        0
+        11px;
+
+    border:
+        1px solid transparent;
+
+    border-radius: 999px;
+
+    background:
+        transparent;
+
+    color: #3a3a3a;
+
+    font-family:
+        "Inter",
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        sans-serif;
+
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1;
+
+    white-space: nowrap;
+
+    cursor: pointer;
+
+    appearance: none;
+    -webkit-appearance: none;
+
+    transform: none !important;
+
+    transition:
+        background-color 140ms ease,
+        border-color 140ms ease,
+        color 140ms ease,
+        box-shadow 140ms ease;
+}
+
+
+#topBarPrivateChatBtn:hover {
+    background:
+        rgba(0, 0, 0, 0.055);
+}
+
+
+#topBarPrivateChatBtn:active {
+    transform: none !important;
+}
+
+
+#topBarPrivateChatBtn:focus {
+    outline: none;
+}
+
+
+#topBarPrivateChatBtn:focus-visible {
+    outline:
+        2px solid rgba(0, 0, 0, 0.15);
+
+    outline-offset: 1px;
+}
+
+
+#topBarPrivateChatBtn svg {
+    width: 18px;
+    height: 18px;
+
+    flex:
+        0
+        0
+        18px;
+
+    stroke-width: 1.8;
+
+    pointer-events: none;
+}
+
+
+#topBarPrivateChatBtn
+.private-chat-label {
+    display: inline-block;
+
+    pointer-events: none;
+}
+
+
+/* ---------------------------------------------------------
+   PRIVATE CHAT — ACTIVE
+   --------------------------------------------------------- */
+
+#topBarPrivateChatBtn.active,
+#topBarPrivateChatBtn.is-active,
+#topBarPrivateChatBtn[aria-pressed="true"] {
+    background:
+        #171717;
+
+    border-color:
+        #171717;
+
+    color:
+        #ffffff;
+
+    box-shadow:
+        0 1px 2px rgba(0, 0, 0, 0.12);
+}
+
+
+#topBarPrivateChatBtn.active:hover,
+#topBarPrivateChatBtn.is-active:hover,
+#topBarPrivateChatBtn[aria-pressed="true"]:hover {
+    background:
+        #000000;
+
+    border-color:
+        #000000;
+}
+
+
+/* =========================================================
+   THEME BUTTON
+   ========================================================= */
+
+#topBarDarkModeToggle {
+    position: relative;
+
+    overflow: hidden;
+}
+
+
+/* Current Lucide icon */
+
+#topBarDarkModeToggle svg {
+    width: 20px;
+    height: 20px;
+
+    display: block;
+
+    transform:
+        rotate(0deg)
+        scale(1);
+
+    transform-origin:
+        center;
+
+    transition:
+        transform 220ms cubic-bezier(
+            0.22,
+            1,
+            0.36,
+            1
+        ),
+        opacity 160ms ease;
+}
+
+
+/* Dark state animation */
+
+body.dark-mode
+#topBarDarkModeToggle svg {
+    transform:
+        rotate(180deg)
+        scale(0.94);
+}
+
+
+/* Optional controller transition class */
+
+#topBarDarkModeToggle.theme-changing svg {
+    opacity: 0.55;
+
+    transform:
+        rotate(90deg)
+        scale(0.78);
+}
+
+
+/* ---------------------------------------------------------
+   OPTIONAL DUAL ICON SUPPORT
+   ---------------------------------------------------------
+
+Later topbar controller can use:
+
+.theme-icon-sun
+.theme-icon-moon
+
+without changing this CSS.
+--------------------------------------------------------- */
+
+#topBarDarkModeToggle
+.theme-icon-sun,
+#topBarDarkModeToggle
+.theme-icon-moon {
+    position: absolute;
+
+    inset: 0;
+
+    margin: auto;
+
+    width: 20px;
+    height: 20px;
+
+    transition:
+        opacity 180ms ease,
+        transform 220ms cubic-bezier(
+            0.22,
+            1,
+            0.36,
+            1
+        );
+}
+
+
+#topBarDarkModeToggle
+.theme-icon-sun {
+    opacity: 1;
+
+    transform:
+        rotate(0deg)
+        scale(1);
+}
+
+
+#topBarDarkModeToggle
+.theme-icon-moon {
+    opacity: 0;
+
+    transform:
+        rotate(-70deg)
+        scale(0.72);
+}
+
+
+body.dark-mode
+#topBarDarkModeToggle
+.theme-icon-sun {
+    opacity: 0;
+
+    transform:
+        rotate(70deg)
+        scale(0.72);
+}
+
+
+body.dark-mode
+#topBarDarkModeToggle
+.theme-icon-moon {
+    opacity: 1;
+
+    transform:
+        rotate(0deg)
+        scale(1);
 }
 
 
@@ -163,6 +493,53 @@ body.dark-mode
 }
 
 
+/* Private Chat dark */
+
+body.dark-mode
+#topBarPrivateChatBtn {
+    color:
+        #d8d8d8;
+}
+
+
+body.dark-mode
+#topBarPrivateChatBtn:hover {
+    background:
+        rgba(255, 255, 255, 0.07);
+}
+
+
+body.dark-mode
+#topBarPrivateChatBtn.active,
+body.dark-mode
+#topBarPrivateChatBtn.is-active,
+body.dark-mode
+#topBarPrivateChatBtn[aria-pressed="true"] {
+    background:
+        #f1f1f1;
+
+    border-color:
+        #f1f1f1;
+
+    color:
+        #171717;
+}
+
+
+body.dark-mode
+#topBarPrivateChatBtn.active:hover,
+body.dark-mode
+#topBarPrivateChatBtn.is-active:hover,
+body.dark-mode
+#topBarPrivateChatBtn[aria-pressed="true"]:hover {
+    background:
+        #ffffff;
+
+    border-color:
+        #ffffff;
+}
+
+
 /* =========================================================
    DESKTOP
    ========================================================= */
@@ -184,6 +561,10 @@ body.dark-mode
     }
 
 
+    /* =====================================================
+       LEFT
+       ===================================================== */
+
     .top-left {
         height:
             40px !important;
@@ -199,9 +580,120 @@ body.dark-mode
     }
 
 
+    /* =====================================================
+       MODEL — EXACT CENTER
+       ===================================================== */
+
+    .top-bar
+    .model-dropdown-wrapper {
+        position:
+            absolute !important;
+
+        left:
+            50% !important;
+
+        top:
+            50% !important;
+
+        z-index:
+            8 !important;
+
+        width:
+            max-content;
+
+        max-width:
+            min(420px, 46vw);
+
+        margin:
+            0 !important;
+
+        padding:
+            0 !important;
+
+        transform:
+            translate(
+                -50%,
+                -50%
+            ) !important;
+    }
+
+
+    .top-bar
+    .model-badge {
+        min-height:
+            40px !important;
+
+        max-width:
+            100%;
+
+        margin:
+            0 !important;
+
+        padding:
+            0
+            10px !important;
+
+        border:
+            0 !important;
+
+        border-radius:
+            10px !important;
+
+        background:
+            transparent !important;
+
+        box-shadow:
+            none !important;
+
+        transform:
+            none !important;
+
+        cursor:
+            pointer;
+    }
+
+
+    .top-bar
+    .model-badge:hover {
+        background:
+            rgba(0, 0, 0, 0.045)
+            !important;
+    }
+
+
+    .top-bar
+    .model-name {
+        white-space:
+            nowrap;
+
+        overflow:
+            hidden;
+
+        text-overflow:
+            ellipsis;
+    }
+
+
+    /*
+     * Dropdown remains anchored to the same
+     * model wrapper, therefore functionality
+     * from model-menu.js stays untouched.
+     */
+
+    .top-bar
+    .model-dropdown-menu {
+        z-index:
+            90 !important;
+    }
+
+
+    /* =====================================================
+       RIGHT
+       ===================================================== */
+
     .top-right {
         width:
-            40px !important;
+            auto !important;
 
         height:
             40px !important;
@@ -214,8 +706,18 @@ body.dark-mode
 
         padding:
             0 !important;
+
+        gap:
+            4px !important;
+
+        margin-left:
+            auto !important;
     }
 
+
+    /* =====================================================
+       ICON SIZES
+       ===================================================== */
 
     #sidebarToggleBtn,
     #topBarDarkModeToggle {
@@ -254,6 +756,10 @@ body.dark-mode
     }
 
 
+    /* =====================================================
+       SIDEBAR STATE
+       ===================================================== */
+
     body:not(.sidebar-collapsed)
     #sidebarToggleBtn {
         display:
@@ -265,6 +771,46 @@ body.dark-mode
     #sidebarToggleBtn {
         display:
             inline-flex !important;
+    }
+
+}
+
+
+/* =========================================================
+   MEDIUM DESKTOP
+   ========================================================= */
+
+@media (
+    min-width: 768px
+)
+and (
+    max-width: 1050px
+) {
+
+    /*
+     * Keep Private Chat compact on narrower desktop.
+     */
+
+    #topBarPrivateChatBtn {
+        width:
+            40px;
+
+        padding:
+            0;
+    }
+
+
+    #topBarPrivateChatBtn
+    .private-chat-label {
+        display:
+            none;
+    }
+
+
+    .top-bar
+    .model-dropdown-wrapper {
+        max-width:
+            38vw;
     }
 
 }
@@ -323,6 +869,10 @@ body.dark-mode
     }
 
 
+    /* =====================================================
+       LEFT
+       ===================================================== */
+
     .top-left {
         flex:
             1 1 auto;
@@ -332,14 +882,25 @@ body.dark-mode
     }
 
 
+    /* =====================================================
+       RIGHT
+       ===================================================== */
+
     .top-right {
         flex:
-            0 0 40px;
+            0 0 auto;
 
         width:
-            40px;
+            auto;
+
+        gap:
+            2px;
     }
 
+
+    /* =====================================================
+       SIDEBAR TOGGLE
+       ===================================================== */
 
     .top-toggle-btn {
         display:
@@ -366,12 +927,74 @@ body.dark-mode
     }
 
 
-    .top-bar .model-badge {
+    /* =====================================================
+       PRIVATE CHAT MOBILE
+       ===================================================== */
+
+    #topBarPrivateChatBtn {
+        width:
+            40px;
+
+        min-width:
+            40px;
+
+        padding:
+            0;
+    }
+
+
+    #topBarPrivateChatBtn
+    .private-chat-label {
+        display:
+            none;
+    }
+
+
+    /* =====================================================
+       MODEL MOBILE
+       ===================================================== */
+
+    /*
+     * Existing mobile model layout is intentionally
+     * preserved instead of forcing desktop absolute
+     * positioning on small screens.
+     */
+
+    .top-bar
+    .model-dropdown-wrapper {
+        position:
+            relative !important;
+
+        left:
+            auto !important;
+
+        top:
+            auto !important;
+
+        width:
+            auto;
+
+        min-width:
+            0;
+
+        max-width:
+            calc(
+                100vw -
+                152px
+            );
+
+        transform:
+            none !important;
+    }
+
+
+    .top-bar
+    .model-badge {
         min-height:
             40px !important;
 
         max-width:
-            calc(100vw - 112px);
+            100%;
 
         padding:
             0
@@ -391,7 +1014,8 @@ body.dark-mode
     }
 
 
-    .top-bar .model-name {
+    .top-bar
+    .model-name {
         min-width:
             0;
 
@@ -415,7 +1039,8 @@ body.dark-mode
     }
 
 
-    .top-bar .model-chevron {
+    .top-bar
+    .model-chevron {
         width:
             16px !important;
 
@@ -430,13 +1055,22 @@ body.dark-mode
     }
 
 
+    /* =====================================================
+       MOBILE HOVER
+       ===================================================== */
+
     .top-bar .icon-btn:hover,
-    .top-bar .model-badge:hover {
+    .top-bar .model-badge:hover,
+    #topBarPrivateChatBtn:hover {
         background:
             rgba(0, 0, 0, 0.04)
             !important;
     }
 
+
+    /* =====================================================
+       MOBILE DARK
+       ===================================================== */
 
     body.dark-mode
     .top-bar {
@@ -453,10 +1087,59 @@ body.dark-mode
     body.dark-mode
     .top-bar .icon-btn:hover,
     body.dark-mode
-    .top-bar .model-badge:hover {
+    .top-bar .model-badge:hover,
+    body.dark-mode
+    #topBarPrivateChatBtn:hover {
         background:
             rgba(255, 255, 255, 0.06)
             !important;
     }
 
+}
+
+
+/* =========================================================
+   REDUCED MOTION
+   ========================================================= */
+
+@media (
+    prefers-reduced-motion:
+    reduce
+) {
+
+    .top-bar,
+    .top-bar .icon-btn,
+    #topBarPrivateChatBtn,
+    #topBarDarkModeToggle svg,
+    #topBarDarkModeToggle
+    .theme-icon-sun,
+    #topBarDarkModeToggle
+    .theme-icon-moon {
+        transition:
+            none !important;
+    }
+
+}
+
+
+/* =========================================================
+   NEYO REDUCED MOTION PREFERENCE
+   ========================================================= */
+
+body[data-neyo-motion="reduced"]
+.top-bar,
+body[data-neyo-motion="reduced"]
+.top-bar .icon-btn,
+body[data-neyo-motion="reduced"]
+#topBarPrivateChatBtn,
+body[data-neyo-motion="reduced"]
+#topBarDarkModeToggle svg,
+body[data-neyo-motion="reduced"]
+#topBarDarkModeToggle
+.theme-icon-sun,
+body[data-neyo-motion="reduced"]
+#topBarDarkModeToggle
+.theme-icon-moon {
+    transition:
+        none !important;
 }

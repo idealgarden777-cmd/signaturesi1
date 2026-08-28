@@ -73,7 +73,8 @@
 
   <!-- Sidebar & Topbar -->
   <link rel="stylesheet" href="/css/components/sidebar.css?v=17">
-  <link rel="stylesheet" href="/css/components/topbar.css?v=1">
+  <!-- ✅ UPDATED topbar.css to v2 to avoid caching issues -->
+  <link rel="stylesheet" href="/css/components/topbar.css?v=2">
 
   <!-- Menus -->
   <link rel="stylesheet" href="/css/components/model-menu.css?v=1">
@@ -223,7 +224,9 @@
 
   <main class="app-shell">
 
+    <!-- ===== UPDATED TOP BAR ===== -->
     <header class="top-bar">
+      <!-- LEFT: Sidebar toggle -->
       <div class="top-left">
         <button
           class="icon-btn top-toggle-btn"
@@ -235,6 +238,10 @@
         >
           <i data-lucide="columns-2" size="20"></i>
         </button>
+      </div>
+
+      <!-- CENTER: Model dropdown (exact center) -->
+      <div class="top-center">
         <div class="model-dropdown-wrapper">
           <div
             class="model-badge"
@@ -257,7 +264,20 @@
           </div>
         </div>
       </div>
+
+      <!-- RIGHT: Private Chat + Theme toggle -->
       <div class="top-right">
+        <!-- ✅ Fixed ID to match CSS selector -->
+        <button
+          class="icon-btn private-chat-btn"
+          id="topBarPrivateChatBtn"
+          title="Private Chat"
+          type="button"
+          data-tooltip="Private Chat"
+          data-tooltip-position="bottom"
+        >
+          <i data-lucide="lock" size="18"></i>
+        </button>
         <button
           class="icon-btn"
           id="topBarDarkModeToggle"
@@ -1386,6 +1406,14 @@
   <script
     type="module"
     src="/js/components/chat-runtime.js?v=5"
+  ></script>
+
+  <!-- ========================================================= -->
+  <!-- TOP-BAR CONTROLS — NEW                                    -->
+  <!-- ========================================================= -->
+  <script
+    type="module"
+    src="/js/components/topbar-controls.js?v=1"
   ></script>
 
   <!-- Ads module (v3) — handles Monetag Vignette + Onclick for Free users only -->

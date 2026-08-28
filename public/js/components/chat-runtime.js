@@ -1,13 +1,23 @@
 /*
 =========================================================
-NEO — CHAT RUNTIME
-Production v4 — Thin Migration Bridge
+NEYO — CHAT RUNTIME
+SINGLE SEND-OWNER INTEGRATION v4
 
-Purpose:
-Keep old neo.js physically loaded during migration while
-the modular chat stack becomes authoritative.
+FILE:
+public/js/components/chat-runtime.js
 
-Canonical pipeline:
+PURPOSE
+---------------------------------------------------------
+Keep legacy neo.js loaded safely while routing actual
+chat actions through the modular NEYO pipeline.
+
+AUTHORITATIVE PIPELINE
+---------------------------------------------------------
+
+User action
+    ↓
+chat-runtime.js
+    ↓
 NeyoSendState
     ↓
 neyo:chat-send-request
@@ -20,48 +30,65 @@ NeyoMessages
     ↓
 NeyoMessageRenderer
 
-Owns:
-- Modular chat runtime activation
-- Dependency readiness
-- Legacy New Chat interception
-- Starter-prompt routing
-- Compatibility send / stop facade
-- Active-conversation-deleted recovery
+SEND BUTTON OWNERSHIP
+---------------------------------------------------------
+NeyoSendState ONLY owns:
+
+- enabled / disabled state
+- grey / active state
+- arrow icon
+- stop icon
+- generating visual state
+- send availability
+- attachment-ready availability
+
+chat-runtime.js DOES NOT directly mutate #sendBtn.
+
+RUNTIME OWNS
+---------------------------------------------------------
+- Legacy chat event interception
+- Send routing
+- Stop routing
+- Enter routing safety
+- Starter prompt routing
+- New chat routing
+- Conversation/history synchronization
+- Runtime activation
 - Runtime health state
 
-Does NOT own:
-- #sendBtn
-- Enter / Shift+Enter
-- Send / Stop visual state
-- /api/chat
-- Conversation state
-- Message DOM
-- Markdown
-- Attachment upload
-- Attachment cleanup after send
-- Composer clearing
-- History persistence
-- Topbar / model picker
-
-Important:
-NeyoSendState is the ONLY Send / Stop UI owner.
-NeyoChat is the ONLY conversation / network owner.
-New-chat draft cleanup belongs to new-chat.js.
+IMPORTANT
+---------------------------------------------------------
+neo.js may remain loaded.
+The modular pipeline remains authoritative.
 =========================================================
 */
 
 (() => {
   "use strict";
 
+
+  /* =====================================================
+     VERSION / SINGLETON
+     ===================================================== */
+
   const VERSION =
-    "neo-chat-runtime-production-v4";
+    "neyo-chat-runtime-single-send-owner-v4";
+
 
   if (
     window.NeyoChatRuntime
       ?.__controller === true
   ) {
+
+    console.warn(
+      "[NEYO Runtime] Already initialized."
+    );
+
+
     return;
+
   }
+
 
   /* =====================================================
      CONFIG
@@ -69,24 +96,41 @@ New-chat draft cleanup belongs to new-chat.js.
 
   const CONFIG =
     Object.freeze({
+
+      debug:
+        true,
+
       dependencyWaitMs:
         8000,
 
       dependencyPollMs:
         50,
 
-      duplicatePromptWindowMs:
-        180
+      duplicateSendWindowMs:
+        220
+
     });
+
+
+  /* =====================================================
+     REQUIRED MODULES
+     ===================================================== */
 
   const REQUIRED =
     Object.freeze([
+
       "NeyoAttachments",
+
       "NeyoChat",
+
       "NeyoMessages",
+
       "NeyoMessageRenderer",
+
       "NeyoSendState"
+
     ]);
+
 
   /* =====================================================
      DOM
@@ -97,38 +141,80 @@ New-chat draft cleanup belongs to new-chat.js.
       "chatInput"
     );
 
+
+  const sendBtn =
+    document.getElementById(
+      "sendBtn"
+    );
+
+
   /* =====================================================
      STATE
      ===================================================== */
 
   const state = {
-    active: false,
 
-    ready: false,
+    active:
+      false,
 
-    activating: false,
+    ready:
+      false,
 
-    failed: false,
+    activating:
+      false,
 
-    reason: null,
+    composing:
+      false,
+
+    generating:
+      false,
+
+    sending:
+      false,
+
+    reason:
+      null,
 
     startedAt:
       Date.now(),
 
-    activatedAt: null,
+    activatedAt:
+      null,
 
-    routedNewChats: 0,
+    routedSends:
+      0,
 
-    routedPrompts: 0,
+    routedStops:
+      0,
 
-    compatibilitySends: 0,
+    lastSendAt:
+      0
 
-    compatibilityStops: 0,
-
-    lastPromptAt: 0,
-
-    lastPromptText: ""
   };
+
+
+  /* =====================================================
+     LOGGING
+     ===================================================== */
+
+  function debug(
+    ...args
+  ) {
+
+    if (
+      !CONFIG.debug
+    ) {
+      return;
+    }
+
+
+    console.log(
+      "[NEYO Runtime]",
+      ...args
+    );
+
+  }
+
 
   /* =====================================================
      EVENTS
@@ -138,6 +224,7 @@ New-chat draft cleanup belongs to new-chat.js.
     name,
     detail = {}
   ) {
+
     window.dispatchEvent(
       new CustomEvent(
         name,
@@ -146,380 +233,850 @@ New-chat draft cleanup belongs to new-chat.js.
         }
       )
     );
+
   }
+
 
   /* =====================================================
      ELEMENT HELPERS
      ===================================================== */
 
-  function isElement(value) {
+  function isElement(
+    value
+  ) {
+
     return (
       value instanceof
       Element
     );
+
   }
+
 
   function closest(
     target,
     selector
   ) {
-    if (!isElement(target)) {
+
+    if (
+      !isElement(
+        target
+      )
+    ) {
       return null;
     }
 
+
     try {
+
       return target.closest(
         selector
       );
+
     } catch {
+
       return null;
+
     }
+
   }
 
-  function consumeLegacyEvent(
-    event
-  ) {
-    event.preventDefault();
-
-    event.stopPropagation();
-
-    event.stopImmediatePropagation();
-  }
 
   /* =====================================================
-     DEPENDENCY CHECK
+     TEXT
      ===================================================== */
 
-  function getMissingModules() {
-    return REQUIRED.filter(
-      name => {
-        const controller =
-          window[name];
+  function getRawText() {
 
-        return !(
-          controller &&
-          typeof controller ===
-            "object" &&
-          controller.__controller ===
-            true
-        );
-      }
-    );
-  }
-
-  function dependenciesReady() {
-    return (
-      getMissingModules()
-        .length === 0
-    );
-  }
-
-  /* =====================================================
-     OWNER HELPERS
-     ===================================================== */
-
-  function sendOwner() {
-    const controller =
-      window.NeyoSendState;
-
-    return (
-      controller &&
-      controller.__controller ===
-        true
+    return String(
+      chatInput?.value ||
+      ""
     )
-      ? controller
-      : null;
-  }
-
-  function chatOwner() {
-    const controller =
-      window.NeyoChat;
-
-    return (
-      controller &&
-      controller.__controller ===
-        true
-    )
-      ? controller
-      : null;
-  }
-
-  /* =====================================================
-     SEND COMPATIBILITY
-
-     Runtime does NOT inspect composer files or text.
-     NeyoSendState remains authoritative.
-     ===================================================== */
-
-  function requestSend() {
-    if (!state.active) {
-      return false;
-    }
-
-    const owner =
-      sendOwner();
-
-    if (!owner) {
-      return false;
-    }
-
-    let result = false;
-
-    try {
-      if (
-        typeof owner.requestSend ===
-        "function"
-      ) {
-        result =
-          owner.requestSend();
-
-      } else if (
-        typeof owner.send ===
-        "function"
-      ) {
-        result =
-          owner.send();
-      }
-    } catch (error) {
-      console.error(
-        "[NEO Runtime] Send delegation failed:",
-        error
-      );
-
-      emit(
-        "neyo:chat-runtime-error",
-        {
-          action:
-            "send",
-
-          error
-        }
-      );
-
-      return false;
-    }
-
-    if (result !== false) {
-      state.compatibilitySends +=
-        1;
-
-      return true;
-    }
-
-    return false;
-  }
-
-  /* =====================================================
-     STOP COMPATIBILITY
-     ===================================================== */
-
-  function requestStop() {
-    if (!state.active) {
-      return false;
-    }
-
-    const owner =
-      sendOwner();
-
-    if (!owner) {
-      return false;
-    }
-
-    let result = false;
-
-    try {
-      if (
-        typeof owner.requestStop ===
-        "function"
-      ) {
-        result =
-          owner.requestStop();
-
-      } else if (
-        typeof owner.stop ===
-        "function"
-      ) {
-        result =
-          owner.stop();
-      }
-    } catch (error) {
-      console.error(
-        "[NEO Runtime] Stop delegation failed:",
-        error
-      );
-
-      emit(
-        "neyo:chat-runtime-error",
-        {
-          action:
-            "stop",
-
-          error
-        }
-      );
-
-      return false;
-    }
-
-    if (result !== false) {
-      state.compatibilityStops +=
-        1;
-
-      return true;
-    }
-
-    return false;
-  }
-
-  /* =====================================================
-     NEW CHAT
-
-     Runtime only intercepts legacy button ownership.
-
-     Actual state reset:
-     NeyoChat
-
-     Draft/attachments/hero/focus cleanup:
-     new-chat.js after canonical neyo:chat-new.
-     ===================================================== */
-
-  function requestNewChat(
-    reason =
-      "runtime"
-  ) {
-    if (!state.active) {
-      return false;
-    }
-
-    emit(
-      "neyo:chat-new-request",
-      {
-        reason
-      }
-    );
-
-    state.routedNewChats +=
-      1;
-
-    return true;
-  }
-
-  /* =====================================================
-     STARTER PROMPT
-     ===================================================== */
-
-  function requestStarterPrompt(
-    prompt
-  ) {
-    if (!state.active) {
-      return false;
-    }
-
-    const value =
-      String(
-        prompt || ""
+      .replace(
+        /\r\n?/g,
+        "\n"
       )
-        .replace(
-          /\u0000/g,
-          ""
-        )
-        .trim();
+      .replace(
+        /\u0000/g,
+        ""
+      );
 
-    if (!value) {
-      return false;
-    }
+  }
 
-    const now =
-      Date.now();
 
-    /*
-     * Prevent duplicate prompt dispatch where nested prompt
-     * elements or old handlers trigger nearly together.
-     */
+  function getText() {
+
+    return getRawText()
+      .trim();
+
+  }
+
+
+  function hasText() {
+
+    return (
+      getText().length >
+      0
+    );
+
+  }
+
+
+  function clearText() {
 
     if (
-      value ===
-        state.lastPromptText &&
-      now -
-        state.lastPromptAt <
-        CONFIG
-          .duplicatePromptWindowMs
+      !chatInput
     ) {
-      return false;
+      return;
     }
 
-    state.lastPromptText =
-      value;
-
-    state.lastPromptAt =
-      now;
-
-    if (!chatInput) {
-      emit(
-        "neyo:chat-runtime-error",
-        {
-          action:
-            "starter-prompt",
-
-          reason:
-            "composer-input-missing"
-        }
-      );
-
-      return false;
-    }
-
-    /*
-     * Preserve old starter-card behavior:
-     * prompt appears in composer first, so composer sizing,
-     * hero state and any input listeners stay synchronized.
-     */
 
     chatInput.value =
-      value;
+      "";
+
 
     chatInput.dispatchEvent(
       new Event(
         "input",
         {
-          bubbles: true
+          bubbles:
+            true
         }
       )
     );
 
-    const sent =
-      requestSend();
 
-    if (sent) {
-      state.routedPrompts +=
-        1;
-    }
+    try {
 
-    return sent;
+      window.NeyoComposer
+        ?.refresh
+        ?.();
+
+    } catch {}
+
+
+    try {
+
+      window
+        .NeyoComposerScrollbar
+        ?.refresh
+        ?.();
+
+    } catch {}
+
   }
 
+
   /* =====================================================
-     DOCUMENT CLICK — CAPTURE
+     ATTACHMENTS
+     ===================================================== */
 
-     IMPORTANT:
-     Send button is NOT intercepted here anymore.
-     NeyoSendState already owns #sendBtn in capture phase.
+  function getAllAttachments() {
 
-     We intercept only legacy actions still owned by neo.js:
-     - New Chat
-     - Starter prompt cards
+    try {
+
+      const value =
+        window
+          .NeyoAttachments
+          ?.getAll
+          ?.();
+
+
+      return Array.isArray(
+        value
+      )
+        ? value
+        : [];
+
+    } catch (
+      error
+    ) {
+
+      console.warn(
+        "[NEYO Runtime] Could not read attachments:",
+        error
+      );
+
+
+      return [];
+
+    }
+
+  }
+
+
+  function getReadyAttachments() {
+
+    try {
+
+      const value =
+        window
+          .NeyoAttachments
+          ?.getReady
+          ?.();
+
+
+      return Array.isArray(
+        value
+      )
+        ? value
+        : [];
+
+    } catch (
+      error
+    ) {
+
+      console.warn(
+        "[NEYO Runtime] Could not read ready attachments:",
+        error
+      );
+
+
+      return [];
+
+    }
+
+  }
+
+
+  function clearAttachments() {
+
+    try {
+
+      window
+        .NeyoAttachments
+        ?.clear
+        ?.();
+
+    } catch (
+      error
+    ) {
+
+      console.warn(
+        "[NEYO Runtime] Could not clear attachments:",
+        error
+      );
+
+    }
+
+  }
+
+
+  /* =====================================================
+     MODULE VALIDATION
+     ===================================================== */
+
+  function getMissingModules() {
+
+    return REQUIRED.filter(
+      name =>
+        !window[name]
+    );
+
+  }
+
+
+  function validateModules() {
+
+    const missing =
+      getMissingModules();
+
+
+    if (
+      missing.length >
+      0
+    ) {
+
+      return {
+
+        valid:
+          false,
+
+        reason:
+          `Missing modules: ${missing.join(", ")}`
+
+      };
+
+    }
+
+
+    if (
+      typeof window
+        .NeyoChat
+        ?.send !==
+      "function"
+    ) {
+
+      return {
+
+        valid:
+          false,
+
+        reason:
+          "NeyoChat.send() is unavailable."
+
+      };
+
+    }
+
+
+    if (
+      typeof window
+        .NeyoChat
+        ?.stop !==
+      "function"
+    ) {
+
+      return {
+
+        valid:
+          false,
+
+        reason:
+          "NeyoChat.stop() is unavailable."
+
+      };
+
+    }
+
+
+    if (
+      typeof window
+        .NeyoAttachments
+        ?.getReady !==
+      "function"
+    ) {
+
+      return {
+
+        valid:
+          false,
+
+        reason:
+          "NeyoAttachments.getReady() is unavailable."
+
+      };
+
+    }
+
+
+    if (
+      !window.NeyoMessages
+    ) {
+
+      return {
+
+        valid:
+          false,
+
+        reason:
+          "NeyoMessages is unavailable."
+
+      };
+
+    }
+
+
+    if (
+      typeof window
+        .NeyoMessageRenderer
+        ?.render !==
+        "function" &&
+      typeof window
+        .NeyoMessageRenderer
+        ?.renderInto !==
+        "function"
+    ) {
+
+      return {
+
+        valid:
+          false,
+
+        reason:
+          "NeyoMessageRenderer API is unavailable."
+
+      };
+
+    }
+
+
+    if (
+      window
+        .NeyoSendState
+        ?.__controller !==
+      true
+    ) {
+
+      return {
+
+        valid:
+          false,
+
+        reason:
+          "NeyoSendState controller is unavailable."
+
+      };
+
+    }
+
+
+    return {
+
+      valid:
+        true,
+
+      reason:
+        null
+
+    };
+
+  }
+
+
+  /* =====================================================
+     WAIT FOR DEPENDENCIES
+     ===================================================== */
+
+  function waitForDependencies() {
+
+    return new Promise(
+      resolve => {
+
+        const started =
+          Date.now();
+
+
+        const check =
+          () => {
+
+            const validation =
+              validateModules();
+
+
+            if (
+              validation.valid
+            ) {
+
+              resolve(
+                validation
+              );
+
+
+              return;
+
+            }
+
+
+            if (
+              Date.now() -
+                started >=
+              CONFIG.dependencyWaitMs
+            ) {
+
+              resolve(
+                validation
+              );
+
+
+              return;
+
+            }
+
+
+            window.setTimeout(
+              check,
+              CONFIG.dependencyPollMs
+            );
+
+          };
+
+
+        check();
+
+      }
+    );
+
+  }
+
+
+  /* =====================================================
+     ROOT RUNTIME ATTRIBUTE
+     ===================================================== */
+
+  function setRuntimeAttribute(
+    active
+  ) {
+
+    const root =
+      document.documentElement;
+
+
+    if (
+      active
+    ) {
+
+      root.setAttribute(
+        "data-neyo-chat-runtime",
+        "single-send-owner-v4"
+      );
+
+
+      root.classList.add(
+        "neyo-chat-v2"
+      );
+
+
+      return;
+
+    }
+
+
+    root.removeAttribute(
+      "data-neyo-chat-runtime"
+    );
+
+
+    root.classList.remove(
+      "neyo-chat-v2"
+    );
+
+  }
+
+
+  /* =====================================================
+     SEND BUTTON SYNC
+     ===================================================== */
+
+  function updateSendState() {
+
+    /*
+    -------------------------------------------------------
+    CRITICAL SINGLE-OWNER RULE
+
+    chat-runtime.js must NEVER directly set:
+
+    sendBtn.disabled
+    sendBtn.innerHTML
+    .is-ready
+    .is-disabled
+    .is-generating
+
+    NeyoSendState owns all of it.
+    -------------------------------------------------------
+    */
+
+    const controller =
+      window.NeyoSendState;
+
+
+    if (
+      controller
+        ?.__controller ===
+        true &&
+      typeof controller.update ===
+        "function"
+    ) {
+
+      try {
+
+        controller.update();
+
+        return true;
+
+      } catch (
+        error
+      ) {
+
+        console.warn(
+          "[NEYO Runtime] Send-state sync failed:",
+          error
+        );
+
+      }
+
+    }
+
+
+    return false;
+
+  }
+
+
+  /* =====================================================
+     SEND
+     ===================================================== */
+
+  function requestSend() {
+
+    if (
+      !state.active
+    ) {
+      return false;
+    }
+
+
+    if (
+      state.generating
+    ) {
+
+      return requestStop();
+
+    }
+
+
+    const sendController =
+      window.NeyoSendState;
+
+
+    /*
+    -------------------------------------------------------
+    Canonical route.
+
+    Do NOT depend on legacy neo.js state.
+    Do NOT directly send from runtime.
+    -------------------------------------------------------
+    */
+
+    if (
+      sendController
+        ?.__controller ===
+        true &&
+      typeof sendController.send ===
+        "function"
+    ) {
+
+      try {
+
+        const result =
+          sendController.send();
+
+
+        if (
+          result
+        ) {
+
+          state.routedSends +=
+            1;
+
+        }
+
+
+        return Boolean(
+          result
+        );
+
+      } catch (
+        error
+      ) {
+
+        console.error(
+          "[NEYO Runtime] Send routing failed:",
+          error
+        );
+
+
+        emit(
+          "neyo:runtime-error",
+          {
+
+            version:
+              VERSION,
+
+            reason:
+              "Send routing failed.",
+
+            error
+
+          }
+        );
+
+
+        return false;
+
+      }
+
+    }
+
+
+    console.error(
+      "[NEYO Runtime] NeyoSendState.send() unavailable."
+    );
+
+
+    return false;
+
+  }
+
+
+  /* =====================================================
+     STOP
+     ===================================================== */
+
+  function requestStop() {
+
+    if (
+      !state.active
+    ) {
+      return false;
+    }
+
+
+    const sendController =
+      window.NeyoSendState;
+
+
+    /*
+    Prefer canonical stop method.
+    */
+
+    if (
+      sendController
+        ?.__controller ===
+        true &&
+      typeof sendController.stop ===
+        "function"
+    ) {
+
+      try {
+
+        const result =
+          sendController.stop();
+
+
+        if (
+          result
+        ) {
+
+          state.routedStops +=
+            1;
+
+        }
+
+
+        return Boolean(
+          result
+        );
+
+      } catch (
+        error
+      ) {
+
+        console.error(
+          "[NEYO Runtime] Stop routing failed:",
+          error
+        );
+
+
+        return false;
+
+      }
+
+    }
+
+
+    /*
+    Compatibility fallback only.
+    */
+
+    if (
+      state.generating
+    ) {
+
+      state.routedStops +=
+        1;
+
+
+      emit(
+        "neyo:chat-stop-request"
+      );
+
+
+      return true;
+
+    }
+
+
+    return false;
+
+  }
+
+
+  /* =====================================================
+     LEGACY EVENT INTERCEPTION
+     ===================================================== */
+
+  function consumeLegacyEvent(
+    event
+  ) {
+
+    event.preventDefault();
+
+
+    event.stopPropagation();
+
+
+    event.stopImmediatePropagation();
+
+  }
+
+
+  /* =====================================================
+     CLICK ROUTING
      ===================================================== */
 
   document.addEventListener(
     "click",
     event => {
-      if (!state.active) {
+
+      if (
+        !state.active
+      ) {
         return;
       }
 
-      /* -----------------------------------------------
+
+      /* =================================================
+         SEND / STOP
+         ================================================= */
+
+      const sendButton =
+        closest(
+          event.target,
+          "#sendBtn"
+        );
+
+
+      if (
+        sendButton
+      ) {
+
+        consumeLegacyEvent(
+          event
+        );
+
+
+        if (
+          state.generating
+        ) {
+
+          requestStop();
+
+        } else {
+
+          requestSend();
+
+        }
+
+
+        return;
+
+      }
+
+
+      /* =================================================
          NEW CHAT
-         ----------------------------------------------- */
+         ================================================= */
 
       const newChatButton =
         closest(
@@ -527,21 +1084,29 @@ New-chat draft cleanup belongs to new-chat.js.
           "#newChatBtn"
         );
 
-      if (newChatButton) {
+
+      if (
+        newChatButton
+      ) {
+
         consumeLegacyEvent(
           event
         );
 
-        requestNewChat(
-          "new-chat-button"
+
+        emit(
+          "neyo:chat-new-request"
         );
 
+
         return;
+
       }
 
-      /* -----------------------------------------------
+
+      /* =================================================
          STARTER PROMPT
-         ----------------------------------------------- */
+         ================================================= */
 
       const promptButton =
         closest(
@@ -549,393 +1114,846 @@ New-chat draft cleanup belongs to new-chat.js.
           "[data-prompt]"
         );
 
-      if (!promptButton) {
+
+      if (
+        promptButton
+      ) {
+
+        const prompt =
+          String(
+            promptButton
+              .dataset
+              ?.prompt ||
+            ""
+          )
+            .trim();
+
+
+        if (
+          !prompt
+        ) {
+          return;
+        }
+
+
+        consumeLegacyEvent(
+          event
+        );
+
+
+        if (
+          chatInput
+        ) {
+
+          chatInput.value =
+            prompt;
+
+
+          chatInput.dispatchEvent(
+            new Event(
+              "input",
+              {
+                bubbles:
+                  true
+              }
+            )
+          );
+
+        }
+
+
+        requestSend();
+
+
+        return;
+
+      }
+
+    },
+    true
+  );
+
+
+  /* =====================================================
+     IME STATE
+     ===================================================== */
+
+  if (
+    chatInput
+  ) {
+
+    chatInput.addEventListener(
+      "compositionstart",
+      () => {
+
+        state.composing =
+          true;
+
+      }
+    );
+
+
+    chatInput.addEventListener(
+      "compositionend",
+      () => {
+
+        state.composing =
+          false;
+
+      }
+    );
+
+  }
+
+
+  /* =====================================================
+     KEYBOARD ROUTING
+     ===================================================== */
+
+  document.addEventListener(
+    "keydown",
+    event => {
+
+      if (
+        !state.active
+      ) {
         return;
       }
 
-      const prompt =
-        String(
-          promptButton.dataset
-            ?.prompt ||
-          ""
-        ).trim();
 
-      if (!prompt) {
+      const input =
+        closest(
+          event.target,
+          "#chatInput"
+        );
+
+
+      if (
+        !input
+      ) {
         return;
       }
+
+
+      if (
+        event.key !==
+        "Enter"
+      ) {
+        return;
+      }
+
+
+      /*
+       * Shift + Enter = newline.
+       */
+
+      if (
+        event.shiftKey
+      ) {
+        return;
+      }
+
+
+      /*
+       * Modifier shortcuts remain untouched.
+       */
+
+      if (
+        event.altKey ||
+        event.ctrlKey ||
+        event.metaKey
+      ) {
+        return;
+      }
+
+
+      /*
+       * IME protection.
+       */
+
+      if (
+        event.isComposing ||
+        state.composing ||
+        event.keyCode ===
+          229
+      ) {
+        return;
+      }
+
+
+      /*
+       * During generation Enter must NOT become Stop.
+       * Stop stays an explicit button action.
+       */
+
+      if (
+        state.generating
+      ) {
+
+        consumeLegacyEvent(
+          event
+        );
+
+
+        return;
+
+      }
+
+
+      const sendController =
+        window.NeyoSendState;
+
+
+      if (
+        sendController
+          ?.__controller !==
+        true
+      ) {
+        return;
+      }
+
+
+      if (
+        typeof sendController.canSend ===
+          "function" &&
+        !sendController.canSend()
+      ) {
+
+        return;
+
+      }
+
 
       consumeLegacyEvent(
         event
       );
 
-      requestStarterPrompt(
-        prompt
-      );
+
+      requestSend();
+
     },
     true
   );
 
-  /* =====================================================
-     ACTIVE CONVERSATION DELETED
-
-     Old working NEO returned to a clean conversation if the
-     currently open history item was deleted.
-
-     History owns deletion.
-     Runtime only requests canonical New Chat recovery.
-     ===================================================== */
-
-  window.addEventListener(
-    "neyo:history-deleted",
-    event => {
-      if (!state.active) {
-        return;
-      }
-
-      const deletedId =
-        String(
-          event.detail
-            ?.conversationId ||
-          ""
-        ).trim();
-
-      if (!deletedId) {
-        return;
-      }
-
-      const currentId =
-        String(
-          chatOwner()
-            ?.getConversationId
-            ?.() ||
-          ""
-        ).trim();
-
-      if (
-        !currentId ||
-        currentId !==
-          deletedId
-      ) {
-        return;
-      }
-
-      requestNewChat(
-        "active-conversation-deleted"
-      );
-    }
-  );
-
-  /*
-   * Compatibility alias during migration.
-   */
-
-  window.addEventListener(
-    "neyo:history-active-conversation-deleted",
-    event => {
-      if (!state.active) {
-        return;
-      }
-
-      const deletedId =
-        String(
-          event.detail
-            ?.conversationId ||
-          event.detail?.id ||
-          ""
-        ).trim();
-
-      const currentId =
-        String(
-          chatOwner()
-            ?.getConversationId
-            ?.() ||
-          ""
-        ).trim();
-
-      if (
-        deletedId &&
-        currentId &&
-        deletedId !==
-          currentId
-      ) {
-        return;
-      }
-
-      requestNewChat(
-        "active-conversation-deleted"
-      );
-    }
-  );
 
   /* =====================================================
-     RUNTIME STATE REQUEST
+     INPUT SYNC
      ===================================================== */
 
-  window.addEventListener(
-    "neyo:chat-runtime-state-request",
-    () => {
-      emitRuntimeState();
-    }
-  );
+  chatInput
+    ?.addEventListener(
+      "input",
+      () => {
 
-  /* =====================================================
-     HEALTH
-     ===================================================== */
+        updateSendState();
 
-  function getHealth() {
-    const missing =
-      getMissingModules();
-
-    return {
-      healthy:
-        state.active &&
-        missing.length === 0,
-
-      active:
-        state.active,
-
-      ready:
-        state.ready,
-
-      failed:
-        state.failed,
-
-      missing,
-
-      sendOwner:
-        Boolean(
-          sendOwner()
-        ),
-
-      chatOwner:
-        Boolean(
-          chatOwner()
-        )
-    };
-  }
-
-  function emitRuntimeState() {
-    emit(
-      "neyo:chat-runtime-state",
-      {
-        version:
-          VERSION,
-
-        ...getHealth(),
-
-        reason:
-          state.reason,
-
-        startedAt:
-          state.startedAt,
-
-        activatedAt:
-          state.activatedAt,
-
-        routedNewChats:
-          state.routedNewChats,
-
-        routedPrompts:
-          state.routedPrompts,
-
-        compatibilitySends:
-          state.compatibilitySends,
-
-        compatibilityStops:
-          state.compatibilityStops
       }
     );
+
+
+  /* =====================================================
+     ATTACHMENT SYNC
+     ===================================================== */
+
+  for (
+    const eventName
+    of [
+
+      "neyo:attachments-change",
+
+      "neyo:attachment-ready",
+
+      "neyo:attachment-error",
+
+      "neyo:attachment-removed"
+
+    ]
+  ) {
+
+    window.addEventListener(
+      eventName,
+      () => {
+
+        updateSendState();
+
+      }
+    );
+
   }
+
+
+  /* =====================================================
+     CHAT START
+     ===================================================== */
+
+  window.addEventListener(
+    "neyo:chat-send-start",
+    event => {
+
+      if (
+        !state.active
+      ) {
+        return;
+      }
+
+
+      state.generating =
+        true;
+
+
+      state.sending =
+        false;
+
+
+      /*
+       * Send-state also receives this event and renders
+       * the STOP icon.
+       *
+       * Runtime only asks it to sync.
+       */
+
+      updateSendState();
+
+
+      const attachments =
+        Array.isArray(
+          event.detail
+            ?.attachments
+        )
+          ? event.detail
+              .attachments
+          : [];
+
+
+      debug(
+        "CHAT START",
+        {
+
+          attachmentCount:
+            attachments.length,
+
+          conversationId:
+            event.detail
+              ?.conversationId ||
+            null
+
+        }
+      );
+
+    }
+  );
+
+
+  /* =====================================================
+     CHAT FINISH
+     ===================================================== */
+
+  function generationFinished() {
+
+    state.generating =
+      false;
+
+
+    state.sending =
+      false;
+
+
+    updateSendState();
+
+  }
+
+
+  for (
+    const eventName
+    of [
+
+      "neyo:chat-send-end",
+
+      "neyo:chat-response",
+
+      "neyo:chat-error",
+
+      "neyo:chat-aborted",
+
+      "neyo:chat-limit-reached",
+
+      "neyo:chat-state-loaded",
+
+      "neyo:chat-new"
+
+    ]
+  ) {
+
+    window.addEventListener(
+      eventName,
+      generationFinished
+    );
+
+  }
+
+
+  /* =====================================================
+     NEW CHAT CLEANUP
+     ===================================================== */
+
+  window.addEventListener(
+    "neyo:chat-new",
+    () => {
+
+      if (
+        !state.active
+      ) {
+        return;
+      }
+
+
+      emit(
+        "neyo:history-active-set",
+        {
+          conversationId:
+            null
+        }
+      );
+
+
+      clearAttachments();
+
+
+      if (
+        chatInput
+      ) {
+
+        clearText();
+
+      }
+
+
+      updateSendState();
+
+    }
+  );
+
+
+  /* =====================================================
+     HISTORY ACTIVE SYNC
+     ===================================================== */
+
+  function syncActiveConversation(
+    event
+  ) {
+
+    if (
+      !state.active
+    ) {
+      return;
+    }
+
+
+    const conversationId =
+      event.detail
+        ?.conversationId ||
+      event.detail
+        ?.id ||
+      null;
+
+
+    if (
+      !conversationId
+    ) {
+      return;
+    }
+
+
+    emit(
+      "neyo:history-active-set",
+      {
+        conversationId
+      }
+    );
+
+  }
+
+
+  window.addEventListener(
+    "neyo:conversation-loaded",
+    syncActiveConversation
+  );
+
+
+  window.addEventListener(
+    "neyo:chat-state-loaded",
+    syncActiveConversation
+  );
+
+
+  /* =====================================================
+     ACTIVE CONVERSATION DELETED
+     ===================================================== */
+
+  window.addEventListener(
+    "neyo:active-conversation-deleted",
+    () => {
+
+      if (
+        !state.active
+      ) {
+        return;
+      }
+
+
+      emit(
+        "neyo:chat-new-request"
+      );
+
+    }
+  );
+
+
+  /* =====================================================
+     DEBUG EVENTS
+     ===================================================== */
+
+  window.addEventListener(
+    "neyo:chat-response",
+    event => {
+
+      debug(
+        "CHAT RESPONSE",
+        {
+
+          conversationId:
+            event.detail
+              ?.conversationId ||
+            null,
+
+          replyLength:
+            String(
+              event.detail
+                ?.reply ||
+              ""
+            ).length
+
+        }
+      );
+
+    }
+  );
+
+
+  window.addEventListener(
+    "neyo:chat-error",
+    event => {
+
+      console.error(
+        "[NEYO Runtime] Chat error:",
+        event.detail
+          ?.error ||
+        event.detail
+      );
+
+    }
+  );
+
 
   /* =====================================================
      ACTIVATE
      ===================================================== */
 
-  function activate() {
-    if (state.active) {
+  async function activate() {
+
+    if (
+      state.active
+    ) {
       return true;
     }
 
-    if (!dependenciesReady()) {
+
+    if (
+      state.activating
+    ) {
       return false;
     }
 
-    state.active = true;
-
-    state.ready = true;
-
-    state.failed = false;
-
-    state.activating =
-      false;
-
-    state.reason =
-      "dependencies-ready";
-
-    state.activatedAt =
-      Date.now();
-
-    emit(
-      "neyo:chat-runtime-ready",
-      {
-        version:
-          VERSION,
-
-        active: true,
-
-        dependencies:
-          REQUIRED.slice(),
-
-        sendOwner:
-          "NeyoSendState",
-
-        chatOwner:
-          "NeyoChat"
-      }
-    );
-
-    emitRuntimeState();
-
-    return true;
-  }
-
-  /* =====================================================
-     WAIT FOR DEPENDENCIES
-
-     HTML remains unchanged until final app stage, so runtime
-     must tolerate current script ordering.
-     ===================================================== */
-
-  function waitForDependencies() {
-    if (
-      state.active ||
-      state.activating
-    ) {
-      return;
-    }
 
     state.activating =
       true;
 
-    const started =
-      Date.now();
 
-    function check() {
-      if (activate()) {
-        return;
-      }
+    try {
 
-      const elapsed =
-        Date.now() -
-        started;
+      const validation =
+        await waitForDependencies();
+
 
       if (
-        elapsed >=
-        CONFIG.dependencyWaitMs
+        !validation.valid
       ) {
-        state.activating =
+
+        state.active =
           false;
 
-        state.failed =
-          true;
 
         state.ready =
           false;
 
+
         state.reason =
-          "dependency-timeout";
+          validation.reason;
 
-        const missing =
-          getMissingModules();
 
-        console.warn(
-          "[NEO Runtime] Dependencies unavailable:",
-          missing
+        setRuntimeAttribute(
+          false
         );
 
+
+        console.error(
+          "[NEYO Runtime] Activation failed:",
+          validation.reason
+        );
+
+
         emit(
-          "neyo:chat-runtime-error",
+          "neyo:runtime-error",
           {
+
             version:
               VERSION,
 
             reason:
-              "dependency-timeout",
+              validation.reason,
 
-            missing
+            missingModules:
+              getMissingModules()
+
           }
         );
 
-        emitRuntimeState();
 
-        return;
+        return false;
+
       }
 
-      window.setTimeout(
-        check,
-        CONFIG.dependencyPollMs
+
+      state.active =
+        true;
+
+
+      state.ready =
+        true;
+
+
+      state.reason =
+        null;
+
+
+      state.activatedAt =
+        Date.now();
+
+
+      setRuntimeAttribute(
+        true
       );
+
+
+      /*
+       * Ask canonical chat core for its current state.
+       */
+
+      emit(
+        "neyo:chat-state-sync-request"
+      );
+
+
+      /*
+       * Initial send-button synchronization.
+       */
+
+      updateSendState();
+
+
+      emit(
+        "neyo:runtime-ready",
+        {
+
+          version:
+            VERSION,
+
+          active:
+            true,
+
+          mode:
+            "single-send-owner",
+
+          buttonOwner:
+            "NeyoSendState"
+
+        }
+      );
+
+
+      debug(
+        "ACTIVE",
+        {
+
+          version:
+            VERSION,
+
+          mode:
+            "single-send-owner",
+
+          sendState:
+            window
+              .NeyoSendState
+              ?.getState
+              ?.(),
+
+          attachments:
+            window
+              .NeyoAttachments
+              ?.getState
+              ?.(),
+
+          chat:
+            window
+              .NeyoChat
+              ?.getState
+              ?.()
+
+        }
+      );
+
+
+      return true;
+
+    } catch (
+      error
+    ) {
+
+      state.active =
+        false;
+
+
+      state.ready =
+        false;
+
+
+      state.reason =
+        error?.message ||
+        "Runtime activation failed.";
+
+
+      setRuntimeAttribute(
+        false
+      );
+
+
+      console.error(
+        "[NEYO Runtime] Activation exception:",
+        error
+      );
+
+
+      return false;
+
+    } finally {
+
+      state.activating =
+        false;
+
     }
 
-    check();
   }
+
+
+  /* =====================================================
+     DEACTIVATE
+     ===================================================== */
+
+  function deactivate(
+    reason =
+      "Runtime disabled."
+  ) {
+
+    state.active =
+      false;
+
+
+    state.ready =
+      false;
+
+
+    state.generating =
+      false;
+
+
+    state.sending =
+      false;
+
+
+    state.reason =
+      reason;
+
+
+    setRuntimeAttribute(
+      false
+    );
+
+
+    emit(
+      "neyo:runtime-disabled",
+      {
+
+        version:
+          VERSION,
+
+        reason
+
+      }
+    );
+
+
+    return true;
+
+  }
+
 
   /* =====================================================
      PUBLIC API
      ===================================================== */
 
-  const api =
+  const publicApi =
     Object.freeze({
+
       __controller:
         true,
 
       version:
         VERSION,
 
-      get active() {
-        return state.active;
-      },
-
-      get ready() {
-        return state.ready;
-      },
-
       activate,
+
+      deactivate,
 
       send:
         requestSend,
 
-      requestSend,
-
       stop:
         requestStop,
 
-      requestStop,
+      check:
+        validateModules,
 
-      newChat:
-        requestNewChat,
+      update:
+        updateSendState,
 
-      requestNewChat,
+      isActive:
+        () =>
+          state.active,
 
-      starterPrompt:
-        requestStarterPrompt,
 
-      requestStarterPrompt,
+      getState:
+        () => ({
 
-      isActive() {
-        return state.active;
-      },
-
-      isReady() {
-        return state.ready;
-      },
-
-      getHealth,
-
-      getMissingModules,
-
-      getState() {
-        return {
           version:
             VERSION,
 
@@ -948,42 +1966,66 @@ New-chat draft cleanup belongs to new-chat.js.
           activating:
             state.activating,
 
-          failed:
-            state.failed,
+          composing:
+            state.composing,
+
+          generating:
+            state.generating,
+
+          sending:
+            state.sending,
 
           reason:
             state.reason,
 
-          startedAt:
+          missingModules:
+            getMissingModules(),
+
+          sendOwner:
+            "NeyoSendState",
+
+          sendStateActive:
+            window
+              .NeyoSendState
+              ?.active ===
+            true,
+
+          textReady:
+            hasText(),
+
+          readyAttachments:
+            getReadyAttachments()
+              .length,
+
+          allAttachments:
+            getAllAttachments()
+              .length,
+
+          routedSends:
+            state.routedSends,
+
+          routedStops:
+            state.routedStops,
+
+          uptimeMs:
+            Date.now() -
             state.startedAt,
 
           activatedAt:
-            state.activatedAt,
+            state.activatedAt
 
-          routedNewChats:
-            state.routedNewChats,
+        })
 
-          routedPrompts:
-            state.routedPrompts,
-
-          compatibilitySends:
-            state.compatibilitySends,
-
-          compatibilityStops:
-            state.compatibilityStops,
-
-          missing:
-            getMissingModules()
-        };
-      }
     });
+
 
   Object.defineProperty(
     window,
     "NeyoChatRuntime",
     {
+
       value:
-        api,
+        publicApi,
 
       writable:
         false,
@@ -993,12 +2035,15 @@ New-chat draft cleanup belongs to new-chat.js.
 
       enumerable:
         true
+
     }
   );
 
+
   /* =====================================================
-     INIT
+     BOOT
      ===================================================== */
 
-  waitForDependencies();
+  void activate();
+
 })();

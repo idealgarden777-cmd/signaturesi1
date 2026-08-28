@@ -1,7 +1,7 @@
 /*
 =========================================================
-NEYO — SEND / STOP STATE
-FINAL SIMPLE SINGLE-OWNER v11
+NEYO — SEND / STOP CONTROLLER
+DIRECT CHAT OWNER v12
 
 FILE:
 public/js/components/send-state.js
@@ -11,45 +11,31 @@ OWNS
 - #sendBtn
 - Send arrow
 - Stop square
-- Grey / active state
-- Click to send
-- Click to stop
+- Enabled / disabled state
 - Enter to send
 - Shift + Enter newline
 - IME safety
 - Ready attachment eligibility
-- Composer clear AFTER chat accepts send
-- Sent attachment cleanup
+- Direct NeyoChat.send()
+- Direct NeyoChat.stop()
 
 DOES NOT OWN
 ---------------------------------------------------------
-- /api/chat
+- /api/chat implementation
 - Conversation state
 - Message DOM
-- AbortController
 - Attachment upload / processing
 - History
-- Composer autosize
+- Markdown rendering
 
-FLOW
+IMPORTANT
 ---------------------------------------------------------
-Text / ready file
-    ↓
-Send
-    ↓
-neyo:chat-send-request
-    ↓
-NeyoChat
-    ↓
-neyo:chat-send-start
-    ↓
-STOP square
-    ↓
-response / error / abort
-    ↓
-neyo:chat-send-end
-    ↓
-Send arrow
+This is the ONLY owner of:
+- Send button click
+- Enter key send
+- Stop button click
+
+chat-runtime.js must NOT intercept these.
 =========================================================
 */
 
@@ -58,11 +44,11 @@ Send arrow
 
 
     /* =====================================================
-       VERSION / SINGLETON
+       VERSION / GUARD
        ===================================================== */
 
     const VERSION =
-        "neyo-send-state-simple-v11";
+        "neyo-send-state-direct-v12";
 
 
     if (
@@ -98,7 +84,7 @@ Send arrow
         !chatInput
     ) {
         console.warn(
-            "[NEYO Send] Required composer DOM missing."
+            "[NEYO Send] Composer DOM missing."
         );
 
         return;
@@ -112,11 +98,11 @@ Send arrow
     const CONFIG =
         Object.freeze({
 
-            duplicateWindowMs:
-                180,
-
             maxMessageLength:
-                50_000
+                50_000,
+
+            duplicateWindowMs:
+                180
 
         });
 
@@ -270,7 +256,7 @@ Send arrow
         ) {
 
             console.warn(
-                "[NEYO Send] Attachment state read failed:",
+                "[NEYO Send] Attachment state failed:",
                 error
             );
 
@@ -293,10 +279,6 @@ Send arrow
         }
 
 
-        /*
-         * Canonical attachment controller.
-         */
-
         try {
 
             const files =
@@ -313,10 +295,6 @@ Send arrow
 
         } catch {}
 
-
-        /*
-         * Compatibility fallback.
-         */
 
         return getAllAttachments()
             .filter(
@@ -348,7 +326,7 @@ Send arrow
 
     function syncAttachments() {
 
-        const all =
+        const files =
             getAllAttachments();
 
 
@@ -366,7 +344,7 @@ Send arrow
 
         for (
             const file
-            of all
+            of files
         ) {
 
             const status =
@@ -390,7 +368,6 @@ Send arrow
                 state.readyAttachments +=
                     1;
 
-
                 continue;
 
             }
@@ -403,7 +380,6 @@ Send arrow
 
                 state.failedAttachments +=
                     1;
-
 
                 continue;
 
@@ -419,7 +395,7 @@ Send arrow
 
 
     /* =====================================================
-       ATTACHMENT CLEANUP
+       REMOVE SENT ATTACHMENTS
        ===================================================== */
 
     function removeSentAttachments(
@@ -475,7 +451,6 @@ Send arrow
                         id
                     );
 
-
                     continue;
 
                 }
@@ -523,14 +498,7 @@ Send arrow
         if (
             state.generating
         ) {
-
-            /*
-             * Button is STOP while generating,
-             * therefore it must stay clickable.
-             */
-
             return true;
-
         }
 
 
@@ -557,7 +525,7 @@ Send arrow
 
 
     /* =====================================================
-       ICON HELPERS
+       ICONS
        ===================================================== */
 
     function refreshIcons() {
@@ -572,10 +540,6 @@ Send arrow
 
     }
 
-
-    /* =====================================================
-       SEND ICON
-       ===================================================== */
 
     function renderSendIcon() {
 
@@ -616,10 +580,6 @@ Send arrow
     }
 
 
-    /* =====================================================
-       STOP ICON
-       ===================================================== */
-
     function renderStopIcon() {
 
         sendBtn.replaceChildren();
@@ -658,7 +618,7 @@ Send arrow
 
 
         /* -------------------------------------------------
-           GENERATING → STOP
+           GENERATING / STOP
            ------------------------------------------------- */
 
         if (
@@ -824,6 +784,53 @@ Send arrow
         }
 
 
+        const chat =
+            window.NeyoChat;
+
+
+        if (
+            chat &&
+            typeof chat.stop ===
+                "function"
+        ) {
+
+            try {
+
+                const result =
+                    chat.stop();
+
+
+                if (
+                    result !== false
+                ) {
+
+                    emit(
+                        "neyo:send-stop-requested"
+                    );
+
+
+                    return true;
+
+                }
+
+            } catch (
+                error
+            ) {
+
+                console.error(
+                    "[NEYO Send] Stop failed:",
+                    error
+                );
+
+            }
+
+        }
+
+
+        /*
+         * Compatibility fallback.
+         */
+
         emit(
             "neyo:chat-stop-request",
             {
@@ -831,14 +838,6 @@ Send arrow
                     "user"
             }
         );
-
-
-        /*
-         * Do NOT set generating=false here.
-         *
-         * chat.js owns AbortController and will emit
-         * chat-aborted / chat-send-end.
-         */
 
 
         return true;
@@ -851,10 +850,6 @@ Send arrow
        ===================================================== */
 
     function sendMessage() {
-
-        /*
-         * Same button becomes STOP.
-         */
 
         if (
             state.generating
@@ -872,9 +867,6 @@ Send arrow
         }
 
 
-        syncAttachments();
-
-
         const text =
             getText();
 
@@ -883,17 +875,13 @@ Send arrow
             getRawText();
 
 
-        const readyAttachments =
+        const attachments =
             getReadyAttachments();
 
 
-        /* -------------------------------------------------
-           NOTHING TO SEND
-           ------------------------------------------------- */
-
         if (
             !text &&
-            readyAttachments.length ===
+            attachments.length ===
                 0
         ) {
 
@@ -906,7 +894,7 @@ Send arrow
 
 
         /* -------------------------------------------------
-           DUPLICATE SEND GUARD
+           DUPLICATE GUARD
            ------------------------------------------------- */
 
         const now =
@@ -928,64 +916,100 @@ Send arrow
             now;
 
 
+        /* -------------------------------------------------
+           CHAT CONTROLLER
+           ------------------------------------------------- */
+
+        const chat =
+            window.NeyoChat;
+
+
+        if (
+            !chat ||
+            typeof chat.send !==
+                "function"
+        ) {
+
+            console.error(
+                "[NEYO Send] NeyoChat.send() unavailable."
+            );
+
+
+            updateButton();
+
+
+            return false;
+
+        }
+
+
         state.sending =
             true;
 
 
+        updateButton();
+
+
+        let request;
+
+
+        try {
+
+            /*
+             * IMPORTANT:
+             *
+             * NeyoChat.send() adds the user message and emits
+             * neyo:chat-send-start synchronously before its
+             * first network await.
+             */
+
+            request =
+                chat.send({
+                    text,
+                    attachments
+                });
+
+        } catch (
+            error
+        ) {
+
+            state.sending =
+                false;
+
+
+            state.generating =
+                false;
+
+
+            updateButton();
+
+
+            console.error(
+                "[NEYO Send] Send failed:",
+                error
+            );
+
+
+            return false;
+
+        }
+
+
         /*
-         * IMPORTANT:
-         *
-         * Do NOT fake generating=true here.
-         *
-         * We first dispatch to chat.js.
-         * chat.js will synchronously emit:
-         *
-         * neyo:chat-send-start
-         *
-         * if it actually accepts the message.
-         */
-
-        emit(
-            "neyo:chat-send-request",
-            {
-
-                text,
-
-                attachments:
-                    readyAttachments
-
-            }
-        );
-
-
-        /*
-         * CustomEvent dispatch is synchronous.
-         *
-         * If chat.js accepted the request,
-         * generationStarted() has already run.
+         * chat-send-start listener should already have
+         * switched generating=true if chat accepted it.
          */
 
         const accepted =
             state.generating;
 
 
-        state.sending =
-            false;
-
-
-        /* -------------------------------------------------
-           ACCEPTED
-           ------------------------------------------------- */
-
         if (
             accepted
         ) {
 
             /*
-             * Clear only the exact draft we sent.
-             *
-             * If another script/user changed the composer
-             * during dispatch, preserve the new value.
+             * Clear only the draft that was actually sent.
              */
 
             if (
@@ -998,14 +1022,13 @@ Send arrow
             }
 
 
-            /*
-             * Remove only attachments included in the
-             * accepted request.
-             */
-
             removeSentAttachments(
-                readyAttachments
+                attachments
             );
+
+
+            state.sending =
+                false;
 
 
             updateButton();
@@ -1018,40 +1041,71 @@ Send arrow
                     text,
 
                     attachmentCount:
-                        readyAttachments.length
+                        attachments.length
 
                 }
             );
 
+        } else {
 
-            return true;
+            /*
+             * If chat did not immediately report generation,
+             * keep user draft intact.
+             */
+
+            state.sending =
+                false;
+
+
+            updateButton();
 
         }
 
 
-        /* -------------------------------------------------
-           NOT ACCEPTED
-           ------------------------------------------------- */
-
         /*
-         * Leave text and attachments untouched.
-         *
-         * This prevents the old bug where the composer
-         * cleared even though no chat was created.
+         * Async rejection safety.
          */
 
-        updateButton();
+        if (
+            request &&
+            typeof request.catch ===
+                "function"
+        ) {
+
+            request.catch(
+                error => {
+
+                    console.error(
+                        "[NEYO Send] Chat request rejected:",
+                        error
+                    );
 
 
-        emit(
-            "neyo:send-not-accepted",
-            {
-                text
-            }
-        );
+                    state.sending =
+                        false;
 
 
-        return false;
+                    if (
+                        !window.NeyoChat
+                            ?.isGenerating
+                            ?.()
+                    ) {
+
+                        state.generating =
+                            false;
+
+                    }
+
+
+                    updateButton();
+
+                }
+            );
+
+        }
+
+
+        return accepted;
 
     }
 
@@ -1060,41 +1114,9 @@ Send arrow
        SEND BUTTON CLICK
        ===================================================== */
 
-    function handleClick(
+    function handleButtonClick(
         event
     ) {
-
-        const target =
-            event.target;
-
-
-        if (
-            !(
-                target instanceof
-                Element
-            )
-        ) {
-            return;
-        }
-
-
-        const button =
-            target.closest(
-                "#sendBtn"
-            );
-
-
-        if (!button) {
-            return;
-        }
-
-
-        /*
-         * This controller is the sole Send / Stop click
-         * owner.
-         *
-         * Prevent chat-runtime / neo.js from also sending.
-         */
 
         event.preventDefault();
 
@@ -1111,33 +1133,29 @@ Send arrow
 
             stopGeneration();
 
+        } else {
 
-            return;
+            sendMessage();
 
         }
-
-
-        sendMessage();
 
     }
 
 
     /*
-     * Capture on document deliberately.
-     *
-     * send-state.js loads before chat-runtime.js, so this
-     * listener gets first ownership of #sendBtn.
+     * Capture listener intentionally makes this module
+     * the first and only Send-button owner.
      */
 
-    document.addEventListener(
+    sendBtn.addEventListener(
         "click",
-        handleClick,
+        handleButtonClick,
         true
     );
 
 
     /* =====================================================
-       COMPOSITION / IME
+       IME
        ===================================================== */
 
     chatInput.addEventListener(
@@ -1166,35 +1184,12 @@ Send arrow
 
 
     /* =====================================================
-       ENTER KEY
+       ENTER
        ===================================================== */
 
-    function handleKeyDown(
+    function handleEnter(
         event
     ) {
-
-        const target =
-            event.target;
-
-
-        if (
-            !(
-                target instanceof
-                Element
-            )
-        ) {
-            return;
-        }
-
-
-        if (
-            !target.closest(
-                "#chatInput"
-            )
-        ) {
-            return;
-        }
-
 
         if (
             event.key !==
@@ -1204,16 +1199,12 @@ Send arrow
         }
 
 
-        /* Shift + Enter = newline */
-
         if (
             event.shiftKey
         ) {
             return;
         }
 
-
-        /* Keep modified shortcuts untouched */
 
         if (
             event.ctrlKey ||
@@ -1223,8 +1214,6 @@ Send arrow
             return;
         }
 
-
-        /* IME safety */
 
         if (
             event.isComposing ||
@@ -1237,8 +1226,7 @@ Send arrow
 
 
         /*
-         * Enter must never become STOP.
-         * Stop requires explicit button click.
+         * Enter cannot stop generation.
          */
 
         if (
@@ -1280,9 +1268,9 @@ Send arrow
     }
 
 
-    document.addEventListener(
+    chatInput.addEventListener(
         "keydown",
-        handleKeyDown,
+        handleEnter,
         true
     );
 
@@ -1293,16 +1281,12 @@ Send arrow
 
     chatInput.addEventListener(
         "input",
-        () => {
-
-            updateButton();
-
-        }
+        updateButton
     );
 
 
     /* =====================================================
-       ATTACHMENT STATE EVENTS
+       ATTACHMENT STATE
        ===================================================== */
 
     for (
@@ -1322,11 +1306,7 @@ Send arrow
 
         window.addEventListener(
             eventName,
-            () => {
-
-                updateButton();
-
-            }
+            updateButton
         );
 
     }
@@ -1336,32 +1316,29 @@ Send arrow
        GENERATION START
        ===================================================== */
 
-    function generationStarted() {
-
-        state.generating =
-            true;
-
-
-        state.sending =
-            false;
-
-
-        updateButton();
-
-    }
-
-
     window.addEventListener(
         "neyo:chat-send-start",
-        generationStarted
+        () => {
+
+            state.generating =
+                true;
+
+
+            state.sending =
+                false;
+
+
+            updateButton();
+
+        }
     );
 
 
     /* =====================================================
-       GENERATION END
+       GENERATION FINISH
        ===================================================== */
 
-    function generationFinished() {
+    function finishGeneration() {
 
         state.generating =
             false;
@@ -1382,134 +1359,27 @@ Send arrow
 
             "neyo:chat-send-end",
 
+            "neyo:chat-response",
+
             "neyo:chat-error",
 
             "neyo:chat-aborted",
 
             "neyo:chat-limit-reached",
 
-            "neyo:chat-new"
+            "neyo:chat-new",
+
+            "neyo:chat-state-loaded"
 
         ]
     ) {
 
         window.addEventListener(
             eventName,
-            generationFinished
+            finishGeneration
         );
 
     }
-
-
-    /* =====================================================
-       CHAT STATE SYNC
-       ===================================================== */
-
-    window.addEventListener(
-        "neyo:chat-state",
-        event => {
-
-            const generating =
-                event.detail
-                    ?.generating;
-
-
-            if (
-                typeof generating !==
-                "boolean"
-            ) {
-                return;
-            }
-
-
-            state.generating =
-                generating;
-
-
-            if (
-                !generating
-            ) {
-
-                state.sending =
-                    false;
-
-            }
-
-
-            updateButton();
-
-        }
-    );
-
-
-    window.addEventListener(
-        "neyo:chat-state-loaded",
-        () => {
-
-            /*
-             * Loading history means there is no active
-             * generation from the composer.
-             */
-
-            state.generating =
-                false;
-
-
-            state.sending =
-                false;
-
-
-            updateButton();
-
-        }
-    );
-
-
-    /* =====================================================
-       CHAT BUSY RECOVERY
-       ===================================================== */
-
-    window.addEventListener(
-        "neyo:chat-busy",
-        () => {
-
-            /*
-             * If chat.js says it is already busy,
-             * synchronize button with canonical chat state.
-             */
-
-            try {
-
-                const busy =
-                    Boolean(
-                        window.NeyoChat
-                            ?.isGenerating
-                            ?.()
-                    );
-
-
-                state.generating =
-                    busy;
-
-
-                state.sending =
-                    false;
-
-
-                updateButton();
-
-            } catch {
-
-                state.sending =
-                    false;
-
-
-                updateButton();
-
-            }
-
-        }
-    );
 
 
     /* =====================================================
@@ -1644,7 +1514,7 @@ Send arrow
 
 
     /* =====================================================
-       INITIAL STATE
+       INITIAL SYNC
        ===================================================== */
 
     try {
@@ -1682,14 +1552,8 @@ Send arrow
 
 
     console.log(
-        "[NEYO Send] Ready",
-        {
-            version:
-                VERSION,
-
-            owner:
-                "NeyoSendState"
-        }
+        "[NEYO Send] Direct controller ready.",
+        VERSION
     );
 
 })();

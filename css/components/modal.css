@@ -42,10 +42,10 @@ Legacy neo-v3.css remains loaded during migration.
         rgba(0, 0, 0, 0.42);
 
     backdrop-filter:
-        blur(6px);
+        none;
 
     -webkit-backdrop-filter:
-        blur(6px);
+        none;
 
     opacity: 0;
     visibility: hidden;
@@ -794,6 +794,8 @@ body.dark-mode
     }
 
 }
+
+
 /* =========================================================
    NEYO LEVERAGE — UPGRADE EXPERIENCE
    ========================================================= */
@@ -818,10 +820,10 @@ body.dark-mode
         rgba(245, 245, 245, 0.94);
 
     backdrop-filter:
-        blur(16px);
+        none;
 
     -webkit-backdrop-filter:
-        blur(16px);
+        none;
 }
 
 
@@ -1392,6 +1394,12 @@ body.dark-mode
 .leverage-upgrade-overlay {
     background:
         rgba(15, 15, 15, 0.94);
+
+    backdrop-filter:
+        none;
+
+    -webkit-backdrop-filter:
+        none;
 }
 
 

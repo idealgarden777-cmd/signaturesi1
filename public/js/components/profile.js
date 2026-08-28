@@ -6,7 +6,7 @@ STABLE REPAIR VERSION
 Owns:
 - Load current profile
 - Update sidebar profile UI
-- Free / Pro badge
+- Free / Leverage badge
 - Billing plan UI
 - Avatar prepare/upload/save
 - Avatar removal
@@ -346,7 +346,7 @@ Does NOT own:
 
                 userPlanBadge.textContent =
                     plan === "pro"
-                        ? "Pro Plan"
+                        ? "Leverage"
                         : "Free Plan";
 
 
@@ -360,7 +360,7 @@ Does NOT own:
 
                 billingPlanText.textContent =
                     plan === "pro"
-                        ? "NEYO Pro"
+                        ? "NEYO Leverage"
                         : "Free Plan";
 
             }
@@ -373,7 +373,7 @@ Does NOT own:
                 ) {
 
                     settingsUpgradeBtn.textContent =
-                        "Pro Active";
+                        "Leverage Active";
 
                     settingsUpgradeBtn.disabled =
                         true;

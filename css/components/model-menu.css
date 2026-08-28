@@ -1,595 +1,827 @@
 /*
 =========================================================
-NEYO — MODEL MENU COMPONENT
+NEYO — MODEL MENU
+CLEAN PREMIUM VERSION
 
-Purpose:
-Model selector trigger + dropdown.
-
-Includes:
-- Model trigger badge
-- Dropdown surface
-- Model options
-- Active state
-- PRO badge
-- Check icon
+Owns:
+- Top center model selector
+- Model badge
+- Dropdown positioning
+- Model option layout
+- Active / hover states
 - Dark mode
-- Mobile sizing
-- Reduced motion
+- Mobile responsiveness
 
-Legacy neo-v3.css remains loaded during migration.
+Does NOT own:
+- Model selection logic
+- Plan authorization
+- Leverage intro
+- Checkout
 =========================================================
 */
 
 
-/* =========================================================
-   WRAPPER
-   ========================================================= */
+/* =====================================================
+   TOP CENTER
+   ===================================================== */
 
-.model-dropdown-wrapper {
-    position: relative;
+.top-center {
+    position: absolute;
+
+    left: 50%;
+
+    top: 50%;
+
+    z-index: 40;
+
+    display: flex;
+
+    align-items: center;
+    justify-content: center;
+
+    transform:
+        translate(
+            -50%,
+            -50%
+        );
+
+    pointer-events: auto;
 }
 
 
-/* =========================================================
-   MODEL TRIGGER
-   ========================================================= */
+/* =====================================================
+   WRAPPER
+   ===================================================== */
+
+.model-dropdown-wrapper {
+    position: relative;
+
+    display: inline-flex;
+
+    align-items: center;
+    justify-content: center;
+}
+
+
+/* =====================================================
+   MODEL BADGE
+   ===================================================== */
 
 .model-badge {
-    min-height: 42px !important;
+    position: relative;
 
-    display: inline-flex !important;
-    align-items: center !important;
+    min-height: 38px;
 
-    gap: 6px !important;
+    display: inline-flex;
+
+    align-items: center;
+    justify-content: center;
+
+    gap: 5px;
 
     padding:
         0
-        11px !important;
+        10px;
 
     border:
-        1px solid transparent !important;
+        1px solid
+        transparent;
 
     border-radius:
-        12px !important;
+        10px;
 
     background:
-        transparent !important;
+        transparent;
 
-    cursor: pointer !important;
+    color:
+        #171717;
 
-    transform:
-        none !important;
+    box-shadow:
+        none;
+
+    cursor:
+        pointer;
+
+    user-select:
+        none;
+
+    -webkit-tap-highlight-color:
+        transparent;
 
     transition:
         background-color 140ms ease,
         border-color 140ms ease,
-        color 140ms ease !important;
+        color 140ms ease;
 }
 
 
 .model-badge:hover {
     background:
-        #f5f5f5 !important;
-
-    border-color:
-        rgba(0, 0, 0, 0.05) !important;
-
-    transform:
-        none !important;
+        rgba(0, 0, 0, 0.045);
 }
 
+
+.model-badge:active {
+    background:
+        rgba(0, 0, 0, 0.065);
+}
+
+
+.model-badge:focus-visible {
+    outline:
+        2px solid
+        rgba(52, 110, 232, 0.46);
+
+    outline-offset:
+        2px;
+}
+
+
+/* =====================================================
+   MODEL NAME
+   ===================================================== */
 
 .model-name {
-    color:
-        #111111 !important;
+    display: inline-flex;
 
-    font-family:
-        "Sora",
-        -apple-system,
-        BlinkMacSystemFont,
-        "Segoe UI",
-        sans-serif !important;
-
-    font-size:
-        15px !important;
-
-    font-weight:
-        600 !important;
-
-    line-height:
-        1 !important;
-
-    letter-spacing:
-        -0.02em !important;
-}
-
-
-.model-chevron {
-    width:
-        16px !important;
-
-    height:
-        16px !important;
+    align-items: center;
 
     color:
-        #737373 !important;
-
-    opacity:
-        0.65 !important;
-}
-
-
-/* =========================================================
-   DROPDOWN
-   ========================================================= */
-
-.model-dropdown-menu {
-    width:
-        292px !important;
-
-    padding:
-        7px !important;
-
-    border:
-        1px solid rgba(0, 0, 0, 0.08) !important;
-
-    border-radius:
-        var(--neyo-radius-lg, 16px) !important;
-
-    background:
-        rgba(255, 255, 255, 0.98) !important;
-
-    box-shadow:
-        var(
-            --neyo-shadow-md,
-            0 1px 2px rgba(0, 0, 0, 0.03),
-            0 10px 28px rgba(0, 0, 0, 0.09)
-        ) !important;
-
-    backdrop-filter:
-        blur(18px)
-        saturate(135%);
-
-    -webkit-backdrop-filter:
-        blur(18px)
-        saturate(135%);
-}
-
-
-/* =========================================================
-   MODEL OPTION
-   ========================================================= */
-
-.model-option {
-    position:
-        relative !important;
-
-    min-height:
-        60px !important;
-
-    display:
-        flex !important;
-
-    align-items:
-        center !important;
-
-    justify-content:
-        space-between !important;
-
-    gap:
-        10px !important;
-
-    padding:
-        10px
-        11px !important;
-
-    border:
-        1px solid transparent !important;
-
-    border-radius:
-        var(--neyo-radius-md, 11px) !important;
-
-    background:
-        transparent !important;
-
-    cursor:
-        pointer !important;
-
-    transform:
-        none !important;
-
-    transition:
-        background-color 140ms ease,
-        border-color 140ms ease,
-        color 140ms ease,
-        opacity 140ms ease,
-        box-shadow 140ms ease !important;
-}
-
-
-.model-option:hover {
-    background:
-        #f5f5f5 !important;
-
-    border-color:
-        rgba(0, 0, 0, 0.05) !important;
-
-    transform:
-        none !important;
-}
-
-
-.model-option:active {
-    transform:
-        none !important;
-}
-
-
-/* Active model */
-
-.model-option.active {
-    background:
-        #f7f7f7 !important;
-
-    border-color:
-        rgba(0, 0, 0, 0.07) !important;
-}
-
-
-/* =========================================================
-   OPTION TEXT
-   ========================================================= */
-
-.model-opt-info {
-    min-width:
-        0 !important;
-
-    display:
-        flex !important;
-
-    flex-direction:
-        column !important;
-
-    gap:
-        3px !important;
-}
-
-
-.model-opt-info strong {
-    color:
-        #111111 !important;
-
-    font-family:
-        "Sora",
-        -apple-system,
-        BlinkMacSystemFont,
-        "Segoe UI",
-        sans-serif !important;
-
-    font-size:
-        14px !important;
-
-    font-weight:
-        600 !important;
-
-    line-height:
-        1.2 !important;
-
-    letter-spacing:
-        -0.02em !important;
-}
-
-
-.model-opt-info small {
-    max-width:
-        205px !important;
-
-    color:
-        #727272 !important;
+        inherit;
 
     font-family:
         "Inter",
         -apple-system,
         BlinkMacSystemFont,
         "Segoe UI",
-        sans-serif !important;
+        sans-serif;
 
     font-size:
-        11.5px !important;
+        14px;
 
     font-weight:
-        400 !important;
+        600;
 
     line-height:
-        1.35 !important;
-}
-
-
-/* =========================================================
-   ACTIVE CHECK ICON
-   ========================================================= */
-
-.model-option
-.opt-check-icon {
-    flex:
-        0 0 auto !important;
-
-    width:
-        24px !important;
-
-    height:
-        24px !important;
-
-    padding:
-        5px !important;
-
-    border-radius:
-        999px !important;
-
-    background:
-        #111111 !important;
-
-    color:
-        #ffffff !important;
-
-    stroke-width:
-        2 !important;
-}
-
-
-/* =========================================================
-   PRO OPTION
-   ========================================================= */
-
-.model-option.pro-option {
-    margin-top:
-        2px !important;
-}
-
-
-.model-option.pro-option::before {
-    content:
-        "" !important;
-
-    position:
-        absolute !important;
-
-    top:
-        -3px !important;
-
-    left:
-        11px !important;
-
-    right:
-        11px !important;
-
-    height:
-        1px !important;
-
-    background:
-        rgba(0, 0, 0, 0.07) !important;
-}
-
-
-/* =========================================================
-   PRO BADGE
-   ========================================================= */
-
-.pro-tag {
-    flex:
-        0 0 auto !important;
-
-    min-height:
-        22px !important;
-
-    display:
-        inline-flex !important;
-
-    align-items:
-        center !important;
-
-    justify-content:
-        center !important;
-
-    padding:
-        0
-        8px !important;
-
-    border:
-        1px solid #111111 !important;
-
-    border-radius:
-        999px !important;
-
-    background:
-        #111111 !important;
-
-    color:
-        #ffffff !important;
-
-    font-family:
-        "IBM Plex Mono",
-        ui-monospace,
-        SFMono-Regular,
-        monospace !important;
-
-    font-size:
-        9px !important;
-
-    font-weight:
-        600 !important;
-
-    line-height:
-        1 !important;
+        1;
 
     letter-spacing:
-        0.08em !important;
+        -0.01em;
+
+    white-space:
+        nowrap;
 }
 
 
-/* =========================================================
-   DARK MODE
-   ========================================================= */
+/* =====================================================
+   CHEVRON
+   ===================================================== */
 
-body.dark-mode
-.model-dropdown-menu {
-    border-color:
-        rgba(255, 255, 255, 0.09) !important;
+.model-chevron {
+    flex:
+        0 0 auto;
 
-    background:
-        rgba(18, 18, 18, 0.98) !important;
+    width:
+        15px;
 
-    box-shadow:
-        0 1px 2px rgba(0, 0, 0, 0.28),
-        0 18px 48px rgba(0, 0, 0, 0.48) !important;
-}
+    height:
+        15px;
 
-
-body.dark-mode
-.model-option:hover,
-body.dark-mode
-.model-option.active {
-    background:
-        #202020 !important;
-
-    border-color:
-        rgba(255, 255, 255, 0.07) !important;
-}
-
-
-body.dark-mode
-.model-opt-info strong,
-body.dark-mode
-.model-name {
     color:
-        #f5f5f5 !important;
+        #888888;
+
+    stroke-width:
+        1.9;
+
+    transition:
+        transform 140ms ease,
+        color 140ms ease;
 }
 
 
-body.dark-mode
-.model-opt-info small,
-body.dark-mode
+.model-badge:hover
 .model-chevron {
     color:
-        #9b9b9b !important;
+        #505050;
 }
 
 
-body.dark-mode
-.model-option.pro-option::before {
+.model-dropdown-wrapper.open
+.model-chevron,
+.model-badge[aria-expanded="true"]
+.model-chevron {
+    transform:
+        rotate(180deg);
+}
+
+
+/* =====================================================
+   DROPDOWN
+   ===================================================== */
+
+.model-dropdown-menu {
+    position: absolute;
+
+    top:
+        calc(100% + 7px);
+
+    left: 50%;
+
+    z-index: 120;
+
+    width:
+        220px;
+
+    min-width:
+        220px;
+
+    max-width:
+        calc(100vw - 24px);
+
+    padding:
+        5px;
+
+    border:
+        1px solid
+        rgba(0, 0, 0, 0.085);
+
+    border-radius:
+        14px;
+
     background:
-        rgba(255, 255, 255, 0.08) !important;
+        #ffffff;
+
+    box-shadow:
+        0 10px 30px
+            rgba(0, 0, 0, 0.10),
+        0 2px 6px
+            rgba(0, 0, 0, 0.04);
+
+    opacity:
+        0;
+
+    visibility:
+        hidden;
+
+    pointer-events:
+        none;
+
+    transform:
+        translateX(-50%)
+        translateY(-4px);
+
+    transform-origin:
+        top center;
+
+    overflow:
+        hidden;
+
+    transition:
+        opacity 130ms ease,
+        transform 130ms ease,
+        visibility 130ms ease;
 }
 
 
-body.dark-mode
-.model-option
+/* =====================================================
+   DROPDOWN OPEN STATES
+   ===================================================== */
+
+.model-dropdown-menu.show,
+.model-dropdown-menu.open,
+.model-dropdown-menu.active,
+.model-dropdown-menu[aria-hidden="false"],
+.model-dropdown-wrapper.open
+.model-dropdown-menu {
+    opacity:
+        1;
+
+    visibility:
+        visible;
+
+    pointer-events:
+        auto;
+
+    transform:
+        translateX(-50%)
+        translateY(0);
+}
+
+
+/* =====================================================
+   MODEL OPTION
+   ===================================================== */
+
+.model-option {
+    position: relative;
+
+    min-height:
+        52px;
+
+    display:
+        flex;
+
+    align-items:
+        center;
+
+    justify-content:
+        space-between;
+
+    gap:
+        10px;
+
+    padding:
+        9px
+        10px;
+
+    border:
+        0;
+
+    border-radius:
+        10px;
+
+    background:
+        transparent;
+
+    color:
+        #161616;
+
+    cursor:
+        pointer;
+
+    user-select:
+        none;
+
+    -webkit-tap-highlight-color:
+        transparent;
+
+    transition:
+        background-color 120ms ease,
+        color 120ms ease;
+}
+
+
+.model-option:hover {
+    background:
+        #f5f5f5;
+}
+
+
+.model-option:active {
+    background:
+        #eeeeee;
+}
+
+
+/* =====================================================
+   ACTIVE MODEL
+   ===================================================== */
+
+.model-option.active {
+    background:
+        #f7f7f7;
+}
+
+
+/* =====================================================
+   OPTION INFO
+   ===================================================== */
+
+.model-opt-info {
+    min-width:
+        0;
+
+    flex:
+        1;
+
+    display:
+        flex;
+
+    flex-direction:
+        column;
+
+    align-items:
+        flex-start;
+
+    gap:
+        3px;
+
+    text-align:
+        left;
+}
+
+
+.model-opt-info strong {
+    display:
+        block;
+
+    width:
+        100%;
+
+    overflow:
+        hidden;
+
+    color:
+        #171717;
+
+    font-family:
+        "Inter",
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        sans-serif;
+
+    font-size:
+        13.5px;
+
+    font-weight:
+        600;
+
+    line-height:
+        1.3;
+
+    letter-spacing:
+        -0.01em;
+
+    text-overflow:
+        ellipsis;
+
+    white-space:
+        nowrap;
+}
+
+
+.model-opt-info small {
+    display:
+        block;
+
+    width:
+        100%;
+
+    overflow:
+        hidden;
+
+    color:
+        #7b7b7b;
+
+    font-family:
+        "Inter",
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        sans-serif;
+
+    font-size:
+        11px;
+
+    font-weight:
+        400;
+
+    line-height:
+        1.35;
+
+    text-overflow:
+        ellipsis;
+
+    white-space:
+        nowrap;
+}
+
+
+/* =====================================================
+   CHECK ICON
+   ===================================================== */
+
 .opt-check-icon {
-    background:
-        #f5f5f5 !important;
+    flex:
+        0 0 auto;
+
+    width:
+        16px;
+
+    height:
+        16px;
 
     color:
-        #111111 !important;
+        #1e1e1e;
+
+    stroke-width:
+        2;
 }
 
 
+/* =====================================================
+   LEVERAGE OPTION
+   ===================================================== */
+
+.model-option.pro-option {
+    min-height:
+        44px;
+}
+
+
+.model-option.pro-option
+.model-opt-info {
+    justify-content:
+        center;
+}
+
+
+.model-option.pro-option
+.model-opt-info strong {
+    font-size:
+        13.5px;
+
+    font-weight:
+        600;
+}
+
+
+/* =====================================================
+   OPTIONAL DIVIDER BETWEEN ITEMS
+   ===================================================== */
+
+.model-option + .model-option {
+    margin-top:
+        2px;
+}
+
+
+/* =====================================================
+   FOCUS
+   ===================================================== */
+
+.model-option:focus-visible {
+    outline:
+        2px solid
+        rgba(52, 110, 232, 0.42);
+
+    outline-offset:
+        -2px;
+}
+
+
+/* =====================================================
+   DARK MODE
+   ===================================================== */
+
 body.dark-mode
-.pro-tag {
-    border-color:
-        #f5f5f5 !important;
-
-    background:
-        #f5f5f5 !important;
-
+.model-badge {
     color:
-        #111111 !important;
+        #f2f2f2;
 }
 
 
 body.dark-mode
 .model-badge:hover {
     background:
-        #202020 !important;
-
-    border-color:
-        rgba(255, 255, 255, 0.07) !important;
+        rgba(255, 255, 255, 0.07);
 }
 
 
-/* =========================================================
-   MOBILE
-   ========================================================= */
+body.dark-mode
+.model-badge:active {
+    background:
+        rgba(255, 255, 255, 0.10);
+}
 
-@media (max-width: 767px) {
+
+body.dark-mode
+.model-chevron {
+    color:
+        #999999;
+}
+
+
+body.dark-mode
+.model-badge:hover
+.model-chevron {
+    color:
+        #d4d4d4;
+}
+
+
+body.dark-mode
+.model-dropdown-menu {
+    border-color:
+        rgba(255, 255, 255, 0.09);
+
+    background:
+        #1e1e1e;
+
+    box-shadow:
+        0 12px 34px
+            rgba(0, 0, 0, 0.42),
+        0 2px 8px
+            rgba(0, 0, 0, 0.20);
+}
+
+
+body.dark-mode
+.model-option {
+    color:
+        #f1f1f1;
+}
+
+
+body.dark-mode
+.model-option:hover {
+    background:
+        rgba(255, 255, 255, 0.07);
+}
+
+
+body.dark-mode
+.model-option:active {
+    background:
+        rgba(255, 255, 255, 0.10);
+}
+
+
+body.dark-mode
+.model-option.active {
+    background:
+        rgba(255, 255, 255, 0.065);
+}
+
+
+body.dark-mode
+.model-opt-info strong {
+    color:
+        #f3f3f3;
+}
+
+
+body.dark-mode
+.model-opt-info small {
+    color:
+        #9d9d9d;
+}
+
+
+body.dark-mode
+.opt-check-icon {
+    color:
+        #f3f3f3;
+}
+
+
+/* =====================================================
+   TABLET
+   ===================================================== */
+
+@media (max-width: 900px) {
 
     .model-dropdown-menu {
         width:
-            min(
-                286px,
-                calc(100vw - 20px)
-            ) !important;
+            215px;
 
-        padding:
-            6px !important;
-
-        border-radius:
-            15px !important;
+        min-width:
+            215px;
     }
 
-
-    .model-option {
-        min-height:
-            58px !important;
-
-        padding:
-            9px
-            10px !important;
-    }
+}
 
 
-    .model-opt-info small {
-        max-width:
-            195px !important;
-    }
+/* =====================================================
+   MOBILE
+   ===================================================== */
 
+@media (max-width: 600px) {
 
-    .model-name {
-        font-size:
-            14px !important;
+    .top-center {
+        left:
+            50%;
+
+        top:
+            50%;
+
+        transform:
+            translate(
+                -50%,
+                -50%
+            );
     }
 
 
     .model-badge {
         min-height:
-            40px !important;
+            36px;
 
         padding:
             0
-            6px !important;
-
-        border:
-            0 !important;
+            8px;
 
         border-radius:
-            8px !important;
+            9px;
+    }
 
-        box-shadow:
-            none !important;
+
+    .model-name {
+        font-size:
+            13.5px;
+    }
+
+
+    .model-chevron {
+        width:
+            14px;
+
+        height:
+            14px;
+    }
+
+
+    .model-dropdown-menu {
+        top:
+            calc(100% + 6px);
+
+        width:
+            210px;
+
+        min-width:
+            210px;
+
+        max-width:
+            calc(100vw - 20px);
+
+        padding:
+            5px;
+
+        border-radius:
+            13px;
+    }
+
+
+    .model-option {
+        min-height:
+            50px;
+
+        padding:
+            8px
+            9px;
+
+        border-radius:
+            9px;
+    }
+
+
+    .model-option.pro-option {
+        min-height:
+            43px;
+    }
+
+
+    .model-opt-info strong {
+        font-size:
+            13px;
+    }
+
+
+    .model-opt-info small {
+        font-size:
+            10.5px;
     }
 
 }
 
 
-/* =========================================================
+/* =====================================================
+   VERY SMALL MOBILE
+   ===================================================== */
+
+@media (max-width: 390px) {
+
+    .model-dropdown-menu {
+        width:
+            200px;
+
+        min-width:
+            200px;
+    }
+
+
+    .model-badge {
+        padding:
+            0
+            7px;
+    }
+
+}
+
+
+/* =====================================================
    REDUCED MOTION
-   ========================================================= */
+   ===================================================== */
 
 @media (prefers-reduced-motion: reduce) {
 
     .model-badge,
+    .model-chevron,
+    .model-dropdown-menu,
     .model-option {
-        transition-duration:
-            0.01ms !important;
+        transition:
+            none !important;
     }
 
 }

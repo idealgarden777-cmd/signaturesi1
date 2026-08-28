@@ -1,27 +1,41 @@
 /*
 =========================================================
 NEYO — HISTORY COMPONENT
-v4 — SELF-CONTAINED HISTORY OPTIONS
+v5 — COMPLETE SELF-CONTAINED HISTORY MENU
 
-Owns:
+OWNS
+---------------------------------------------------------
 - Load conversation history
 - Render history list
-- Open conversation data
+- Open conversation
 - Rename conversation
 - Delete conversation
-- Pin / unpin conversation
-- History loading state
 - Conversation options popup
 - Popup positioning
-- Popup actions
+- Share action bridge
+- History state
 - Public history API
 
-Does NOT own:
-- Message rendering
+DOES NOT OWN
+---------------------------------------------------------
 - Chat sending
+- Message rendering
 - Authentication
-- Sidebar behavior
 - Theme
+- Sidebar
+- Model menu
+- neo.js
+
+NOTES
+---------------------------------------------------------
+Backend currently supports:
+- list
+- get
+- rename
+- delete
+
+Pin is kept visible in the existing UI, but is disabled here
+because current /api/history backend has no pin/unpin action.
 =========================================================
 */
 
@@ -39,26 +53,43 @@ Does NOT own:
 
 
     /* =====================================================
-       ELEMENTS
+       DOM
        ===================================================== */
 
     const historyList =
-        document.getElementById("historyList");
+        document.getElementById(
+            "historyList"
+        );
+
 
     const historyPopupMenu =
-        document.getElementById("historyPopupMenu");
+        document.getElementById(
+            "historyPopupMenu"
+        );
+
 
     const hpShareBtn =
-        document.getElementById("hpShareBtn");
+        document.getElementById(
+            "hpShareBtn"
+        );
+
 
     const hpPinBtn =
-        document.getElementById("hpPinBtn");
+        document.getElementById(
+            "hpPinBtn"
+        );
+
 
     const hpRenameBtn =
-        document.getElementById("hpRenameBtn");
+        document.getElementById(
+            "hpRenameBtn"
+        );
+
 
     const hpDeleteBtn =
-        document.getElementById("hpDeleteBtn");
+        document.getElementById(
+            "hpDeleteBtn"
+        );
 
 
     if (!historyList) {
@@ -70,19 +101,32 @@ Does NOT own:
        STATE
        ===================================================== */
 
-    let conversations = [];
+    let conversations =
+        [];
 
-    let activeConversationId = null;
 
-    let loadingPromise = null;
+    let activeConversationId =
+        null;
 
-    let popupConversationId = null;
 
-    let popupConversationTitle = "";
+    let loadingPromise =
+        null;
 
-    let popupConversationPinned = false;
 
-    let popupAnchorElement = null;
+    let popupConversationId =
+        null;
+
+
+    let popupConversationTitle =
+        "";
+
+
+    let popupConversationPinned =
+        false;
+
+
+    let popupAnchorElement =
+        null;
 
 
     /* =====================================================
@@ -93,6 +137,7 @@ Does NOT own:
         name,
         detail = {}
     ) => {
+
         window.dispatchEvent(
             new CustomEvent(
                 name,
@@ -101,42 +146,62 @@ Does NOT own:
                 }
             )
         );
+
     };
 
 
-    const refreshIcons = () => {
-        try {
-            window.lucide?.createIcons?.();
-        } catch {}
-    };
+    const refreshIcons =
+        () => {
+
+            try {
+
+                window.lucide
+                    ?.createIcons
+                    ?.();
+
+            } catch {}
+
+        };
 
 
-    const readJson = async response => {
-        const data =
-            await response
-                .json()
-                .catch(() => ({}));
+    const readJson =
+        async response => {
 
-        if (!response.ok) {
-            throw new Error(
-                data?.error ||
-                `Request failed (${response.status})`
-            );
-        }
+            const data =
+                await response
+                    .json()
+                    .catch(
+                        () => ({})
+                    );
 
-        return data;
-    };
+
+            if (!response.ok) {
+
+                throw new Error(
+                    data?.error ||
+                    `Request failed (${response.status})`
+                );
+
+            }
+
+
+            return data;
+
+        };
 
 
     const getConversationById =
         conversationId => {
+
             return (
                 conversations.find(
                     item =>
-                        item.id === conversationId
+                        item.id ===
+                        conversationId
                 ) ||
                 null
             );
+
         };
 
 
@@ -144,465 +209,651 @@ Does NOT own:
        LOADING UI
        ===================================================== */
 
-    const renderLoading = () => {
-        historyList.innerHTML = `
-            <div
-                class="history-loading"
-                aria-hidden="true"
-            >
-                <div class="history-skeleton-row">
-                    <div class="history-skeleton-line"></div>
-                </div>
+    const renderLoading =
+        () => {
 
-                <div class="history-skeleton-row">
-                    <div class="history-skeleton-line"></div>
-                </div>
+            historyList.innerHTML = `
+                <div
+                    class="history-loading"
+                    aria-hidden="true"
+                >
+                    <div class="history-skeleton-row">
+                        <div class="history-skeleton-line"></div>
+                    </div>
 
-                <div class="history-skeleton-row">
-                    <div class="history-skeleton-line"></div>
+                    <div class="history-skeleton-row">
+                        <div class="history-skeleton-line"></div>
+                    </div>
+
+                    <div class="history-skeleton-row">
+                        <div class="history-skeleton-line"></div>
+                    </div>
                 </div>
-            </div>
-        `;
-    };
+            `;
+
+        };
 
 
     /* =====================================================
        EMPTY UI
        ===================================================== */
 
-    const renderEmpty = () => {
-        historyList.replaceChildren();
-    };
+    const renderEmpty =
+        () => {
+
+            historyList
+                .replaceChildren();
+
+        };
 
 
     /* =====================================================
        POPUP — CLOSE
        ===================================================== */
 
-    const closeHistoryPopup = () => {
-        if (!historyPopupMenu) {
-            return;
-        }
+    const closeHistoryPopup =
+        () => {
 
-        historyPopupMenu
-            .classList
-            .remove("show");
+            if (
+                !historyPopupMenu
+            ) {
+                return;
+            }
 
-        historyPopupMenu.style.display =
-            "none";
 
-        historyPopupMenu.style.left =
-            "";
+            historyPopupMenu
+                .classList
+                .remove(
+                    "show"
+                );
 
-        historyPopupMenu.style.top =
-            "";
 
-        historyPopupMenu
-            .setAttribute(
-                "aria-hidden",
-                "true"
-            );
+            historyPopupMenu.style.display =
+                "none";
 
-        popupConversationId = null;
 
-        popupConversationTitle = "";
+            historyPopupMenu.style.left =
+                "";
 
-        popupConversationPinned = false;
 
-        popupAnchorElement = null;
-    };
+            historyPopupMenu.style.top =
+                "";
+
+
+            historyPopupMenu
+                .setAttribute(
+                    "aria-hidden",
+                    "true"
+                );
+
+
+            popupConversationId =
+                null;
+
+
+            popupConversationTitle =
+                "";
+
+
+            popupConversationPinned =
+                false;
+
+
+            popupAnchorElement =
+                null;
+
+        };
 
 
     /* =====================================================
        POPUP — POSITION
        ===================================================== */
 
-    const positionHistoryPopup = ({
-        anchorElement = null,
-        clientX = null,
-        clientY = null
-    } = {}) => {
-        if (!historyPopupMenu) {
-            return;
-        }
+    const positionHistoryPopup =
+        ({
+            anchorElement = null,
+            clientX = null,
+            clientY = null
+        } = {}) => {
 
-        const viewportPadding = 12;
-
-        const gap = 6;
-
-        const menuWidth =
-            historyPopupMenu.offsetWidth ||
-            208;
-
-        const menuHeight =
-            historyPopupMenu.offsetHeight ||
-            188;
-
-        let left =
-            Number(clientX);
-
-        let top =
-            Number(clientY);
+            if (
+                !historyPopupMenu
+            ) {
+                return;
+            }
 
 
-        if (
-            anchorElement &&
-            typeof anchorElement
-                .getBoundingClientRect ===
-                "function"
-        ) {
-            const rect =
-                anchorElement
-                    .getBoundingClientRect();
+            const viewportPadding =
+                12;
+
+
+            const gap =
+                6;
+
+
+            const menuWidth =
+                historyPopupMenu
+                    .offsetWidth ||
+                208;
+
+
+            const menuHeight =
+                historyPopupMenu
+                    .offsetHeight ||
+                188;
+
+
+            let left =
+                Number(
+                    clientX
+                );
+
+
+            let top =
+                Number(
+                    clientY
+                );
+
+
+            if (
+                anchorElement &&
+                typeof anchorElement
+                    .getBoundingClientRect ===
+                    "function"
+            ) {
+
+                const rect =
+                    anchorElement
+                        .getBoundingClientRect();
+
+
+                left =
+                    rect.right -
+                    menuWidth;
+
+
+                top =
+                    rect.bottom +
+                    gap;
+
+            }
+
+
+            if (
+                !Number.isFinite(
+                    left
+                )
+            ) {
+
+                left =
+                    viewportPadding;
+
+            }
+
+
+            if (
+                !Number.isFinite(
+                    top
+                )
+            ) {
+
+                top =
+                    viewportPadding;
+
+            }
+
 
             left =
-                rect.right -
-                menuWidth;
+                Math.max(
+                    viewportPadding,
+                    Math.min(
+                        left,
+                        window.innerWidth -
+                            menuWidth -
+                            viewportPadding
+                    )
+                );
+
 
             top =
-                rect.bottom +
-                gap;
-        }
+                Math.max(
+                    viewportPadding,
+                    Math.min(
+                        top,
+                        window.innerHeight -
+                            menuHeight -
+                            viewportPadding
+                    )
+                );
 
 
-        if (!Number.isFinite(left)) {
-            left =
-                viewportPadding;
-        }
+            historyPopupMenu
+                .style
+                .left =
+                    `${Math.round(left)}px`;
 
 
-        if (!Number.isFinite(top)) {
-            top =
-                viewportPadding;
-        }
+            historyPopupMenu
+                .style
+                .top =
+                    `${Math.round(top)}px`;
 
-
-        left =
-            Math.max(
-                viewportPadding,
-                Math.min(
-                    left,
-                    window.innerWidth -
-                        menuWidth -
-                        viewportPadding
-                )
-            );
-
-
-        top =
-            Math.max(
-                viewportPadding,
-                Math.min(
-                    top,
-                    window.innerHeight -
-                        menuHeight -
-                        viewportPadding
-                )
-            );
-
-
-        historyPopupMenu.style.left =
-            `${Math.round(left)}px`;
-
-        historyPopupMenu.style.top =
-            `${Math.round(top)}px`;
-    };
+        };
 
 
     /* =====================================================
        POPUP — OPEN
        ===================================================== */
 
-    const openHistoryPopup = ({
-        conversationId,
-        title,
-        isPinned,
-        anchorElement = null,
-        clientX = null,
-        clientY = null
-    } = {}) => {
-        if (
-            !historyPopupMenu ||
-            !conversationId
-        ) {
-            return;
-        }
-
-
-        /*
-         * Toggle same menu off when same button
-         * is clicked again.
-         */
-
-        if (
-            popupConversationId ===
-                conversationId &&
-            historyPopupMenu
-                .classList
-                .contains("show")
-        ) {
-            closeHistoryPopup();
-            return;
-        }
-
-
-        popupConversationId =
-            conversationId;
-
-        popupConversationTitle =
-            String(
-                title ||
-                "New conversation"
-            );
-
-        popupConversationPinned =
-            Boolean(isPinned);
-
-        popupAnchorElement =
-            anchorElement ||
-            null;
-
-
-        if (hpPinBtn) {
-            hpPinBtn.innerHTML =
-                popupConversationPinned
-                    ? `
-                        <i
-                            data-lucide="pin-off"
-                            size="16"
-                        ></i>
-                        Unpin
-                    `
-                    : `
-                        <i
-                            data-lucide="pin"
-                            size="16"
-                        ></i>
-                        Pin
-                    `;
-        }
-
-
-        historyPopupMenu.style.display =
-            "block";
-
-        historyPopupMenu
-            .classList
-            .add("show");
-
-        historyPopupMenu
-            .setAttribute(
-                "aria-hidden",
-                "false"
-            );
-
-
-        positionHistoryPopup({
-            anchorElement,
-            clientX,
-            clientY
-        });
-
-
-        refreshIcons();
-    };
-
-
-    /* =====================================================
-       PROFESSIONAL TEXT DIALOG
-       ===================================================== */
-
-    const requestText = ({
-        title,
-        value = "",
-        placeholder = "",
-        confirmText = "Save"
-    }) => {
-        return new Promise(resolve => {
-            const overlay =
-                document.createElement("div");
-
-            overlay.className =
-                "neo-dialog-overlay";
-
-
-            const card =
-                document.createElement("div");
-
-            card.className =
-                "neo-dialog-card";
-
-
-            const heading =
-                document.createElement("h3");
-
-            heading.textContent =
-                title;
-
-
-            const input =
-                document.createElement("input");
-
-            input.type = "text";
-
-            input.className =
-                "neo-dialog-input";
-
-            input.value =
-                value;
-
-            input.placeholder =
-                placeholder;
-
-            input.maxLength =
-                100;
-
-
-            const actions =
-                document.createElement("div");
-
-            actions.className =
-                "neo-dialog-actions";
-
-
-            const cancel =
-                document.createElement("button");
-
-            cancel.type = "button";
-
-            cancel.className =
-                "neo-dialog-cancel";
-
-            cancel.textContent =
-                "Cancel";
-
-
-            const confirm =
-                document.createElement("button");
-
-            confirm.type = "button";
-
-            confirm.className =
-                "neo-dialog-confirm";
-
-            confirm.textContent =
-                confirmText;
-
-
-            let closed = false;
-
-
-            const close =
-                result => {
-                    if (closed) {
-                        return;
-                    }
-
-                    closed = true;
-
-                    overlay.remove();
-
-                    resolve(result);
-                };
-
-
-            cancel.addEventListener(
-                "click",
-                () => {
-                    close(null);
-                }
-            );
-
-
-            confirm.addEventListener(
-                "click",
-                () => {
-                    const result =
-                        input.value
-                            .trim();
-
-                    close(
-                        result ||
-                        null
-                    );
-                }
-            );
-
-
-            input.addEventListener(
-                "keydown",
-                event => {
-                    if (
-                        event.key ===
-                        "Enter"
-                    ) {
-                        event.preventDefault();
-
-                        confirm.click();
-                    }
-
-                    if (
-                        event.key ===
-                        "Escape"
-                    ) {
-                        event.preventDefault();
-
-                        cancel.click();
-                    }
-                }
-            );
-
-
-            overlay.addEventListener(
-                "click",
-                event => {
-                    if (
-                        event.target ===
-                        overlay
-                    ) {
-                        cancel.click();
-                    }
-                }
-            );
-
-
-            actions.append(
-                cancel,
-                confirm
-            );
-
-
-            card.append(
-                heading,
-                input,
-                actions
-            );
-
-
-            overlay.appendChild(
-                card
-            );
-
-
-            document.body
-                .appendChild(
-                    overlay
+    const openHistoryPopup =
+        ({
+            conversationId,
+            title,
+            isPinned = false,
+            anchorElement = null,
+            clientX = null,
+            clientY = null
+        } = {}) => {
+
+            if (
+                !historyPopupMenu ||
+                !conversationId
+            ) {
+                return;
+            }
+
+
+            /*
+             * Toggle same popup off
+             */
+
+            if (
+                popupConversationId ===
+                    conversationId &&
+                historyPopupMenu
+                    .classList
+                    .contains(
+                        "show"
+                    )
+            ) {
+
+                closeHistoryPopup();
+
+                return;
+
+            }
+
+
+            popupConversationId =
+                conversationId;
+
+
+            popupConversationTitle =
+                String(
+                    title ||
+                    "New conversation"
                 );
 
 
-            requestAnimationFrame(
-                () => {
+            popupConversationPinned =
+                Boolean(
+                    isPinned
+                );
+
+
+            popupAnchorElement =
+                anchorElement ||
+                null;
+
+
+            /*
+             * Current backend has no pin support.
+             */
+
+            if (hpPinBtn) {
+
+                hpPinBtn.innerHTML = `
+                    <i
+                        data-lucide="pin"
+                        size="16"
+                    ></i>
+                    Pin
+                `;
+
+
+                hpPinBtn
+                    .setAttribute(
+                        "aria-disabled",
+                        "true"
+                    );
+
+
+                hpPinBtn
+                    .setAttribute(
+                        "title",
+                        "Pin support is not available yet"
+                    );
+
+
+                hpPinBtn.style.opacity =
+                    "0.45";
+
+
+                hpPinBtn.style.cursor =
+                    "not-allowed";
+
+            }
+
+
+            historyPopupMenu
+                .style
+                .display =
+                    "block";
+
+
+            historyPopupMenu
+                .classList
+                .add(
+                    "show"
+                );
+
+
+            historyPopupMenu
+                .setAttribute(
+                    "aria-hidden",
+                    "false"
+                );
+
+
+            positionHistoryPopup({
+                anchorElement,
+                clientX,
+                clientY
+            });
+
+
+            refreshIcons();
+
+        };
+
+
+    /* =====================================================
+       RENAME DIALOG
+       ===================================================== */
+
+    const requestText =
+        ({
+            title,
+            value = "",
+            placeholder = "",
+            confirmText = "Save"
+        }) => {
+
+            return new Promise(
+                resolve => {
+
+                    const overlay =
+                        document.createElement(
+                            "div"
+                        );
+
+
+                    overlay.className =
+                        "neo-dialog-overlay";
+
+
+                    const card =
+                        document.createElement(
+                            "div"
+                        );
+
+
+                    card.className =
+                        "neo-dialog-card";
+
+
+                    const heading =
+                        document.createElement(
+                            "h3"
+                        );
+
+
+                    heading.textContent =
+                        title;
+
+
+                    const input =
+                        document.createElement(
+                            "input"
+                        );
+
+
+                    input.type =
+                        "text";
+
+
+                    input.className =
+                        "neo-dialog-input";
+
+
+                    input.value =
+                        value;
+
+
+                    input.placeholder =
+                        placeholder;
+
+
+                    input.maxLength =
+                        80;
+
+
+                    const actions =
+                        document.createElement(
+                            "div"
+                        );
+
+
+                    actions.className =
+                        "neo-dialog-actions";
+
+
+                    const cancel =
+                        document.createElement(
+                            "button"
+                        );
+
+
+                    cancel.type =
+                        "button";
+
+
+                    cancel.className =
+                        "neo-dialog-cancel";
+
+
+                    cancel.textContent =
+                        "Cancel";
+
+
+                    const confirm =
+                        document.createElement(
+                            "button"
+                        );
+
+
+                    confirm.type =
+                        "button";
+
+
+                    confirm.className =
+                        "neo-dialog-confirm";
+
+
+                    confirm.textContent =
+                        confirmText;
+
+
+                    let closed =
+                        false;
+
+
+                    const close =
+                        result => {
+
+                            if (
+                                closed
+                            ) {
+                                return;
+                            }
+
+
+                            closed =
+                                true;
+
+
+                            overlay.remove();
+
+
+                            resolve(
+                                result
+                            );
+
+                        };
+
+
+                    cancel
+                        .addEventListener(
+                            "click",
+                            () => {
+
+                                close(
+                                    null
+                                );
+
+                            }
+                        );
+
+
+                    confirm
+                        .addEventListener(
+                            "click",
+                            () => {
+
+                                const result =
+                                    input.value
+                                        .trim();
+
+
+                                close(
+                                    result ||
+                                    null
+                                );
+
+                            }
+                        );
+
+
+                    input
+                        .addEventListener(
+                            "keydown",
+                            event => {
+
+                                if (
+                                    event.key ===
+                                    "Enter"
+                                ) {
+
+                                    event
+                                        .preventDefault();
+
+
+                                    confirm.click();
+
+                                }
+
+
+                                if (
+                                    event.key ===
+                                    "Escape"
+                                ) {
+
+                                    event
+                                        .preventDefault();
+
+
+                                    cancel.click();
+
+                                }
+
+                            }
+                        );
+
+
                     overlay
-                        .classList
-                        .add("show");
+                        .addEventListener(
+                            "click",
+                            event => {
 
-                    input.focus();
+                                if (
+                                    event.target ===
+                                    overlay
+                                ) {
 
-                    input.select();
+                                    cancel.click();
+
+                                }
+
+                            }
+                        );
+
+
+                    actions.append(
+                        cancel,
+                        confirm
+                    );
+
+
+                    card.append(
+                        heading,
+                        input,
+                        actions
+                    );
+
+
+                    overlay.appendChild(
+                        card
+                    );
+
+
+                    document.body
+                        .appendChild(
+                            overlay
+                        );
+
+
+                    requestAnimationFrame(
+                        () => {
+
+                            overlay
+                                .classList
+                                .add(
+                                    "show"
+                                );
+
+
+                            input.focus();
+
+
+                            input.select();
+
+                        }
+                    );
+
                 }
             );
-        });
-    };
+
+        };
 
 
     /* =====================================================
@@ -611,6 +862,7 @@ Does NOT own:
 
     const createHistoryRow =
         item => {
+
             const row =
                 document.createElement(
                     "div"
@@ -619,6 +871,7 @@ Does NOT own:
 
             row.className =
                 "history-item-wrapper";
+
 
             row.dataset.id =
                 item.id;
@@ -633,14 +886,18 @@ Does NOT own:
                     "button"
                 );
 
+
             button.type =
                 "button";
+
 
             button.className =
                 "history-item";
 
+
             button.dataset.conversationId =
                 item.id;
+
 
             button.title =
                 item.title ||
@@ -656,12 +913,15 @@ Does NOT own:
                     "span"
                 );
 
+
             title.className =
                 "history-item-title";
+
 
             title.textContent =
                 item.title ||
                 "New conversation";
+
 
             button.appendChild(
                 title
@@ -669,62 +929,40 @@ Does NOT own:
 
 
             /* -----------------------------------------
-               PIN ICON
+               ACTIVE STATE
                ----------------------------------------- */
 
-            if (item.is_pinned) {
-                const pin =
-                    document.createElement(
-                        "span"
-                    );
-
-                pin.className =
-                    "history-pin-icon";
-
-                pin.innerHTML = `
-                    <i
-                        data-lucide="pin"
-                        width="12"
-                        height="12"
-                        aria-hidden="true"
-                    ></i>
-                `;
-
-                button.appendChild(
-                    pin
+            button
+                .classList
+                .toggle(
+                    "active",
+                    item.id ===
+                        activeConversationId
                 );
-            }
 
 
             /* -----------------------------------------
-               ACTIVE
+               OPEN
                ----------------------------------------- */
 
-            button.classList.toggle(
-                "active",
-                item.id ===
-                    activeConversationId
-            );
+            button
+                .addEventListener(
+                    "click",
+                    () => {
+
+                        closeHistoryPopup();
+
+
+                        openConversation(
+                            item.id
+                        );
+
+                    }
+                );
 
 
             /* -----------------------------------------
-               OPEN CHAT
-               ----------------------------------------- */
-
-            button.addEventListener(
-                "click",
-                () => {
-                    closeHistoryPopup();
-
-                    openConversation(
-                        item.id
-                    );
-                }
-            );
-
-
-            /* -----------------------------------------
-               THREE DOT
+               MENU BUTTON
                ----------------------------------------- */
 
             const menuButton =
@@ -732,21 +970,28 @@ Does NOT own:
                     "button"
                 );
 
+
             menuButton.type =
                 "button";
+
 
             menuButton.className =
                 "history-three-dot";
 
-            menuButton.setAttribute(
-                "aria-label",
-                "Conversation options"
-            );
 
-            menuButton.setAttribute(
-                "aria-haspopup",
-                "menu"
-            );
+            menuButton
+                .setAttribute(
+                    "aria-label",
+                    "Conversation options"
+                );
+
+
+            menuButton
+                .setAttribute(
+                    "aria-haspopup",
+                    "menu"
+                );
+
 
             menuButton.innerHTML = `
                 <i
@@ -758,72 +1003,75 @@ Does NOT own:
             `;
 
 
-            menuButton.addEventListener(
-                "click",
-                event => {
-                    event.preventDefault();
+            menuButton
+                .addEventListener(
+                    "click",
+                    event => {
 
-                    event.stopPropagation();
+                        event
+                            .preventDefault();
 
 
-                    /*
-                     * Directly open popup.
-                     * No neo.js bridge required.
-                     */
+                        event
+                            .stopPropagation();
 
-                    openHistoryPopup({
-                        conversationId:
-                            item.id,
 
-                        title:
-                            item.title ||
-                            "New conversation",
+                        openHistoryPopup({
+                            conversationId:
+                                item.id,
 
-                        isPinned:
-                            Boolean(
-                                item.is_pinned
-                            ),
+                            title:
+                                item.title ||
+                                "New conversation",
 
-                        anchorElement:
-                            menuButton
-                    });
-                }
-            );
+                            isPinned:
+                                false,
+
+                            anchorElement:
+                                menuButton
+                        });
+
+                    }
+                );
 
 
             /* -----------------------------------------
-               RIGHT CLICK
+               CONTEXT MENU
                ----------------------------------------- */
 
-            row.addEventListener(
-                "contextmenu",
-                event => {
-                    event.preventDefault();
+            row
+                .addEventListener(
+                    "contextmenu",
+                    event => {
 
-                    event.stopPropagation();
+                        event
+                            .preventDefault();
 
 
-                    openHistoryPopup({
-                        conversationId:
-                            item.id,
+                        event
+                            .stopPropagation();
 
-                        title:
-                            item.title ||
-                            "New conversation",
 
-                        isPinned:
-                            Boolean(
-                                item.is_pinned
-                            ),
+                        openHistoryPopup({
+                            conversationId:
+                                item.id,
 
-                        clientX:
-                            event.clientX,
+                            title:
+                                item.title ||
+                                "New conversation",
 
-                        clientY:
-                            event.clientY
-                    });
-                }
-            );
+                            isPinned:
+                                false,
+
+                            clientX:
+                                event.clientX,
+
+                            clientY:
+                                event.clientY
+                        });
+
+                    }
+                );
 
 
             row.append(
@@ -833,6 +1081,7 @@ Does NOT own:
 
 
             return row;
+
         };
 
 
@@ -840,63 +1089,81 @@ Does NOT own:
        RENDER HISTORY
        ===================================================== */
 
-    const renderHistory = () => {
-        historyList
-            .replaceChildren();
+    const renderHistory =
+        () => {
+
+            historyList
+                .replaceChildren();
 
 
-        if (
-            conversations.length ===
-            0
-        ) {
-            renderEmpty();
+            if (
+                conversations.length ===
+                0
+            ) {
+
+                renderEmpty();
+
+
+                emit(
+                    "neyo:history-rendered",
+                    {
+                        conversations:
+                            [],
+
+                        count:
+                            0
+                    }
+                );
+
+
+                return;
+
+            }
+
+
+            const fragment =
+                document
+                    .createDocumentFragment();
+
+
+            conversations
+                .forEach(
+                    item => {
+
+                        fragment
+                            .appendChild(
+                                createHistoryRow(
+                                    item
+                                )
+                            );
+
+                    }
+                );
+
+
+            historyList
+                .appendChild(
+                    fragment
+                );
+
+
+            refreshIcons();
+
 
             emit(
                 "neyo:history-rendered",
                 {
-                    conversations: [],
-                    count: 0
+                    conversations:
+                        [
+                            ...conversations
+                        ],
+
+                    count:
+                        conversations.length
                 }
             );
 
-            return;
-        }
-
-
-        const fragment =
-            document.createDocumentFragment();
-
-
-        conversations.forEach(
-            item => {
-                fragment.appendChild(
-                    createHistoryRow(
-                        item
-                    )
-                );
-            }
-        );
-
-
-        historyList.appendChild(
-            fragment
-        );
-
-
-        refreshIcons();
-
-
-        emit(
-            "neyo:history-rendered",
-            {
-                conversations:
-                    [...conversations],
-
-                count:
-                    conversations.length
-            }
-        );
-    };
+        };
 
 
     /* =====================================================
@@ -905,10 +1172,12 @@ Does NOT own:
 
     const performLoadHistory =
         async () => {
+
             renderLoading();
 
 
             try {
+
                 const response =
                     await fetch(
                         "/api/history",
@@ -951,7 +1220,9 @@ Does NOT own:
                     "neyo:history-loaded",
                     {
                         conversations:
-                            [...conversations]
+                            [
+                                ...conversations
+                            ]
                     }
                 );
 
@@ -959,10 +1230,15 @@ Does NOT own:
                 return [
                     ...conversations
                 ];
+
             }
 
-            catch (error) {
+            catch (
+                error
+            ) {
+
                 renderEmpty();
+
 
                 emit(
                     "neyo:history-error",
@@ -971,15 +1247,23 @@ Does NOT own:
                     }
                 );
 
+
                 throw error;
+
             }
+
         };
 
 
     const loadHistory =
         async () => {
-            if (loadingPromise) {
+
+            if (
+                loadingPromise
+            ) {
+
                 return loadingPromise;
+
             }
 
 
@@ -988,13 +1272,18 @@ Does NOT own:
 
 
             try {
+
                 return await loadingPromise;
+
             }
 
             finally {
+
                 loadingPromise =
                     null;
+
             }
+
         };
 
 
@@ -1004,7 +1293,10 @@ Does NOT own:
 
     const fetchConversation =
         async conversationId => {
-            if (!conversationId) {
+
+            if (
+                !conversationId
+            ) {
                 return null;
             }
 
@@ -1055,6 +1347,7 @@ Does NOT own:
                         ? data.messages
                         : []
             };
+
         };
 
 
@@ -1064,7 +1357,10 @@ Does NOT own:
 
     const openConversation =
         async conversationId => {
-            if (!conversationId) {
+
+            if (
+                !conversationId
+            ) {
                 return null;
             }
 
@@ -1078,6 +1374,7 @@ Does NOT own:
 
 
             try {
+
                 const conversation =
                     await fetchConversation(
                         conversationId
@@ -1103,9 +1400,13 @@ Does NOT own:
 
 
                 return conversation;
+
             }
 
-            catch (error) {
+            catch (
+                error
+            ) {
+
                 emit(
                     "neyo:history-error",
                     {
@@ -1114,13 +1415,16 @@ Does NOT own:
                     }
                 );
 
+
                 throw error;
+
             }
+
         };
 
 
     /* =====================================================
-       ACTION REQUEST
+       API ACTION
        ===================================================== */
 
     const performAction =
@@ -1129,6 +1433,7 @@ Does NOT own:
             conversationId,
             payload = {}
         ) => {
+
             const response =
                 await fetch(
                     "/api/history",
@@ -1160,6 +1465,7 @@ Does NOT own:
             return readJson(
                 response
             );
+
         };
 
 
@@ -1172,14 +1478,16 @@ Does NOT own:
             conversationId,
             title
         ) => {
+
             const cleanTitle =
                 String(
-                    title || ""
+                    title ||
+                    ""
                 )
                     .trim()
                     .slice(
                         0,
-                        100
+                        80
                     );
 
 
@@ -1187,7 +1495,9 @@ Does NOT own:
                 !conversationId ||
                 !cleanTitle
             ) {
+
                 return false;
+
             }
 
 
@@ -1208,6 +1518,7 @@ Does NOT own:
                 "neyo:history-renamed",
                 {
                     conversationId,
+
                     title:
                         cleanTitle
                 }
@@ -1215,6 +1526,7 @@ Does NOT own:
 
 
             return true;
+
         };
 
 
@@ -1224,8 +1536,13 @@ Does NOT own:
 
     const deleteConversation =
         async conversationId => {
-            if (!conversationId) {
+
+            if (
+                !conversationId
+            ) {
+
                 return false;
+
             }
 
 
@@ -1239,6 +1556,7 @@ Does NOT own:
                 activeConversationId ===
                 conversationId
             ) {
+
                 activeConversationId =
                     null;
 
@@ -1249,6 +1567,7 @@ Does NOT own:
                         conversationId
                     }
                 );
+
             }
 
 
@@ -1264,45 +1583,7 @@ Does NOT own:
 
 
             return true;
-        };
 
-
-    /* =====================================================
-       PIN / UNPIN
-       ===================================================== */
-
-    const setPinned =
-        async (
-            conversationId,
-            pinned
-        ) => {
-            if (!conversationId) {
-                return false;
-            }
-
-
-            await performAction(
-                pinned
-                    ? "pin"
-                    : "unpin",
-                conversationId
-            );
-
-
-            await loadHistory();
-
-
-            emit(
-                "neyo:history-pin-change",
-                {
-                    conversationId,
-                    pinned:
-                        Boolean(pinned)
-                }
-            );
-
-
-            return true;
         };
 
 
@@ -1311,28 +1592,28 @@ Does NOT own:
        ===================================================== */
 
     const shareConversation =
-        async conversationId => {
-            if (!conversationId) {
+        conversationId => {
+
+            if (
+                !conversationId
+            ) {
+
                 return false;
+
             }
 
 
-            const item =
+            const conversation =
                 getConversationById(
                     conversationId
                 );
 
 
             const title =
-                item?.title ||
+                conversation?.title ||
                 popupConversationTitle ||
                 "NEYO conversation";
 
-
-            /*
-             * First notify any existing NEYO share
-             * controller.
-             */
 
             emit(
                 "neyo:history-share-request",
@@ -1342,11 +1623,6 @@ Does NOT own:
                 }
             );
 
-
-            /*
-             * Also expose generic conversation share
-             * request for compatibility.
-             */
 
             emit(
                 "neyo:conversation-share-request",
@@ -1358,22 +1634,25 @@ Does NOT own:
 
 
             return true;
+
         };
 
 
     /* =====================================================
-       POPUP — SHARE
+       POPUP ACTION — SHARE
        ===================================================== */
 
     hpShareBtn
         ?.addEventListener(
             "click",
             event => {
-                event.preventDefault();
 
-                event.stopImmediatePropagation();
+                event
+                    .preventDefault();
 
-                event.stopPropagation();
+
+                event
+                    .stopPropagation();
 
 
                 const conversationId =
@@ -1383,7 +1662,9 @@ Does NOT own:
                 closeHistoryPopup();
 
 
-                if (!conversationId) {
+                if (
+                    !conversationId
+                ) {
                     return;
                 }
 
@@ -1391,81 +1672,56 @@ Does NOT own:
                 shareConversation(
                     conversationId
                 );
-            },
-            true
+
+            }
         );
 
 
     /* =====================================================
-       POPUP — PIN
+       POPUP ACTION — PIN
        ===================================================== */
 
     hpPinBtn
         ?.addEventListener(
             "click",
             event => {
-                event.preventDefault();
 
-                event.stopImmediatePropagation();
-
-                event.stopPropagation();
+                event
+                    .preventDefault();
 
 
-                const conversationId =
-                    popupConversationId;
+                event
+                    .stopPropagation();
 
-                const nextPinned =
-                    !popupConversationPinned;
+                /*
+                 * Backend pin support does not exist yet.
+                 * Intentionally do nothing.
+                 */
 
-
-                closeHistoryPopup();
-
-
-                if (!conversationId) {
-                    return;
-                }
-
-
-                setPinned(
-                    conversationId,
-                    nextPinned
-                ).catch(
-                    error => {
-                        console.warn(
-                            "History pin failed:",
-                            error
-                        );
-
-                        emit(
-                            "neyo:history-error",
-                            {
-                                error
-                            }
-                        );
-                    }
-                );
-            },
-            true
+            }
         );
 
 
     /* =====================================================
-       POPUP — RENAME
+       POPUP ACTION — RENAME
        ===================================================== */
 
     hpRenameBtn
         ?.addEventListener(
             "click",
             async event => {
-                event.preventDefault();
 
-                event.stopImmediatePropagation();
+                event
+                    .preventDefault();
 
-                event.stopPropagation();
+
+                event
+                    .stopPropagation();
 
 
                 const conversationId =
                     popupConversationId;
+
 
                 const oldTitle =
                     popupConversationTitle;
@@ -1474,7 +1730,9 @@ Does NOT own:
                 closeHistoryPopup();
 
 
-                if (!conversationId) {
+                if (
+                    !conversationId
+                ) {
                     return;
                 }
 
@@ -1495,47 +1753,60 @@ Does NOT own:
                     });
 
 
-                if (!newTitle) {
+                if (
+                    !newTitle
+                ) {
                     return;
                 }
 
 
-                renameConversation(
-                    conversationId,
-                    newTitle
-                ).catch(
-                    error => {
-                        console.warn(
-                            "History rename failed:",
-                            error
-                        );
+                try {
 
-                        emit(
-                            "neyo:history-error",
-                            {
-                                error
-                            }
-                        );
-                    }
-                );
-            },
-            true
+                    await renameConversation(
+                        conversationId,
+                        newTitle
+                    );
+
+                }
+
+                catch (
+                    error
+                ) {
+
+                    console.warn(
+                        "History rename failed:",
+                        error
+                    );
+
+
+                    emit(
+                        "neyo:history-error",
+                        {
+                            error
+                        }
+                    );
+
+                }
+
+            }
         );
 
 
     /* =====================================================
-       POPUP — DELETE
+       POPUP ACTION — DELETE
        ===================================================== */
 
     hpDeleteBtn
         ?.addEventListener(
             "click",
-            event => {
-                event.preventDefault();
+            async event => {
 
-                event.stopImmediatePropagation();
+                event
+                    .preventDefault();
 
-                event.stopPropagation();
+
+                event
+                    .stopPropagation();
 
 
                 const conversationId =
@@ -1545,7 +1816,9 @@ Does NOT own:
                 closeHistoryPopup();
 
 
-                if (!conversationId) {
+                if (
+                    !conversationId
+                ) {
                     return;
                 }
 
@@ -1556,30 +1829,41 @@ Does NOT own:
                     );
 
 
-                if (!confirmed) {
+                if (
+                    !confirmed
+                ) {
                     return;
                 }
 
 
-                deleteConversation(
-                    conversationId
-                ).catch(
-                    error => {
-                        console.warn(
-                            "History delete failed:",
-                            error
-                        );
+                try {
 
-                        emit(
-                            "neyo:history-error",
-                            {
-                                error
-                            }
-                        );
-                    }
-                );
-            },
-            true
+                    await deleteConversation(
+                        conversationId
+                    );
+
+                }
+
+                catch (
+                    error
+                ) {
+
+                    console.warn(
+                        "History delete failed:",
+                        error
+                    );
+
+
+                    emit(
+                        "neyo:history-error",
+                        {
+                            error
+                        }
+                    );
+
+                }
+
+            }
         );
 
 
@@ -1587,129 +1871,133 @@ Does NOT own:
        CLOSE POPUP — OUTSIDE CLICK
        ===================================================== */
 
-    document.addEventListener(
-        "click",
-        event => {
-            if (
-                !historyPopupMenu ||
-                !historyPopupMenu
-                    .classList
-                    .contains("show")
-            ) {
-                return;
+    document
+        .addEventListener(
+            "click",
+            event => {
+
+                if (
+                    !historyPopupMenu
+                        ?.classList
+                        .contains(
+                            "show"
+                        )
+                ) {
+                    return;
+                }
+
+
+                if (
+                    historyPopupMenu
+                        .contains(
+                            event.target
+                        )
+                ) {
+                    return;
+                }
+
+
+                if (
+                    event.target
+                        ?.closest
+                        ?.(
+                            ".history-three-dot"
+                        )
+                ) {
+                    return;
+                }
+
+
+                closeHistoryPopup();
+
             }
-
-
-            if (
-                historyPopupMenu
-                    .contains(
-                        event.target
-                    )
-            ) {
-                return;
-            }
-
-
-            if (
-                event.target
-                    ?.closest
-                    ?.(".history-three-dot")
-            ) {
-                return;
-            }
-
-
-            closeHistoryPopup();
-        }
-    );
+        );
 
 
     /* =====================================================
-       CLOSE POPUP — ESCAPE
+       ESCAPE
        ===================================================== */
 
-    document.addEventListener(
-        "keydown",
-        event => {
-            if (
-                event.key !==
-                "Escape"
-            ) {
-                return;
+    document
+        .addEventListener(
+            "keydown",
+            event => {
+
+                if (
+                    event.key !==
+                    "Escape"
+                ) {
+                    return;
+                }
+
+
+                if (
+                    !historyPopupMenu
+                        ?.classList
+                        .contains(
+                            "show"
+                        )
+                ) {
+                    return;
+                }
+
+
+                const anchor =
+                    popupAnchorElement;
+
+
+                closeHistoryPopup();
+
+
+                anchor
+                    ?.focus
+                    ?.();
+
             }
-
-
-            if (
-                !historyPopupMenu
-                    ?.classList
-                    .contains("show")
-            ) {
-                return;
-            }
-
-
-            const anchor =
-                popupAnchorElement;
-
-
-            closeHistoryPopup();
-
-
-            anchor?.focus?.();
-        }
-    );
+        );
 
 
     /* =====================================================
-       CLOSE / REPOSITION
+       RESIZE
        ===================================================== */
 
-    window.addEventListener(
-        "resize",
-        () => {
-            if (
-                !historyPopupMenu
-                    ?.classList
-                    .contains("show")
-            ) {
-                return;
+    window
+        .addEventListener(
+            "resize",
+            () => {
+
+                if (
+                    !historyPopupMenu
+                        ?.classList
+                        .contains(
+                            "show"
+                        )
+                ) {
+                    return;
+                }
+
+
+                if (
+                    popupAnchorElement
+                ) {
+
+                    positionHistoryPopup({
+                        anchorElement:
+                            popupAnchorElement
+                    });
+
+                } else {
+
+                    closeHistoryPopup();
+
+                }
+
+            },
+            {
+                passive:
+                    true
             }
-
-
-            if (popupAnchorElement) {
-                positionHistoryPopup({
-                    anchorElement:
-                        popupAnchorElement
-                });
-            } else {
-                closeHistoryPopup();
-            }
-        },
-        {
-            passive:
-                true
-        }
-    );
-
-
-    window.addEventListener(
-        "scroll",
-        () => {
-            if (
-                historyPopupMenu
-                    ?.classList
-                    .contains("show")
-            ) {
-                closeHistoryPopup();
-            }
-        },
-        {
-            passive:
-                true,
-            capture:
-                true
-        }
-    );
+        );
 
 
     /* =====================================================
@@ -1718,164 +2006,177 @@ Does NOT own:
 
     const setActiveConversation =
         conversationId => {
+
             activeConversationId =
                 conversationId ||
                 null;
 
 
             renderHistory();
+
         };
 
 
     /* =====================================================
-       EXTERNAL ACTION EVENTS
+       EXTERNAL RENAME EVENT
        ===================================================== */
 
-    window.addEventListener(
-        "neyo:history-rename-request",
-        event => {
-            renameConversation(
-                event.detail
-                    ?.conversationId,
+    window
+        .addEventListener(
+            "neyo:history-rename-request",
+            event => {
 
-                event.detail
-                    ?.title
-            ).catch(
-                error => {
-                    emit(
-                        "neyo:history-error",
-                        {
-                            error
-                        }
-                    );
-                }
-            );
-        }
-    );
-
-
-    window.addEventListener(
-        "neyo:history-delete-request",
-        event => {
-            deleteConversation(
-                event.detail
-                    ?.conversationId
-            ).catch(
-                error => {
-                    emit(
-                        "neyo:history-error",
-                        {
-                            error
-                        }
-                    );
-                }
-            );
-        }
-    );
-
-
-    window.addEventListener(
-        "neyo:history-pin-request",
-        event => {
-            setPinned(
-                event.detail
-                    ?.conversationId,
-
-                event.detail
-                    ?.pinned
-            ).catch(
-                error => {
-                    emit(
-                        "neyo:history-error",
-                        {
-                            error
-                        }
-                    );
-                }
-            );
-        }
-    );
-
-
-    /* =====================================================
-       PUBLIC EVENTS
-       ===================================================== */
-
-    window.addEventListener(
-        "neyo:history-load-request",
-        () => {
-            loadHistory()
-                .catch(
-                    error => {
-                        console.warn(
-                            "History load failed:",
-                            error
-                        );
-                    }
-                );
-        }
-    );
-
-
-    window.addEventListener(
-        "neyo:conversation-open-request",
-        event => {
-            openConversation(
-                event.detail
-                    ?.conversationId
-            );
-        }
-    );
-
-
-    window.addEventListener(
-        "neyo:history-active-set",
-        event => {
-            setActiveConversation(
-                event.detail
-                    ?.conversationId
-            );
-        }
-    );
-
-
-    /*
-     * Compatibility:
-     * if another component still emits the
-     * old menu request event, history.js can
-     * now handle it itself.
-     */
-
-    window.addEventListener(
-        "neyo:history-menu-request",
-        event => {
-            openHistoryPopup({
-                conversationId:
+                renameConversation(
                     event.detail
                         ?.conversationId,
 
-                title:
                     event.detail
-                        ?.title,
+                        ?.title
+                )
+                    .catch(
+                        error => {
 
-                isPinned:
-                    event.detail
-                        ?.isPinned,
+                            emit(
+                                "neyo:history-error",
+                                {
+                                    error
+                                }
+                            );
 
-                anchorElement:
-                    event.detail
-                        ?.anchorElement,
+                        }
+                    );
 
-                clientX:
-                    event.detail
-                        ?.clientX,
+            }
+        );
 
-                clientY:
+
+    /* =====================================================
+       EXTERNAL DELETE EVENT
+       ===================================================== */
+
+    window
+        .addEventListener(
+            "neyo:history-delete-request",
+            event => {
+
+                deleteConversation(
                     event.detail
-                        ?.clientY
-            });
-        }
-    );
+                        ?.conversationId
+                )
+                    .catch(
+                        error => {
+
+                            emit(
+                                "neyo:history-error",
+                                {
+                                    error
+                                }
+                            );
+
+                        }
+                    );
+
+            }
+        );
+
+
+    /* =====================================================
+       LOAD REQUEST
+       ===================================================== */
+
+    window
+        .addEventListener(
+            "neyo:history-load-request",
+            () => {
+
+                loadHistory()
+                    .catch(
+                        error => {
+
+                            console.warn(
+                                "History load failed:",
+                                error
+                            );
+
+                        }
+                    );
+
+            }
+        );
+
+
+    /* =====================================================
+       OPEN REQUEST
+       ===================================================== */
+
+    window
+        .addEventListener(
+            "neyo:conversation-open-request",
+            event => {
+
+                openConversation(
+                    event.detail
+                        ?.conversationId
+                );
+
+            }
+        );
+
+
+    /* =====================================================
+       ACTIVE SET
+       ===================================================== */
+
+    window
+        .addEventListener(
+            "neyo:history-active-set",
+            event => {
+
+                setActiveConversation(
+                    event.detail
+                        ?.conversationId
+                );
+
+            }
+        );
+
+
+    /* =====================================================
+       OLD MENU REQUEST COMPATIBILITY
+       ===================================================== */
+
+    window
+        .addEventListener(
+            "neyo:history-menu-request",
+            event => {
+
+                openHistoryPopup({
+                    conversationId:
+                        event.detail
+                            ?.conversationId,
+
+                    title:
+                        event.detail
+                            ?.title,
+
+                    isPinned:
+                        false,
+
+                    anchorElement:
+                        event.detail
+                            ?.anchorElement,
+
+                    clientX:
+                        event.detail
+                            ?.clientX,
+
+                    clientY:
+                        event.detail
+                            ?.clientY
+                });
+
+            }
+        );
 
 
     /* =====================================================
@@ -1889,7 +2190,7 @@ Does NOT own:
                 true,
 
             version:
-                "history-v4",
+                "history-v5",
 
             load:
                 loadHistory,
@@ -1908,8 +2209,6 @@ Does NOT own:
             delete:
                 deleteConversation,
 
-            setPinned,
-
             setActive:
                 setActiveConversation,
 
@@ -1918,8 +2217,9 @@ Does NOT own:
                     activeConversationId,
 
             getConversations:
-                () =>
-                    [...conversations],
+                () => [
+                    ...conversations
+                ],
 
             getById:
                 id =>
@@ -1931,7 +2231,10 @@ Does NOT own:
                 openHistoryPopup,
 
             closeMenu:
-                closeHistoryPopup
+                closeHistoryPopup,
+
+            share:
+                shareConversation
         });
 
 
@@ -1955,9 +2258,14 @@ Does NOT own:
 
 
     /* =====================================================
-       INITIAL MENU STATE
+       INITIAL STATE
        ===================================================== */
 
     closeHistoryPopup();
+
+
+    console.log(
+        "[NEYO History] Ready. history-v5"
+    );
 
 })();

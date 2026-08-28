@@ -1,23 +1,37 @@
 /*
 =========================================================
 NEYO — MODEL MENU COMPONENT
-STABLE + UPGRADE MODAL RESTORE
+v6 — NEYO + LEVERAGE
 
 Owns:
 - Model dropdown open / close
 - Model selection
 - Active model UI
 - Current model display
-- Pro access state
-- Upgrade modal trigger for Free users
+- Plan access state
+- Leverage intro trigger for Free users
+- Existing upgrade modal compatibility
 - Legacy neo.js click-conflict protection
 - Public model events / API
 
 Does NOT own:
+- Leverage intro cards UI
 - Checkout
 - Subscription fetching
 - Chat API
+- Backend model routing
 - Usage limits
+
+IMPORTANT:
+- Internal model IDs stay unchanged:
+  l1.0 = NEYO
+  l1.2 = Leverage
+
+- Internal plan values stay unchanged:
+  free
+  pro
+
+This preserves existing project compatibility.
 =========================================================
 */
 
@@ -34,15 +48,18 @@ Does NOT own:
             "modelBadgeBtn"
         );
 
+
     const modelDropdownMenu =
         document.getElementById(
             "modelDropdownMenu"
         );
 
+
     const currentModelDisplay =
         document.getElementById(
             "currentModelDisplay"
         );
+
 
     const modelOptions =
         Array.from(
@@ -51,15 +68,18 @@ Does NOT own:
             )
         );
 
+
     const upgradeModal =
         document.getElementById(
             "upgradeModal"
         );
 
+
     const modalCloseBtn =
         document.getElementById(
             "modalCloseBtn"
         );
+
 
     const modalMaybeLaterBtn =
         document.getElementById(
@@ -83,15 +103,26 @@ Does NOT own:
         Object.freeze({
 
             "l1.0": {
-                id: "l1.0",
-                label: "NEYO L1.0",
-                plan: "free"
+                id:
+                    "l1.0",
+
+                label:
+                    "NEYO",
+
+                plan:
+                    "free"
             },
 
+
             "l1.2": {
-                id: "l1.2",
-                label: "NEYO L1.2 Pro",
-                plan: "pro"
+                id:
+                    "l1.2",
+
+                label:
+                    "Leverage",
+
+                plan:
+                    "pro"
             }
 
         });
@@ -103,6 +134,7 @@ Does NOT own:
 
     let selectedModel =
         "l1.0";
+
 
     let userPlan =
         "free";
@@ -132,14 +164,39 @@ Does NOT own:
     const normalizePlan =
         value => {
 
-            return String(
-                value || "free"
-            )
-                .trim()
-                .toLowerCase() ===
-                "pro"
-                ? "pro"
-                : "free";
+            const normalized =
+                String(
+                    value ||
+                    "free"
+                )
+                    .trim()
+                    .toLowerCase();
+
+
+            /*
+             * Keep old backend/account compatibility.
+             *
+             * Existing paid plan values still resolve to "pro".
+             */
+
+            if (
+                [
+                    "pro",
+                    "neo_pro",
+                    "neo-pro",
+                    "premium",
+                    "business",
+                    "suite",
+                    "leverage"
+                ].includes(
+                    normalized
+                )
+            ) {
+                return "pro";
+            }
+
+
+            return "free";
 
         };
 
@@ -148,7 +205,9 @@ Does NOT own:
         modelId => {
 
             return (
-                MODELS[modelId] ||
+                MODELS[
+                    modelId
+                ] ||
                 null
             );
 
@@ -157,7 +216,13 @@ Does NOT own:
 
     const isProUser =
         () =>
-            userPlan === "pro";
+            userPlan ===
+            "pro";
+
+
+    const isLeverageUser =
+        () =>
+            isProUser();
 
 
     const canUseModel =
@@ -175,12 +240,11 @@ Does NOT own:
 
 
             if (
-                model.plan === "pro" &&
+                model.plan ===
+                    "pro" &&
                 !isProUser()
             ) {
-
                 return false;
-
             }
 
 
@@ -269,14 +333,65 @@ Does NOT own:
 
 
     /* =====================================================
-       UPGRADE MODAL
+       LEVERAGE INTRO
+       ===================================================== */
+
+    const requestLeverageIntro =
+        modelId => {
+
+            const model =
+                getModel(
+                    modelId
+                );
+
+
+            if (!model) {
+                return false;
+            }
+
+
+            closeMenu();
+
+
+            /*
+             * Important:
+             *
+             * Free user clicking Leverage does NOT
+             * directly open the old upgrade modal.
+             *
+             * leverage-intro.js will listen to this event
+             * and show the introduction cards.
+             */
+
+            emit(
+                "neyo:leverage-intro-request",
+                {
+                    model:
+                        modelId,
+
+                    modelInfo:
+                        model,
+
+                    plan:
+                        userPlan
+                }
+            );
+
+
+            return true;
+
+        };
+
+
+    /* =====================================================
+       EXISTING UPGRADE MODAL
        ===================================================== */
 
     const openUpgradeModal =
         modelId => {
 
             if (!upgradeModal) {
-                return;
+                return false;
             }
 
 
@@ -304,6 +419,13 @@ Does NOT own:
                 );
 
 
+            /*
+             * Preserve existing upgrade event.
+             *
+             * This will later be called from the final
+             * Leverage introduction card.
+             */
+
             emit(
                 "neyo:model-upgrade-required",
                 {
@@ -317,6 +439,9 @@ Does NOT own:
                 }
             );
 
+
+            return true;
+
         };
 
 
@@ -324,7 +449,7 @@ Does NOT own:
         () => {
 
             if (!upgradeModal) {
-                return;
+                return false;
             }
 
 
@@ -355,6 +480,9 @@ Does NOT own:
                     "modal-open"
                 );
 
+
+            return true;
+
         };
 
 
@@ -365,75 +493,91 @@ Does NOT own:
     const updateAccessUI =
         () => {
 
-            modelOptions.forEach(
-                option => {
+            modelOptions
+                .forEach(
+                    option => {
 
-                    const modelId =
-                        option.dataset.model;
-
-
-                    const model =
-                        getModel(
-                            modelId
-                        );
+                        const modelId =
+                            option
+                                .dataset
+                                .model;
 
 
-                    if (!model) {
-                        return;
-                    }
+                        const model =
+                            getModel(
+                                modelId
+                            );
 
 
-                    const isProModel =
-                        model.plan === "pro";
+                        if (!model) {
+                            return;
+                        }
 
 
-                    const unlocked =
-                        canUseModel(
-                            modelId
-                        );
+                        const isPaidModel =
+                            model.plan ===
+                            "pro";
 
 
-                    option
-                        .classList
-                        .toggle(
-                            "locked",
-                            isProModel &&
+                        const unlocked =
+                            canUseModel(
+                                modelId
+                            );
+
+
+                        /*
+                         * Keep old CSS classes.
+                         * Do not rename these yet.
+                         */
+
+                        option
+                            .classList
+                            .toggle(
+                                "locked",
+                                isPaidModel &&
+                                !unlocked
+                            );
+
+
+                        option
+                            .classList
+                            .toggle(
+                                "is-unlocked",
+                                isPaidModel &&
+                                unlocked
+                            );
+
+
+                        /*
+                         * Leverage remains clickable for Free users
+                         * because clicking it opens the intro cards.
+                         *
+                         * aria-disabled is therefore NOT used to
+                         * block interaction.
+                         */
+
+                        if (
+                            isPaidModel &&
                             !unlocked
-                        );
+                        ) {
 
+                            option
+                                .setAttribute(
+                                    "aria-label",
+                                    "Learn about Leverage"
+                                );
 
-                    option
-                        .classList
-                        .toggle(
-                            "is-unlocked",
-                            isProModel &&
-                            unlocked
-                        );
+                        } else {
 
+                            option
+                                .removeAttribute(
+                                    "aria-label"
+                                );
 
-                    if (
-                        isProModel
-                    ) {
-
-                        option
-                            .setAttribute(
-                                "aria-disabled",
-                                String(
-                                    !unlocked
-                                )
-                            );
-
-                    } else {
-
-                        option
-                            .removeAttribute(
-                                "aria-disabled"
-                            );
+                        }
 
                     }
-
-                }
-            );
+                );
 
         };
 
@@ -452,7 +596,7 @@ Does NOT own:
 
 
             if (!model) {
-                return;
+                return false;
             }
 
 
@@ -462,40 +606,73 @@ Does NOT own:
 
                 currentModelDisplay
                     .textContent =
-                    model.label;
+                        model.label;
 
             }
 
 
-            modelOptions.forEach(
-                option => {
+            modelOptions
+                .forEach(
+                    option => {
 
-                    const active =
-                        option.dataset.model ===
-                        modelId;
-
-
-                    option
-                        .classList
-                        .toggle(
-                            "active",
-                            active
-                        );
+                        const active =
+                            option
+                                .dataset
+                                .model ===
+                            modelId;
 
 
-                    option
-                        .setAttribute(
-                            "aria-selected",
-                            String(
+                        option
+                            .classList
+                            .toggle(
+                                "active",
                                 active
-                            )
-                        );
+                            );
 
-                }
-            );
+
+                        option
+                            .setAttribute(
+                                "aria-selected",
+                                String(
+                                    active
+                                )
+                            );
+
+                    }
+                );
 
 
             updateAccessUI();
+
+
+            return true;
+
+        };
+
+
+    /* =====================================================
+       SAVE SELECTED MODEL
+       ===================================================== */
+
+    const saveSelectedModel =
+        modelId => {
+
+            try {
+
+                sessionStorage
+                    .setItem(
+                        "neyo_selected_model",
+                        modelId
+                    );
+
+
+                return true;
+
+            } catch {
+
+                return false;
+
+            }
 
         };
 
@@ -521,16 +698,42 @@ Does NOT own:
             }
 
 
-            /*
-            FREE USER → PRO MODEL
-            Restore original upgrade card.
-            */
+            /* -------------------------------------------------
+               FREE USER → LEVERAGE
+               ------------------------------------------------- */
 
             if (
                 !canUseModel(
                     modelId
                 )
             ) {
+
+                /*
+                 * Default new behavior:
+                 * show Leverage introduction.
+                 */
+
+                if (
+                    options.skipIntro !==
+                    true
+                ) {
+
+                    requestLeverageIntro(
+                        modelId
+                    );
+
+
+                    return false;
+
+                }
+
+
+                /*
+                 * Compatibility escape hatch.
+                 *
+                 * Allows leverage-intro.js final action
+                 * to explicitly open existing upgrade flow.
+                 */
 
                 openUpgradeModal(
                     modelId
@@ -542,9 +745,9 @@ Does NOT own:
             }
 
 
-            /*
-            SUCCESSFUL MODEL SELECT
-            */
+            /* -------------------------------------------------
+               SUCCESSFUL MODEL SELECT
+               ------------------------------------------------- */
 
             selectedModel =
                 modelId;
@@ -558,16 +761,9 @@ Does NOT own:
             closeMenu();
 
 
-            try {
-
-                sessionStorage.setItem(
-                    "neyo_selected_model",
-                    selectedModel
-                );
-
-            } catch {
-                // Ignore storage failure.
-            }
+            saveSelectedModel(
+                selectedModel
+            );
 
 
             if (
@@ -611,10 +807,10 @@ Does NOT own:
 
 
             /*
-            If Pro expires while
-            L1.2 is selected,
-            safely fall back.
-            */
+             * If paid access disappears while
+             * Leverage is selected,
+             * fall back safely to NEYO.
+             */
 
             if (
                 !canUseModel(
@@ -631,16 +827,9 @@ Does NOT own:
                 );
 
 
-                try {
-
-                    sessionStorage.setItem(
-                        "neyo_selected_model",
-                        selectedModel
-                    );
-
-                } catch {
-                    // Ignore.
-                }
+                saveSelectedModel(
+                    selectedModel
+                );
 
 
                 emit(
@@ -666,9 +855,15 @@ Does NOT own:
                 "neyo:model-plan-change",
                 {
                     plan:
-                        userPlan
+                        userPlan,
+
+                    leverage:
+                        isLeverageUser()
                 }
             );
+
+
+            return userPlan;
 
         };
 
@@ -677,53 +872,62 @@ Does NOT own:
        LEGACY NEO.JS CONFLICT PROTECTION
        ===================================================== */
 
-    modelBadgeBtn.addEventListener(
-        "click",
-        event => {
+    modelBadgeBtn
+        .addEventListener(
+            "click",
+            event => {
 
-            event.preventDefault();
-            event.stopPropagation();
-            event.stopImmediatePropagation();
+                event.preventDefault();
 
+                event.stopPropagation();
 
-            toggleMenu();
-
-        },
-        true
-    );
+                event.stopImmediatePropagation();
 
 
-    modelOptions.forEach(
-        option => {
+                toggleMenu();
 
-            option.addEventListener(
-                "click",
-                event => {
-
-                    event.preventDefault();
-                    event.stopPropagation();
-                    event.stopImmediatePropagation();
+            },
+            true
+        );
 
 
-                    const modelId =
-                        option.dataset.model;
+    modelOptions
+        .forEach(
+            option => {
+
+                option
+                    .addEventListener(
+                        "click",
+                        event => {
+
+                            event.preventDefault();
+
+                            event.stopPropagation();
+
+                            event.stopImmediatePropagation();
 
 
-                    if (!modelId) {
-                        return;
-                    }
+                            const modelId =
+                                option
+                                    .dataset
+                                    .model;
 
 
-                    selectModel(
-                        modelId
+                            if (!modelId) {
+                                return;
+                            }
+
+
+                            selectModel(
+                                modelId
+                            );
+
+                        },
+                        true
                     );
 
-                },
-                true
-            );
-
-        }
-    );
+            }
+        );
 
 
     /* =====================================================
@@ -736,6 +940,7 @@ Does NOT own:
             event => {
 
                 event.preventDefault();
+
                 event.stopPropagation();
 
 
@@ -752,6 +957,7 @@ Does NOT own:
             event => {
 
                 event.preventDefault();
+
                 event.stopPropagation();
 
 
@@ -785,145 +991,188 @@ Does NOT own:
        OUTSIDE MODEL MENU CLICK
        ===================================================== */
 
-    document.addEventListener(
-        "click",
-        event => {
+    document
+        .addEventListener(
+            "click",
+            event => {
 
-            if (
-                modelBadgeBtn.contains(
-                    event.target
-                )
-            ) {
-                return;
-            }
-
-
-            if (
-                modelDropdownMenu.contains(
-                    event.target
-                )
-            ) {
-                return;
-            }
+                if (
+                    modelBadgeBtn
+                        .contains(
+                            event.target
+                        )
+                ) {
+                    return;
+                }
 
 
-            closeMenu();
+                if (
+                    modelDropdownMenu
+                        .contains(
+                            event.target
+                        )
+                ) {
+                    return;
+                }
 
-        },
-        true
-    );
+
+                closeMenu();
+
+            },
+            true
+        );
 
 
     /* =====================================================
        ESCAPE
        ===================================================== */
 
-    document.addEventListener(
-        "keydown",
-        event => {
+    document
+        .addEventListener(
+            "keydown",
+            event => {
 
-            if (
-                event.key !==
-                "Escape"
-            ) {
-                return;
-            }
-
-
-            if (
-                upgradeModal &&
-                upgradeModal.getAttribute(
-                    "aria-hidden"
-                ) === "false"
-            ) {
-
-                closeUpgradeModal();
-
-                return;
-
-            }
+                if (
+                    event.key !==
+                    "Escape"
+                ) {
+                    return;
+                }
 
 
-            if (
-                isMenuOpen()
-            ) {
+                if (
+                    upgradeModal &&
+                    upgradeModal
+                        .getAttribute(
+                            "aria-hidden"
+                        ) ===
+                        "false"
+                ) {
 
-                closeMenu();
+                    closeUpgradeModal();
 
-                modelBadgeBtn.focus();
+                    return;
 
-            }
+                }
 
-        },
-        true
-    );
+
+                if (
+                    isMenuOpen()
+                ) {
+
+                    closeMenu();
+
+                    modelBadgeBtn
+                        .focus();
+
+                }
+
+            },
+            true
+        );
 
 
     /* =====================================================
        PROFILE / PLAN EVENTS
        ===================================================== */
 
-    window.addEventListener(
-        "neyo:model-plan-set",
-        event => {
-
-            setUserPlan(
-                event.detail?.plan
-            );
-
-        }
-    );
-
-
-    window.addEventListener(
-        "neyo:profile-loaded",
-        event => {
-
-            const plan =
-                event
-                    .detail
-                    ?.user
-                    ?.planType;
-
-
-            if (plan) {
+    window
+        .addEventListener(
+            "neyo:model-plan-set",
+            event => {
 
                 setUserPlan(
-                    plan
+                    event.detail
+                        ?.plan
                 );
 
             }
+        );
 
-        }
-    );
+
+    window
+        .addEventListener(
+            "neyo:profile-loaded",
+            event => {
+
+                const plan =
+                    event
+                        .detail
+                        ?.user
+                        ?.planType;
+
+
+                if (plan) {
+
+                    setUserPlan(
+                        plan
+                    );
+
+                }
+
+            }
+        );
 
 
     /* =====================================================
-       EXTERNAL EVENTS
+       EXTERNAL MODEL SELECT
        ===================================================== */
 
-    window.addEventListener(
-        "neyo:model-select-request",
-        event => {
+    window
+        .addEventListener(
+            "neyo:model-select-request",
+            event => {
 
-            selectModel(
-                event.detail?.model
-            );
+                selectModel(
+                    event.detail
+                        ?.model,
+                    event.detail
+                        ?.options ||
+                    {}
+                );
 
-        }
-    );
-
-
-    window.addEventListener(
-        "neyo:model-menu-open-request",
-        openMenu
-    );
+            }
+        );
 
 
-    window.addEventListener(
-        "neyo:model-menu-close-request",
-        closeMenu
-    );
+    /* =====================================================
+       EXTERNAL MENU EVENTS
+       ===================================================== */
+
+    window
+        .addEventListener(
+            "neyo:model-menu-open-request",
+            openMenu
+        );
+
+
+    window
+        .addEventListener(
+            "neyo:model-menu-close-request",
+            closeMenu
+        );
+
+
+    /* =====================================================
+       LEVERAGE INTRO → UPGRADE
+       ===================================================== */
+
+    /*
+     * leverage-intro.js can emit this when the
+     * final intro card's upgrade button is clicked.
+     */
+
+    window
+        .addEventListener(
+            "neyo:leverage-upgrade-request",
+            () => {
+
+                openUpgradeModal(
+                    "l1.2"
+                );
+
+            }
+        );
 
 
     /* =====================================================
@@ -931,14 +1180,15 @@ Does NOT own:
        ===================================================== */
 
     const initialActive =
-        modelOptions.find(
-            option =>
-                option
-                    .classList
-                    .contains(
-                        "active"
-                    )
-        );
+        modelOptions
+            .find(
+                option =>
+                    option
+                        .classList
+                        .contains(
+                            "active"
+                        )
+            );
 
 
     if (
@@ -946,12 +1196,66 @@ Does NOT own:
             ?.dataset
             ?.model &&
         MODELS[
-            initialActive.dataset.model
+            initialActive
+                .dataset
+                .model
         ]
     ) {
 
         selectedModel =
-            initialActive.dataset.model;
+            initialActive
+                .dataset
+                .model;
+
+    }
+
+
+    /*
+     * Restore session selection only when valid.
+     *
+     * Access will be checked again after profile loads.
+     */
+
+    try {
+
+        const storedModel =
+            sessionStorage
+                .getItem(
+                    "neyo_selected_model"
+                );
+
+
+        if (
+            storedModel &&
+            MODELS[
+                storedModel
+            ]
+        ) {
+
+            selectedModel =
+                storedModel;
+
+        }
+
+    } catch {
+        // Ignore storage failure.
+    }
+
+
+    /*
+     * Before profile plan is known,
+     * never allow an old paid selection
+     * to visually activate for a Free session.
+     */
+
+    if (
+        !canUseModel(
+            selectedModel
+        )
+    ) {
+
+        selectedModel =
+            "l1.0";
 
     }
 
@@ -970,9 +1274,10 @@ Does NOT own:
 
     if (
         upgradeModal &&
-        !upgradeModal.hasAttribute(
-            "aria-hidden"
-        )
+        !upgradeModal
+            .hasAttribute(
+                "aria-hidden"
+            )
     ) {
 
         upgradeModal
@@ -993,7 +1298,8 @@ Does NOT own:
 
             const profileUser =
                 window.NeyoProfile
-                    ?.getUser?.();
+                    ?.getUser
+                    ?.();
 
 
             if (
@@ -1002,7 +1308,8 @@ Does NOT own:
             ) {
 
                 setUserPlan(
-                    profileUser.planType
+                    profileUser
+                        .planType
                 );
 
             }
@@ -1035,18 +1342,23 @@ Does NOT own:
             open:
                 openMenu,
 
+
             close:
                 closeMenu,
+
 
             toggle:
                 toggleMenu,
 
+
             select:
                 selectModel,
+
 
             getSelected:
                 () =>
                     selectedModel,
+
 
             getModel:
                 modelId =>
@@ -1054,24 +1366,57 @@ Does NOT own:
                         modelId
                     ),
 
+
             setUserPlan,
+
 
             getUserPlan:
                 () =>
                     userPlan,
 
+
+            isLeverageUser,
+
+
             canUse:
                 canUseModel,
+
 
             refreshAccess:
                 updateAccessUI,
 
+
+            requestLeverageIntro,
+
+
             openUpgrade:
                 openUpgradeModal,
+
 
             closeUpgrade:
                 closeUpgradeModal
 
         });
+
+
+    /* =====================================================
+       READY EVENT
+       ===================================================== */
+
+    emit(
+        "neyo:model-menu-ready",
+        {
+            model:
+                selectedModel,
+
+            modelInfo:
+                getModel(
+                    selectedModel
+                ),
+
+            plan:
+                userPlan
+        }
+    );
 
 })();

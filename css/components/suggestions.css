@@ -278,3 +278,20 @@ and
     }
 
 }
+/* =========================================================
+   SUGGESTION PILLS — NO SHADOW
+   ========================================================= */
+
+.live-suggestions button,
+.live-suggestions .suggestion-pill {
+    box-shadow: none !important;
+}
+
+.live-suggestions button:hover,
+.live-suggestions .suggestion-pill:hover,
+.live-suggestions button:focus,
+.live-suggestions .suggestion-pill:focus,
+.live-suggestions button:active,
+.live-suggestions .suggestion-pill:active {
+    box-shadow: none !important;
+}

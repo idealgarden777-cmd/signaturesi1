@@ -336,19 +336,26 @@ export default async function handler(
 
 
         /*
-         * Database plans:
+         * Current database plans:
          *
          * free
          * leverage
          *
+         * Legacy paid compatibility:
+         *
+         * pro       -> paid
+         * leverage  -> paid
+         *
          * Existing frontend compatibility:
          *
-         * free      -> free
-         * leverage  -> pro
+         * paid -> pro
          */
 
         const planType =
-            rawPlanType === "leverage"
+            (
+                rawPlanType === "leverage" ||
+                rawPlanType === "pro"
+            )
                 ? "pro"
                 : "free";
 

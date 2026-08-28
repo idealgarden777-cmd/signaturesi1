@@ -1,13 +1,12 @@
 /*
 =========================================================
 NEYO — MESSAGES CORE
-CANONICAL CHAT PIPELINE v4
+CANONICAL CHAT PIPELINE v3
 
 FILE:
 public/js/components/messages.js
 
 OWNS
----------------------------------------------------------
 - Message DOM shells
 - User messages
 - Assistant messages
@@ -19,22 +18,11 @@ OWNS
 - History-loaded messages
 - Auto scroll
 - Hero visibility
-- User message actions
-- Assistant message actions
 
-ACTIONS
+IMPORTANT
 ---------------------------------------------------------
-USER
-- Edit
-- Copy
+Supports BOTH:
 
-ASSISTANT
-- Copy
-- Share
-- Regenerate
-
-SUPPORTS
----------------------------------------------------------
 Canonical:
 neyo:chat-message-added
 
@@ -54,7 +42,7 @@ neo.js may remain loaded.
        ===================================================== */
 
     const VERSION =
-        "neyo-messages-canonical-v4";
+        "neyo-messages-canonical-v3";
 
 
     if (
@@ -134,7 +122,7 @@ neo.js may remain loaded.
 
 
     /* =====================================================
-       CLEAN TEXT
+       TEXT
        ===================================================== */
 
     function clean(
@@ -191,20 +179,6 @@ neo.js may remain loaded.
     }
 
 
-    function messageId(
-        message
-    ) {
-
-        return clean(
-            message?.id ||
-            message?.messageId ||
-            "",
-            200
-        ).trim();
-
-    }
-
-
     /* =====================================================
        ICONS
        ===================================================== */
@@ -218,6 +192,24 @@ neo.js may remain loaded.
                 ?.();
 
         } catch {}
+
+    }
+
+
+    /* =====================================================
+       MESSAGE ID
+       ===================================================== */
+
+    function messageId(
+        message
+    ) {
+
+        return clean(
+            message?.id ||
+            message?.messageId ||
+            "",
+            200
+        ).trim();
 
     }
 
@@ -375,7 +367,7 @@ neo.js may remain loaded.
 
 
     /* =====================================================
-       ATTACHMENTS
+       ATTACHMENT HELPERS
        ===================================================== */
 
     function formatBytes(
@@ -394,10 +386,7 @@ neo.js may remain loaded.
         }
 
 
-        if (
-            value <
-            1024
-        ) {
+        if (value < 1024) {
             return `${value} B`;
         }
 
@@ -407,10 +396,12 @@ neo.js may remain loaded.
             1024 * 1024
         ) {
 
-            return `${(
-                value /
-                1024
-            ).toFixed(1)} KB`;
+            return `${
+                (
+                    value /
+                    1024
+                ).toFixed(1)
+            } KB`;
 
         }
 
@@ -420,21 +411,25 @@ neo.js may remain loaded.
             1024 * 1024 * 1024
         ) {
 
-            return `${(
-                value /
-                1024 /
-                1024
-            ).toFixed(1)} MB`;
+            return `${
+                (
+                    value /
+                    1024 /
+                    1024
+                ).toFixed(1)
+            } MB`;
 
         }
 
 
-        return `${(
-            value /
-            1024 /
-            1024 /
-            1024
-        ).toFixed(1)} GB`;
+        return `${
+            (
+                value /
+                1024 /
+                1024 /
+                1024
+            ).toFixed(1)
+        } GB`;
 
     }
 
@@ -826,7 +821,7 @@ neo.js may remain loaded.
 
 
     /* =====================================================
-       RENDER CONTENT
+       CONTENT RENDER
        ===================================================== */
 
     function renderContent(
@@ -898,355 +893,18 @@ neo.js may remain loaded.
 
 
     /* =====================================================
-       ACTION BUTTON
+       ACTION BUTTONS
+
+       IMPORTANT:
+       -----------------------------------------------------
+       Only the old DOM structure is restored here.
+
+       No chat flow, history, edit logic or regenerate
+       implementation is owned by this file.
        ===================================================== */
 
-    function createActionButton({
-        icon,
-        label,
-        action
-    }) {
 
-        const button =
-            document.createElement(
-                "button"
-            );
-
-
-        button.type =
-            "button";
-
-
-        button.className =
-            "message-action-btn";
-
-
-        button.dataset.action =
-            action;
-
-
-        button.setAttribute(
-            "aria-label",
-            label
-        );
-
-
-        button.setAttribute(
-            "title",
-            label
-        );
-
-
-        button.setAttribute(
-            "data-tooltip",
-            label
-        );
-
-
-        button.setAttribute(
-            "data-tooltip-position",
-            "top"
-        );
-
-
-        const iconElement =
-            document.createElement(
-                "i"
-            );
-
-
-        iconElement.setAttribute(
-            "data-lucide",
-            icon
-        );
-
-
-        iconElement.setAttribute(
-            "size",
-            "16"
-        );
-
-
-        iconElement.setAttribute(
-            "aria-hidden",
-            "true"
-        );
-
-
-        button.appendChild(
-            iconElement
-        );
-
-
-        return button;
-
-    }
-
-
-    /* =====================================================
-       COPY
-       ===================================================== */
-
-    async function copyText(
-        text,
-        button
-    ) {
-
-        const value =
-            clean(
-                text
-            );
-
-
-        if (!value) {
-            return false;
-        }
-
-
-        try {
-
-            await navigator.clipboard
-                .writeText(
-                    value
-                );
-
-
-            const oldLabel =
-                button?.getAttribute(
-                    "aria-label"
-                ) ||
-                "Copy";
-
-
-            if (button) {
-
-                button.setAttribute(
-                    "aria-label",
-                    "Copied"
-                );
-
-
-                button.setAttribute(
-                    "data-tooltip",
-                    "Copied"
-                );
-
-
-                button.replaceChildren();
-
-
-                const icon =
-                    document.createElement(
-                        "i"
-                    );
-
-
-                icon.setAttribute(
-                    "data-lucide",
-                    "check"
-                );
-
-
-                icon.setAttribute(
-                    "size",
-                    "16"
-                );
-
-
-                button.appendChild(
-                    icon
-                );
-
-
-                refreshIcons();
-
-
-                window.setTimeout(
-                    () => {
-
-                        button.setAttribute(
-                            "aria-label",
-                            oldLabel
-                        );
-
-
-                        button.setAttribute(
-                            "data-tooltip",
-                            oldLabel
-                        );
-
-
-                        button.replaceChildren();
-
-
-                        const original =
-                            document.createElement(
-                                "i"
-                            );
-
-
-                        original.setAttribute(
-                            "data-lucide",
-                            "copy"
-                        );
-
-
-                        original.setAttribute(
-                            "size",
-                            "16"
-                        );
-
-
-                        button.appendChild(
-                            original
-                        );
-
-
-                        refreshIcons();
-
-                    },
-                    1100
-                );
-
-            }
-
-
-            return true;
-
-        } catch (
-            error
-        ) {
-
-            console.warn(
-                "[NEYO Messages] Clipboard failed:",
-                error
-            );
-
-
-            return false;
-
-        }
-
-    }
-
-
-    /* =====================================================
-       SHARE
-       ===================================================== */
-
-    async function shareText(
-        text
-    ) {
-
-        const value =
-            clean(
-                text
-            );
-
-
-        if (!value) {
-            return false;
-        }
-
-
-        if (
-            typeof navigator.share ===
-            "function"
-        ) {
-
-            try {
-
-                await navigator.share({
-                    text:
-                        value
-                });
-
-
-                return true;
-
-            } catch (
-                error
-            ) {
-
-                if (
-                    error?.name ===
-                    "AbortError"
-                ) {
-                    return false;
-                }
-
-            }
-
-        }
-
-
-        try {
-
-            await navigator.clipboard
-                .writeText(
-                    value
-                );
-
-
-            return true;
-
-        } catch {
-
-            return false;
-
-        }
-
-    }
-
-
-    /* =====================================================
-       MESSAGE DATA
-       ===================================================== */
-
-    function readMessageText(
-        element
-    ) {
-
-        return clean(
-            element
-                ?.querySelector(
-                    ".message-content"
-                )
-                ?.innerText ||
-            ""
-        );
-
-    }
-
-
-    function getMessageIndex(
-        element
-    ) {
-
-        const value =
-            Number(
-                element?.dataset
-                    ?.msgIndex
-            );
-
-
-        return Number.isFinite(
-            value
-        )
-            ? value
-            : null;
-
-    }
-
-
-    /* =====================================================
-       USER ACTIONS
-       ===================================================== */
-
-    function createUserActions(
-        element,
-        message
-    ) {
+    function createUserActions() {
 
         const actions =
             document.createElement(
@@ -1255,69 +913,63 @@ neo.js may remain loaded.
 
 
         actions.className =
-            "user-msg-actions message-actions";
+            "user-msg-actions";
 
 
         const editButton =
-            createActionButton({
-                icon:
-                    "pencil",
+            document.createElement(
+                "button"
+            );
 
-                label:
-                    "Edit",
 
-                action:
-                    "edit"
-            });
+        editButton.className =
+            "user-action-btn user-edit-btn";
+
+
+        editButton.type =
+            "button";
+
+
+        editButton.title =
+            "Edit message";
+
+
+        editButton.setAttribute(
+            "aria-label",
+            "Edit message"
+        );
+
+
+        editButton.innerHTML =
+            '<i data-lucide="pencil" size="14"></i>';
 
 
         const copyButton =
-            createActionButton({
-                icon:
-                    "copy",
-
-                label:
-                    "Copy",
-
-                action:
-                    "copy"
-            });
+            document.createElement(
+                "button"
+            );
 
 
-        editButton.addEventListener(
-            "click",
-            event => {
-
-                event.preventDefault();
-                event.stopPropagation();
+        copyButton.className =
+            "user-action-btn user-copy-btn";
 
 
-                beginEdit(
-                    element,
-                    message
-                );
+        copyButton.type =
+            "button";
 
-            }
+
+        copyButton.title =
+            "Copy text";
+
+
+        copyButton.setAttribute(
+            "aria-label",
+            "Copy text"
         );
 
 
-        copyButton.addEventListener(
-            "click",
-            event => {
-
-                event.preventDefault();
-                event.stopPropagation();
-
-
-                void copyText(
-                    readMessageText(
-                        element
-                    ),
-                    copyButton
-                );
-
-            }
-        );
+        copyButton.innerHTML =
+            '<i data-lucide="copy" size="14"></i>';
 
 
         actions.append(
@@ -1331,14 +983,7 @@ neo.js may remain loaded.
     }
 
 
-    /* =====================================================
-       ASSISTANT ACTIONS
-       ===================================================== */
-
-    function createAssistantActions(
-        element,
-        message
-    ) {
+    function createAssistantActions() {
 
         const actions =
             document.createElement(
@@ -1347,492 +992,49 @@ neo.js may remain loaded.
 
 
         actions.className =
-            "assistant-msg-actions message-actions";
+            "message-actions";
 
 
-        const copyButton =
-            createActionButton({
-                icon:
-                    "copy",
+        actions.innerHTML = `
+            <button
+                class="msg-action-btn copy-msg-btn"
+                title="Copy"
+                aria-label="Copy"
+                type="button"
+            >
+                <i
+                    data-lucide="copy"
+                    size="16"
+                ></i>
+            </button>
 
-                label:
-                    "Copy",
+            <button
+                class="msg-action-btn share-msg-btn"
+                title="Share"
+                aria-label="Share"
+                type="button"
+            >
+                <i
+                    data-lucide="share-2"
+                    size="16"
+                ></i>
+            </button>
 
-                action:
-                    "copy"
-            });
-
-
-        const shareButton =
-            createActionButton({
-                icon:
-                    "share-2",
-
-                label:
-                    "Share",
-
-                action:
-                    "share"
-            });
-
-
-        const regenerateButton =
-            createActionButton({
-                icon:
-                    "rotate-cw",
-
-                label:
-                    "Regenerate",
-
-                action:
-                    "regenerate"
-            });
-
-
-        copyButton.addEventListener(
-            "click",
-            event => {
-
-                event.preventDefault();
-                event.stopPropagation();
-
-
-                void copyText(
-                    readMessageText(
-                        element
-                    ),
-                    copyButton
-                );
-
-            }
-        );
-
-
-        shareButton.addEventListener(
-            "click",
-            event => {
-
-                event.preventDefault();
-                event.stopPropagation();
-
-
-                void shareText(
-                    readMessageText(
-                        element
-                    )
-                );
-
-            }
-        );
-
-
-        regenerateButton
-            .addEventListener(
-                "click",
-                event => {
-
-                    event.preventDefault();
-                    event.stopPropagation();
-
-
-                    const messageId =
-                        element.dataset
-                            .neyoMessageId ||
-                        null;
-
-
-                    const index =
-                        getMessageIndex(
-                            element
-                        );
-
-
-                    /*
-                     * Use events so chat.js / legacy neo.js
-                     * can handle regeneration without this
-                     * module owning the API.
-                     */
-
-                    emit(
-                        "neyo:chat-regenerate-request",
-                        {
-                            messageId,
-                            index,
-                            message
-                        }
-                    );
-
-
-                    emit(
-                        "neyo:message-regenerate-request",
-                        {
-                            messageId,
-                            index,
-                            message
-                        }
-                    );
-
-                }
-            );
-
-
-        actions.append(
-            copyButton,
-            shareButton,
-            regenerateButton
-        );
+            <button
+                class="msg-action-btn regen-msg-btn"
+                title="Regenerate"
+                aria-label="Regenerate"
+                type="button"
+            >
+                <i
+                    data-lucide="rotate-cw"
+                    size="16"
+                ></i>
+            </button>
+        `;
 
 
         return actions;
-
-    }
-
-
-    /* =====================================================
-       EDIT MODE
-       ===================================================== */
-
-    function beginEdit(
-        element,
-        message
-    ) {
-
-        if (
-            !element ||
-            !element.classList
-                .contains(
-                    "user"
-                )
-        ) {
-            return false;
-        }
-
-
-        if (
-            element.querySelector(
-                ".edit-message-box"
-            )
-        ) {
-            return false;
-        }
-
-
-        const wrapper =
-            element.querySelector(
-                ".message-wrapper"
-            );
-
-
-        const content =
-            element.querySelector(
-                ".message-content"
-            );
-
-
-        if (
-            !wrapper ||
-            !content
-        ) {
-            return false;
-        }
-
-
-        const originalText =
-            clean(
-                content.innerText
-            );
-
-
-        const oldActions =
-            element.querySelector(
-                ".user-msg-actions"
-            );
-
-
-        wrapper.style.display =
-            "none";
-
-
-        if (oldActions) {
-            oldActions.style.display =
-                "none";
-        }
-
-
-        const box =
-            document.createElement(
-                "div"
-            );
-
-
-        box.className =
-            "edit-message-box";
-
-
-        const textarea =
-            document.createElement(
-                "textarea"
-            );
-
-
-        textarea.className =
-            "edit-textarea";
-
-
-        textarea.value =
-            originalText;
-
-
-        textarea.rows =
-            1;
-
-
-        const actions =
-            document.createElement(
-                "div"
-            );
-
-
-        actions.className =
-            "edit-actions";
-
-
-        const cancel =
-            document.createElement(
-                "button"
-            );
-
-
-        cancel.type =
-            "button";
-
-
-        cancel.className =
-            "edit-btn-cancel";
-
-
-        cancel.textContent =
-            "Cancel";
-
-
-        const save =
-            document.createElement(
-                "button"
-            );
-
-
-        save.type =
-            "button";
-
-
-        save.className =
-            "edit-btn-save";
-
-
-        save.textContent =
-            "Send";
-
-
-        actions.append(
-            cancel,
-            save
-        );
-
-
-        box.append(
-            textarea,
-            actions
-        );
-
-
-        element.appendChild(
-            box
-        );
-
-
-        function closeEdit() {
-
-            box.remove();
-
-
-            wrapper.style.display =
-                "";
-
-
-            if (oldActions) {
-                oldActions.style.display =
-                    "";
-            }
-
-        }
-
-
-        cancel.addEventListener(
-            "click",
-            event => {
-
-                event.preventDefault();
-                event.stopPropagation();
-
-
-                closeEdit();
-
-            }
-        );
-
-
-        save.addEventListener(
-            "click",
-            event => {
-
-                event.preventDefault();
-                event.stopPropagation();
-
-
-                const text =
-                    clean(
-                        textarea.value
-                    ).trim();
-
-
-                if (!text) {
-                    return;
-                }
-
-
-                const id =
-                    element.dataset
-                        .neyoMessageId ||
-                    messageId(
-                        message
-                    );
-
-
-                const index =
-                    getMessageIndex(
-                        element
-                    );
-
-
-                /*
-                 * UI updates immediately.
-                 */
-
-                renderContent(
-                    content,
-                    text,
-                    "user"
-                );
-
-
-                closeEdit();
-
-
-                /*
-                 * Let chat.js / legacy layer perform
-                 * canonical edit + resend logic.
-                 */
-
-                emit(
-                    "neyo:chat-edit-request",
-                    {
-                        id,
-                        messageId:
-                            id,
-
-                        index,
-
-                        content:
-                            text,
-
-                        text,
-
-                        message: {
-                            ...message,
-                            id,
-                            role:
-                                "user",
-                            content:
-                                text
-                        }
-                    }
-                );
-
-
-                emit(
-                    "neyo:message-edit-request",
-                    {
-                        id,
-                        messageId:
-                            id,
-
-                        index,
-
-                        content:
-                            text,
-
-                        text
-                    }
-                );
-
-            }
-        );
-
-
-        textarea
-            .addEventListener(
-                "keydown",
-                event => {
-
-                    if (
-                        event.key ===
-                        "Escape"
-                    ) {
-
-                        event.preventDefault();
-
-
-                        closeEdit();
-
-
-                        return;
-
-                    }
-
-
-                    if (
-                        event.key ===
-                        "Enter" &&
-                        !event.shiftKey
-                    ) {
-
-                        event.preventDefault();
-
-
-                        save.click();
-
-                    }
-
-                }
-            );
-
-
-        requestAnimationFrame(
-            () => {
-
-                textarea.focus();
-
-
-                textarea.setSelectionRange(
-                    textarea.value.length,
-                    textarea.value.length
-                );
-
-            }
-        );
-
-
-        return true;
 
     }
 
@@ -1874,6 +1076,10 @@ neo.js may remain loaded.
             createId();
 
 
+        /*
+         * Prevent duplicate DOM rows.
+         */
+
         const existing =
             findMessage(
                 id
@@ -1887,6 +1093,7 @@ neo.js may remain loaded.
                 message.content,
                 {
                     role,
+
                     message
                 }
             );
@@ -1896,6 +1103,10 @@ neo.js may remain loaded.
 
         }
 
+
+        /*
+         * Real assistant response replaces Thinking.
+         */
 
         if (
             role ===
@@ -1970,8 +1181,7 @@ neo.js may remain loaded.
            ------------------------------------------------- */
 
         if (
-            role ===
-            "user"
+            role === "user"
         ) {
 
             const wrapper =
@@ -2009,11 +1219,13 @@ neo.js may remain loaded.
             );
 
 
+            /*
+             * ONLY RESTORED PART:
+             * old user action buttons.
+             */
+
             element.appendChild(
-                createUserActions(
-                    element,
-                    message
-                )
+                createUserActions()
             );
 
         }
@@ -2045,11 +1257,13 @@ neo.js may remain loaded.
             }
 
 
+            /*
+             * ONLY RESTORED PART:
+             * old assistant action buttons.
+             */
+
             element.appendChild(
-                createAssistantActions(
-                    element,
-                    message
-                )
+                createAssistantActions()
             );
 
         }
@@ -2445,7 +1659,7 @@ neo.js may remain loaded.
 
 
     /* =====================================================
-       REPLACE HISTORY
+       REPLACE
        ===================================================== */
 
     function replaceMessages(
@@ -2603,17 +1817,11 @@ neo.js may remain loaded.
     for (
         const eventName
         of [
-
             "neyo:chat-response",
-
             "neyo:chat-send-end",
-
             "neyo:chat-error",
-
             "neyo:chat-aborted",
-
             "neyo:chat-limit-reached"
-
         ]
     ) {
 
@@ -2661,54 +1869,81 @@ neo.js may remain loaded.
 
 
     /* =====================================================
-       HISTORY LOAD BRIDGE
+       LEGACY UPDATE BRIDGE
        ===================================================== */
 
     window.addEventListener(
-        "neyo:conversation-loaded",
+        "neyo:message-update-request",
         event => {
 
-            const messages =
-                event.detail
-                    ?.messages;
+            const detail =
+                event.detail ||
+                {};
 
 
-            if (
-                Array.isArray(
-                    messages
-                )
-            ) {
+            const id =
+                detail.id ||
+                detail.messageId ||
+                detail.message?.id;
 
-                replaceMessages(
-                    messages
-                );
 
+            if (!id) {
+                return;
             }
+
+
+            updateMessage(
+                id,
+                detail.content ??
+                detail.message
+                    ?.content ??
+                "",
+                {
+                    role:
+                        detail.role ||
+                        detail.message
+                            ?.role,
+
+                    message:
+                        detail.message
+                }
+            );
 
         }
     );
 
 
+    /* =====================================================
+       REPLACE BRIDGE
+       ===================================================== */
+
     window.addEventListener(
-        "neyo:history-conversation-loaded",
+        "neyo:messages-replace",
         event => {
 
-            const messages =
+            replaceMessages(
                 event.detail
-                    ?.messages;
+                    ?.messages ||
+                event.detail ||
+                []
+            );
+
+        }
+    );
 
 
-            if (
-                Array.isArray(
-                    messages
-                )
-            ) {
+    /* =====================================================
+       SCROLL EVENT
+       ===================================================== */
 
-                replaceMessages(
-                    messages
-                );
+    window.addEventListener(
+        "neyo:messages-scroll-bottom",
+        () => {
 
-            }
+            scrollToBottom(
+                "smooth",
+                true
+            );
 
         }
     );
@@ -2726,6 +1961,9 @@ neo.js may remain loaded.
 
             version:
                 VERSION,
+
+            active:
+                true,
 
             create:
                 createMessage,
@@ -2748,16 +1986,35 @@ neo.js may remain loaded.
 
             scrollToBottom,
 
-            find:
+            getElement:
                 findMessage,
 
-            refreshIcons,
+            getContainer:
+                () =>
+                    chatMessages,
 
-            getRoot() {
+            getState:
+                () => ({
 
-                return chatMessages;
+                    version:
+                        VERSION,
 
-            }
+                    active:
+                        true,
+
+                    messageCount:
+                        chatMessages
+                            .querySelectorAll(
+                                '[data-neyo-message-id]:not([data-neyo-message-id="neyo-thinking"])'
+                            )
+                            .length,
+
+                    thinking:
+                        Boolean(
+                            thinkingElement
+                        )
+
+                })
 
         });
 
@@ -2783,10 +2040,11 @@ neo.js may remain loaded.
     );
 
 
+    /* =====================================================
+       INIT
+       ===================================================== */
+
     updateHero();
-
-
-    refreshIcons();
 
 
     emit(
@@ -2794,14 +2052,17 @@ neo.js may remain loaded.
         {
 
             version:
-                VERSION
+                VERSION,
+
+            active:
+                true
 
         }
     );
 
 
     console.log(
-        "[NEYO Messages] Ready.",
+        "[NEYO Messages] Canonical renderer ready.",
         VERSION
     );
 

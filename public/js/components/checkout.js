@@ -156,7 +156,7 @@ Does NOT own:
                 button.dataset.checkoutOriginalText =
                     button.textContent
                         ?.trim() ||
-                    "Upgrade to Pro";
+                    "Go to NEYO Leverage";
             }
 
             button.disabled = true;
@@ -282,7 +282,8 @@ Does NOT own:
 
                             body:
                                 JSON.stringify({
-                                    source
+                                    source,
+                                    plan: "leverage"
                                 })
                         }
                     );

@@ -77,7 +77,6 @@
 
   <!-- Menus -->
   <link rel="stylesheet" href="/css/components/model-menu.css?v=1">
-  <!-- NEW: leverage-intro CSS -->
   <link rel="stylesheet" href="/css/components/leverage-intro.css?v=1">
   <link rel="stylesheet" href="/css/components/menus.css?v=2">
 
@@ -1279,57 +1278,283 @@
     </div>
   </div>
 
-  <!-- Upgrade Modal (unchanged) -->
-  <div class="modal-overlay" id="upgradeModal">
-    <div class="modal-card">
+  <!-- ========================================================= -->
+  <!-- NEYO LEVERAGE — UPGRADE MODAL                             -->
+  <!-- Existing IDs preserved for checkout compatibility         -->
+  <!-- ========================================================= -->
+
+  <div
+    class="modal-overlay leverage-upgrade-overlay"
+    id="upgradeModal"
+    aria-hidden="true"
+  >
+    <div
+      class="leverage-upgrade-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="leverageUpgradeTitle"
+    >
+
+      <!-- CLOSE -->
       <button
-        class="modal-close-btn"
+        class="modal-close-btn leverage-upgrade-close"
         id="modalCloseBtn"
         type="button"
+        aria-label="Close upgrade options"
         data-tooltip="Close"
         data-tooltip-position="left"
       >
-        &times;
+        <i data-lucide="x" size="20"></i>
       </button>
-      <div class="modal-header">
-        <div class="pro-sparkle-badge"><i data-lucide="zap" size="22"></i></div>
-        <h2>Unlock NEYO L1.2 Pro</h2>
-        <p>Supercharge your workflow with full multimodal power and reasoning.</p>
+
+
+      <!-- HEADER -->
+      <div class="leverage-upgrade-header">
+
+        <span class="leverage-upgrade-kicker">
+          NEYO LEVERAGE
+        </span>
+
+        <h2 id="leverageUpgradeTitle">
+          Go further with NEYO Leverage
+        </h2>
+
+        <p>
+          More capability for demanding conversations,
+          advanced reasoning, files, and complex work.
+        </p>
+
       </div>
-      <div class="modal-features-list">
-        <div class="feature-item">
-          <div class="feature-icon"><i data-lucide="clapperboard" size="18"></i></div>
-          <div class="feature-text"><strong>Video & Audio Processing</strong><small>Upload MP4, MP3, and WAV files directly for AI analysis.</small></div>
-        </div>
-        <div class="feature-item">
-          <div class="feature-icon"><i data-lucide="brain-circuit" size="18"></i></div>
-          <div class="feature-text"><strong>Deep Structural Reasoning</strong><small>Solve complex logic, architecture, and step-by-step math.</small></div>
-        </div>
-        <div class="feature-item">
-          <div class="feature-icon"><i data-lucide="file-text" size="18"></i></div>
-          <div class="feature-text"><strong>4,000 Output Tokens</strong><small>Generate long-form scripts, complete codebases, and reports.</small></div>
-        </div>
-      </div>
-      <div class="modal-footer-actions">
-        <button
-          class="upgrade-btn-primary"
-          id="upgradeActionBtn"
-          type="button"
-          data-tooltip="Upgrade to Pro"
-          data-tooltip-position="top"
+
+
+      <!-- PLAN GRID -->
+      <div class="leverage-plan-grid">
+
+
+        <!-- =================================================== -->
+        <!-- FREE PLAN                                           -->
+        <!-- =================================================== -->
+
+        <section
+          class="leverage-plan-card leverage-plan-card-free"
+          aria-label="NEYO Free plan"
         >
-          Upgrade to Pro ($12/mo)
-        </button>
+
+          <div class="leverage-plan-card-header">
+
+            <span class="leverage-plan-name">
+              NEYO
+            </span>
+
+            <h3>
+              Start with the essentials
+            </h3>
+
+            <p>
+              Everyday AI help for writing, questions,
+              ideas, and basic tasks.
+            </p>
+
+          </div>
+
+
+          <div class="leverage-plan-current">
+            Your current plan
+          </div>
+
+
+          <div class="leverage-plan-divider"></div>
+
+
+          <div class="leverage-plan-feature-heading">
+            Included
+          </div>
+
+
+          <div class="leverage-plan-features">
+
+            <div class="leverage-plan-feature">
+              <i data-lucide="check" size="17"></i>
+
+              <span>
+                Limited chat access
+              </span>
+            </div>
+
+
+            <div class="leverage-plan-feature">
+              <i data-lucide="check" size="17"></i>
+
+              <span>
+                Standard NEYO intelligence
+              </span>
+            </div>
+
+
+            <div class="leverage-plan-feature">
+              <i data-lucide="check" size="17"></i>
+
+              <span>
+                Basic writing, coding, and everyday help
+              </span>
+            </div>
+
+
+            <div class="leverage-plan-feature">
+              <i data-lucide="check" size="17"></i>
+
+              <span>
+                Core NEYO features
+              </span>
+            </div>
+
+          </div>
+
+        </section>
+
+
+        <!-- =================================================== -->
+        <!-- LEVERAGE PLAN                                       -->
+        <!-- =================================================== -->
+
+        <section
+          class="leverage-plan-card leverage-plan-card-featured"
+          aria-label="NEYO Leverage plan"
+        >
+
+          <div class="leverage-plan-card-top">
+
+            <span class="leverage-plan-name">
+              NEYO Leverage
+            </span>
+
+            <span class="leverage-plan-badge">
+              Advanced
+            </span>
+
+          </div>
+
+
+          <div class="leverage-plan-card-header">
+
+            <h3>
+              Built for deeper work
+            </h3>
+
+            <p>
+              Advanced NEYO capability for harder tasks,
+              richer inputs, and more demanding workflows.
+            </p>
+
+          </div>
+
+
+          <!-- EXISTING CHECKOUT BUTTON ID PRESERVED -->
+          <button
+            class="upgrade-btn-primary leverage-plan-upgrade-btn"
+            id="upgradeActionBtn"
+            type="button"
+            data-tooltip="Continue to Leverage"
+            data-tooltip-position="top"
+          >
+            Go to NEYO Leverage
+
+            <i
+              data-lucide="arrow-right"
+              size="18"
+              aria-hidden="true"
+            ></i>
+          </button>
+
+
+          <div class="leverage-plan-divider"></div>
+
+
+          <div class="leverage-plan-feature-heading">
+            Everything in NEYO, plus
+          </div>
+
+
+          <div class="leverage-plan-features">
+
+            <div class="leverage-plan-feature">
+              <i data-lucide="check" size="17"></i>
+
+              <span>
+                Advanced intelligence for more demanding tasks
+              </span>
+            </div>
+
+
+            <div class="leverage-plan-feature">
+              <i data-lucide="check" size="17"></i>
+
+              <span>
+                Deeper reasoning for complex problems
+              </span>
+            </div>
+
+
+            <div class="leverage-plan-feature">
+              <i data-lucide="check" size="17"></i>
+
+              <span>
+                Stronger coding, analysis, and structured work
+              </span>
+            </div>
+
+
+            <div class="leverage-plan-feature">
+              <i data-lucide="check" size="17"></i>
+
+              <span>
+                Richer file and multimodal workflows
+              </span>
+            </div>
+
+
+            <div class="leverage-plan-feature">
+              <i data-lucide="check" size="17"></i>
+
+              <span>
+                Intelligent model routing based on the task
+              </span>
+            </div>
+
+
+            <div class="leverage-plan-feature">
+              <i data-lucide="check" size="17"></i>
+
+              <span>
+                Access to future advanced NEYO capabilities
+              </span>
+            </div>
+
+          </div>
+
+        </section>
+
+      </div>
+
+
+      <!-- FOOTER -->
+      <div class="leverage-upgrade-footer">
+
+        <p>
+          Continue to see current Leverage pricing
+          and available billing options.
+        </p>
+
         <button
-          class="upgrade-btn-secondary"
+          class="upgrade-btn-secondary leverage-upgrade-later"
           id="modalMaybeLaterBtn"
           type="button"
-          data-tooltip="Maybe later"
-          data-tooltip-position="top"
         >
-          Maybe Later
+          Maybe later
         </button>
+
       </div>
+
     </div>
   </div>
 

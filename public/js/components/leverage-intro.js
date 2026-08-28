@@ -1,30 +1,24 @@
 /*
 =========================================================
 NEYO — LEVERAGE INTRO
-v1 — 5 CARD INTRO FLOW
+CHATGPT-STYLE PREMIUM INTRO
+VERSION 2
 
-Purpose:
-- Free user clicks Leverage
-- Show 5 introduction cards
-- No price shown in intro cards
-- Final card opens existing upgrade flow
-- Keep current model-menu / checkout untouched
-
-Listens:
-- neyo:leverage-intro-request
-
-Emits:
-- neyo:leverage-intro-open
-- neyo:leverage-intro-close
-- neyo:leverage-intro-change
-- neyo:leverage-upgrade-request
+Owns:
+- Leverage introduction modal
+- 5-card onboarding flow
+- Slide navigation
+- Keyboard navigation
+- Close behavior
+- Upgrade handoff
+- Free-user introduction experience
 
 Does NOT own:
 - Checkout
-- Subscription state
-- Model access
 - Billing
-- Backend routing
+- Subscription state
+- Model authorization
+- Pricing
 =========================================================
 */
 
@@ -33,172 +27,195 @@ Does NOT own:
 
 
     /* =====================================================
-       SINGLETON GUARD
+       SINGLETON
        ===================================================== */
 
     if (
         window.NeyoLeverageIntro
-            ?.__controller ===
-        true
+            ?.__controller
     ) {
         return;
     }
 
 
     /* =====================================================
-       STATE
+       CONFIG
        ===================================================== */
 
-    let overlay =
-        null;
+    const CONFIG =
+        Object.freeze({
 
+            overlayId:
+                "leverageIntroOverlay",
 
-    let card =
-        null;
+            modalId:
+                "leverageIntroModal",
 
+            requestEvent:
+                "neyo:leverage-intro-request",
 
-    let content =
-        null;
+            upgradeEvent:
+                "neyo:leverage-upgrade-request"
 
-
-    let dots =
-        null;
-
-
-    let backBtn =
-        null;
-
-
-    let nextBtn =
-        null;
-
-
-    let closeBtn =
-        null;
-
-
-    let currentIndex =
-        0;
-
-
-    let isOpen =
-        false;
+        });
 
 
     /* =====================================================
-       CARDS
+       CONTENT
        ===================================================== */
 
     const CARDS =
         Object.freeze([
+
             {
                 eyebrow:
-                    "Leverage",
+                    "NEYO LEVERAGE",
 
                 title:
-                    "Meet Leverage",
+                    "Meet NEYO Leverage",
 
                 description:
                     "A more capable NEYO experience for demanding work, deeper reasoning, and advanced tasks.",
 
-                icon:
-                    "sparkles"
+                learnMore:
+                    true
             },
 
             {
                 eyebrow:
-                    "More capability",
+                    "BUILT FOR MORE",
 
                 title:
-                    "Built for harder tasks",
+                    "Take on harder tasks",
 
                 description:
-                    "Leverage uses stronger intelligence routing for complex questions, coding, planning, analysis, and long-form work.",
+                    "Leverage is designed for complex questions, coding, planning, analysis, and longer structured work.",
 
-                icon:
-                    "brain-circuit"
+                learnMore:
+                    false
             },
 
             {
                 eyebrow:
-                    "Advanced reasoning",
+                    "DEEPER REASONING",
 
                 title:
                     "Go deeper when needed",
 
                 description:
-                    "Handle multi-step problems, technical work, structured reasoning, and more demanding conversations with greater depth.",
+                    "Work through multi-step, technical, and structured problems with stronger reasoning and more capable task handling.",
 
-                icon:
-                    "workflow"
+                learnMore:
+                    false
             },
 
             {
                 eyebrow:
-                    "More tools",
+                    "ADVANCED WORKFLOWS",
 
                 title:
                     "A broader NEYO experience",
 
                 description:
-                    "Leverage is designed to unlock advanced capabilities across research, files, multimodal tasks, and specialist workflows.",
+                    "Use advanced capabilities across files, research, multimodal work, coding, analysis, and future specialist workflows.",
 
-                icon:
-                    "layers-3"
+                learnMore:
+                    false
             },
 
             {
                 eyebrow:
-                    "Leverage",
+                    "NEYO LEVERAGE",
 
                 title:
                     "Ready to unlock more?",
 
                 description:
-                    "View the available upgrade options and choose whether Leverage is right for you.",
+                    "Explore the available Leverage options and decide whether the advanced NEYO experience is right for you.",
 
-                icon:
-                    "arrow-up-right",
-
-                final:
-                    true
+                learnMore:
+                    false
             }
+
         ]);
+
+
+    /* =====================================================
+       STATE
+       ===================================================== */
+
+    let currentIndex =
+        0;
+
+    let open =
+        false;
+
+    let overlay =
+        null;
+
+    let modal =
+        null;
+
+    let titleElement =
+        null;
+
+    let eyebrowElement =
+        null;
+
+    let descriptionElement =
+        null;
+
+    let learnMoreElement =
+        null;
+
+    let backButton =
+        null;
+
+    let nextButton =
+        null;
+
+    let closeButton =
+        null;
+
+    let dotsContainer =
+        null;
+
+    let cardStage =
+        null;
 
 
     /* =====================================================
        HELPERS
        ===================================================== */
 
-    const emit =
-        (
-            name,
-            detail = {}
-        ) => {
+    const emit = (
+        name,
+        detail = {}
+    ) => {
 
-            window.dispatchEvent(
-                new CustomEvent(
-                    name,
-                    {
-                        detail
-                    }
-                )
-            );
+        window.dispatchEvent(
+            new CustomEvent(
+                name,
+                {
+                    detail
+                }
+            )
+        );
 
-        };
+    };
 
 
     const refreshIcons =
         () => {
 
-            try {
-
+            if (
                 window.lucide
                     ?.createIcons
-                    ?.();
+            ) {
 
-            } catch {
-                // Ignore icon refresh failure.
+                window.lucide
+                    .createIcons();
+
             }
 
         };
@@ -210,40 +227,247 @@ Does NOT own:
             return Math.max(
                 0,
                 Math.min(
-                    Number(
-                        value
-                    ) || 0,
-                    CARDS.length - 1
+                    CARDS.length - 1,
+                    value
                 )
             );
 
         };
 
 
+    const isLastCard =
+        () => {
+
+            return (
+                currentIndex ===
+                CARDS.length - 1
+            );
+
+        };
+
+
+    const isFirstCard =
+        () => {
+
+            return (
+                currentIndex === 0
+            );
+
+        };
+
+
     /* =====================================================
-       CREATE UI
+       CREATE ELEMENT
        ===================================================== */
 
-    const createUI =
+    const createElement =
+        (
+            tag,
+            className = "",
+            text = ""
+        ) => {
+
+            const element =
+                document.createElement(
+                    tag
+                );
+
+
+            if (className) {
+
+                element.className =
+                    className;
+
+            }
+
+
+            if (
+                typeof text ===
+                    "string" &&
+                text
+            ) {
+
+                element.textContent =
+                    text;
+
+            }
+
+
+            return element;
+
+        };
+
+
+    /* =====================================================
+       SEGMENTED CONTROL
+       ===================================================== */
+
+    const createSegmentedControl =
+        () => {
+
+            const wrapper =
+                createElement(
+                    "div",
+                    "leverage-intro-segmented"
+                );
+
+
+            const neyoTab =
+                createElement(
+                    "button",
+                    "leverage-intro-segment",
+                    "NEYO"
+                );
+
+
+            const leverageTab =
+                createElement(
+                    "button",
+                    "leverage-intro-segment active",
+                    "Leverage"
+                );
+
+
+            neyoTab.type =
+                "button";
+
+            leverageTab.type =
+                "button";
+
+
+            neyoTab.setAttribute(
+                "aria-label",
+                "NEYO"
+            );
+
+
+            leverageTab.setAttribute(
+                "aria-label",
+                "Leverage"
+            );
+
+
+            neyoTab.addEventListener(
+                "click",
+                () => {
+
+                    closeIntro();
+
+                }
+            );
+
+
+            leverageTab.addEventListener(
+                "click",
+                () => {
+
+                    goToSlide(
+                        currentIndex
+                    );
+
+                }
+            );
+
+
+            wrapper.append(
+                neyoTab,
+                leverageTab
+            );
+
+
+            return wrapper;
+
+        };
+
+
+    /* =====================================================
+       DOTS
+       ===================================================== */
+
+    const createDots =
+        () => {
+
+            const container =
+                createElement(
+                    "div",
+                    "leverage-intro-dots"
+                );
+
+
+            CARDS.forEach(
+                (
+                    card,
+                    index
+                ) => {
+
+                    const dot =
+                        createElement(
+                            "button",
+                            "leverage-intro-dot"
+                        );
+
+
+                    dot.type =
+                        "button";
+
+
+                    dot.setAttribute(
+                        "aria-label",
+                        `Go to Leverage introduction ${index + 1}`
+                    );
+
+
+                    dot.dataset.index =
+                        String(index);
+
+
+                    dot.addEventListener(
+                        "click",
+                        () => {
+
+                            goToSlide(
+                                index
+                            );
+
+                        }
+                    );
+
+
+                    container
+                        .appendChild(
+                            dot
+                        );
+
+                }
+            );
+
+
+            return container;
+
+        };
+
+
+    /* =====================================================
+       BUILD MODAL
+       ===================================================== */
+
+    const build =
         () => {
 
             if (overlay) {
-                return;
+                return overlay;
             }
 
 
             overlay =
-                document.createElement(
-                    "div"
+                createElement(
+                    "div",
+                    "leverage-intro-overlay"
                 );
 
 
             overlay.id =
-                "leverageIntroOverlay";
-
-
-            overlay.className =
-                "leverage-intro-overlay";
+                CONFIG.overlayId;
 
 
             overlay.setAttribute(
@@ -252,113 +476,310 @@ Does NOT own:
             );
 
 
-            overlay.innerHTML = `
-                <div
-                    class="leverage-intro-card"
-                    id="leverageIntroCard"
-                    role="dialog"
-                    aria-modal="true"
-                    aria-labelledby="leverageIntroTitle"
-                    aria-describedby="leverageIntroDescription"
-                >
-                    <button
-                        class="leverage-intro-close"
-                        id="leverageIntroCloseBtn"
-                        type="button"
-                        aria-label="Close Leverage introduction"
-                    >
-                        <i
-                            data-lucide="x"
-                            width="18"
-                            height="18"
-                            aria-hidden="true"
-                        ></i>
-                    </button>
-
-                    <div
-                        class="leverage-intro-content"
-                        id="leverageIntroContent"
-                    ></div>
-
-                    <div
-                        class="leverage-intro-footer"
-                    >
-                        <div
-                            class="leverage-intro-dots"
-                            id="leverageIntroDots"
-                            aria-label="Introduction progress"
-                        ></div>
-
-                        <div
-                            class="leverage-intro-actions"
-                        >
-                            <button
-                                class="leverage-intro-back"
-                                id="leverageIntroBackBtn"
-                                type="button"
-                            >
-                                Back
-                            </button>
-
-                            <button
-                                class="leverage-intro-next"
-                                id="leverageIntroNextBtn"
-                                type="button"
-                            >
-                                Next
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            `;
-
-
-            document.body
-                .appendChild(
-                    overlay
+            modal =
+                createElement(
+                    "section",
+                    "leverage-intro-modal"
                 );
 
 
-            card =
-                document.getElementById(
-                    "leverageIntroCard"
+            modal.id =
+                CONFIG.modalId;
+
+
+            modal.setAttribute(
+                "role",
+                "dialog"
+            );
+
+
+            modal.setAttribute(
+                "aria-modal",
+                "true"
+            );
+
+
+            modal.setAttribute(
+                "aria-labelledby",
+                "leverageIntroTitle"
+            );
+
+
+            /* =============================================
+               DECORATIVE GRADIENT
+               ============================================= */
+
+            const gradient =
+                createElement(
+                    "div",
+                    "leverage-intro-gradient"
                 );
 
 
-            content =
-                document.getElementById(
-                    "leverageIntroContent"
+            gradient.setAttribute(
+                "aria-hidden",
+                "true"
+            );
+
+
+            /* =============================================
+               CLOSE BUTTON
+               ============================================= */
+
+            closeButton =
+                createElement(
+                    "button",
+                    "leverage-intro-close"
                 );
 
 
-            dots =
-                document.getElementById(
-                    "leverageIntroDots"
+            closeButton.type =
+                "button";
+
+
+            closeButton.setAttribute(
+                "aria-label",
+                "Close Leverage introduction"
+            );
+
+
+            closeButton.innerHTML =
+                '<i data-lucide="x" size="20"></i>';
+
+
+            closeButton.addEventListener(
+                "click",
+                () => {
+
+                    closeIntro();
+
+                }
+            );
+
+
+            /* =============================================
+               TOP AREA
+               ============================================= */
+
+            const top =
+                createElement(
+                    "div",
+                    "leverage-intro-top"
                 );
 
 
-            backBtn =
-                document.getElementById(
-                    "leverageIntroBackBtn"
+            const segmented =
+                createSegmentedControl();
+
+
+            top.appendChild(
+                segmented
+            );
+
+
+            /* =============================================
+               CONTENT
+               ============================================= */
+
+            cardStage =
+                createElement(
+                    "div",
+                    "leverage-intro-stage"
                 );
 
 
-            nextBtn =
-                document.getElementById(
-                    "leverageIntroNextBtn"
+            const content =
+                createElement(
+                    "div",
+                    "leverage-intro-content"
                 );
 
 
-            closeBtn =
-                document.getElementById(
-                    "leverageIntroCloseBtn"
+            eyebrowElement =
+                createElement(
+                    "div",
+                    "leverage-intro-eyebrow"
                 );
 
 
-            bindUIEvents();
+            titleElement =
+                createElement(
+                    "h2",
+                    "leverage-intro-title"
+                );
 
 
-            buildDots();
+            titleElement.id =
+                "leverageIntroTitle";
+
+
+            descriptionElement =
+                createElement(
+                    "p",
+                    "leverage-intro-description"
+                );
+
+
+            learnMoreElement =
+                createElement(
+                    "button",
+                    "leverage-intro-learn-more",
+                    "Learn more"
+                );
+
+
+            learnMoreElement.type =
+                "button";
+
+
+            learnMoreElement.addEventListener(
+                "click",
+                () => {
+
+                    goToSlide(
+                        1
+                    );
+
+                }
+            );
+
+
+            content.append(
+                eyebrowElement,
+                titleElement,
+                descriptionElement,
+                learnMoreElement
+            );
+
+
+            cardStage.appendChild(
+                content
+            );
+
+
+            /* =============================================
+               DOTS
+               ============================================= */
+
+            dotsContainer =
+                createDots();
+
+
+            /* =============================================
+               FOOTER ACTIONS
+               ============================================= */
+
+            const footer =
+                createElement(
+                    "div",
+                    "leverage-intro-footer"
+                );
+
+
+            backButton =
+                createElement(
+                    "button",
+                    "leverage-intro-back",
+                    "Back"
+                );
+
+
+            backButton.type =
+                "button";
+
+
+            backButton.addEventListener(
+                "click",
+                () => {
+
+                    previousSlide();
+
+                }
+            );
+
+
+            nextButton =
+                createElement(
+                    "button",
+                    "leverage-intro-next",
+                    "Next"
+                );
+
+
+            nextButton.type =
+                "button";
+
+
+            nextButton.addEventListener(
+                "click",
+                () => {
+
+                    if (
+                        isLastCard()
+                    ) {
+
+                        requestUpgrade();
+
+                        return;
+
+                    }
+
+
+                    nextSlide();
+
+                }
+            );
+
+
+            footer.append(
+                backButton,
+                nextButton
+            );
+
+
+            /* =============================================
+               ASSEMBLE
+               ============================================= */
+
+            modal.append(
+                gradient,
+                closeButton,
+                top,
+                cardStage,
+                dotsContainer,
+                footer
+            );
+
+
+            overlay.appendChild(
+                modal
+            );
+
+
+            document.body.appendChild(
+                overlay
+            );
+
+
+            /* =============================================
+               OVERLAY CLICK
+               ============================================= */
+
+            overlay.addEventListener(
+                "click",
+                event => {
+
+                    if (
+                        event.target ===
+                        overlay
+                    ) {
+
+                        closeIntro();
+
+                    }
+
+                }
+            );
 
 
             render();
@@ -366,79 +787,8 @@ Does NOT own:
 
             refreshIcons();
 
-        };
 
-
-    /* =====================================================
-       BUILD DOTS
-       ===================================================== */
-
-    const buildDots =
-        () => {
-
-            if (!dots) {
-                return;
-            }
-
-
-            dots.replaceChildren();
-
-
-            CARDS.forEach(
-                (
-                    item,
-                    index
-                ) => {
-
-                    const dot =
-                        document.createElement(
-                            "button"
-                        );
-
-
-                    dot.type =
-                        "button";
-
-
-                    dot.className =
-                        "leverage-intro-dot";
-
-
-                    dot.setAttribute(
-                        "aria-label",
-                        `Go to introduction card ${index + 1}`
-                    );
-
-
-                    dot.dataset.index =
-                        String(
-                            index
-                        );
-
-
-                    dot.addEventListener(
-                        "click",
-                        event => {
-
-                            event.preventDefault();
-
-                            event.stopPropagation();
-
-
-                            goTo(
-                                index
-                            );
-
-                        }
-                    );
-
-
-                    dots.appendChild(
-                        dot
-                    );
-
-                }
-            );
+            return overlay;
 
         };
 
@@ -451,99 +801,106 @@ Does NOT own:
         () => {
 
             if (
-                !content ||
-                !nextBtn ||
-                !backBtn
+                !overlay ||
+                !modal
             ) {
                 return;
             }
 
 
-            currentIndex =
-                clampIndex(
-                    currentIndex
-                );
-
-
-            const item =
+            const card =
                 CARDS[
                     currentIndex
                 ];
 
 
-            content.innerHTML = `
-                <div
-                    class="leverage-intro-slide"
-                    data-index="${currentIndex}"
-                >
-                    <div
-                        class="leverage-intro-icon"
-                        aria-hidden="true"
-                    >
-                        <i
-                            data-lucide="${item.icon}"
-                            width="24"
-                            height="24"
-                        ></i>
-                    </div>
-
-                    <div
-                        class="leverage-intro-copy"
-                    >
-                        <span
-                            class="leverage-intro-eyebrow"
-                        >
-                            ${item.eyebrow}
-                        </span>
-
-                        <h2
-                            id="leverageIntroTitle"
-                        >
-                            ${item.title}
-                        </h2>
-
-                        <p
-                            id="leverageIntroDescription"
-                        >
-                            ${item.description}
-                        </p>
-                    </div>
-                </div>
-            `;
-
-
-            backBtn.hidden =
-                currentIndex ===
-                0;
+            if (
+                !card
+            ) {
+                return;
+            }
 
 
             if (
-                item.final ===
-                true
+                eyebrowElement
             ) {
 
-                nextBtn.textContent =
-                    "View upgrade options";
-
-            } else {
-
-                nextBtn.textContent =
-                    "Next";
+                eyebrowElement.textContent =
+                    card.eyebrow;
 
             }
 
 
-            if (dots) {
+            if (
+                titleElement
+            ) {
 
-                const dotButtons =
-                    Array.from(
-                        dots.querySelectorAll(
+                titleElement.textContent =
+                    card.title;
+
+            }
+
+
+            if (
+                descriptionElement
+            ) {
+
+                descriptionElement.textContent =
+                    card.description;
+
+            }
+
+
+            if (
+                learnMoreElement
+            ) {
+
+                learnMoreElement.hidden =
+                    !card.learnMore;
+
+            }
+
+
+            if (
+                backButton
+            ) {
+
+                backButton.hidden =
+                    isFirstCard();
+
+            }
+
+
+            if (
+                nextButton
+            ) {
+
+                nextButton.textContent =
+                    isLastCard()
+                        ? "Explore Leverage"
+                        : "Next";
+
+
+                nextButton.classList.toggle(
+                    "is-final",
+                    isLastCard()
+                );
+
+            }
+
+
+            if (
+                dotsContainer
+            ) {
+
+                const dots =
+                    dotsContainer
+                        .querySelectorAll(
                             ".leverage-intro-dot"
-                        )
-                    );
+                        );
 
 
-                dotButtons.forEach(
+                dots.forEach(
                     (
                         dot,
                         index
@@ -554,17 +911,16 @@ Does NOT own:
                             currentIndex;
 
 
-                        dot.classList
-                            .toggle(
-                                "active",
-                                active
-                            );
+                        dot.classList.toggle(
+                            "active",
+                            active
+                        );
 
 
                         dot.setAttribute(
                             "aria-current",
                             active
-                                ? "step"
+                                ? "true"
                                 : "false"
                         );
 
@@ -574,97 +930,109 @@ Does NOT own:
             }
 
 
+            modal.dataset.slide =
+                String(
+                    currentIndex
+                );
+
+
+            modal.dataset.lastSlide =
+                isLastCard()
+                    ? "true"
+                    : "false";
+
+
             refreshIcons();
-
-
-            emit(
-                "neyo:leverage-intro-change",
-                {
-                    index:
-                        currentIndex,
-
-                    total:
-                        CARDS.length,
-
-                    card:
-                        item
-                }
-            );
 
         };
 
 
     /* =====================================================
-       NAVIGATION
+       SLIDE NAVIGATION
        ===================================================== */
 
-    const goTo =
+    const goToSlide =
         index => {
 
-            currentIndex =
+            const nextIndex =
                 clampIndex(
-                    index
+                    Number(index) || 0
                 );
-
-
-            render();
-
-        };
-
-
-    const next =
-        () => {
-
-            const item =
-                CARDS[
-                    currentIndex
-                ];
 
 
             if (
-                item?.final ===
-                true
+                currentIndex ===
+                nextIndex
             ) {
 
-                close();
-
-
-                emit(
-                    "neyo:leverage-upgrade-request",
-                    {
-                        source:
-                            "leverage-intro"
-                    }
-                );
-
+                render();
 
                 return;
 
             }
 
 
-            goTo(
-                currentIndex +
-                1
+            if (
+                cardStage
+            ) {
+
+                cardStage.classList.add(
+                    "is-changing"
+                );
+
+            }
+
+
+            window.setTimeout(
+                () => {
+
+                    currentIndex =
+                        nextIndex;
+
+
+                    render();
+
+
+                    if (
+                        cardStage
+                    ) {
+
+                        requestAnimationFrame(
+                            () => {
+
+                                cardStage
+                                    .classList
+                                    .remove(
+                                        "is-changing"
+                                    );
+
+                            }
+                        );
+
+                    }
+
+                },
+                120
             );
 
         };
 
 
-    const back =
+    const nextSlide =
         () => {
 
-            if (
-                currentIndex <=
-                0
-            ) {
-                return;
-            }
+            goToSlide(
+                currentIndex + 1
+            );
+
+        };
 
 
-            goTo(
-                currentIndex -
-                1
+    const previousSlide =
+        () => {
+
+            goToSlide(
+                currentIndex - 1
             );
 
         };
@@ -674,39 +1042,44 @@ Does NOT own:
        OPEN
        ===================================================== */
 
-    const open =
-        () => {
+    const openIntro =
+        ({
+            startIndex = 0
+        } = {}) => {
 
-            createUI();
-
-
-            if (!overlay) {
-                return false;
-            }
+            build();
 
 
             currentIndex =
-                0;
+                clampIndex(
+                    Number(
+                        startIndex
+                    ) || 0
+                );
 
 
             render();
 
 
-            isOpen =
+            open =
                 true;
 
 
-            overlay
+            overlay.classList.add(
+                "open"
+            );
+
+
+            overlay.setAttribute(
+                "aria-hidden",
+                "false"
+            );
+
+
+            document.documentElement
                 .classList
                 .add(
-                    "show"
-                );
-
-
-            overlay
-                .setAttribute(
-                    "aria-hidden",
-                    "false"
+                    "leverage-intro-open"
                 );
 
 
@@ -717,27 +1090,24 @@ Does NOT own:
                 );
 
 
-            requestAnimationFrame(
+            window.setTimeout(
                 () => {
 
-                    nextBtn
-                        ?.focus
-                        ?.();
+                    closeButton
+                        ?.focus?.();
 
-                }
+                },
+                50
             );
 
 
             emit(
-                "neyo:leverage-intro-open",
+                "neyo:leverage-intro-opened",
                 {
-                    total:
-                        CARDS.length
+                    index:
+                        currentIndex
                 }
             );
-
-
-            return true;
 
         };
 
@@ -746,29 +1116,38 @@ Does NOT own:
        CLOSE
        ===================================================== */
 
-    const close =
-        () => {
+    const closeIntro =
+        ({
+            reason = "close"
+        } = {}) => {
 
-            if (!overlay) {
-                return false;
+            if (
+                !overlay ||
+                !open
+            ) {
+                return;
             }
 
 
-            isOpen =
+            open =
                 false;
 
 
-            overlay
+            overlay.classList.remove(
+                "open"
+            );
+
+
+            overlay.setAttribute(
+                "aria-hidden",
+                "true"
+            );
+
+
+            document.documentElement
                 .classList
                 .remove(
-                    "show"
-                );
-
-
-            overlay
-                .setAttribute(
-                    "aria-hidden",
-                    "true"
+                    "leverage-intro-open"
                 );
 
 
@@ -780,98 +1159,62 @@ Does NOT own:
 
 
             emit(
-                "neyo:leverage-intro-close"
+                "neyo:leverage-intro-closed",
+                {
+                    reason,
+                    index:
+                        currentIndex
+                }
             );
-
-
-            return true;
 
         };
 
 
     /* =====================================================
-       UI EVENTS
+       UPGRADE HANDOFF
        ===================================================== */
 
-    function bindUIEvents() {
+    const requestUpgrade =
+        () => {
 
-        closeBtn
-            ?.addEventListener(
-                "click",
-                event => {
-
-                    event.preventDefault();
-
-                    event.stopPropagation();
+            closeIntro({
+                reason:
+                    "upgrade"
+            });
 
 
-                    close();
+            window.setTimeout(
+                () => {
 
-                }
+                    emit(
+                        CONFIG.upgradeEvent,
+                        {
+                            modelId:
+                                "l1.2",
+
+                            plan:
+                                "leverage",
+
+                            source:
+                                "leverage-intro"
+                        }
+                    );
+
+                },
+                140
             );
 
-
-        nextBtn
-            ?.addEventListener(
-                "click",
-                event => {
-
-                    event.preventDefault();
-
-                    event.stopPropagation();
-
-
-                    next();
-
-                }
-            );
-
-
-        backBtn
-            ?.addEventListener(
-                "click",
-                event => {
-
-                    event.preventDefault();
-
-                    event.stopPropagation();
-
-
-                    back();
-
-                }
-            );
-
-
-        overlay
-            ?.addEventListener(
-                "click",
-                event => {
-
-                    if (
-                        event.target ===
-                        overlay
-                    ) {
-
-                        close();
-
-                    }
-
-                }
-            );
-
-    }
+        };
 
 
     /* =====================================================
        KEYBOARD
        ===================================================== */
 
-    document.addEventListener(
-        "keydown",
+    const handleKeydown =
         event => {
 
-            if (!isOpen) {
+            if (!open) {
                 return;
             }
 
@@ -884,7 +1227,10 @@ Does NOT own:
                 event.preventDefault();
 
 
-                close();
+                closeIntro({
+                    reason:
+                        "escape"
+                });
 
 
                 return;
@@ -900,7 +1246,14 @@ Does NOT own:
                 event.preventDefault();
 
 
-                next();
+                if (
+                    isLastCard()
+                ) {
+                    return;
+                }
+
+
+                nextSlide();
 
 
                 return;
@@ -916,47 +1269,47 @@ Does NOT own:
                 event.preventDefault();
 
 
-                back();
+                if (
+                    isFirstCard()
+                ) {
+                    return;
+                }
+
+
+                previousSlide();
 
             }
 
-        },
-        true
+        };
+
+
+    document.addEventListener(
+        "keydown",
+        handleKeydown
     );
 
 
     /* =====================================================
-       MODEL MENU EVENT
+       INTRO REQUEST EVENT
        ===================================================== */
 
     window.addEventListener(
-        "neyo:leverage-intro-request",
+        CONFIG.requestEvent,
         event => {
 
-            event
-                ?.preventDefault
-                ?.();
+            const startIndex =
+                Number(
+                    event
+                        ?.detail
+                        ?.startIndex
+                ) || 0;
 
 
-            open();
+            openIntro({
+                startIndex
+            });
 
         }
-    );
-
-
-    /* =====================================================
-       EXTERNAL OPEN / CLOSE
-       ===================================================== */
-
-    window.addEventListener(
-        "neyo:leverage-intro-open-request",
-        open
-    );
-
-
-    window.addEventListener(
-        "neyo:leverage-intro-close-request",
-        close
     );
 
 
@@ -964,50 +1317,52 @@ Does NOT own:
        PUBLIC API
        ===================================================== */
 
-    window.NeyoLeverageIntro =
-        Object.freeze({
+    const controller =
+        {
 
             __controller:
                 true,
 
+            open:
+                openIntro,
 
-            version:
-                "v1",
+            close:
+                closeIntro,
 
+            next:
+                nextSlide,
 
-            open,
+            back:
+                previousSlide,
 
+            goTo:
+                goToSlide,
 
-            close,
-
-
-            next,
-
-
-            back,
-
-
-            goTo,
-
+            upgrade:
+                requestUpgrade,
 
             isOpen:
                 () =>
-                    isOpen,
-
+                    open,
 
             getIndex:
                 () =>
                     currentIndex,
 
-
             getCards:
                 () =>
                     CARDS.map(
-                        item => ({
-                            ...item
+                        card => ({
+                            ...card
                         })
                     )
 
-        });
+        };
+
+
+    window.NeyoLeverageIntro =
+        Object.freeze(
+            controller
+        );
 
 })();

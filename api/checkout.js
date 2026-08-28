@@ -10,6 +10,7 @@ Purpose:
 - Validate request origin
 - Create Lemon Squeezy checkout
 - Pass user ID into checkout custom data
+- Pass selected plan into checkout custom data
 - Return secure checkout URL
 
 Server-only:
@@ -174,7 +175,7 @@ export default async function handler(
        ================================================= */
 
     const user =
-        await getAuthenticatedUser(req);   // <-- 👈 CHANGED HERE
+        await getAuthenticatedUser(req);
 
 
     if (
@@ -186,6 +187,37 @@ export default async function handler(
             .json({
                 error:
                     "Authentication required."
+            });
+
+    }
+
+
+    /* =================================================
+       PLAN
+       ================================================= */
+
+    const requestedPlan =
+        clean(
+            req?.body?.plan
+        )
+            .toLowerCase();
+
+
+    const plan =
+        requestedPlan === "leverage"
+            ? "leverage"
+            : "";
+
+
+    if (
+        !plan
+    ) {
+
+        return res
+            .status(400)
+            .json({
+                error:
+                    "Invalid plan."
             });
 
     }
@@ -305,7 +337,10 @@ export default async function handler(
                     String(
                         user.username ||
                         ""
-                    )
+                    ),
+
+                plan:
+                    plan
 
             }
 

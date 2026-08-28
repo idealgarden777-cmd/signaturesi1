@@ -1,7 +1,7 @@
 /*
 =========================================================
 NEYO — SEND / STOP CONTROLLER
-FULL MODULAR RUNTIME v8.1
+FULL MODULAR RUNTIME v8.2
 
 FILE:
 public/js/components/send-state.js
@@ -37,7 +37,7 @@ IMPORTANT
      ===================================================== */
 
   const VERSION =
-    "neyo-send-state-modular-v8.1-single-owner";
+    "neyo-send-state-modular-v8.2-stop-square";
 
 
   if (
@@ -95,16 +95,6 @@ IMPORTANT
           )
     );
 
-
-  /*
-   * Correct ownership rule:
-   *
-   * NeyoChat.__controller means the modular chat core
-   * exists and is ready to receive send events.
-   *
-   * neo.js may still be loaded, but that must NOT
-   * disable the modular send controller.
-   */
 
   const modularChatReady =
     window.NeyoChat
@@ -416,13 +406,9 @@ IMPORTANT
 
   function renderSendIcon() {
 
-    sendBtn.innerHTML = `
-      <i
-        data-lucide="arrow-up"
-        size="18"
-        aria-hidden="true"
-      ></i>
-    `;
+    sendBtn.classList.remove(
+      "is-generating"
+    );
 
 
     sendBtn.setAttribute(
@@ -432,13 +418,52 @@ IMPORTANT
 
 
     sendBtn.setAttribute(
-      "title",
-      "Send message"
+      "aria-disabled",
+      String(
+        sendBtn.disabled
+      )
     );
 
 
     sendBtn.dataset.tooltip =
-      "Send message";
+      "Send";
+
+
+    sendBtn.removeAttribute(
+      "title"
+    );
+
+
+    sendBtn.replaceChildren();
+
+
+    const icon =
+      document.createElement(
+        "i"
+      );
+
+
+    icon.setAttribute(
+      "data-lucide",
+      "arrow-up"
+    );
+
+
+    icon.setAttribute(
+      "size",
+      "18"
+    );
+
+
+    icon.setAttribute(
+      "aria-hidden",
+      "true"
+    );
+
+
+    sendBtn.appendChild(
+      icon
+    );
 
 
     refreshIcons();
@@ -448,13 +473,25 @@ IMPORTANT
 
   function renderStopIcon() {
 
-    sendBtn.innerHTML = `
-      <i
-        data-lucide="square"
-        size="15"
-        aria-hidden="true"
-      ></i>
-    `;
+    sendBtn.disabled =
+      false;
+
+
+    sendBtn.classList.add(
+      "is-generating"
+    );
+
+
+    sendBtn.classList.remove(
+      "is-disabled",
+      "is-ready"
+    );
+
+
+    sendBtn.setAttribute(
+      "aria-disabled",
+      "false"
+    );
 
 
     sendBtn.setAttribute(
@@ -463,17 +500,42 @@ IMPORTANT
     );
 
 
-    sendBtn.setAttribute(
-      "title",
-      "Stop generating"
+    sendBtn.dataset.tooltip =
+      "Stop";
+
+
+    sendBtn.removeAttribute(
+      "title"
     );
 
 
-    sendBtn.dataset.tooltip =
-      "Stop generating";
+    /*
+     * Original solid STOP square.
+     * CSS already styles .send-stop-square.
+     */
+
+    sendBtn.replaceChildren();
 
 
-    refreshIcons();
+    const square =
+      document.createElement(
+        "span"
+      );
+
+
+    square.className =
+      "send-stop-square";
+
+
+    square.setAttribute(
+      "aria-hidden",
+      "true"
+    );
+
+
+    sendBtn.appendChild(
+      square
+    );
 
   }
 
@@ -490,11 +552,6 @@ IMPORTANT
       return false;
     }
 
-
-    /*
-     * During generation the button becomes STOP,
-     * therefore it must remain clickable.
-     */
 
     if (
       state.generating
@@ -534,11 +591,6 @@ IMPORTANT
     syncAttachments();
 
 
-    /*
-     * If modular chat isn't ready yet, don't incorrectly
-     * enable the send transport.
-     */
-
     if (
       !active
     ) {
@@ -558,6 +610,9 @@ IMPORTANT
       );
 
 
+      renderSendIcon();
+
+
       return false;
 
     }
@@ -571,26 +626,6 @@ IMPORTANT
       state.generating
     ) {
 
-      sendBtn.disabled =
-        false;
-
-
-      sendBtn.classList.add(
-        "is-generating"
-      );
-
-
-      sendBtn.classList.remove(
-        "is-disabled",
-        "is-ready"
-      );
-
-
-      sendBtn.removeAttribute(
-        "aria-busy"
-      );
-
-
       renderStopIcon();
 
 
@@ -602,9 +637,6 @@ IMPORTANT
     /* -----------------------------------------------------
        NORMAL SEND STATE
        ----------------------------------------------------- */
-
-    renderSendIcon();
-
 
     const enabled =
       canSend();
@@ -647,6 +679,9 @@ IMPORTANT
       );
 
     }
+
+
+    renderSendIcon();
 
 
     return enabled;
@@ -807,6 +842,16 @@ IMPORTANT
       true;
 
 
+    /*
+     * IMPORTANT:
+     * Switch immediately to generating state so the solid
+     * Stop square appears without waiting for network work.
+     */
+
+    state.generating =
+      true;
+
+
     updateButton();
 
 
@@ -835,14 +880,18 @@ IMPORTANT
 
 
     /*
-     * Remove only the READY attachments that were sent.
-     * Upload controller remains owner of upload lifecycle.
+     * Remove only attachments that were actually sent.
      */
 
     removeSentAttachments(
       readyAttachments
     );
 
+
+    /*
+     * Request has been dispatched.
+     * generating stays TRUE until chat response/error/abort.
+     */
 
     state.sending =
       false;
@@ -915,10 +964,6 @@ IMPORTANT
     }
 
 
-    /*
-     * IME protection.
-     */
-
     if (
       event.isComposing ||
       state.composing ||
@@ -929,20 +974,12 @@ IMPORTANT
     }
 
 
-    /*
-     * Shift + Enter = newline.
-     */
-
     if (
       event.shiftKey
     ) {
       return;
     }
 
-
-    /*
-     * Do not hijack modified Enter combinations.
-     */
 
     if (
       event.altKey ||
@@ -954,8 +991,7 @@ IMPORTANT
 
 
     /*
-     * Enter must never accidentally behave as STOP.
-     * STOP is explicit through send button while generating.
+     * Enter never acts as Stop.
      */
 
     if (
@@ -1269,7 +1305,10 @@ IMPORTANT
       modularChatReady,
 
       buttonOwner:
-        "NeyoSendState"
+        "NeyoSendState",
+
+      stopVisual:
+        "solid-square"
 
     }
   );

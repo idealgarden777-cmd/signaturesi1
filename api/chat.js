@@ -52,6 +52,14 @@ const MAX_URL_CONTEXT_SOURCES =
     5;
 
 
+const URL_FETCH_TIMEOUT_MS =
+    8000;
+
+
+const MAX_HISTORY_CHARS =
+    60000;
+
+
 /* =========================================================
    NEYO MODEL ROUTING CONFIG
 
@@ -680,6 +688,160 @@ function normalizePrivateChat(
 
 
 /* =========================================================
+   AUTOMATIC EFFORT
+   ========================================================= */
+
+function detectAutomaticEffort(
+    text
+) {
+
+    const value =
+        cleanString(
+            text || "",
+            12000
+        )
+            .toLowerCase();
+
+
+    if (
+        !value
+    ) {
+        return "standard";
+    }
+
+
+    const deepSignals = [
+        /\bdeep(?:ly)?\b/,
+        /\bthorough(?:ly)?\b/,
+        /\bcomplex\b/,
+        /\bdifficult\b/,
+        /\bhard\b/,
+        /\barchitecture\b/,
+        /\bdebug\b/,
+        /\banaly[sz]e\b/,
+        /\breason(?:ing)?\b/,
+        /\bresearch\b/,
+        /\bcompare\b/,
+        /\boptimi[sz]e\b/,
+        /\bproduction\b/,
+        /\broot cause\b/,
+        /\bstep[- ]by[- ]step\b/
+    ];
+
+
+    if (
+        value.length >= 3500 ||
+        deepSignals.some(
+            pattern =>
+                pattern.test(
+                    value
+                )
+        )
+    ) {
+        return "deep";
+    }
+
+
+    if (
+        value.length <= 160 &&
+        !value.includes(
+            "```"
+        )
+    ) {
+        return "light";
+    }
+
+
+    return "standard";
+
+}
+
+
+/* =========================================================
+   SMART HISTORY
+   ========================================================= */
+
+function selectHistoryMessages(
+    messages
+) {
+
+    if (
+        !Array.isArray(
+            messages
+        ) ||
+        messages.length ===
+            0
+    ) {
+        return [];
+    }
+
+
+    const recent =
+        messages.slice(
+            -MAX_HISTORY_MESSAGES
+        );
+
+
+    const selected =
+        [];
+
+
+    let totalChars =
+        0;
+
+
+    for (
+        let index =
+                recent.length -
+                1;
+        index >= 0;
+        index -= 1
+    ) {
+
+        const message =
+            recent[index];
+
+
+        const content =
+            cleanString(
+                message?.content ||
+                ""
+            );
+
+
+        const cost =
+            content.length;
+
+
+        if (
+            selected.length >
+                0 &&
+            totalChars +
+                cost >
+                MAX_HISTORY_CHARS
+        ) {
+            break;
+        }
+
+
+        selected.push(
+            message
+        );
+
+
+        totalChars +=
+            cost;
+
+    }
+
+
+    return selected
+        .reverse();
+
+}
+
+
+/* =========================================================
    MODEL ROUTER
    ========================================================= */
 
@@ -687,7 +849,8 @@ function selectModelRoute({
     isPro = false,
     attachments = [],
     preferences = {},
-    isDeepResearch = false
+    isDeepResearch = false,
+    autoEffort = "standard"
 } = {}) {
 
     const hasAttachments =
@@ -740,7 +903,9 @@ function selectModelRoute({
         (
             preferences.intelligence ===
                 "maximum" ||
-            isDeepResearch
+            isDeepResearch ||
+            autoEffort ===
+                "deep"
         )
     ) {
 
@@ -1115,7 +1280,8 @@ async function callModelRoute(
                     route.route,
 
                 message:
-                    primaryError?.message
+                    primaryError
+                        ?.message
 
             }
         );
@@ -1611,16 +1777,44 @@ async function fetchUrlText(
 
     try {
 
-        const response =
-            await fetch(
-                url,
-                {
+        const controller =
+            new AbortController();
 
-                    redirect:
-                        "follow"
 
-                }
+        const timeout =
+            setTimeout(
+                () =>
+                    controller.abort(),
+                URL_FETCH_TIMEOUT_MS
             );
+
+
+        let response;
+
+
+        try {
+
+            response =
+                await fetch(
+                    url,
+                    {
+
+                        redirect:
+                            "follow",
+
+                        signal:
+                            controller.signal
+
+                    }
+                );
+
+        } finally {
+
+            clearTimeout(
+                timeout
+            );
+
+        }
 
 
         if (
@@ -1701,28 +1895,20 @@ async function callGeminiUrlContext(
 ) {
 
     const contextParts =
-        [];
+        await Promise.all(
+            urls.map(
+                async url => ({
 
+                    url,
 
-    for (
-        const url
-        of urls
-    ) {
+                    content:
+                        await fetchUrlText(
+                            url
+                        )
 
-        const content =
-            await fetchUrlText(
-                url
-            );
-
-
-        contextParts.push({
-
-            url,
-            content
-
-        });
-
-    }
+                })
+            )
+        );
 
 
     const context =
@@ -1894,8 +2080,11 @@ function extractFinalReply(
 ) {
 
     if (
-        !Array.isArray(parts) ||
-        parts.length === 0
+        !Array.isArray(
+            parts
+        ) ||
+        parts.length ===
+            0
     ) {
         return "";
     }
@@ -1905,7 +2094,8 @@ function extractFinalReply(
         .filter(
             part =>
                 part &&
-                part.thought !== true &&
+                part.thought !==
+                    true &&
                 typeof part.text ===
                     "string" &&
                 part.text.trim() !==
@@ -2223,7 +2413,7 @@ export default async function handler(
 
         const rawAttachments =
             bodyAttachments.length >
-            0
+                0
                 ? bodyAttachments
                 : messageAttachments;
 
@@ -2253,6 +2443,17 @@ export default async function handler(
 
 
         /* =================================================
+           AUTOMATIC EFFORT
+           ================================================= */
+
+        const autoEffort =
+            detectAutomaticEffort(
+                lastMsg.content ||
+                ""
+            );
+
+
+        /* =================================================
            MODEL ROUTE
            ================================================= */
 
@@ -2265,7 +2466,9 @@ export default async function handler(
 
                 preferences,
 
-                isDeepResearch
+                isDeepResearch,
+
+                autoEffort
 
             });
 
@@ -2287,9 +2490,12 @@ export default async function handler(
                 route:
                     modelRoute.route,
 
+                effort:
+                    autoEffort,
+
                 multimodal:
                     attachments.length >
-                    0
+                        0
 
             }
         );
@@ -2300,8 +2506,8 @@ export default async function handler(
            ================================================= */
 
         const history =
-            messages.slice(
-                -MAX_HISTORY_MESSAGES
+            selectHistoryMessages(
+                messages
             );
 
 
@@ -2376,48 +2582,60 @@ export default async function handler(
                 ];
 
 
-            const attachmentParts =
-                [];
+            const preparedAttachments =
+                await Promise.all(
+                    attachments.map(
+                        async file => {
+
+                            const geminiFile =
+                                await uploadSupabaseFileToGemini(
+                                    file
+                                );
 
 
-            for (
-                const file
-                of attachments
-            ) {
-
-                const geminiFile =
-                    await uploadSupabaseFileToGemini(
-                        file
-                    );
+                            if (
+                                !geminiFile?.uri
+                            ) {
+                                return null;
+                            }
 
 
-                if (
-                    !geminiFile?.uri
-                ) {
-                    continue;
-                }
+                            return geminiFile;
 
-
-                geminiFiles.push(
-                    geminiFile.name
+                        }
+                    )
                 );
 
 
-                attachmentParts.push({
+            const attachmentParts =
+                preparedAttachments
+                    .filter(
+                        Boolean
+                    )
+                    .map(
+                        geminiFile => {
 
-                    fileData: {
+                            geminiFiles.push(
+                                geminiFile.name
+                            );
 
-                        mimeType:
-                            geminiFile.mimeType,
 
-                        fileUri:
-                            geminiFile.uri
+                            return {
 
-                    }
+                                fileData: {
 
-                });
+                                    mimeType:
+                                        geminiFile.mimeType,
 
-            }
+                                    fileUri:
+                                        geminiFile.uri
+
+                                }
+
+                            };
+
+                        }
+                    );
 
 
             if (
@@ -2729,7 +2947,7 @@ export default async function handler(
 
                 sources:
                     sources.length >
-                    0
+                        0
                         ? sources
                         : undefined,
 

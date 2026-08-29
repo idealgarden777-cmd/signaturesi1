@@ -33,9 +33,8 @@ Backend currently supports:
 - get
 - rename
 - delete
-
-Pin is kept visible in the existing UI, but is disabled here
-because current /api/history backend has no pin/unpin action.
+- pin
+- unpin
 =========================================================
 */
 
@@ -504,35 +503,42 @@ because current /api/history backend has no pin/unpin action.
 
             if (hpPinBtn) {
 
-                hpPinBtn.innerHTML = `
-                    <i
-                        data-lucide="pin"
-                        size="16"
-                    ></i>
-                    Pin
-                `;
+                hpPinBtn.innerHTML =
+                    popupConversationPinned
+                        ? `
+                            <i
+                                data-lucide="pin-off"
+                                size="16"
+                            ></i>
+                            Unpin
+                        `
+                        : `
+                            <i
+                                data-lucide="pin"
+                                size="16"
+                            ></i>
+                            Pin
+                        `;
 
 
                 hpPinBtn
-                    .setAttribute(
-                        "aria-disabled",
-                        "true"
+                    .removeAttribute(
+                        "aria-disabled"
                     );
 
 
                 hpPinBtn
-                    .setAttribute(
-                        "title",
-                        "Pin support is not available yet"
+                    .removeAttribute(
+                        "title"
                     );
 
 
                 hpPinBtn.style.opacity =
-                    "0.45";
+                    "";
 
 
                 hpPinBtn.style.cursor =
-                    "not-allowed";
+                    "";
 
             }
 
@@ -1299,7 +1305,9 @@ because current /api/history backend has no pin/unpin action.
                                 "New conversation",
 
                             isPinned:
-                                false,
+                                Boolean(
+                                    item.isPinned
+                                ),
 
                             anchorElement:
                                 menuButton
@@ -1331,7 +1339,9 @@ because current /api/history backend has no pin/unpin action.
                                 "New conversation",
 
                             isPinned:
-                                false,
+                                Boolean(
+                                    item.isPinned
+                                ),
 
                             clientX:
                                 event.clientX,
@@ -1801,6 +1811,60 @@ because current /api/history backend has no pin/unpin action.
 
 
     /* =====================================================
+       PIN / UNPIN
+       ===================================================== */
+
+    const pinConversation =
+        async (
+            conversationId,
+            isPinned
+        ) => {
+
+            if (
+                !conversationId
+            ) {
+
+                return false;
+
+            }
+
+
+            const nextPinned =
+                Boolean(
+                    isPinned
+                );
+
+
+            await performAction(
+                nextPinned
+                    ? "pin"
+                    : "unpin",
+                conversationId
+            );
+
+
+            await loadHistory();
+
+
+            emit(
+                nextPinned
+                    ? "neyo:history-pinned"
+                    : "neyo:history-unpinned",
+                {
+                    conversationId,
+
+                    isPinned:
+                        nextPinned
+                }
+            );
+
+
+            return true;
+
+        };
+
+
+    /* =====================================================
        DELETE
        ===================================================== */
 
@@ -1954,7 +2018,7 @@ because current /api/history backend has no pin/unpin action.
     hpPinBtn
         ?.addEventListener(
             "click",
-            event => {
+            async event => {
 
                 event
                     .preventDefault();
@@ -1962,6 +2026,53 @@ because current /api/history backend has no pin/unpin action.
 
                 event
                     .stopPropagation();
+
+
+                const conversationId =
+                    popupConversationId;
+
+
+                const nextPinned =
+                    !popupConversationPinned;
+
+
+                closeHistoryPopup();
+
+
+                if (
+                    !conversationId
+                ) {
+                    return;
+                }
+
+
+                try {
+
+                    await pinConversation(
+                        conversationId,
+                        nextPinned
+                    );
+
+                }
+
+                catch (
+                    error
+                ) {
+
+                    console.warn(
+                        "History pin failed:",
+                        error
+                    );
+
+
+                    emit(
+                        "neyo:history-error",
+                        {
+                            error
+                        }
+                    );
+
+                }
 
             }
         );
@@ -2327,6 +2438,39 @@ because current /api/history backend has no pin/unpin action.
 
 
     /* =====================================================
+       EXTERNAL PIN EVENT
+       ===================================================== */
+
+    window
+        .addEventListener(
+            "neyo:history-pin-request",
+            event => {
+
+                pinConversation(
+                    event.detail
+                        ?.conversationId,
+
+                    event.detail
+                        ?.isPinned
+                )
+                    .catch(
+                        error => {
+
+                            emit(
+                                "neyo:history-error",
+                                {
+                                    error
+                                }
+                            );
+
+                        }
+                    );
+
+            }
+        );
+
+
+    /* =====================================================
        EXTERNAL DELETE EVENT
        ===================================================== */
 
@@ -2436,7 +2580,10 @@ because current /api/history backend has no pin/unpin action.
                             ?.title,
 
                     isPinned:
-                        false,
+                        Boolean(
+                            event.detail
+                                ?.isPinned
+                        ),
 
                     anchorElement:
                         event.detail
@@ -2481,6 +2628,9 @@ because current /api/history backend has no pin/unpin action.
 
             rename:
                 renameConversation,
+
+            pin:
+                pinConversation,
 
             delete:
                 deleteConversation,

@@ -196,6 +196,16 @@ Before answering:
 - Remove internal planning text.
 - Make sure the answer directly addresses the user.
 - Prefer one strong final response over several versions of the same response.
+
+INTERNAL REASONING
+- Never reveal internal analysis, planning, classifications, hidden reasoning,
+  drafts, candidate answers, method‑selection notes, or instructions about
+  how the response should be written.
+- Do not output labels such as:
+  "Input:", "Operation:", "Numbers:", "Method:", "Goal:",
+  "Reasoning:", "Analysis:", "The response should be:", or similar
+  internal scaffolding unless the user explicitly requests that format.
+- Only output the polished final response intended for the user.
 `;
 
 /* =========================================================

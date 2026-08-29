@@ -252,6 +252,11 @@ function safeConversation(
             conversation.model ||
             null,
 
+        isPinned:
+            Boolean(
+                conversation.is_pinned
+            ),
+
         createdAt:
             conversation.created_at ||
             null,
@@ -366,6 +371,13 @@ async function listConversations(
             .eq(
                 "user_id",
                 userId
+            )
+            .order(
+                "is_pinned",
+                {
+                    ascending:
+                        false
+                }
             )
             .order(
                 "created_at",
@@ -565,6 +577,68 @@ async function renameConversation(
             .update({
                 title:
                     cleanTitle
+            })
+            .eq(
+                "id",
+                conversationId
+            )
+            .eq(
+                "user_id",
+                userId
+            )
+            .select(
+                "*"
+            )
+            .single();
+
+
+    if (error) {
+        throw error;
+    }
+
+
+    return safeConversation(
+        data
+    );
+}
+
+
+/* =====================================================
+   PIN / UNPIN
+   ===================================================== */
+
+async function setConversationPinned(
+    supabase,
+    conversationId,
+    userId,
+    isPinned
+) {
+    const conversation =
+        await verifyConversationOwnership(
+            supabase,
+            conversationId,
+            userId
+        );
+
+
+    if (!conversation) {
+        return null;
+    }
+
+
+    const {
+        data,
+        error
+    } =
+        await supabase
+            .from(
+                "chat_conversations"
+            )
+            .update({
+                is_pinned:
+                    Boolean(
+                        isPinned
+                    )
             })
             .eq(
                 "id",
@@ -874,6 +948,134 @@ export default async function handler(
                         ),
 
                     messages
+                });
+        }
+
+
+        /* =================================================
+           PIN
+           ================================================= */
+
+        if (
+            action ===
+            "pin"
+        ) {
+            if (
+                !conversationId
+            ) {
+                return res
+                    .status(
+                        400
+                    )
+                    .json({
+                        error:
+                            "Conversation ID is required."
+                    });
+            }
+
+
+            const updatedConversation =
+                await setConversationPinned(
+                    supabase,
+                    conversationId,
+                    userId,
+                    true
+                );
+
+
+            if (
+                !updatedConversation
+            ) {
+                return res
+                    .status(
+                        404
+                    )
+                    .json({
+                        error:
+                            "Conversation not found."
+                    });
+            }
+
+
+            return res
+                .status(
+                    200
+                )
+                .json({
+                    success:
+                        true,
+
+                    pinned:
+                        true,
+
+                    conversationId,
+
+                    conversation:
+                        updatedConversation
+                });
+        }
+
+
+        /* =================================================
+           UNPIN
+           ================================================= */
+
+        if (
+            action ===
+            "unpin"
+        ) {
+            if (
+                !conversationId
+            ) {
+                return res
+                    .status(
+                        400
+                    )
+                    .json({
+                        error:
+                            "Conversation ID is required."
+                    });
+            }
+
+
+            const updatedConversation =
+                await setConversationPinned(
+                    supabase,
+                    conversationId,
+                    userId,
+                    false
+                );
+
+
+            if (
+                !updatedConversation
+            ) {
+                return res
+                    .status(
+                        404
+                    )
+                    .json({
+                        error:
+                            "Conversation not found."
+                    });
+            }
+
+
+            return res
+                .status(
+                    200
+                )
+                .json({
+                    success:
+                        true,
+
+                    pinned:
+                        false,
+
+                    conversationId,
+
+                    conversation:
+                        updatedConversation
                 });
         }
 

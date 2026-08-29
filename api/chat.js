@@ -53,6 +53,81 @@ const MAX_URL_CONTEXT_SOURCES =
 
 
 /* =========================================================
+   NEYO MODEL ROUTING CONFIG
+
+   FRONTEND NAMES:
+   - NEYO
+   - Leverage
+
+   Provider/model names below remain backend-only.
+   ========================================================= */
+
+
+/*
+NEYO Free
+
+Primary:
+Gemma 4 26B
+
+Fallback:
+Gemini 3.1 Flash-Lite
+*/
+
+const NEYO_FREE_PRIMARY_MODEL =
+    cleanEnv(
+        process.env.NEYO_FREE_PRIMARY_MODEL
+    ) ||
+    "gemma-4-26b-a4b-it";
+
+
+const NEYO_FREE_FALLBACK_MODEL =
+    cleanEnv(
+        process.env.NEYO_FREE_FALLBACK_MODEL
+    ) ||
+    cleanEnv(
+        process.env.GEMINI_FREE_MODEL
+    ) ||
+    "gemini-3.1-flash-lite";
+
+
+/*
+Leverage
+
+Normal:
+Gemma 4 26B
+
+Advanced / multimodal:
+Gemma 4 31B
+
+Fallback:
+Gemini 3.5 Flash-Lite
+*/
+
+const NEYO_LEVERAGE_PRIMARY_MODEL =
+    cleanEnv(
+        process.env.NEYO_LEVERAGE_PRIMARY_MODEL
+    ) ||
+    "gemma-4-26b-a4b-it";
+
+
+const NEYO_LEVERAGE_ADVANCED_MODEL =
+    cleanEnv(
+        process.env.NEYO_LEVERAGE_ADVANCED_MODEL
+    ) ||
+    "gemma-4-31b-it";
+
+
+const NEYO_LEVERAGE_FALLBACK_MODEL =
+    cleanEnv(
+        process.env.NEYO_LEVERAGE_FALLBACK_MODEL
+    ) ||
+    cleanEnv(
+        process.env.GEMINI_PRO_MODEL
+    ) ||
+    "gemini-3.5-flash-lite";
+
+
+/* =========================================================
    SYSTEM
    ========================================================= */
 
@@ -331,6 +406,7 @@ function validAttachmentList(
                 "[NEYO Chat] Attachment user mismatch:",
                 {
                     path,
+
                     expectedPrefix:
                         userPrefix
                 }
@@ -406,6 +482,7 @@ function validAttachmentList(
         "[NEYO Chat] Accepted attachments:",
         output.map(
             item => ({
+
                 name:
                     item.name,
 
@@ -417,6 +494,7 @@ function validAttachmentList(
 
                 path:
                     item.path
+
             })
         )
     );
@@ -590,6 +668,165 @@ function normalizePrivateChat(
 
 
 /* =========================================================
+   MODEL ROUTER
+   ========================================================= */
+
+function selectModelRoute({
+    isPro = false,
+    attachments = [],
+    preferences = {},
+    isDeepResearch = false
+} = {}) {
+
+    const hasAttachments =
+        Array.isArray(
+            attachments
+        ) &&
+        attachments.length >
+            0;
+
+
+    /*
+    =====================================================
+    LEVERAGE
+    =====================================================
+
+    Files / multimodal:
+    Gemma 4 31B
+    fallback Gemini 3.5 Flash-Lite
+    */
+
+    if (
+        isPro &&
+        hasAttachments
+    ) {
+
+        return {
+
+            primary:
+                NEYO_LEVERAGE_ADVANCED_MODEL,
+
+            fallback:
+                NEYO_LEVERAGE_FALLBACK_MODEL,
+
+            route:
+                "leverage-multimodal"
+
+        };
+
+    }
+
+
+    /*
+    Leverage maximum / deep work:
+    Gemma 4 31B
+    fallback Gemini 3.5 Flash-Lite
+    */
+
+    if (
+        isPro &&
+        (
+            preferences.intelligence ===
+                "maximum" ||
+            isDeepResearch
+        )
+    ) {
+
+        return {
+
+            primary:
+                NEYO_LEVERAGE_ADVANCED_MODEL,
+
+            fallback:
+                NEYO_LEVERAGE_FALLBACK_MODEL,
+
+            route:
+                "leverage-advanced"
+
+        };
+
+    }
+
+
+    /*
+    Leverage normal text / code / reasoning:
+    Gemma 4 26B
+    fallback Gemini 3.5 Flash-Lite
+    */
+
+    if (
+        isPro
+    ) {
+
+        return {
+
+            primary:
+                NEYO_LEVERAGE_PRIMARY_MODEL,
+
+            fallback:
+                NEYO_LEVERAGE_FALLBACK_MODEL,
+
+            route:
+                "leverage-standard"
+
+        };
+
+    }
+
+
+    /*
+    =====================================================
+    NEYO FREE
+    =====================================================
+
+    Files / multimodal:
+    Gemma 4 26B
+    fallback Gemini 3.1 Flash-Lite
+    */
+
+    if (
+        hasAttachments
+    ) {
+
+        return {
+
+            primary:
+                NEYO_FREE_PRIMARY_MODEL,
+
+            fallback:
+                NEYO_FREE_FALLBACK_MODEL,
+
+            route:
+                "free-multimodal"
+
+        };
+
+    }
+
+
+    /*
+    Free text / code / reasoning:
+    Gemma 4 26B
+    fallback Gemini 3.1 Flash-Lite
+    */
+
+    return {
+
+        primary:
+            NEYO_FREE_PRIMARY_MODEL,
+
+        fallback:
+            NEYO_FREE_FALLBACK_MODEL,
+
+        route:
+            "free-standard"
+
+    };
+
+}
+
+
+/* =========================================================
    SYSTEM BUILDER
    ========================================================= */
 
@@ -706,7 +943,7 @@ function buildGeminiBody(
 
 
 /* =========================================================
-   GEMINI
+   MODEL API
    ========================================================= */
 
 async function callGemini(
@@ -736,8 +973,10 @@ async function callGemini(
                     "POST",
 
                 headers: {
+
                     "Content-Type":
                         "application/json"
+
                 },
 
                 body:
@@ -766,22 +1005,129 @@ async function callGemini(
     ) {
 
         console.error(
-            "[NEYO Gemini]",
-            data
+            "[NEYO Model Request]",
+            {
+
+                model,
+
+                status:
+                    response.status,
+
+                error:
+                    data
+                        ?.error
+                        ?.message
+
+            }
         );
 
 
-        throw new Error(
-            data
-                ?.error
-                ?.message ||
-            `Gemini request failed (${response.status}).`
-        );
+        const error =
+            new Error(
+                data
+                    ?.error
+                    ?.message ||
+                `Model request failed (${response.status}).`
+            );
+
+
+        error.status =
+            response.status;
+
+
+        error.model =
+            model;
+
+
+        throw error;
 
     }
 
 
     return data;
+
+}
+
+
+/* =========================================================
+   MODEL CALL WITH FALLBACK
+   ========================================================= */
+
+async function callModelRoute(
+    messages,
+    route,
+    isDeepResearch = false,
+    preferences = {}
+) {
+
+    try {
+
+        const data =
+            await callGemini(
+                messages,
+                route.primary,
+                isDeepResearch,
+                preferences
+            );
+
+
+        return {
+
+            data,
+
+            usedFallback:
+                false
+
+        };
+
+    } catch (
+        primaryError
+    ) {
+
+        if (
+            !route.fallback ||
+            route.fallback ===
+                route.primary
+        ) {
+
+            throw primaryError;
+
+        }
+
+
+        console.warn(
+            "[NEYO Model Router] Primary failed, trying fallback:",
+            {
+
+                route:
+                    route.route,
+
+                message:
+                    primaryError?.message
+
+            }
+        );
+
+
+        const data =
+            await callGemini(
+                messages,
+                route.fallback,
+                isDeepResearch,
+                preferences
+            );
+
+
+        return {
+
+            data,
+
+            usedFallback:
+                true
+
+        };
+
+    }
 
 }
 
@@ -954,6 +1300,7 @@ async function uploadSupabaseFileToGemini(
     console.log(
         "[NEYO Attachment] Downloading:",
         {
+
             bucket:
                 file.bucket,
 
@@ -962,6 +1309,7 @@ async function uploadSupabaseFileToGemini(
 
             name:
                 file.name
+
         }
     );
 
@@ -989,6 +1337,7 @@ async function uploadSupabaseFileToGemini(
         console.error(
             "[NEYO Attachment] Download failed:",
             {
+
                 bucket:
                     file.bucket,
 
@@ -997,6 +1346,7 @@ async function uploadSupabaseFileToGemini(
 
                 error:
                     error?.message
+
             }
         );
 
@@ -1036,7 +1386,7 @@ async function uploadSupabaseFileToGemini(
 
 
     /* ---------------------------------------------
-       INIT GEMINI UPLOAD
+       INIT GEMINI FILE UPLOAD
        --------------------------------------------- */
 
     const startResponse =
@@ -1253,8 +1603,10 @@ async function fetchUrlText(
             await fetch(
                 url,
                 {
+
                     redirect:
                         "follow"
+
                 }
             );
 
@@ -1331,7 +1683,7 @@ async function fetchUrlText(
 async function callGeminiUrlContext(
     query,
     urls,
-    model,
+    route,
     isDeepResearch,
     preferences
 ) {
@@ -1375,7 +1727,7 @@ async function callGeminiUrlContext(
             );
 
 
-    return callGemini(
+    return callModelRoute(
         [
             {
 
@@ -1397,7 +1749,7 @@ ${context}`
 
             }
         ],
-        model,
+        route,
         isDeepResearch,
         preferences
     );
@@ -1546,8 +1898,10 @@ export default async function handler(
                 405
             )
             .json({
+
                 error:
                     "Method not allowed"
+
             });
 
     }
@@ -1586,8 +1940,10 @@ export default async function handler(
                     401
                 )
                 .json({
+
                     error:
                         "Authentication required. Please log in."
+
                 });
 
         }
@@ -1627,8 +1983,10 @@ export default async function handler(
                     400
                 )
                 .json({
+
                     error:
                         "Messages array required"
+
                 });
 
         }
@@ -1652,8 +2010,10 @@ export default async function handler(
                     400
                 )
                 .json({
+
                     error:
                         "Last message must be user"
+
                 });
 
         }
@@ -1689,6 +2049,12 @@ export default async function handler(
             );
 
 
+        const isDeepResearch =
+            Boolean(
+                body.isDeepResearch
+            );
+
+
         /* =================================================
            CREDIT
            ================================================= */
@@ -1703,8 +2069,10 @@ export default async function handler(
                 .rpc(
                     "reserve_message",
                     {
+
                         p_user_id:
                             userId
+
                     }
                 );
 
@@ -1724,8 +2092,10 @@ export default async function handler(
                     500
                 )
                 .json({
+
                     error:
                         "Unable to check message credits."
+
                 });
 
         }
@@ -1763,11 +2133,13 @@ export default async function handler(
                     429
                 )
                 .json({
+
                     error:
                         "MESSAGE_LIMIT_REACHED",
 
                     creditsRemaining:
                         0
+
                 });
 
         }
@@ -1811,6 +2183,7 @@ export default async function handler(
         console.log(
             "[NEYO Chat] Incoming attachment counts:",
             {
+
                 body:
                     bodyAttachments.length,
 
@@ -1819,6 +2192,7 @@ export default async function handler(
 
                 selected:
                     rawAttachments.length
+
             }
         );
 
@@ -1831,7 +2205,50 @@ export default async function handler(
 
 
         /* =================================================
-           HISTORY FOR GEMINI
+           MODEL ROUTE
+           ================================================= */
+
+        const modelRoute =
+            selectModelRoute({
+
+                isPro,
+
+                attachments,
+
+                preferences,
+
+                isDeepResearch
+
+            });
+
+
+        /*
+        Do not expose provider/model names
+        to frontend response.
+        */
+
+        console.log(
+            "[NEYO Model Router]",
+            {
+
+                plan:
+                    isPro
+                        ? "leverage"
+                        : "free",
+
+                route:
+                    modelRoute.route,
+
+                multimodal:
+                    attachments.length >
+                    0
+
+            }
+        );
+
+
+        /* =================================================
+           HISTORY FOR MODEL
            ================================================= */
 
         const history =
@@ -1853,11 +2270,13 @@ export default async function handler(
 
                         parts: [
                             {
+
                                 text:
                                     cleanString(
                                         message.content ||
                                         ""
                                     )
+
                             }
                         ]
 
@@ -1881,8 +2300,10 @@ export default async function handler(
 
                 parts: [
                     {
+
                         text:
                             "Please respond to the user."
+
                     }
                 ]
 
@@ -1892,7 +2313,7 @@ export default async function handler(
 
 
         /* =================================================
-           ATTACHMENT → GEMINI
+           ATTACHMENT → MODEL FILE
            ================================================= */
 
         if (
@@ -1978,8 +2399,10 @@ export default async function handler(
             lastGeminiMessage.parts = [
 
                 {
+
                     text:
                         userText
+
                 },
 
                 ...attachmentParts
@@ -1988,7 +2411,7 @@ export default async function handler(
 
 
             console.log(
-                "[NEYO Chat] Gemini attachments prepared:",
+                "[NEYO Chat] Model attachments prepared:",
                 attachmentParts.length
             );
 
@@ -2087,26 +2510,6 @@ export default async function handler(
 
 
         /* =================================================
-           MODEL
-           ================================================= */
-
-        const model =
-            isPro
-                ? (
-                    cleanEnv(
-                        process.env.GEMINI_PRO_MODEL
-                    ) ||
-                    "gemini-3.5-flash-lite"
-                )
-                : (
-                    cleanEnv(
-                        process.env.GEMINI_FREE_MODEL
-                    ) ||
-                    "gemini-3.1-flash-lite"
-                );
-
-
-        /* =================================================
            RESPONSE
            ================================================= */
 
@@ -2148,16 +2551,15 @@ export default async function handler(
                             0,
                             MAX_URL_CONTEXT_SOURCES
                         ),
-                        model,
-                        Boolean(
-                            body.isDeepResearch
-                        ),
+                        modelRoute,
+                        isDeepResearch,
                         preferences
                     );
 
 
                 reply =
                     urlResponse
+                        ?.data
                         ?.candidates?.[0]
                         ?.content
                         ?.parts
@@ -2176,9 +2578,12 @@ export default async function handler(
                 sources =
                     urls.map(
                         url => ({
+
                             title:
                                 url,
+
                             url
+
                         })
                     );
 
@@ -2201,22 +2606,25 @@ export default async function handler(
 
 
         /*
-        Normal Gemini call, including attachment requests.
+        Normal model call,
+        including attachment requests.
         */
 
         if (
             !reply
         ) {
 
-            const result =
-                await callGemini(
+            const modelResponse =
+                await callModelRoute(
                     geminiMessages,
-                    model,
-                    Boolean(
-                        body.isDeepResearch
-                    ),
+                    modelRoute,
+                    isDeepResearch,
                     preferences
                 );
+
+
+            const result =
+                modelResponse.data;
 
 
             reply =
@@ -2241,7 +2649,7 @@ export default async function handler(
             ) {
 
                 throw new Error(
-                    "Gemini returned an empty response."
+                    "NEYO returned an empty response."
                 );
 
             }
@@ -2314,11 +2722,13 @@ export default async function handler(
         console.error(
             "[NEYO Chat Error]",
             {
+
                 message:
                     error?.message,
 
                 stack:
                     error?.stack
+
             }
         );
 
@@ -2343,11 +2753,13 @@ export default async function handler(
                     .rpc(
                         "refund_message",
                         {
+
                             p_user_id:
                                 userId,
 
                             p_type:
                                 reservedType
+
                         }
                     );
 
@@ -2372,8 +2784,9 @@ export default async function handler(
     } finally {
 
         /*
-        Delete Gemini temporary copies only.
-        Supabase originals stay intact.
+        Delete temporary Gemini API copies only.
+
+        Supabase originals remain intact.
         */
 
         if (

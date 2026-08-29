@@ -463,10 +463,6 @@ because current /api/history backend has no pin/unpin action.
             }
 
 
-            /*
-             * Toggle same popup off
-             */
-
             if (
                 popupConversationId ===
                     conversationId &&
@@ -505,10 +501,6 @@ because current /api/history backend has no pin/unpin action.
                 anchorElement ||
                 null;
 
-
-            /*
-             * Current backend has no pin support.
-             */
 
             if (hpPinBtn) {
 
@@ -857,6 +849,308 @@ because current /api/history backend has no pin/unpin action.
 
 
     /* =====================================================
+       CUSTOM CONFIRM DIALOG
+       NO BROWSER window.confirm()
+       ===================================================== */
+
+    const requestConfirm =
+        ({
+            title = "Confirm",
+            message = "",
+            confirmText = "Confirm",
+            cancelText = "Cancel"
+        } = {}) => {
+
+            return new Promise(
+                resolve => {
+
+                    const overlay =
+                        document.createElement(
+                            "div"
+                        );
+
+
+                    overlay.className =
+                        "neo-dialog-overlay";
+
+
+                    const card =
+                        document.createElement(
+                            "div"
+                        );
+
+
+                    card.className =
+                        "neo-dialog-card";
+
+
+                    card.setAttribute(
+                        "role",
+                        "dialog"
+                    );
+
+
+                    card.setAttribute(
+                        "aria-modal",
+                        "true"
+                    );
+
+
+                    const heading =
+                        document.createElement(
+                            "h3"
+                        );
+
+
+                    heading.textContent =
+                        title;
+
+
+                    const messageElement =
+                        document.createElement(
+                            "p"
+                        );
+
+
+                    messageElement.className =
+                        "neo-dialog-message";
+
+
+                    messageElement.textContent =
+                        message;
+
+
+                    const actions =
+                        document.createElement(
+                            "div"
+                        );
+
+
+                    actions.className =
+                        "neo-dialog-actions";
+
+
+                    const cancel =
+                        document.createElement(
+                            "button"
+                        );
+
+
+                    cancel.type =
+                        "button";
+
+
+                    cancel.className =
+                        "neo-dialog-cancel";
+
+
+                    cancel.textContent =
+                        cancelText;
+
+
+                    const confirm =
+                        document.createElement(
+                            "button"
+                        );
+
+
+                    confirm.type =
+                        "button";
+
+
+                    confirm.className =
+                        "neo-dialog-confirm neo-dialog-danger";
+
+
+                    confirm.textContent =
+                        confirmText;
+
+
+                    let closed =
+                        false;
+
+
+                    const handleKeydown =
+                        event => {
+
+                            if (
+                                event.key ===
+                                "Escape"
+                            ) {
+
+                                event.preventDefault();
+
+                                close(
+                                    false
+                                );
+
+                                return;
+
+                            }
+
+
+                            if (
+                                event.key ===
+                                "Enter"
+                            ) {
+
+                                event.preventDefault();
+
+                                close(
+                                    true
+                                );
+
+                            }
+
+                        };
+
+
+                    const close =
+                        result => {
+
+                            if (
+                                closed
+                            ) {
+                                return;
+                            }
+
+
+                            closed =
+                                true;
+
+
+                            document
+                                .removeEventListener(
+                                    "keydown",
+                                    handleKeydown
+                                );
+
+
+                            overlay
+                                .classList
+                                .remove(
+                                    "show"
+                                );
+
+
+                            window.setTimeout(
+                                () => {
+
+                                    overlay.remove();
+
+
+                                    resolve(
+                                        Boolean(
+                                            result
+                                        )
+                                    );
+
+                                },
+                                120
+                            );
+
+                        };
+
+
+                    cancel
+                        .addEventListener(
+                            "click",
+                            () => {
+
+                                close(
+                                    false
+                                );
+
+                            }
+                        );
+
+
+                    confirm
+                        .addEventListener(
+                            "click",
+                            () => {
+
+                                close(
+                                    true
+                                );
+
+                            }
+                        );
+
+
+                    overlay
+                        .addEventListener(
+                            "click",
+                            event => {
+
+                                if (
+                                    event.target ===
+                                    overlay
+                                ) {
+
+                                    close(
+                                        false
+                                    );
+
+                                }
+
+                            }
+                        );
+
+
+                    document
+                        .addEventListener(
+                            "keydown",
+                            handleKeydown
+                        );
+
+
+                    actions.append(
+                        cancel,
+                        confirm
+                    );
+
+
+                    card.append(
+                        heading,
+                        messageElement,
+                        actions
+                    );
+
+
+                    overlay.appendChild(
+                        card
+                    );
+
+
+                    document.body
+                        .appendChild(
+                            overlay
+                        );
+
+
+                    requestAnimationFrame(
+                        () => {
+
+                            overlay
+                                .classList
+                                .add(
+                                    "show"
+                                );
+
+
+                            cancel.focus();
+
+                        }
+                    );
+
+                }
+            );
+
+        };
+
+
+    /* =====================================================
        CREATE HISTORY ROW
        ===================================================== */
 
@@ -876,10 +1170,6 @@ because current /api/history backend has no pin/unpin action.
             row.dataset.id =
                 item.id;
 
-
-            /* -----------------------------------------
-               MAIN BUTTON
-               ----------------------------------------- */
 
             const button =
                 document.createElement(
@@ -904,10 +1194,6 @@ because current /api/history backend has no pin/unpin action.
                 "New conversation";
 
 
-            /* -----------------------------------------
-               TITLE
-               ----------------------------------------- */
-
             const title =
                 document.createElement(
                     "span"
@@ -928,10 +1214,6 @@ because current /api/history backend has no pin/unpin action.
             );
 
 
-            /* -----------------------------------------
-               ACTIVE STATE
-               ----------------------------------------- */
-
             button
                 .classList
                 .toggle(
@@ -940,10 +1222,6 @@ because current /api/history backend has no pin/unpin action.
                         activeConversationId
                 );
 
-
-            /* -----------------------------------------
-               OPEN
-               ----------------------------------------- */
 
             button
                 .addEventListener(
@@ -960,10 +1238,6 @@ because current /api/history backend has no pin/unpin action.
                     }
                 );
 
-
-            /* -----------------------------------------
-               MENU BUTTON
-               ----------------------------------------- */
 
             const menuButton =
                 document.createElement(
@@ -1034,10 +1308,6 @@ because current /api/history backend has no pin/unpin action.
                     }
                 );
 
-
-            /* -----------------------------------------
-               CONTEXT MENU
-               ----------------------------------------- */
 
             row
                 .addEventListener(
@@ -1693,11 +1963,6 @@ because current /api/history backend has no pin/unpin action.
                 event
                     .stopPropagation();
 
-                /*
-                 * Backend pin support does not exist yet.
-                 * Intentionally do nothing.
-                 */
-
             }
         );
 
@@ -1794,6 +2059,7 @@ because current /api/history backend has no pin/unpin action.
 
     /* =====================================================
        POPUP ACTION — DELETE
+       CUSTOM NEYO CONFIRM
        ===================================================== */
 
     hpDeleteBtn
@@ -1824,9 +2090,19 @@ because current /api/history backend has no pin/unpin action.
 
 
                 const confirmed =
-                    window.confirm(
-                        "Delete this conversation?"
-                    );
+                    await requestConfirm({
+                        title:
+                            "Delete conversation?",
+
+                        message:
+                            "This conversation will be permanently deleted.",
+
+                        confirmText:
+                            "Delete",
+
+                        cancelText:
+                            "Cancel"
+                    });
 
 
                 if (

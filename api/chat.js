@@ -132,7 +132,7 @@ const NEYO_LEVERAGE_FALLBACK_MODEL =
    ========================================================= */
 
 const NEYO_RESPONSE_FORMAT = `
-I'm NEYO — your personalized AI assistant.
+I'm NEYO — an AI personalized model by Signaturesi.
 
 I adapt to how you think, work, and communicate. I can keep things quick when the answer is simple, go deep when the problem is complex, and stay with you across ideas, planning, technical work, writing, research, or everyday questions.
 The more context you give me, the better I can work with you.
@@ -168,6 +168,7 @@ If something is uncertain, say so instead of guessing.
 
 The goal is to give the right answer with the right depth, tone, and effort for the situation.
 `;
+
 
 /* =========================================================
    HELPERS
@@ -1885,17 +1886,38 @@ async function saveMessage(
 
 
 /* =========================================================
-   EXTRACT FINAL REPLY (new helper)
+   EXTRACT FINAL REPLY
    ========================================================= */
 
-function extractFinalReply(parts) {
-    if (!parts || parts.length === 0) return "";
-    const nonEmpty = parts.filter(p => p?.text && p.text.trim() !== "");
-    if (nonEmpty.length === 0) return "";
-    // If only one part, return it
-    if (nonEmpty.length === 1) return nonEmpty[0].text.trim();
-    // Multiple parts → take the last non‑empty one (most likely the final answer)
-    return nonEmpty[nonEmpty.length - 1].text.trim();
+function extractFinalReply(
+    parts
+) {
+
+    if (
+        !Array.isArray(parts) ||
+        parts.length === 0
+    ) {
+        return "";
+    }
+
+
+    return parts
+        .filter(
+            part =>
+                part &&
+                part.thought !== true &&
+                typeof part.text ===
+                    "string" &&
+                part.text.trim() !==
+                    ""
+        )
+        .map(
+            part =>
+                part.text
+        )
+        .join("")
+        .trim();
+
 }
 
 

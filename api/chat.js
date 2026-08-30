@@ -64,13 +64,6 @@ const STREAM_HEARTBEAT_MS =
     5000;
 
 
-/*
-Latency-oriented history budgets.
-
-Simple messages should not repeatedly send
-the entire 60k conversation context.
-*/
-
 const HISTORY_BUDGET_LIGHT = {
     messages: 12,
     chars: 12000
@@ -181,12 +174,9 @@ The goal is to give the right answer with the right depth, tone, and effort for 
    BASIC HELPERS
    ========================================================= */
 
-function cleanEnv(
-    value
-) {
+function cleanEnv(value) {
 
-    return typeof value ===
-        "string"
+    return typeof value === "string"
         ? value.trim()
         : "";
 
@@ -199,39 +189,29 @@ function cleanString(
 ) {
 
     if (
-        typeof value !==
-        "string"
+        typeof value !== "string"
     ) {
         return "";
     }
 
 
     return value
-        .replace(
-            /\r\n?/g,
-            "\n"
-        )
+        .replace(/\r\n?/g, "\n")
         .replace(
             /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g,
             ""
         )
         .trim()
-        .slice(
-            0,
-            max
-        );
+        .slice(0, max);
 
 }
 
 
-function elapsed(
-    start
-) {
+function elapsed(start) {
 
     return Math.max(
         0,
-        Date.now() -
-        start
+        Date.now() - start
     );
 
 }
@@ -246,9 +226,7 @@ function logTiming(
     console.log(
         `[NEYO Timing] ${name}`,
         {
-            ms:
-                value,
-
+            ms: value,
             ...extra
         }
     );
@@ -267,9 +245,7 @@ function validAttachmentList(
 ) {
 
     if (
-        !Array.isArray(
-            attachments
-        )
+        !Array.isArray(attachments)
     ) {
         return [];
     }
@@ -277,8 +253,7 @@ function validAttachmentList(
 
     const safeUserId =
         String(
-            userId ||
-            ""
+            userId || ""
         ).trim();
 
 
@@ -296,16 +271,12 @@ function validAttachmentList(
 
     for (
         const raw
-        of attachments.slice(
-            0,
-            max
-        )
+        of attachments.slice(0, max)
     ) {
 
         if (
             !raw ||
-            typeof raw !==
-                "object"
+            typeof raw !== "object"
         ) {
             continue;
         }
@@ -321,8 +292,7 @@ function validAttachmentList(
 
         const path =
             cleanString(
-                raw.path ||
-                "",
+                raw.path || "",
                 1024
             );
 
@@ -357,14 +327,10 @@ function validAttachmentList(
 
         const extension =
             cleanString(
-                raw.extension ||
-                "",
+                raw.extension || "",
                 32
             )
-                .replace(
-                    /^\./,
-                    ""
-                )
+                .replace(/^\./, "")
                 .toLowerCase();
 
 
@@ -380,9 +346,7 @@ function validAttachmentList(
         const size =
             Math.max(
                 0,
-                Number(
-                    raw.size
-                ) || 0
+                Number(raw.size) || 0
             );
 
 
@@ -394,9 +358,7 @@ function validAttachmentList(
         }
 
 
-        if (
-            !path
-        ) {
+        if (!path) {
             continue;
         }
 
@@ -424,25 +386,20 @@ function validAttachmentList(
 
 
         if (
-            seen.has(
-                key
-            )
+            seen.has(key)
         ) {
             continue;
         }
 
 
-        seen.add(
-            key
-        );
+        seen.add(key);
 
 
         output.push({
 
             id:
                 cleanString(
-                    raw.id ||
-                    "",
+                    raw.id || "",
                     128
                 ) ||
                 uploadId ||
@@ -495,8 +452,7 @@ function normalizeIntelligence(
 
     const normalized =
         String(
-            value ||
-            "standard"
+            value || "standard"
         )
             .trim()
             .toLowerCase();
@@ -507,9 +463,7 @@ function normalizeIntelligence(
             "standard",
             "high",
             "maximum"
-        ].includes(
-            normalized
-        )
+        ].includes(normalized)
     ) {
         return normalized;
     }
@@ -526,8 +480,7 @@ function normalizeLanguage(
 
     return cleanString(
         String(
-            value ||
-            "auto"
+            value || "auto"
         ),
         40
     )
@@ -543,8 +496,7 @@ function normalizePersonality(
 
     return cleanString(
         String(
-            value ||
-            "neyo"
+            value || "neyo"
         ),
         50
     )
@@ -558,8 +510,7 @@ function normalizePrivateChat(
     value
 ) {
 
-    return value ===
-        true;
+    return value === true;
 
 }
 
@@ -574,16 +525,13 @@ function detectAutomaticEffort(
 
     const value =
         cleanString(
-            text ||
-            "",
+            text || "",
             12000
         )
             .toLowerCase();
 
 
-    if (
-        !value
-    ) {
+    if (!value) {
         return "standard";
     }
 
@@ -610,13 +558,10 @@ function detectAutomaticEffort(
 
 
     if (
-        value.length >=
-            3500 ||
+        value.length >= 3500 ||
         deepSignals.some(
             pattern =>
-                pattern.test(
-                    value
-                )
+                pattern.test(value)
         )
     ) {
         return "deep";
@@ -624,11 +569,8 @@ function detectAutomaticEffort(
 
 
     if (
-        value.length <=
-            180 &&
-        !value.includes(
-            "```"
-        )
+        value.length <= 180 &&
+        !value.includes("```")
     ) {
         return "light";
     }
@@ -651,14 +593,10 @@ function getHistoryBudget({
 
     if (
         isDeepResearch ||
-        autoEffort ===
-            "deep" ||
+        autoEffort === "deep" ||
         (
-            Array.isArray(
-                attachments
-            ) &&
-            attachments.length >
-                0
+            Array.isArray(attachments) &&
+            attachments.length > 0
         )
     ) {
 
@@ -668,8 +606,7 @@ function getHistoryBudget({
 
 
     if (
-        autoEffort ===
-        "light"
+        autoEffort === "light"
     ) {
 
         return HISTORY_BUDGET_LIGHT;
@@ -695,11 +632,8 @@ function selectHistoryMessages(
 ) {
 
     if (
-        !Array.isArray(
-            messages
-        ) ||
-        messages.length ===
-            0
+        !Array.isArray(messages) ||
+        messages.length === 0
     ) {
         return [];
     }
@@ -721,23 +655,18 @@ function selectHistoryMessages(
 
     for (
         let index =
-                recent.length -
-                1;
+                recent.length - 1;
         index >= 0;
         index -= 1
     ) {
 
         const message =
-            recent[
-                index
-            ];
+            recent[index];
 
 
         const content =
             cleanString(
-                message
-                    ?.content ||
-                ""
+                message?.content || ""
             );
 
 
@@ -746,10 +675,8 @@ function selectHistoryMessages(
 
 
         if (
-            selected.length >
-                0 &&
-            totalChars +
-                cost >
+            selected.length > 0 &&
+            totalChars + cost >
                 maxChars
         ) {
 
@@ -758,19 +685,15 @@ function selectHistoryMessages(
         }
 
 
-        selected.push(
-            message
-        );
+        selected.push(message);
 
 
-        totalChars +=
-            cost;
+        totalChars += cost;
 
     }
 
 
-    return selected
-        .reverse();
+    return selected.reverse();
 
 }
 
@@ -788,11 +711,8 @@ function selectModelRoute({
 } = {}) {
 
     const hasAttachments =
-        Array.isArray(
-            attachments
-        ) &&
-        attachments.length >
-            0;
+        Array.isArray(attachments) &&
+        attachments.length > 0;
 
 
     if (
@@ -819,8 +739,7 @@ function selectModelRoute({
     if (
         isPro &&
         (
-            preferences
-                .intelligence ===
+            preferences.intelligence ===
                 "maximum" ||
             isDeepResearch ||
             autoEffort ===
@@ -844,9 +763,7 @@ function selectModelRoute({
     }
 
 
-    if (
-        isPro
-    ) {
+    if (isPro) {
 
         return {
 
@@ -935,9 +852,7 @@ function buildSystemInstruction(
     }
 
 
-    return parts.join(
-        "\n\n"
-    );
+    return parts.join("\n\n");
 
 }
 
@@ -1011,9 +926,7 @@ async function callGemini(
     preferences = {}
 ) {
 
-    if (
-        !GEMINI_API_KEY
-    ) {
+    if (!GEMINI_API_KEY) {
 
         throw new Error(
             "Gemini API key is missing."
@@ -1031,10 +944,8 @@ async function callGemini(
                     "POST",
 
                 headers: {
-
                     "Content-Type":
                         "application/json"
-
                 },
 
                 body:
@@ -1058,15 +969,11 @@ async function callGemini(
             );
 
 
-    if (
-        !response.ok
-    ) {
+    if (!response.ok) {
 
         const error =
             new Error(
-                data
-                    ?.error
-                    ?.message ||
+                data?.error?.message ||
                 `Model request failed (${response.status}).`
             );
 
@@ -1112,12 +1019,8 @@ async function callModelRoute(
 
 
         return {
-
             data,
-
-            usedFallback:
-                false
-
+            usedFallback: false
         };
 
     } catch (
@@ -1138,14 +1041,11 @@ async function callModelRoute(
         console.warn(
             "[NEYO Model Router] Primary failed, trying fallback:",
             {
-
                 route:
                     route.route,
 
                 message:
-                    primaryError
-                        ?.message
-
+                    primaryError?.message
             }
         );
 
@@ -1160,12 +1060,8 @@ async function callModelRoute(
 
 
         return {
-
             data,
-
-            usedFallback:
-                true
-
+            usedFallback: true
         };
 
     }
@@ -1189,9 +1085,7 @@ function extractVisibleStreamText(
 
 
     if (
-        !Array.isArray(
-            parts
-        )
+        !Array.isArray(parts)
     ) {
         return "";
     }
@@ -1201,8 +1095,7 @@ function extractVisibleStreamText(
         .filter(
             part =>
                 part &&
-                part.thought !==
-                    true &&
+                part.thought !== true &&
                 typeof part.text ===
                     "string"
         )
@@ -1221,42 +1114,26 @@ function extractVisibleStreamText(
 
 function createSSEParser() {
 
-    let buffer =
-        "";
+    let buffer = "";
 
 
-    function push(
-        chunk
-    ) {
+    function push(chunk) {
 
         buffer +=
-            String(
-                chunk ||
-                ""
-            )
-                .replace(
-                    /\r\n/g,
-                    "\n"
-                )
-                .replace(
-                    /\r/g,
-                    "\n"
-                );
+            String(chunk || "")
+                .replace(/\r\n/g, "\n")
+                .replace(/\r/g, "\n");
 
 
         const blocks =
-            buffer.split(
-                "\n\n"
-            );
+            buffer.split("\n\n");
 
 
         buffer =
-            blocks.pop() ||
-            "";
+            blocks.pop() || "";
 
 
-        const events =
-            [];
+        const events = [];
 
 
         for (
@@ -1266,9 +1143,7 @@ function createSSEParser() {
 
             const dataLines =
                 block
-                    .split(
-                        "\n"
-                    )
+                    .split("\n")
                     .filter(
                         line =>
                             line.startsWith(
@@ -1278,19 +1153,13 @@ function createSSEParser() {
                     .map(
                         line =>
                             line
-                                .slice(
-                                    5
-                                )
-                                .replace(
-                                    /^ /,
-                                    ""
-                                )
+                                .slice(5)
+                                .replace(/^ /, "")
                     );
 
 
             if (
-                dataLines.length ===
-                0
+                dataLines.length === 0
             ) {
                 continue;
             }
@@ -1298,16 +1167,13 @@ function createSSEParser() {
 
             const raw =
                 dataLines
-                    .join(
-                        "\n"
-                    )
+                    .join("\n")
                     .trim();
 
 
             if (
                 !raw ||
-                raw ===
-                    "[DONE]"
+                raw === "[DONE]"
             ) {
                 continue;
             }
@@ -1316,9 +1182,7 @@ function createSSEParser() {
             try {
 
                 events.push(
-                    JSON.parse(
-                        raw
-                    )
+                    JSON.parse(raw)
                 );
 
             } catch {
@@ -1339,9 +1203,7 @@ function createSSEParser() {
 
     function flush() {
 
-        if (
-            !buffer.trim()
-        ) {
+        if (!buffer.trim()) {
             return [];
         }
 
@@ -1350,8 +1212,7 @@ function createSSEParser() {
             buffer;
 
 
-        buffer =
-            "";
+        buffer = "";
 
 
         return push(
@@ -1362,11 +1223,8 @@ function createSSEParser() {
 
 
     return {
-
         push,
-
         flush
-
     };
 
 }
@@ -1389,9 +1247,7 @@ async function callGeminiStream(
     } = {}
 ) {
 
-    if (
-        !GEMINI_API_KEY
-    ) {
+    if (!GEMINI_API_KEY) {
 
         throw new Error(
             "Gemini API key is missing."
@@ -1445,7 +1301,7 @@ async function callGeminiStream(
 
     if (
         typeof onHeaders ===
-        "function"
+            "function"
     ) {
 
         onHeaders(
@@ -1456,9 +1312,7 @@ async function callGeminiStream(
     }
 
 
-    if (
-        !response.ok
-    ) {
+    if (!response.ok) {
 
         const raw =
             await response
@@ -1468,25 +1322,18 @@ async function callGeminiStream(
                 );
 
 
-        let data =
-            {};
+        let data = {};
 
 
         try {
-
             data =
-                JSON.parse(
-                    raw
-                );
-
+                JSON.parse(raw);
         } catch {}
 
 
         const error =
             new Error(
-                data
-                    ?.error
-                    ?.message ||
+                data?.error?.message ||
                 raw ||
                 `Streaming model request failed (${response.status}).`
             );
@@ -1536,8 +1383,7 @@ async function callGeminiStream(
 
 
     const reader =
-        response.body
-            .getReader();
+        response.body.getReader();
 
 
     const decoder =
@@ -1548,12 +1394,10 @@ async function callGeminiStream(
         createSSEParser();
 
 
-    let reply =
-        "";
+    let reply = "";
 
 
-    let emittedText =
-        false;
+    let emittedText = false;
 
 
     let firstTextReported =
@@ -1575,16 +1419,12 @@ async function callGeminiStream(
                 );
 
 
-            if (
-                !text
-            ) {
+            if (!text) {
                 continue;
             }
 
 
-            if (
-                !firstTextReported
-            ) {
+            if (!firstTextReported) {
 
                 firstTextReported =
                     true;
@@ -1592,7 +1432,7 @@ async function callGeminiStream(
 
                 if (
                     typeof onFirstText ===
-                    "function"
+                        "function"
                 ) {
 
                     onFirstText(
@@ -1611,8 +1451,7 @@ async function callGeminiStream(
                 true;
 
 
-            reply +=
-                text;
+            reply += text;
 
 
             if (
@@ -1620,9 +1459,7 @@ async function callGeminiStream(
                     "function"
             ) {
 
-                await onText(
-                    text
-                );
+                await onText(text);
 
             }
 
@@ -1633,9 +1470,7 @@ async function callGeminiStream(
 
     try {
 
-        while (
-            true
-        ) {
+        while (true) {
 
             const {
                 done,
@@ -1644,9 +1479,7 @@ async function callGeminiStream(
                 await reader.read();
 
 
-            if (
-                done
-            ) {
+            if (done) {
                 break;
             }
 
@@ -1662,9 +1495,7 @@ async function callGeminiStream(
 
 
             await processEvents(
-                parser.push(
-                    chunk
-                )
+                parser.push(chunk)
             );
 
         }
@@ -1674,14 +1505,10 @@ async function callGeminiStream(
             decoder.decode();
 
 
-        if (
-            tail
-        ) {
+        if (tail) {
 
             await processEvents(
-                parser.push(
-                    tail
-                )
+                parser.push(tail)
             );
 
         }
@@ -1710,20 +1537,15 @@ async function callGeminiStream(
     } finally {
 
         try {
-
             await reader.cancel();
-
         } catch {}
 
     }
 
 
     return {
-
         reply,
-
         emittedText
-
     };
 
 }
@@ -1754,12 +1576,8 @@ async function callModelRouteStream(
 
 
         return {
-
             ...result,
-
-            usedFallback:
-                false
-
+            usedFallback: false
         };
 
 
@@ -1768,8 +1586,7 @@ async function callModelRouteStream(
     ) {
 
         if (
-            primaryError
-                ?.emittedText ===
+            primaryError?.emittedText ===
                 true ||
             !route.fallback ||
             route.fallback ===
@@ -1784,14 +1601,11 @@ async function callModelRouteStream(
         console.warn(
             "[NEYO Model Router] Streaming primary failed before output, trying fallback:",
             {
-
                 route:
                     route.route,
 
                 message:
-                    primaryError
-                        ?.message
-
+                    primaryError?.message
             }
         );
 
@@ -1807,12 +1621,8 @@ async function callModelRouteStream(
 
 
         return {
-
             ...result,
-
-            usedFallback:
-                true
-
+            usedFallback: true
         };
 
     }
@@ -1837,13 +1647,6 @@ function writeSSEHeartbeat(
 
 
     try {
-
-        /*
-         * SSE comment.
-         *
-         * Frontend parser ignores it because
-         * it only processes "data:" lines.
-         */
 
         res.write(
             `: neyo-heartbeat ${Date.now()}\n\n`
@@ -1896,15 +1699,7 @@ function startSSEResponse(
     res.flushHeaders?.();
 
 
-    /*
-     * Send actual bytes immediately.
-     * This avoids an idle SSE connection while
-     * waiting for the model's first token.
-     */
-
-    writeSSEHeartbeat(
-        res
-    );
+    writeSSEHeartbeat(res);
 
 }
 
@@ -1959,13 +1754,8 @@ async function deleteGeminiFile(
     try {
 
         const safeName =
-            String(
-                fileName
-            )
-                .replace(
-                    /^\/+/,
-                    ""
-                );
+            String(fileName)
+                .replace(/^\/+/, "");
 
 
         await fetch(
@@ -1997,12 +1787,9 @@ async function waitForGeminiFile(
 ) {
 
     for (
-        let attempt =
-                0;
-        attempt <
-            60;
-        attempt +=
-            1
+        let attempt = 0;
+        attempt < 60;
+        attempt += 1
     ) {
 
         await new Promise(
@@ -2028,14 +1815,10 @@ async function waitForGeminiFile(
                 );
 
 
-        if (
-            !response.ok
-        ) {
+        if (!response.ok) {
 
             throw new Error(
-                data
-                    ?.error
-                    ?.message ||
+                data?.error?.message ||
                 "Unable to check model file status."
             );
 
@@ -2043,8 +1826,7 @@ async function waitForGeminiFile(
 
 
         if (
-            data.state ===
-            "ACTIVE"
+            data.state === "ACTIVE"
         ) {
 
             return {
@@ -2065,8 +1847,7 @@ async function waitForGeminiFile(
 
 
         if (
-            data.state ===
-            "FAILED"
+            data.state === "FAILED"
         ) {
 
             throw new Error(
@@ -2096,12 +1877,8 @@ async function uploadSupabaseFileToGemini(
     } =
         await supabase
             .storage
-            .from(
-                file.bucket
-            )
-            .download(
-                file.path
-            );
+            .from(file.bucket)
+            .download(file.path);
 
 
     if (
@@ -2125,8 +1902,7 @@ async function uploadSupabaseFileToGemini(
 
 
     if (
-        bytes.length ===
-        0
+        bytes.length === 0
     ) {
 
         throw new Error(
@@ -2188,9 +1964,7 @@ async function uploadSupabaseFileToGemini(
         );
 
 
-    if (
-        !startResponse.ok
-    ) {
+    if (!startResponse.ok) {
 
         throw new Error(
             await startResponse
@@ -2212,9 +1986,7 @@ async function uploadSupabaseFileToGemini(
             );
 
 
-    if (
-        !uploadUrl
-    ) {
+    if (!uploadUrl) {
 
         throw new Error(
             "Model upload URL missing."
@@ -2261,14 +2033,10 @@ async function uploadSupabaseFileToGemini(
             );
 
 
-    if (
-        !uploadResponse.ok
-    ) {
+    if (!uploadResponse.ok) {
 
         throw new Error(
-            payload
-                ?.error
-                ?.message ||
+            payload?.error?.message ||
             "Model file upload failed."
         );
 
@@ -2329,9 +2097,7 @@ function extractUrlsFromText(
     text
 ) {
 
-    if (
-        !text
-    ) {
+    if (!text) {
         return [];
     }
 
@@ -2339,8 +2105,7 @@ function extractUrlsFromText(
     const matches =
         text.match(
             /https?:\/\/[^\s<>"']+/g
-        ) ||
-        [];
+        ) || [];
 
 
     return matches.filter(
@@ -2349,9 +2114,7 @@ function extractUrlsFromText(
             try {
 
                 const parsed =
-                    new URL(
-                        url
-                    );
+                    new URL(url);
 
 
                 const host =
@@ -2372,21 +2135,12 @@ function extractUrlsFromText(
 
 
                 if (
-                    host ===
-                        "localhost" ||
-                    host.startsWith(
-                        "127."
-                    ) ||
-                    host.startsWith(
-                        "10."
-                    ) ||
-                    host.startsWith(
-                        "192.168."
-                    ) ||
+                    host === "localhost" ||
+                    host.startsWith("127.") ||
+                    host.startsWith("10.") ||
+                    host.startsWith("192.168.") ||
                     /^172\.(1[6-9]|2[0-9]|3[0-1])\./
-                        .test(
-                            host
-                        )
+                        .test(host)
                 ) {
                     return false;
                 }
@@ -2408,8 +2162,7 @@ function extractUrlsFromText(
 
 async function fetchUrlText(
     url,
-    maxChars =
-        12000
+    maxChars = 12000
 ) {
 
     try {
@@ -2435,28 +2188,22 @@ async function fetchUrlText(
                 await fetch(
                     url,
                     {
-
                         redirect:
                             "follow",
 
                         signal:
                             controller.signal
-
                     }
                 );
 
         } finally {
 
-            clearTimeout(
-                timeout
-            );
+            clearTimeout(timeout);
 
         }
 
 
-        if (
-            !response.ok
-        ) {
+        if (!response.ok) {
             return "";
         }
 
@@ -2466,16 +2213,13 @@ async function fetchUrlText(
                 response.headers
                     .get(
                         "content-type"
-                    ) ||
-                ""
+                    ) || ""
             )
                 .toLowerCase();
 
 
         if (
-            !type.includes(
-                "text/"
-            ) &&
+            !type.includes("text/") &&
             !type.includes(
                 "application/xhtml+xml"
             )
@@ -2533,14 +2277,9 @@ async function buildUrlContextMessages(
         await Promise.all(
             urls.map(
                 async url => ({
-
                     url,
-
                     content:
-                        await fetchUrlText(
-                            url
-                        )
-
+                        await fetchUrlText(url)
                 })
             )
         );
@@ -2555,30 +2294,24 @@ async function buildUrlContextMessages(
                 ) =>
                     `[URL ${index + 1}]\n${item.url}\n\n${item.content}`
             )
-            .join(
-                "\n\n"
-            );
+            .join("\n\n");
 
 
     return [
         {
-
             role:
                 "user",
 
             parts: [
                 {
-
                     text:
 `${query}
 
 Use the following URL content when relevant.
 
 ${context}`
-
                 }
             ]
-
         }
     ];
 
@@ -2597,9 +2330,7 @@ async function saveMessage(
     sources = []
 ) {
 
-    if (
-        !conversationId
-    ) {
+    if (!conversationId) {
         return;
     }
 
@@ -2612,9 +2343,7 @@ async function saveMessage(
         role,
 
         content:
-            cleanString(
-                content
-            )
+            cleanString(content)
 
     };
 
@@ -2624,16 +2353,12 @@ async function saveMessage(
         ...base,
 
         attachments:
-            Array.isArray(
-                attachments
-            )
+            Array.isArray(attachments)
                 ? attachments
                 : [],
 
         sources:
-            Array.isArray(
-                sources
-            )
+            Array.isArray(sources)
                 ? sources
                 : []
 
@@ -2647,14 +2372,10 @@ async function saveMessage(
             .from(
                 "chat_messages"
             )
-            .insert(
-                full
-            );
+            .insert(full);
 
 
-    if (
-        !error
-    ) {
+    if (!error) {
         return;
     }
 
@@ -2662,8 +2383,7 @@ async function saveMessage(
     if (
         /attachments|sources/i
             .test(
-                error.message ||
-                ""
+                error.message || ""
             )
     ) {
 
@@ -2675,14 +2395,10 @@ async function saveMessage(
                 .from(
                     "chat_messages"
                 )
-                .insert(
-                    base
-                );
+                .insert(base);
 
 
-        if (
-            fallbackError
-        ) {
+        if (fallbackError) {
             throw fallbackError;
         }
 
@@ -2706,9 +2422,7 @@ function extractFinalReply(
 ) {
 
     if (
-        !Array.isArray(
-            parts
-        )
+        !Array.isArray(parts)
     ) {
         return "";
     }
@@ -2718,8 +2432,7 @@ function extractFinalReply(
         .filter(
             part =>
                 part &&
-                part.thought !==
-                    true &&
+                part.thought !== true &&
                 typeof part.text ===
                     "string" &&
                 part.text.trim()
@@ -2776,8 +2489,7 @@ export default async function handler(
 
 
     if (
-        req.method !==
-        "POST"
+        req.method !== "POST"
     ) {
 
         res.setHeader(
@@ -2787,14 +2499,10 @@ export default async function handler(
 
 
         return res
-            .status(
-                405
-            )
+            .status(405)
             .json({
-
                 error:
                     "Method not allowed"
-
             });
 
     }
@@ -2818,25 +2526,17 @@ export default async function handler(
 
         logTiming(
             "AUTH_MS",
-            elapsed(
-                authStarted
-            )
+            elapsed(authStarted)
         );
 
 
-        if (
-            !auth?.userId
-        ) {
+        if (!auth?.userId) {
 
             return res
-                .status(
-                    401
-                )
+                .status(401)
                 .json({
-
                     error:
                         "Authentication required. Please log in."
-
                 });
 
         }
@@ -2867,19 +2567,14 @@ export default async function handler(
 
 
         if (
-            messages.length ===
-            0
+            messages.length === 0
         ) {
 
             return res
-                .status(
-                    400
-                )
+                .status(400)
                 .json({
-
                     error:
                         "Messages array required"
-
                 });
 
         }
@@ -2887,26 +2582,20 @@ export default async function handler(
 
         const lastMsg =
             messages[
-                messages.length -
-                1
+                messages.length - 1
             ];
 
 
         if (
             !lastMsg ||
-            lastMsg.role !==
-                "user"
+            lastMsg.role !== "user"
         ) {
 
             return res
-                .status(
-                    400
-                )
+                .status(400)
                 .json({
-
                     error:
                         "Last message must be user"
-
                 });
 
         }
@@ -2962,25 +2651,19 @@ export default async function handler(
                 .rpc(
                     "reserve_message",
                     {
-
                         p_user_id:
                             userId
-
                     }
                 );
 
 
         logTiming(
             "CREDIT_MS",
-            elapsed(
-                creditStarted
-            )
+            elapsed(creditStarted)
         );
 
 
-        if (
-            reserveError
-        ) {
+        if (reserveError) {
 
             throw new Error(
                 "Unable to check message credits."
@@ -2994,22 +2677,17 @@ export default async function handler(
 
 
         if (
-            reservedType ===
-            "limit"
+            reservedType === "limit"
         ) {
 
             return res
-                .status(
-                    429
-                )
+                .status(429)
                 .json({
-
                     error:
                         "MESSAGE_LIMIT_REACHED",
 
                     creditsRemaining:
                         0
-
                 });
 
         }
@@ -3033,8 +2711,7 @@ export default async function handler(
 
 
         const isPro =
-            reservedType ===
-            "pro";
+            reservedType === "pro";
 
 
         /* =================================================
@@ -3062,8 +2739,7 @@ export default async function handler(
 
 
         const rawAttachments =
-            bodyAttachments.length >
-                0
+            bodyAttachments.length > 0
                 ? bodyAttachments
                 : messageAttachments;
 
@@ -3077,8 +2753,7 @@ export default async function handler(
 
         const userText =
             cleanString(
-                lastMsg.content ||
-                ""
+                lastMsg.content || ""
             );
 
 
@@ -3090,13 +2765,9 @@ export default async function handler(
 
         const historyBudget =
             getHistoryBudget({
-
                 autoEffort,
-
                 isDeepResearch,
-
                 attachments
-
             });
 
 
@@ -3104,15 +2775,11 @@ export default async function handler(
             selectHistoryMessages(
                 messages,
                 {
-
                     maxMessages:
-                        historyBudget
-                            .messages,
+                        historyBudget.messages,
 
                     maxChars:
-                        historyBudget
-                            .chars
-
+                        historyBudget.chars
                 }
             );
 
@@ -3120,17 +2787,14 @@ export default async function handler(
         console.log(
             "[NEYO History]",
             {
-
                 effort:
                     autoEffort,
 
                 budgetMessages:
-                    historyBudget
-                        .messages,
+                    historyBudget.messages,
 
                 budgetChars:
-                    historyBudget
-                        .chars,
+                    historyBudget.chars,
 
                 selectedMessages:
                     history.length,
@@ -3143,37 +2807,28 @@ export default async function handler(
                         ) =>
                             total +
                             String(
-                                message
-                                    ?.content ||
+                                message?.content ||
                                 ""
                             ).length,
                         0
                     )
-
             }
         );
 
 
         const modelRoute =
             selectModelRoute({
-
                 isPro,
-
                 attachments,
-
                 preferences,
-
                 isDeepResearch,
-
                 autoEffort
-
             });
 
 
         console.log(
             "[NEYO Model Router]",
             {
-
                 plan:
                     isPro
                         ? "leverage"
@@ -3186,9 +2841,7 @@ export default async function handler(
                     autoEffort,
 
                 multimodal:
-                    attachments.length >
-                        0
-
+                    attachments.length > 0
             }
         );
 
@@ -3196,7 +2849,6 @@ export default async function handler(
         const geminiMessages =
             history.map(
                 message => ({
-
                     role:
                         message.role ===
                             "assistant"
@@ -3205,40 +2857,32 @@ export default async function handler(
 
                     parts: [
                         {
-
                             text:
                                 cleanString(
                                     message.content ||
                                     ""
                                 )
-
                         }
                     ]
-
                 })
             );
 
 
         if (
-            geminiMessages.length ===
-            0
+            geminiMessages.length === 0
         ) {
 
             geminiMessages.push({
-
                 role:
                     "user",
 
                 parts: [
                     {
-
                         text:
                             userText ||
                             "Please respond to the user."
-
                     }
                 ]
-
             });
 
         }
@@ -3249,8 +2893,7 @@ export default async function handler(
            ================================================= */
 
         if (
-            attachments.length >
-            0
+            attachments.length > 0
         ) {
 
             const preparedFiles =
@@ -3273,9 +2916,7 @@ export default async function handler(
 
             const fileParts =
                 preparedFiles
-                    .filter(
-                        Boolean
-                    )
+                    .filter(Boolean)
                     .map(
                         file => {
 
@@ -3309,11 +2950,9 @@ export default async function handler(
             lastModelMessage.parts = [
 
                 {
-
                     text:
                         userText ||
                         "Please analyze the attached file."
-
                 },
 
                 ...fileParts
@@ -3331,11 +2970,8 @@ export default async function handler(
 
         logTiming(
             "PREP_MS",
-            elapsed(
-                prepStarted
-            ),
+            elapsed(prepStarted),
             {
-
                 effort:
                     autoEffort,
 
@@ -3347,7 +2983,6 @@ export default async function handler(
 
                 urls:
                     urls.length
-
             }
         );
 
@@ -3366,17 +3001,6 @@ export default async function handler(
                 ) ||
                 null;
 
-
-        /*
-         * Validate incoming conversation ID.
-         *
-         * If conversation no longer exists,
-         * treat it as a new conversation.
-         *
-         * If Supabase itself fails, do not silently
-         * convert that infrastructure failure into
-         * a new conversation.
-         */
 
         if (
             !privateChat &&
@@ -3465,15 +3089,11 @@ export default async function handler(
                             "New conversation"
 
                     })
-                    .select(
-                        "id"
-                    )
+                    .select("id")
                     .single();
 
 
-            if (
-                error
-            ) {
+            if (error) {
                 throw error;
             }
 
@@ -3484,9 +3104,7 @@ export default async function handler(
         }
 
 
-        if (
-            !privateChat
-        ) {
+        if (!privateChat) {
 
             await saveMessage(
                 conversationId,
@@ -3505,8 +3123,7 @@ export default async function handler(
            ================================================= */
 
         if (
-            body.stream ===
-            true
+            body.stream === true
         ) {
 
             streamAbortController =
@@ -3556,8 +3173,7 @@ export default async function handler(
                 geminiMessages;
 
 
-            let sources =
-                [];
+            let sources = [];
 
 
             let usedUrlContext =
@@ -3565,10 +3181,8 @@ export default async function handler(
 
 
             if (
-                attachments.length ===
-                    0 &&
-                urls.length >
-                    0
+                attachments.length === 0 &&
+                urls.length > 0
             ) {
 
                 const limitedUrls =
@@ -3588,12 +3202,8 @@ export default async function handler(
                 sources =
                     limitedUrls.map(
                         url => ({
-
-                            title:
-                                url,
-
+                            title: url,
                             url
-
                         })
                     );
 
@@ -3604,19 +3214,12 @@ export default async function handler(
             }
 
 
-            startSSEResponse(
-                res
-            );
+            startSSEResponse(res);
 
 
             streamResponseStarted =
                 true;
 
-
-            /*
-             * Keep the SSE connection active while
-             * waiting for a slow model first token.
-             */
 
             streamHeartbeatTimer =
                 setInterval(
@@ -3684,12 +3287,10 @@ export default async function handler(
                                     "MODEL_HEADERS_MS",
                                     ms,
                                     {
-
                                         route:
                                             modelRoute.route,
 
                                         model
-
                                     }
                                 );
 
@@ -3719,7 +3320,6 @@ export default async function handler(
                                         totalStarted
                                     ),
                                     {
-
                                         modelRequestMs:
                                             ms,
 
@@ -3727,7 +3327,6 @@ export default async function handler(
                                             modelRoute.route,
 
                                         model
-
                                     }
                                 );
 
@@ -3740,13 +3339,11 @@ export default async function handler(
                                 writeSSE(
                                     res,
                                     {
-
                                         type:
                                             "delta",
 
                                         content:
                                             text
-
                                     }
                                 );
 
@@ -3758,18 +3355,14 @@ export default async function handler(
 
             logTiming(
                 "MODEL_TOTAL_MS",
-                elapsed(
-                    modelStarted
-                ),
+                elapsed(modelStarted),
                 {
-
                     route:
                         modelRoute.route,
 
                     fallback:
                         streamResult
                             .usedFallback
-
                 }
             );
 
@@ -3778,9 +3371,7 @@ export default async function handler(
                 streamResult.reply;
 
 
-            if (
-                !reply
-            ) {
+            if (!reply) {
 
                 throw new Error(
                     "NEYO returned an empty response."
@@ -3789,9 +3380,7 @@ export default async function handler(
             }
 
 
-            if (
-                !privateChat
-            ) {
+            if (!privateChat) {
 
                 await saveMessage(
                     conversationId,
@@ -3803,10 +3392,6 @@ export default async function handler(
 
             }
 
-
-            /*
-             * Stop heartbeat before final SSE event.
-             */
 
             if (
                 streamHeartbeatTimer
@@ -3826,7 +3411,6 @@ export default async function handler(
             writeSSE(
                 res,
                 {
-
                     type:
                         "done",
 
@@ -3846,7 +3430,6 @@ export default async function handler(
 
                     creditType:
                         reservedType
-
                 }
             );
 
@@ -3872,17 +3455,13 @@ export default async function handler(
 
             logTiming(
                 "TOTAL_MS",
-                elapsed(
-                    totalStarted
-                ),
+                elapsed(totalStarted),
                 {
-
                     streaming:
                         true,
 
                     route:
                         modelRoute.route
-
                 }
             );
 
@@ -3900,8 +3479,7 @@ export default async function handler(
             geminiMessages;
 
 
-        let sources =
-            [];
+        let sources = [];
 
 
         let usedUrlContext =
@@ -3909,10 +3487,8 @@ export default async function handler(
 
 
         if (
-            attachments.length ===
-                0 &&
-            urls.length >
-                0
+            attachments.length === 0 &&
+            urls.length > 0
         ) {
 
             const limitedUrls =
@@ -3932,12 +3508,8 @@ export default async function handler(
             sources =
                 limitedUrls.map(
                     url => ({
-
-                        title:
-                            url,
-
+                        title: url,
                         url
-
                     })
                 );
 
@@ -3963,11 +3535,8 @@ export default async function handler(
 
         logTiming(
             "MODEL_TOTAL_MS",
-            elapsed(
-                modelStarted
-            ),
+            elapsed(modelStarted),
             {
-
                 streaming:
                     false,
 
@@ -3977,7 +3546,6 @@ export default async function handler(
                 fallback:
                     modelResponse
                         .usedFallback
-
             }
         );
 
@@ -3992,9 +3560,7 @@ export default async function handler(
             );
 
 
-        if (
-            !reply
-        ) {
+        if (!reply) {
 
             throw new Error(
                 "NEYO returned an empty response."
@@ -4003,9 +3569,7 @@ export default async function handler(
         }
 
 
-        if (
-            !privateChat
-        ) {
+        if (!privateChat) {
 
             await saveMessage(
                 conversationId,
@@ -4020,25 +3584,19 @@ export default async function handler(
 
         logTiming(
             "TOTAL_MS",
-            elapsed(
-                totalStarted
-            ),
+            elapsed(totalStarted),
             {
-
                 streaming:
                     false,
 
                 route:
                     modelRoute.route
-
             }
         );
 
 
         return res
-            .status(
-                200
-            )
+            .status(200)
             .json({
 
                 reply,
@@ -4051,8 +3609,7 @@ export default async function handler(
                 privateChat,
 
                 sources:
-                    sources.length >
-                        0
+                    sources.length > 0
                         ? sources
                         : undefined,
 
@@ -4074,10 +3631,6 @@ export default async function handler(
         error
     ) {
 
-        /*
-         * Always stop heartbeat on failure.
-         */
-
         if (
             streamHeartbeatTimer
         ) {
@@ -4096,37 +3649,27 @@ export default async function handler(
         console.error(
             "[NEYO Chat Error]",
             {
-
                 message:
                     error?.message,
 
                 name:
                     error?.name
-
             }
         );
 
 
         logTiming(
             "TOTAL_ERROR_MS",
-            elapsed(
-                totalStarted
-            )
+            elapsed(totalStarted)
         );
 
-
-        /* =================================================
-           REFUND
-           ================================================= */
 
         if (
             !streamCompleted &&
             userId &&
             (
-                reservedType ===
-                    "free" ||
-                reservedType ===
-                    "reward"
+                reservedType === "free" ||
+                reservedType === "reward"
             )
         ) {
 
@@ -4136,13 +3679,11 @@ export default async function handler(
                     .rpc(
                         "refund_message",
                         {
-
                             p_user_id:
                                 userId,
 
                             p_type:
                                 reservedType
-
                         }
                     );
 
@@ -4151,10 +3692,6 @@ export default async function handler(
         }
 
 
-        /* =================================================
-           STREAM ERROR
-           ================================================= */
-
         if (
             streamResponseStarted
         ) {
@@ -4162,7 +3699,6 @@ export default async function handler(
             writeSSE(
                 res,
                 {
-
                     type:
                         "error",
 
@@ -4172,7 +3708,6 @@ export default async function handler(
                             ? "Generation stopped."
                             : error?.message ||
                                 "Unable to complete request."
-
                 }
             );
 
@@ -4194,27 +3729,19 @@ export default async function handler(
 
         return res
             .status(
-                error?.status >=
-                    400 &&
-                error?.status <
-                    600
+                error?.status >= 400 &&
+                error?.status < 600
                     ? error.status
                     : 500
             )
             .json({
-
                 error:
                     error?.message ||
                     "Unable to complete request."
-
             });
 
 
     } finally {
-
-        /*
-         * Final safety cleanup.
-         */
 
         if (
             streamHeartbeatTimer
@@ -4232,8 +3759,7 @@ export default async function handler(
 
 
         if (
-            geminiFiles.length >
-            0
+            geminiFiles.length > 0
         ) {
 
             await Promise.allSettled(

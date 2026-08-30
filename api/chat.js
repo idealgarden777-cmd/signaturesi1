@@ -60,6 +60,10 @@ const URL_FETCH_TIMEOUT_MS =
     8000;
 
 
+const STREAM_HEARTBEAT_MS =
+    5000;
+
+
 /*
 Latency-oriented history budgets.
 
@@ -1820,6 +1824,43 @@ async function callModelRouteStream(
    CLIENT SSE
    ========================================================= */
 
+function writeSSEHeartbeat(
+    res
+) {
+
+    if (
+        res.writableEnded ||
+        res.destroyed
+    ) {
+        return false;
+    }
+
+
+    try {
+
+        /*
+         * SSE comment.
+         *
+         * Frontend parser ignores it because
+         * it only processes "data:" lines.
+         */
+
+        res.write(
+            `: neyo-heartbeat ${Date.now()}\n\n`
+        );
+
+
+        return true;
+
+    } catch {
+
+        return false;
+
+    }
+
+}
+
+
 function startSSEResponse(
     res
 ) {
@@ -1854,6 +1895,17 @@ function startSSEResponse(
 
     res.flushHeaders?.();
 
+
+    /*
+     * Send actual bytes immediately.
+     * This avoids an idle SSE connection while
+     * waiting for the model's first token.
+     */
+
+    writeSSEHeartbeat(
+        res
+    );
+
 }
 
 
@@ -1870,12 +1922,20 @@ function writeSSE(
     }
 
 
-    res.write(
-        `data: ${JSON.stringify(data)}\n\n`
-    );
+    try {
+
+        res.write(
+            `data: ${JSON.stringify(data)}\n\n`
+        );
 
 
-    return true;
+        return true;
+
+    } catch {
+
+        return false;
+
+    }
 
 }
 
@@ -2707,6 +2767,10 @@ export default async function handler(
         null;
 
 
+    let streamHeartbeatTimer =
+        null;
+
+
     const geminiFiles =
         [];
 
@@ -3303,9 +3367,17 @@ export default async function handler(
                 null;
 
 
-        // ---------------------------------------------
-        // FIX: Validate incoming conversationId before using it
-        // ---------------------------------------------
+        /*
+         * Validate incoming conversation ID.
+         *
+         * If conversation no longer exists,
+         * treat it as a new conversation.
+         *
+         * If Supabase itself fails, do not silently
+         * convert that infrastructure failure into
+         * a new conversation.
+         */
+
         if (
             !privateChat &&
             conversationId
@@ -3336,7 +3408,15 @@ export default async function handler(
 
 
             if (
-                conversationLookupError ||
+                conversationLookupError
+            ) {
+
+                throw conversationLookupError;
+
+            }
+
+
+            if (
                 !existingConversation
             ) {
 
@@ -3438,6 +3518,21 @@ export default async function handler(
                 () => {
 
                     if (
+                        streamHeartbeatTimer
+                    ) {
+
+                        clearInterval(
+                            streamHeartbeatTimer
+                        );
+
+
+                        streamHeartbeatTimer =
+                            null;
+
+                    }
+
+
+                    if (
                         !streamCompleted &&
                         !streamAbortController
                             .signal
@@ -3516,6 +3611,46 @@ export default async function handler(
 
             streamResponseStarted =
                 true;
+
+
+            /*
+             * Keep the SSE connection active while
+             * waiting for a slow model first token.
+             */
+
+            streamHeartbeatTimer =
+                setInterval(
+                    () => {
+
+                        const alive =
+                            writeSSEHeartbeat(
+                                res
+                            );
+
+
+                        if (
+                            !alive &&
+                            streamHeartbeatTimer
+                        ) {
+
+                            clearInterval(
+                                streamHeartbeatTimer
+                            );
+
+
+                            streamHeartbeatTimer =
+                                null;
+
+                        }
+
+                    },
+                    STREAM_HEARTBEAT_MS
+                );
+
+
+            streamHeartbeatTimer
+                .unref
+                ?.();
 
 
             let firstTokenLogged =
@@ -3665,6 +3800,25 @@ export default async function handler(
                     [],
                     sources
                 );
+
+            }
+
+
+            /*
+             * Stop heartbeat before final SSE event.
+             */
+
+            if (
+                streamHeartbeatTimer
+            ) {
+
+                clearInterval(
+                    streamHeartbeatTimer
+                );
+
+
+                streamHeartbeatTimer =
+                    null;
 
             }
 
@@ -3920,6 +4074,25 @@ export default async function handler(
         error
     ) {
 
+        /*
+         * Always stop heartbeat on failure.
+         */
+
+        if (
+            streamHeartbeatTimer
+        ) {
+
+            clearInterval(
+                streamHeartbeatTimer
+            );
+
+
+            streamHeartbeatTimer =
+                null;
+
+        }
+
+
         console.error(
             "[NEYO Chat Error]",
             {
@@ -4038,6 +4211,25 @@ export default async function handler(
 
 
     } finally {
+
+        /*
+         * Final safety cleanup.
+         */
+
+        if (
+            streamHeartbeatTimer
+        ) {
+
+            clearInterval(
+                streamHeartbeatTimer
+            );
+
+
+            streamHeartbeatTimer =
+                null;
+
+        }
+
 
         if (
             geminiFiles.length >

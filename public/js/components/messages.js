@@ -1779,20 +1779,69 @@ neo.js may remain loaded.
                     ?.message;
 
 
-            if (!message?.id) {
+            if (
+                !message?.id
+            ) {
                 return;
+            }
+
+
+            const role =
+                message.role ||
+                "assistant";
+
+
+            const content =
+                clean(
+                    message.content ||
+                    ""
+                );
+
+
+            /*
+             * STREAMING:
+             *
+             * Keep Thinking visible until real assistant
+             * content arrives. The initial placeholder "…"
+             * must not remove Thinking.
+             */
+
+            if (
+                role ===
+                    "assistant" &&
+                content.trim() &&
+                content.trim() !==
+                    "…"
+            ) {
+
+                removeThinking();
+
             }
 
 
             updateMessage(
                 message.id,
-                message.content ||
-                "",
+                content,
                 {
-                    role:
-                        message.role,
+                    role,
 
                     message
+                }
+            );
+
+
+            /*
+             * While streaming, keep the response following
+             * the bottom only if the user is already near it.
+             */
+
+            requestAnimationFrame(
+                () => {
+
+                    scrollToBottom(
+                        "auto"
+                    );
+
                 }
             );
 

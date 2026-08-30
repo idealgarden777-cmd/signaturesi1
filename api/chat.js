@@ -48,6 +48,10 @@ const MAX_HISTORY_MESSAGES =
     50;
 
 
+const MAX_HISTORY_CHARS =
+    60000;
+
+
 const MAX_URL_CONTEXT_SOURCES =
     5;
 
@@ -56,30 +60,34 @@ const URL_FETCH_TIMEOUT_MS =
     8000;
 
 
-const MAX_HISTORY_CHARS =
-    60000;
+/*
+Latency-oriented history budgets.
+
+Simple messages should not repeatedly send
+the entire 60k conversation context.
+*/
+
+const HISTORY_BUDGET_LIGHT = {
+    messages: 12,
+    chars: 12000
+};
+
+
+const HISTORY_BUDGET_STANDARD = {
+    messages: 30,
+    chars: 30000
+};
+
+
+const HISTORY_BUDGET_DEEP = {
+    messages: 50,
+    chars: MAX_HISTORY_CHARS
+};
 
 
 /* =========================================================
-   NEYO MODEL ROUTING CONFIG
-
-   FRONTEND NAMES:
-   - NEYO
-   - Leverage
-
-   Provider/model names below remain backend-only.
+   MODELS
    ========================================================= */
-
-
-/*
-NEYO Free
-
-Primary:
-Gemma 4 26B
-
-Fallback:
-Gemini 3.1 Flash-Lite
-*/
 
 const NEYO_FREE_PRIMARY_MODEL =
     cleanEnv(
@@ -97,19 +105,6 @@ const NEYO_FREE_FALLBACK_MODEL =
     ) ||
     "gemini-3.1-flash-lite";
 
-
-/*
-Leverage
-
-Normal:
-Gemma 4 26B
-
-Advanced / multimodal:
-Gemma 4 31B
-
-Fallback:
-Gemini 3.5 Flash-Lite
-*/
 
 const NEYO_LEVERAGE_PRIMARY_MODEL =
     cleanEnv(
@@ -136,7 +131,7 @@ const NEYO_LEVERAGE_FALLBACK_MODEL =
 
 
 /* =========================================================
-   SYSTEM
+   SYSTEM PROMPT
    ========================================================= */
 
 const NEYO_RESPONSE_FORMAT = `
@@ -179,8 +174,20 @@ The goal is to give the right answer with the right depth, tone, and effort for 
 
 
 /* =========================================================
-   HELPERS
+   BASIC HELPERS
    ========================================================= */
+
+function cleanEnv(
+    value
+) {
+
+    return typeof value ===
+        "string"
+        ? value.trim()
+        : "";
+
+}
+
 
 function cleanString(
     value,
@@ -213,29 +220,40 @@ function cleanString(
 }
 
 
-function cleanEnv(
-    value
+function elapsed(
+    start
 ) {
 
-    return typeof value ===
-        "string"
-        ? value.trim()
-        : "";
+    return Math.max(
+        0,
+        Date.now() -
+        start
+    );
+
+}
+
+
+function logTiming(
+    name,
+    value,
+    extra = {}
+) {
+
+    console.log(
+        `[NEYO Timing] ${name}`,
+        {
+            ms:
+                value,
+
+            ...extra
+        }
+    );
 
 }
 
 
 /* =========================================================
    ATTACHMENTS
-
-   Expected upload path:
-
-   users/<authenticatedUserId>/<uploadId>/<filename>
-
-   IMPORTANT:
-   - Do not rebuild path.
-   - Do not force a different bucket.
-   - uploadId is useful but not required for chat access.
    ========================================================= */
 
 function validAttachmentList(
@@ -368,31 +386,14 @@ function validAttachmentList(
             bucket !==
             ATTACHMENT_BUCKET
         ) {
-
-            console.warn(
-                "[NEYO Chat] Wrong attachment bucket:",
-                {
-                    bucket,
-                    name
-                }
-            );
-
             continue;
-
         }
 
 
         if (
             !path
         ) {
-
-            console.warn(
-                "[NEYO Chat] Attachment has no storage path:",
-                name
-            );
-
             continue;
-
         }
 
 
@@ -401,14 +402,7 @@ function validAttachmentList(
             path.includes("\\") ||
             path.includes("..")
         ) {
-
-            console.warn(
-                "[NEYO Chat] Unsafe attachment path:",
-                path
-            );
-
             continue;
-
         }
 
 
@@ -417,29 +411,17 @@ function validAttachmentList(
                 userPrefix
             )
         ) {
-
-            console.warn(
-                "[NEYO Chat] Attachment user mismatch:",
-                {
-                    path,
-
-                    expectedPrefix:
-                        userPrefix
-                }
-            );
-
             continue;
-
         }
 
 
-        const dedupeKey =
+        const key =
             `${bucket}:${path}`;
 
 
         if (
             seen.has(
-                dedupeKey
+                key
             )
         ) {
             continue;
@@ -447,7 +429,7 @@ function validAttachmentList(
 
 
         seen.add(
-            dedupeKey
+            key
         );
 
 
@@ -494,112 +476,7 @@ function validAttachmentList(
     }
 
 
-    console.log(
-        "[NEYO Chat] Accepted attachments:",
-        output.map(
-            item => ({
-
-                name:
-                    item.name,
-
-                uploadId:
-                    item.uploadId,
-
-                bucket:
-                    item.bucket,
-
-                path:
-                    item.path
-
-            })
-        )
-    );
-
-
     return output;
-
-}
-
-
-/* =========================================================
-   URL HELPERS
-   ========================================================= */
-
-function extractUrlsFromText(
-    text
-) {
-
-    if (!text) {
-        return [];
-    }
-
-
-    const matches =
-        text.match(
-            /https?:\/\/[^\s<>"']+/g
-        ) ||
-        [];
-
-
-    return matches.filter(
-        url => {
-
-            try {
-
-                const parsed =
-                    new URL(
-                        url
-                    );
-
-
-                const host =
-                    parsed.hostname
-                        .toLowerCase();
-
-
-                if (
-                    ![
-                        "http:",
-                        "https:"
-                    ].includes(
-                        parsed.protocol
-                    )
-                ) {
-                    return false;
-                }
-
-
-                if (
-                    host ===
-                        "localhost" ||
-                    host.startsWith(
-                        "127."
-                    ) ||
-                    host.startsWith(
-                        "10."
-                    ) ||
-                    host.startsWith(
-                        "192.168."
-                    ) ||
-                    /^172\.(1[6-9]|2[0-9]|3[0-1])\./
-                        .test(
-                            host
-                        )
-                ) {
-                    return false;
-                }
-
-
-                return true;
-
-            } catch {
-
-                return false;
-
-            }
-
-        }
-    );
 
 }
 
@@ -693,7 +570,8 @@ function detectAutomaticEffort(
 
     const value =
         cleanString(
-            text || "",
+            text ||
+            "",
             12000
         )
             .toLowerCase();
@@ -707,6 +585,7 @@ function detectAutomaticEffort(
 
 
     const deepSignals = [
+
         /\bdeep(?:ly)?\b/,
         /\bthorough(?:ly)?\b/,
         /\bcomplex\b/,
@@ -722,11 +601,13 @@ function detectAutomaticEffort(
         /\bproduction\b/,
         /\broot cause\b/,
         /\bstep[- ]by[- ]step\b/
+
     ];
 
 
     if (
-        value.length >= 3500 ||
+        value.length >=
+            3500 ||
         deepSignals.some(
             pattern =>
                 pattern.test(
@@ -739,7 +620,8 @@ function detectAutomaticEffort(
 
 
     if (
-        value.length <= 160 &&
+        value.length <=
+            180 &&
         !value.includes(
             "```"
         )
@@ -754,11 +636,58 @@ function detectAutomaticEffort(
 
 
 /* =========================================================
-   SMART HISTORY
+   HISTORY BUDGET
    ========================================================= */
 
+function getHistoryBudget({
+    autoEffort,
+    isDeepResearch,
+    attachments
+} = {}) {
+
+    if (
+        isDeepResearch ||
+        autoEffort ===
+            "deep" ||
+        (
+            Array.isArray(
+                attachments
+            ) &&
+            attachments.length >
+                0
+        )
+    ) {
+
+        return HISTORY_BUDGET_DEEP;
+
+    }
+
+
+    if (
+        autoEffort ===
+        "light"
+    ) {
+
+        return HISTORY_BUDGET_LIGHT;
+
+    }
+
+
+    return HISTORY_BUDGET_STANDARD;
+
+}
+
+
 function selectHistoryMessages(
-    messages
+    messages,
+    {
+        maxMessages =
+            MAX_HISTORY_MESSAGES,
+
+        maxChars =
+            MAX_HISTORY_CHARS
+
+    } = {}
 ) {
 
     if (
@@ -774,7 +703,7 @@ function selectHistoryMessages(
 
     const recent =
         messages.slice(
-            -MAX_HISTORY_MESSAGES
+            -maxMessages
         );
 
 
@@ -795,12 +724,15 @@ function selectHistoryMessages(
     ) {
 
         const message =
-            recent[index];
+            recent[
+                index
+            ];
 
 
         const content =
             cleanString(
-                message?.content ||
+                message
+                    ?.content ||
                 ""
             );
 
@@ -814,9 +746,11 @@ function selectHistoryMessages(
                 0 &&
             totalChars +
                 cost >
-                MAX_HISTORY_CHARS
+                maxChars
         ) {
+
             break;
+
         }
 
 
@@ -881,7 +815,8 @@ function selectModelRoute({
     if (
         isPro &&
         (
-            preferences.intelligence ===
+            preferences
+                .intelligence ===
                 "maximum" ||
             isDeepResearch ||
             autoEffort ===
@@ -925,26 +860,6 @@ function selectModelRoute({
     }
 
 
-    if (
-        hasAttachments
-    ) {
-
-        return {
-
-            primary:
-                NEYO_FREE_PRIMARY_MODEL,
-
-            fallback:
-                NEYO_FREE_FALLBACK_MODEL,
-
-            route:
-                "free-multimodal"
-
-        };
-
-    }
-
-
     return {
 
         primary:
@@ -954,7 +869,9 @@ function selectModelRoute({
             NEYO_FREE_FALLBACK_MODEL,
 
         route:
-            "free-standard"
+            hasAttachments
+                ? "free-multimodal"
+                : "free-standard"
 
     };
 
@@ -962,7 +879,7 @@ function selectModelRoute({
 
 
 /* =========================================================
-   SYSTEM BUILDER
+   SYSTEM
    ========================================================= */
 
 function buildSystemInstruction(
@@ -1022,7 +939,7 @@ function buildSystemInstruction(
 
 
 /* =========================================================
-   GEMINI BODY
+   MODEL BODY
    ========================================================= */
 
 function buildGeminiBody(
@@ -1053,7 +970,8 @@ function buildGeminiBody(
             temperature:
                 isDeepResearch
                     ? 0.45
-                    : preferences.intelligence ===
+                    : preferences
+                        .intelligence ===
                         "maximum"
                         ? 0.5
                         : 0.65,
@@ -1064,7 +982,8 @@ function buildGeminiBody(
             maxOutputTokens:
                 (
                     isDeepResearch ||
-                    preferences.intelligence ===
+                    preferences
+                        .intelligence ===
                         "maximum"
                 )
                     ? 8192
@@ -1078,7 +997,7 @@ function buildGeminiBody(
 
 
 /* =========================================================
-   NORMAL MODEL API
+   NORMAL MODEL CALL
    ========================================================= */
 
 async function callGemini(
@@ -1139,24 +1058,6 @@ async function callGemini(
         !response.ok
     ) {
 
-        console.error(
-            "[NEYO Model Request]",
-            {
-
-                model,
-
-                status:
-                    response.status,
-
-                error:
-                    data
-                        ?.error
-                        ?.message
-
-            }
-        );
-
-
         const error =
             new Error(
                 data
@@ -1185,7 +1086,7 @@ async function callGemini(
 
 
 /* =========================================================
-   NORMAL MODEL CALL WITH FALLBACK
+   NORMAL ROUTE + FALLBACK
    ========================================================= */
 
 async function callModelRoute(
@@ -1269,7 +1170,7 @@ async function callModelRoute(
 
 
 /* =========================================================
-   STREAMING MODEL API
+   EXTRACT STREAM TEXT
    ========================================================= */
 
 function extractVisibleStreamText(
@@ -1309,6 +1210,10 @@ function extractVisibleStreamText(
 
 }
 
+
+/* =========================================================
+   UPSTREAM SSE PARSER
+   ========================================================= */
 
 function createSSEParser() {
 
@@ -1381,7 +1286,7 @@ function createSSEParser() {
 
             if (
                 dataLines.length ===
-                    0
+                0
             ) {
                 continue;
             }
@@ -1415,7 +1320,7 @@ function createSSEParser() {
             } catch {
 
                 console.warn(
-                    "[NEYO Stream] Ignored malformed upstream SSE event."
+                    "[NEYO Stream] Malformed upstream SSE event ignored."
                 );
 
             }
@@ -1453,12 +1358,19 @@ function createSSEParser() {
 
 
     return {
+
         push,
+
         flush
+
     };
 
 }
 
+
+/* =========================================================
+   STREAM MODEL CALL
+   ========================================================= */
 
 async function callGeminiStream(
     messages,
@@ -1467,7 +1379,9 @@ async function callGeminiStream(
     preferences = {},
     {
         signal,
-        onText
+        onText,
+        onHeaders,
+        onFirstText
     } = {}
 ) {
 
@@ -1480,6 +1394,10 @@ async function callGeminiStream(
         );
 
     }
+
+
+    const requestStarted =
+        Date.now();
 
 
     const response =
@@ -1515,6 +1433,25 @@ async function callGeminiStream(
         );
 
 
+    const headersMs =
+        elapsed(
+            requestStarted
+        );
+
+
+    if (
+        typeof onHeaders ===
+        "function"
+    ) {
+
+        onHeaders(
+            headersMs,
+            model
+        );
+
+    }
+
+
     if (
         !response.ok
     ) {
@@ -1531,39 +1468,14 @@ async function callGeminiStream(
             {};
 
 
-        if (
-            raw
-        ) {
+        try {
 
-            try {
-
-                data =
-                    JSON.parse(
-                        raw
-                    );
-
-            } catch {}
-
-        }
-
-
-        console.error(
-            "[NEYO Stream Model Request]",
-            {
-
-                model,
-
-                status:
-                    response.status,
-
-                error:
-                    data
-                        ?.error
-                        ?.message ||
+            data =
+                JSON.parse(
                     raw
+                );
 
-            }
-        );
+        } catch {}
 
 
         const error =
@@ -1640,6 +1552,10 @@ async function callGeminiStream(
         false;
 
 
+    let firstTextReported =
+        false;
+
+
     async function processEvents(
         events
     ) {
@@ -1659,6 +1575,31 @@ async function callGeminiStream(
                 !text
             ) {
                 continue;
+            }
+
+
+            if (
+                !firstTextReported
+            ) {
+
+                firstTextReported =
+                    true;
+
+
+                if (
+                    typeof onFirstText ===
+                    "function"
+                ) {
+
+                    onFirstText(
+                        elapsed(
+                            requestStarted
+                        ),
+                        model
+                    );
+
+                }
+
             }
 
 
@@ -1785,7 +1726,7 @@ async function callGeminiStream(
 
 
 /* =========================================================
-   STREAMING MODEL CALL WITH SAFE FALLBACK
+   STREAM ROUTER
    ========================================================= */
 
 async function callModelRouteStream(
@@ -1793,10 +1734,7 @@ async function callModelRouteStream(
     route,
     isDeepResearch = false,
     preferences = {},
-    {
-        signal,
-        onText
-    } = {}
+    options = {}
 ) {
 
     try {
@@ -1807,10 +1745,7 @@ async function callModelRouteStream(
                 route.primary,
                 isDeepResearch,
                 preferences,
-                {
-                    signal,
-                    onText
-                }
+                options
             );
 
 
@@ -1863,10 +1798,7 @@ async function callModelRouteStream(
                 route.fallback,
                 isDeepResearch,
                 preferences,
-                {
-                    signal,
-                    onText
-                }
+                options
             );
 
 
@@ -1885,31 +1817,8 @@ async function callModelRouteStream(
 
 
 /* =========================================================
-   DOWNSTREAM SSE
+   CLIENT SSE
    ========================================================= */
-
-function writeSSE(
-    res,
-    data
-) {
-
-    if (
-        res.writableEnded ||
-        res.destroyed
-    ) {
-        return false;
-    }
-
-
-    res.write(
-        `data: ${JSON.stringify(data)}\n\n`
-    );
-
-
-    return true;
-
-}
-
 
 function startSSEResponse(
     res
@@ -1948,8 +1857,31 @@ function startSSEResponse(
 }
 
 
+function writeSSE(
+    res,
+    data
+) {
+
+    if (
+        res.writableEnded ||
+        res.destroyed
+    ) {
+        return false;
+    }
+
+
+    res.write(
+        `data: ${JSON.stringify(data)}\n\n`
+    );
+
+
+    return true;
+
+}
+
+
 /* =========================================================
-   GEMINI TEMP FILE DELETE
+   MODEL FILE HELPERS
    ========================================================= */
 
 async function deleteGeminiFile(
@@ -1964,17 +1896,17 @@ async function deleteGeminiFile(
     }
 
 
-    const safeName =
-        String(
-            fileName
-        )
-            .replace(
-                /^\/+/,
-                ""
-            );
-
-
     try {
+
+        const safeName =
+            String(
+                fileName
+            )
+                .replace(
+                    /^\/+/,
+                    ""
+                );
+
 
         await fetch(
             `https://generativelanguage.googleapis.com/v1beta/${safeName}?key=${encodeURIComponent(GEMINI_API_KEY)}`,
@@ -1984,12 +1916,13 @@ async function deleteGeminiFile(
             }
         );
 
+
     } catch (
         error
     ) {
 
         console.warn(
-            "[NEYO Gemini] Temp cleanup failed:",
+            "[NEYO File Cleanup]",
             error?.message
         );
 
@@ -1998,19 +1931,18 @@ async function deleteGeminiFile(
 }
 
 
-/* =========================================================
-   WAIT FOR GEMINI FILE
-   ========================================================= */
-
 async function waitForGeminiFile(
     fileName,
     fallbackMimeType
 ) {
 
     for (
-        let attempt = 0;
-        attempt < 60;
-        attempt += 1
+        let attempt =
+                0;
+        attempt <
+            60;
+        attempt +=
+            1
     ) {
 
         await new Promise(
@@ -2044,7 +1976,7 @@ async function waitForGeminiFile(
                 data
                     ?.error
                     ?.message ||
-                "Unable to check Gemini file status."
+                "Unable to check model file status."
             );
 
         }
@@ -2078,7 +2010,7 @@ async function waitForGeminiFile(
         ) {
 
             throw new Error(
-                "Gemini could not process this attachment."
+                "Model could not process this attachment."
             );
 
         }
@@ -2087,48 +2019,15 @@ async function waitForGeminiFile(
 
 
     throw new Error(
-        "Gemini file processing timed out."
+        "File processing timed out."
     );
 
 }
 
 
-/* =========================================================
-   SUPABASE → GEMINI FILE
-   ========================================================= */
-
 async function uploadSupabaseFileToGemini(
     file
 ) {
-
-    if (
-        !file?.bucket ||
-        !file?.path
-    ) {
-
-        throw new Error(
-            `Attachment "${file?.name || "file"}" is missing storage metadata.`
-        );
-
-    }
-
-
-    console.log(
-        "[NEYO Attachment] Downloading:",
-        {
-
-            bucket:
-                file.bucket,
-
-            path:
-                file.path,
-
-            name:
-                file.name
-
-        }
-    );
-
 
     const {
         data:
@@ -2149,23 +2048,6 @@ async function uploadSupabaseFileToGemini(
         error ||
         !storedFile
     ) {
-
-        console.error(
-            "[NEYO Attachment] Download failed:",
-            {
-
-                bucket:
-                    file.bucket,
-
-                path:
-                    file.path,
-
-                error:
-                    error?.message
-
-            }
-        );
-
 
         throw new Error(
             error?.message ||
@@ -2195,7 +2077,6 @@ async function uploadSupabaseFileToGemini(
 
 
     const mimeType =
-        file.mime ||
         file.mimeType ||
         storedFile.type ||
         "application/octet-stream";
@@ -2251,17 +2132,13 @@ async function uploadSupabaseFileToGemini(
         !startResponse.ok
     ) {
 
-        const text =
+        throw new Error(
             await startResponse
                 .text()
                 .catch(
-                    () => ""
-                );
-
-
-        throw new Error(
-            text ||
-            "Unable to initialize Gemini file upload."
+                    () =>
+                        "Unable to initialize file upload."
+                )
         );
 
     }
@@ -2280,7 +2157,7 @@ async function uploadSupabaseFileToGemini(
     ) {
 
         throw new Error(
-            "Gemini upload URL missing."
+            "Model upload URL missing."
         );
 
     }
@@ -2332,48 +2209,36 @@ async function uploadSupabaseFileToGemini(
             payload
                 ?.error
                 ?.message ||
-            "Gemini file upload failed."
+            "Model file upload failed."
         );
 
     }
 
 
-    const geminiFile =
+    const modelFile =
         payload?.file;
 
 
     if (
-        !geminiFile?.name ||
-        !geminiFile?.uri
+        !modelFile?.name ||
+        !modelFile?.uri
     ) {
 
         throw new Error(
-            "Gemini file information was not returned."
+            "Model file information missing."
         );
 
     }
 
 
     if (
-        geminiFile.state ===
+        modelFile.state ===
         "PROCESSING"
     ) {
 
         return waitForGeminiFile(
-            geminiFile.name,
+            modelFile.name,
             mimeType
-        );
-
-    }
-
-
-    if (
-        geminiFile.state ===
-        "FAILED"
-    ) {
-
-        throw new Error(
-            `Gemini could not process "${file.name}".`
         );
 
     }
@@ -2382,13 +2247,13 @@ async function uploadSupabaseFileToGemini(
     return {
 
         name:
-            geminiFile.name,
+            modelFile.name,
 
         uri:
-            geminiFile.uri,
+            modelFile.uri,
 
         mimeType:
-            geminiFile.mimeType ||
+            modelFile.mimeType ||
             mimeType
 
     };
@@ -2397,12 +2262,94 @@ async function uploadSupabaseFileToGemini(
 
 
 /* =========================================================
-   URL CONTEXT
+   URL HELPERS
    ========================================================= */
+
+function extractUrlsFromText(
+    text
+) {
+
+    if (
+        !text
+    ) {
+        return [];
+    }
+
+
+    const matches =
+        text.match(
+            /https?:\/\/[^\s<>"']+/g
+        ) ||
+        [];
+
+
+    return matches.filter(
+        url => {
+
+            try {
+
+                const parsed =
+                    new URL(
+                        url
+                    );
+
+
+                const host =
+                    parsed.hostname
+                        .toLowerCase();
+
+
+                if (
+                    ![
+                        "http:",
+                        "https:"
+                    ].includes(
+                        parsed.protocol
+                    )
+                ) {
+                    return false;
+                }
+
+
+                if (
+                    host ===
+                        "localhost" ||
+                    host.startsWith(
+                        "127."
+                    ) ||
+                    host.startsWith(
+                        "10."
+                    ) ||
+                    host.startsWith(
+                        "192.168."
+                    ) ||
+                    /^172\.(1[6-9]|2[0-9]|3[0-1])\./
+                        .test(
+                            host
+                        )
+                ) {
+                    return false;
+                }
+
+
+                return true;
+
+            } catch {
+
+                return false;
+
+            }
+
+        }
+    );
+
+}
+
 
 async function fetchUrlText(
     url,
-    maxChars = 12000
+    maxChars =
+        12000
 ) {
 
     try {
@@ -2507,6 +2454,7 @@ async function fetchUrlText(
             maxChars
         );
 
+
     } catch {
 
         return "";
@@ -2525,11 +2473,14 @@ async function buildUrlContextMessages(
         await Promise.all(
             urls.map(
                 async url => ({
+
                     url,
+
                     content:
                         await fetchUrlText(
                             url
                         )
+
                 })
             )
         );
@@ -2570,31 +2521,6 @@ ${context}`
 
         }
     ];
-
-}
-
-
-async function callGeminiUrlContext(
-    query,
-    urls,
-    route,
-    isDeepResearch,
-    preferences
-) {
-
-    const messages =
-        await buildUrlContextMessages(
-            query,
-            urls
-        );
-
-
-    return callModelRoute(
-        messages,
-        route,
-        isDeepResearch,
-        preferences
-    );
 
 }
 
@@ -2712,7 +2638,7 @@ async function saveMessage(
 
 
 /* =========================================================
-   EXTRACT FINAL REPLY
+   EXTRACT NORMAL REPLY
    ========================================================= */
 
 function extractFinalReply(
@@ -2722,9 +2648,7 @@ function extractFinalReply(
     if (
         !Array.isArray(
             parts
-        ) ||
-        parts.length ===
-            0
+        )
     ) {
         return "";
     }
@@ -2738,8 +2662,7 @@ function extractFinalReply(
                     true &&
                 typeof part.text ===
                     "string" &&
-                part.text.trim() !==
-                    ""
+                part.text.trim()
         )
         .map(
             part =>
@@ -2759,6 +2682,34 @@ export default async function handler(
     req,
     res
 ) {
+
+    const totalStarted =
+        Date.now();
+
+
+    let userId =
+        null;
+
+
+    let reservedType =
+        null;
+
+
+    let streamResponseStarted =
+        false;
+
+
+    let streamCompleted =
+        false;
+
+
+    let streamAbortController =
+        null;
+
+
+    const geminiFiles =
+        [];
+
 
     if (
         req.method !==
@@ -2785,40 +2736,28 @@ export default async function handler(
     }
 
 
-    let userId =
-        null;
-
-
-    let reservedType =
-        null;
-
-
-    const geminiFiles =
-        [];
-
-
-    let streamResponseStarted =
-        false;
-
-
-    let streamCompleted =
-        false;
-
-
-    let streamAbortController =
-        null;
-
-
     try {
 
         /* =================================================
            AUTH
            ================================================= */
 
+        const authStarted =
+            Date.now();
+
+
         const auth =
             await getAuthenticatedUser(
                 req
             );
+
+
+        logTiming(
+            "AUTH_MS",
+            elapsed(
+                authStarted
+            )
+        );
 
 
         if (
@@ -2909,10 +2848,6 @@ export default async function handler(
         }
 
 
-        /* =================================================
-           PREFERENCES
-           ================================================= */
-
         const preferences = {
 
             intelligence:
@@ -2949,6 +2884,10 @@ export default async function handler(
            CREDIT
            ================================================= */
 
+        const creditStarted =
+            Date.now();
+
+
         const {
             data:
                 reserveResult,
@@ -2967,50 +2906,27 @@ export default async function handler(
                 );
 
 
+        logTiming(
+            "CREDIT_MS",
+            elapsed(
+                creditStarted
+            )
+        );
+
+
         if (
             reserveError
         ) {
 
-            console.error(
-                "[NEYO Credit]",
-                reserveError
+            throw new Error(
+                "Unable to check message credits."
             );
-
-
-            return res
-                .status(
-                    500
-                )
-                .json({
-
-                    error:
-                        "Unable to check message credits."
-
-                });
 
         }
 
 
         reservedType =
             reserveResult;
-
-
-        if (
-            ![
-                "pro",
-                "free",
-                "reward",
-                "limit"
-            ].includes(
-                reservedType
-            )
-        ) {
-
-            throw new Error(
-                "Invalid credit reservation response."
-            );
-
-        }
 
 
         if (
@@ -3035,14 +2951,35 @@ export default async function handler(
         }
 
 
+        if (
+            ![
+                "pro",
+                "free",
+                "reward"
+            ].includes(
+                reservedType
+            )
+        ) {
+
+            throw new Error(
+                "Invalid credit reservation response."
+            );
+
+        }
+
+
         const isPro =
             reservedType ===
             "pro";
 
 
         /* =================================================
-           ATTACHMENTS
+           PREPARATION
            ================================================= */
+
+        const prepStarted =
+            Date.now();
+
 
         const bodyAttachments =
             Array.isArray(
@@ -3067,23 +3004,6 @@ export default async function handler(
                 : messageAttachments;
 
 
-        console.log(
-            "[NEYO Chat] Incoming attachment counts:",
-            {
-
-                body:
-                    bodyAttachments.length,
-
-                lastMessage:
-                    messageAttachments.length,
-
-                selected:
-                    rawAttachments.length
-
-            }
-        );
-
-
         const attachments =
             validAttachmentList(
                 rawAttachments,
@@ -3091,20 +3011,84 @@ export default async function handler(
             );
 
 
-        /* =================================================
-           AUTOMATIC EFFORT
-           ================================================= */
-
-        const autoEffort =
-            detectAutomaticEffort(
+        const userText =
+            cleanString(
                 lastMsg.content ||
                 ""
             );
 
 
-        /* =================================================
-           MODEL ROUTE
-           ================================================= */
+        const autoEffort =
+            detectAutomaticEffort(
+                userText
+            );
+
+
+        const historyBudget =
+            getHistoryBudget({
+
+                autoEffort,
+
+                isDeepResearch,
+
+                attachments
+
+            });
+
+
+        const history =
+            selectHistoryMessages(
+                messages,
+                {
+
+                    maxMessages:
+                        historyBudget
+                            .messages,
+
+                    maxChars:
+                        historyBudget
+                            .chars
+
+                }
+            );
+
+
+        console.log(
+            "[NEYO History]",
+            {
+
+                effort:
+                    autoEffort,
+
+                budgetMessages:
+                    historyBudget
+                        .messages,
+
+                budgetChars:
+                    historyBudget
+                        .chars,
+
+                selectedMessages:
+                    history.length,
+
+                selectedChars:
+                    history.reduce(
+                        (
+                            total,
+                            message
+                        ) =>
+                            total +
+                            String(
+                                message
+                                    ?.content ||
+                                ""
+                            ).length,
+                        0
+                    )
+
+            }
+        );
+
 
         const modelRoute =
             selectModelRoute({
@@ -3145,41 +3129,30 @@ export default async function handler(
         );
 
 
-        /* =================================================
-           HISTORY FOR MODEL
-           ================================================= */
-
-        const history =
-            selectHistoryMessages(
-                messages
-            );
-
-
         const geminiMessages =
-            history
-                .map(
-                    message => ({
+            history.map(
+                message => ({
 
-                        role:
-                            message.role ===
-                                "assistant"
-                                ? "model"
-                                : "user",
+                    role:
+                        message.role ===
+                            "assistant"
+                            ? "model"
+                            : "user",
 
-                        parts: [
-                            {
+                    parts: [
+                        {
 
-                                text:
-                                    cleanString(
-                                        message.content ||
-                                        ""
-                                    )
+                            text:
+                                cleanString(
+                                    message.content ||
+                                    ""
+                                )
 
-                            }
-                        ]
+                        }
+                    ]
 
-                    })
-                );
+                })
+            );
 
 
         if (
@@ -3196,6 +3169,7 @@ export default async function handler(
                     {
 
                         text:
+                            userText ||
                             "Please respond to the user."
 
                     }
@@ -3207,7 +3181,7 @@ export default async function handler(
 
 
         /* =================================================
-           ATTACHMENT → MODEL FILE
+           ATTACHMENTS
            ================================================= */
 
         if (
@@ -3215,48 +3189,34 @@ export default async function handler(
             0
         ) {
 
-            const lastGeminiMessage =
+            const preparedFiles =
+                await Promise.all(
+                    attachments.map(
+                        file =>
+                            uploadSupabaseFileToGemini(
+                                file
+                            )
+                    )
+                );
+
+
+            const lastModelMessage =
                 geminiMessages[
                     geminiMessages.length -
                     1
                 ];
 
 
-            const preparedAttachments =
-                await Promise.all(
-                    attachments.map(
-                        async file => {
-
-                            const geminiFile =
-                                await uploadSupabaseFileToGemini(
-                                    file
-                                );
-
-
-                            if (
-                                !geminiFile?.uri
-                            ) {
-                                return null;
-                            }
-
-
-                            return geminiFile;
-
-                        }
-                    )
-                );
-
-
-            const attachmentParts =
-                preparedAttachments
+            const fileParts =
+                preparedFiles
                     .filter(
                         Boolean
                     )
                     .map(
-                        geminiFile => {
+                        file => {
 
                             geminiFiles.push(
-                                geminiFile.name
+                                file.name
                             );
 
 
@@ -3265,10 +3225,10 @@ export default async function handler(
                                 fileData: {
 
                                     mimeType:
-                                        geminiFile.mimeType,
+                                        file.mimeType,
 
                                     fileUri:
-                                        geminiFile.uri
+                                        file.uri
 
                                 }
 
@@ -3278,50 +3238,54 @@ export default async function handler(
                     );
 
 
-            if (
-                attachmentParts.length ===
-                0
-            ) {
-
-                throw new Error(
-                    "No attached files could be prepared."
-                );
-
-            }
-
-
-            const attachmentUserText =
-                cleanString(
-                    lastMsg.content ||
-                    ""
-                ) ||
-                "Please inspect the attached file and explain what it contains.";
-
-
-            lastGeminiMessage.role =
+            lastModelMessage.role =
                 "user";
 
 
-            lastGeminiMessage.parts = [
+            lastModelMessage.parts = [
 
                 {
 
                     text:
-                        attachmentUserText
+                        userText ||
+                        "Please analyze the attached file."
 
                 },
 
-                ...attachmentParts
+                ...fileParts
 
             ];
 
+        }
 
-            console.log(
-                "[NEYO Chat] Model attachments prepared:",
-                attachmentParts.length
+
+        const urls =
+            extractUrlsFromText(
+                userText
             );
 
-        }
+
+        logTiming(
+            "PREP_MS",
+            elapsed(
+                prepStarted
+            ),
+            {
+
+                effort:
+                    autoEffort,
+
+                historyMessages:
+                    history.length,
+
+                attachments:
+                    attachments.length,
+
+                urls:
+                    urls.length
+
+            }
+        );
 
 
         /* =================================================
@@ -3346,7 +3310,7 @@ export default async function handler(
 
             const {
                 data:
-                    conversation,
+                    conversationRow,
                 error
             } =
                 await supabase
@@ -3361,8 +3325,9 @@ export default async function handler(
                         title:
                             cleanString(
                                 body.title ||
-                                lastMsg.content ||
-                                attachments[0]?.name ||
+                                userText ||
+                                attachments[0]
+                                    ?.name ||
                                 "New conversation",
                                 100
                             ) ||
@@ -3383,20 +3348,9 @@ export default async function handler(
 
 
             conversationId =
-                conversation.id;
+                conversationRow.id;
 
         }
-
-
-        /* =================================================
-           SAVE USER
-           ================================================= */
-
-        const userText =
-            cleanString(
-                lastMsg.content ||
-                ""
-            );
 
 
         if (
@@ -3416,47 +3370,27 @@ export default async function handler(
 
 
         /* =================================================
-           RESPONSE
-           ================================================= */
-
-        let reply =
-            "";
-
-
-        let sources =
-            [];
-
-
-        let usedUrlContext =
-            false;
-
-
-        const urls =
-            extractUrlsFromText(
-                userText
-            );
-
-
-        /* =================================================
-           TRUE STREAMING RESPONSE
+           STREAMING
            ================================================= */
 
         if (
             body.stream ===
-                true
+            true
         ) {
 
             streamAbortController =
                 new AbortController();
 
 
-            const abortStream =
+            res.on(
+                "close",
                 () => {
 
                     if (
+                        !streamCompleted &&
                         !streamAbortController
-                            ?.signal
-                            ?.aborted
+                            .signal
+                            .aborted
                     ) {
 
                         try {
@@ -3468,25 +3402,20 @@ export default async function handler(
 
                     }
 
-                };
-
-
-            res.on(
-                "close",
-                () => {
-
-                    if (
-                        !streamCompleted
-                    ) {
-                        abortStream();
-                    }
-
                 }
             );
 
 
             let streamMessages =
                 geminiMessages;
+
+
+            let sources =
+                [];
+
+
+            let usedUrlContext =
+                false;
 
 
             if (
@@ -3513,9 +3442,12 @@ export default async function handler(
                 sources =
                     limitedUrls.map(
                         url => ({
+
                             title:
                                 url,
+
                             url
+
                         })
                     );
 
@@ -3535,6 +3467,14 @@ export default async function handler(
                 true;
 
 
+            let firstTokenLogged =
+                false;
+
+
+            const modelStarted =
+                Date.now();
+
+
             const streamResult =
                 await callModelRouteStream(
                     streamMessages,
@@ -3542,9 +3482,71 @@ export default async function handler(
                     isDeepResearch,
                     preferences,
                     {
+
                         signal:
                             streamAbortController
                                 .signal,
+
+
+                        onHeaders:
+                            (
+                                ms,
+                                model
+                            ) => {
+
+                                logTiming(
+                                    "MODEL_HEADERS_MS",
+                                    ms,
+                                    {
+
+                                        route:
+                                            modelRoute.route,
+
+                                        model
+
+                                    }
+                                );
+
+                            },
+
+
+                        onFirstText:
+                            (
+                                ms,
+                                model
+                            ) => {
+
+                                if (
+                                    firstTokenLogged
+                                ) {
+                                    return;
+                                }
+
+
+                                firstTokenLogged =
+                                    true;
+
+
+                                logTiming(
+                                    "FIRST_TOKEN_MS",
+                                    elapsed(
+                                        totalStarted
+                                    ),
+                                    {
+
+                                        modelRequestMs:
+                                            ms,
+
+                                        route:
+                                            modelRoute.route,
+
+                                        model
+
+                                    }
+                                );
+
+                            },
+
 
                         onText:
                             text => {
@@ -3552,20 +3554,41 @@ export default async function handler(
                                 writeSSE(
                                     res,
                                     {
+
                                         type:
                                             "delta",
 
                                         content:
                                             text
+
                                     }
                                 );
 
                             }
+
                     }
                 );
 
 
-            reply =
+            logTiming(
+                "MODEL_TOTAL_MS",
+                elapsed(
+                    modelStarted
+                ),
+                {
+
+                    route:
+                        modelRoute.route,
+
+                    fallback:
+                        streamResult
+                            .usedFallback
+
+                }
+            );
+
+
+            const reply =
                 streamResult.reply;
 
 
@@ -3598,6 +3621,7 @@ export default async function handler(
             writeSSE(
                 res,
                 {
+
                     type:
                         "done",
 
@@ -3611,22 +3635,13 @@ export default async function handler(
 
                     privateChat,
 
-                    sources:
-                        sources.length >
-                            0
-                            ? sources
-                            : [],
+                    sources,
 
                     usedUrlContext,
 
                     creditType:
-                        reservedType,
+                        reservedType
 
-                    attachmentsReceived:
-                        rawAttachments.length,
-
-                    attachmentsAccepted:
-                        attachments.length
                 }
             );
 
@@ -3650,14 +3665,43 @@ export default async function handler(
             }
 
 
+            logTiming(
+                "TOTAL_MS",
+                elapsed(
+                    totalStarted
+                ),
+                {
+
+                    streaming:
+                        true,
+
+                    route:
+                        modelRoute.route
+
+                }
+            );
+
+
             return;
 
         }
 
 
         /* =================================================
-           NORMAL JSON URL RESPONSE
+           NON-STREAMING
            ================================================= */
+
+        let normalMessages =
+            geminiMessages;
+
+
+        let sources =
+            [];
+
+
+        let usedUrlContext =
+            false;
+
 
         if (
             attachments.length ===
@@ -3666,111 +3710,93 @@ export default async function handler(
                 0
         ) {
 
-            try {
-
-                const limitedUrls =
-                    urls.slice(
-                        0,
-                        MAX_URL_CONTEXT_SOURCES
-                    );
-
-
-                const urlResponse =
-                    await callGeminiUrlContext(
-                        userText,
-                        limitedUrls,
-                        modelRoute,
-                        isDeepResearch,
-                        preferences
-                    );
-
-
-                reply =
-                    extractFinalReply(
-                        urlResponse
-                            ?.data
-                            ?.candidates?.[0]
-                            ?.content
-                            ?.parts
-                    );
-
-
-                sources =
-                    limitedUrls.map(
-                        url => ({
-
-                            title:
-                                url,
-
-                            url
-
-                        })
-                    );
-
-
-                usedUrlContext =
-                    true;
-
-            } catch (
-                error
-            ) {
-
-                console.warn(
-                    "[NEYO URL]",
-                    error?.message
+            const limitedUrls =
+                urls.slice(
+                    0,
+                    MAX_URL_CONTEXT_SOURCES
                 );
 
-            }
+
+            normalMessages =
+                await buildUrlContextMessages(
+                    userText,
+                    limitedUrls
+                );
+
+
+            sources =
+                limitedUrls.map(
+                    url => ({
+
+                        title:
+                            url,
+
+                        url
+
+                    })
+                );
+
+
+            usedUrlContext =
+                true;
 
         }
 
 
-        /* =================================================
-           NORMAL JSON MODEL RESPONSE
-           ================================================= */
+        const modelStarted =
+            Date.now();
+
+
+        const modelResponse =
+            await callModelRoute(
+                normalMessages,
+                modelRoute,
+                isDeepResearch,
+                preferences
+            );
+
+
+        logTiming(
+            "MODEL_TOTAL_MS",
+            elapsed(
+                modelStarted
+            ),
+            {
+
+                streaming:
+                    false,
+
+                route:
+                    modelRoute.route,
+
+                fallback:
+                    modelResponse
+                        .usedFallback
+
+            }
+        );
+
+
+        const reply =
+            extractFinalReply(
+                modelResponse
+                    ?.data
+                    ?.candidates?.[0]
+                    ?.content
+                    ?.parts
+            );
+
 
         if (
             !reply
         ) {
 
-            const modelResponse =
-                await callModelRoute(
-                    geminiMessages,
-                    modelRoute,
-                    isDeepResearch,
-                    preferences
-                );
-
-
-            const result =
-                modelResponse.data;
-
-
-            reply =
-                extractFinalReply(
-                    result
-                        ?.candidates?.[0]
-                        ?.content
-                        ?.parts
-                );
-
-
-            if (
-                !reply
-            ) {
-
-                throw new Error(
-                    "NEYO returned an empty response."
-                );
-
-            }
+            throw new Error(
+                "NEYO returned an empty response."
+            );
 
         }
 
-
-        /* =================================================
-           SAVE ASSISTANT
-           ================================================= */
 
         if (
             !privateChat
@@ -3787,9 +3813,22 @@ export default async function handler(
         }
 
 
-        /* =================================================
-           NORMAL JSON SUCCESS
-           ================================================= */
+        logTiming(
+            "TOTAL_MS",
+            elapsed(
+                totalStarted
+            ),
+            {
+
+                streaming:
+                    false,
+
+                route:
+                    modelRoute.route
+
+            }
+        );
+
 
         return res
             .status(
@@ -3837,10 +3876,18 @@ export default async function handler(
                 message:
                     error?.message,
 
-                stack:
-                    error?.stack
+                name:
+                    error?.name
 
             }
+        );
+
+
+        logTiming(
+            "TOTAL_ERROR_MS",
+            elapsed(
+                totalStarted
+            )
         );
 
 
@@ -3891,6 +3938,7 @@ export default async function handler(
             writeSSE(
                 res,
                 {
+
                     type:
                         "error",
 
@@ -3900,6 +3948,7 @@ export default async function handler(
                             ? "Generation stopped."
                             : error?.message ||
                                 "Unable to complete request."
+
                 }
             );
 
@@ -3919,13 +3968,14 @@ export default async function handler(
         }
 
 
-        /* =================================================
-           NORMAL JSON ERROR
-           ================================================= */
-
         return res
             .status(
-                500
+                error?.status >=
+                    400 &&
+                error?.status <
+                    600
+                    ? error.status
+                    : 500
             )
             .json({
 
@@ -3937,12 +3987,6 @@ export default async function handler(
 
 
     } finally {
-
-        /* =================================================
-           DELETE TEMP MODEL FILES
-
-           Supabase originals remain intact.
-           ================================================= */
 
         if (
             geminiFiles.length >

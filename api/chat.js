@@ -412,10 +412,6 @@ function validAttachmentList(
         }
 
 
-        /*
-        Only allow current authenticated user's files.
-        */
-
         if (
             !path.startsWith(
                 userPrefix
@@ -861,16 +857,6 @@ function selectModelRoute({
             0;
 
 
-    /*
-    =====================================================
-    LEVERAGE
-    =====================================================
-
-    Files / multimodal:
-    Gemma 4 31B
-    fallback Gemini 3.5 Flash-Lite
-    */
-
     if (
         isPro &&
         hasAttachments
@@ -891,12 +877,6 @@ function selectModelRoute({
 
     }
 
-
-    /*
-    Leverage maximum / deep work:
-    Gemma 4 31B
-    fallback Gemini 3.5 Flash-Lite
-    */
 
     if (
         isPro &&
@@ -925,12 +905,6 @@ function selectModelRoute({
     }
 
 
-    /*
-    Leverage normal text / code / reasoning:
-    Gemma 4 26B
-    fallback Gemini 3.5 Flash-Lite
-    */
-
     if (
         isPro
     ) {
@@ -951,16 +925,6 @@ function selectModelRoute({
     }
 
 
-    /*
-    =====================================================
-    NEYO FREE
-    =====================================================
-
-    Files / multimodal:
-    Gemma 4 26B
-    fallback Gemini 3.1 Flash-Lite
-    */
-
     if (
         hasAttachments
     ) {
@@ -980,12 +944,6 @@ function selectModelRoute({
 
     }
 
-
-    /*
-    Free text / code / reasoning:
-    Gemma 4 26B
-    fallback Gemini 3.1 Flash-Lite
-    */
 
     return {
 
@@ -1120,7 +1078,7 @@ function buildGeminiBody(
 
 
 /* =========================================================
-   MODEL API
+   NORMAL MODEL API
    ========================================================= */
 
 async function callGemini(
@@ -1227,7 +1185,7 @@ async function callGemini(
 
 
 /* =========================================================
-   MODEL CALL WITH FALLBACK
+   NORMAL MODEL CALL WITH FALLBACK
    ========================================================= */
 
 async function callModelRoute(
@@ -1306,6 +1264,686 @@ async function callModelRoute(
         };
 
     }
+
+}
+
+
+/* =========================================================
+   STREAMING MODEL API
+   ========================================================= */
+
+function extractVisibleStreamText(
+    data
+) {
+
+    const parts =
+        data
+            ?.candidates?.[0]
+            ?.content
+            ?.parts;
+
+
+    if (
+        !Array.isArray(
+            parts
+        )
+    ) {
+        return "";
+    }
+
+
+    return parts
+        .filter(
+            part =>
+                part &&
+                part.thought !==
+                    true &&
+                typeof part.text ===
+                    "string"
+        )
+        .map(
+            part =>
+                part.text
+        )
+        .join("");
+
+}
+
+
+function createSSEParser() {
+
+    let buffer =
+        "";
+
+
+    function push(
+        chunk
+    ) {
+
+        buffer +=
+            String(
+                chunk ||
+                ""
+            )
+                .replace(
+                    /\r\n/g,
+                    "\n"
+                )
+                .replace(
+                    /\r/g,
+                    "\n"
+                );
+
+
+        const blocks =
+            buffer.split(
+                "\n\n"
+            );
+
+
+        buffer =
+            blocks.pop() ||
+            "";
+
+
+        const events =
+            [];
+
+
+        for (
+            const block
+            of blocks
+        ) {
+
+            const dataLines =
+                block
+                    .split(
+                        "\n"
+                    )
+                    .filter(
+                        line =>
+                            line.startsWith(
+                                "data:"
+                            )
+                    )
+                    .map(
+                        line =>
+                            line
+                                .slice(
+                                    5
+                                )
+                                .replace(
+                                    /^ /,
+                                    ""
+                                )
+                    );
+
+
+            if (
+                dataLines.length ===
+                    0
+            ) {
+                continue;
+            }
+
+
+            const raw =
+                dataLines
+                    .join(
+                        "\n"
+                    )
+                    .trim();
+
+
+            if (
+                !raw ||
+                raw ===
+                    "[DONE]"
+            ) {
+                continue;
+            }
+
+
+            try {
+
+                events.push(
+                    JSON.parse(
+                        raw
+                    )
+                );
+
+            } catch {
+
+                console.warn(
+                    "[NEYO Stream] Ignored malformed upstream SSE event."
+                );
+
+            }
+
+        }
+
+
+        return events;
+
+    }
+
+
+    function flush() {
+
+        if (
+            !buffer.trim()
+        ) {
+            return [];
+        }
+
+
+        const remaining =
+            buffer;
+
+
+        buffer =
+            "";
+
+
+        return push(
+            `${remaining}\n\n`
+        );
+
+    }
+
+
+    return {
+        push,
+        flush
+    };
+
+}
+
+
+async function callGeminiStream(
+    messages,
+    model,
+    isDeepResearch = false,
+    preferences = {},
+    {
+        signal,
+        onText
+    } = {}
+) {
+
+    if (
+        !GEMINI_API_KEY
+    ) {
+
+        throw new Error(
+            "Gemini API key is missing."
+        );
+
+    }
+
+
+    const response =
+        await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:streamGenerateContent?alt=sse&key=${encodeURIComponent(GEMINI_API_KEY)}`,
+            {
+
+                method:
+                    "POST",
+
+                headers: {
+
+                    "Content-Type":
+                        "application/json",
+
+                    Accept:
+                        "text/event-stream"
+
+                },
+
+                body:
+                    JSON.stringify(
+                        buildGeminiBody(
+                            messages,
+                            isDeepResearch,
+                            preferences
+                        )
+                    ),
+
+                signal
+
+            }
+        );
+
+
+    if (
+        !response.ok
+    ) {
+
+        const raw =
+            await response
+                .text()
+                .catch(
+                    () => ""
+                );
+
+
+        let data =
+            {};
+
+
+        if (
+            raw
+        ) {
+
+            try {
+
+                data =
+                    JSON.parse(
+                        raw
+                    );
+
+            } catch {}
+
+        }
+
+
+        console.error(
+            "[NEYO Stream Model Request]",
+            {
+
+                model,
+
+                status:
+                    response.status,
+
+                error:
+                    data
+                        ?.error
+                        ?.message ||
+                    raw
+
+            }
+        );
+
+
+        const error =
+            new Error(
+                data
+                    ?.error
+                    ?.message ||
+                raw ||
+                `Streaming model request failed (${response.status}).`
+            );
+
+
+        error.status =
+            response.status;
+
+
+        error.model =
+            model;
+
+
+        error.emittedText =
+            false;
+
+
+        throw error;
+
+    }
+
+
+    if (
+        !response.body ||
+        typeof response.body
+            .getReader !==
+            "function"
+    ) {
+
+        const error =
+            new Error(
+                "Streaming model response body is unavailable."
+            );
+
+
+        error.model =
+            model;
+
+
+        error.emittedText =
+            false;
+
+
+        throw error;
+
+    }
+
+
+    const reader =
+        response.body
+            .getReader();
+
+
+    const decoder =
+        new TextDecoder();
+
+
+    const parser =
+        createSSEParser();
+
+
+    let reply =
+        "";
+
+
+    let emittedText =
+        false;
+
+
+    async function processEvents(
+        events
+    ) {
+
+        for (
+            const data
+            of events
+        ) {
+
+            const text =
+                extractVisibleStreamText(
+                    data
+                );
+
+
+            if (
+                !text
+            ) {
+                continue;
+            }
+
+
+            emittedText =
+                true;
+
+
+            reply +=
+                text;
+
+
+            if (
+                typeof onText ===
+                    "function"
+            ) {
+
+                await onText(
+                    text
+                );
+
+            }
+
+        }
+
+    }
+
+
+    try {
+
+        while (
+            true
+        ) {
+
+            const {
+                done,
+                value
+            } =
+                await reader.read();
+
+
+            if (
+                done
+            ) {
+                break;
+            }
+
+
+            const chunk =
+                decoder.decode(
+                    value,
+                    {
+                        stream:
+                            true
+                    }
+                );
+
+
+            await processEvents(
+                parser.push(
+                    chunk
+                )
+            );
+
+        }
+
+
+        const tail =
+            decoder.decode();
+
+
+        if (
+            tail
+        ) {
+
+            await processEvents(
+                parser.push(
+                    tail
+                )
+            );
+
+        }
+
+
+        await processEvents(
+            parser.flush()
+        );
+
+
+    } catch (
+        error
+    ) {
+
+        error.emittedText =
+            emittedText;
+
+
+        error.partialReply =
+            reply;
+
+
+        throw error;
+
+
+    } finally {
+
+        try {
+
+            await reader.cancel();
+
+        } catch {}
+
+    }
+
+
+    return {
+
+        reply,
+
+        emittedText
+
+    };
+
+}
+
+
+/* =========================================================
+   STREAMING MODEL CALL WITH SAFE FALLBACK
+   ========================================================= */
+
+async function callModelRouteStream(
+    messages,
+    route,
+    isDeepResearch = false,
+    preferences = {},
+    {
+        signal,
+        onText
+    } = {}
+) {
+
+    try {
+
+        const result =
+            await callGeminiStream(
+                messages,
+                route.primary,
+                isDeepResearch,
+                preferences,
+                {
+                    signal,
+                    onText
+                }
+            );
+
+
+        return {
+
+            ...result,
+
+            usedFallback:
+                false
+
+        };
+
+
+    } catch (
+        primaryError
+    ) {
+
+        if (
+            primaryError
+                ?.emittedText ===
+                true ||
+            !route.fallback ||
+            route.fallback ===
+                route.primary
+        ) {
+
+            throw primaryError;
+
+        }
+
+
+        console.warn(
+            "[NEYO Model Router] Streaming primary failed before output, trying fallback:",
+            {
+
+                route:
+                    route.route,
+
+                message:
+                    primaryError
+                        ?.message
+
+            }
+        );
+
+
+        const result =
+            await callGeminiStream(
+                messages,
+                route.fallback,
+                isDeepResearch,
+                preferences,
+                {
+                    signal,
+                    onText
+                }
+            );
+
+
+        return {
+
+            ...result,
+
+            usedFallback:
+                true
+
+        };
+
+    }
+
+}
+
+
+/* =========================================================
+   DOWNSTREAM SSE
+   ========================================================= */
+
+function writeSSE(
+    res,
+    data
+) {
+
+    if (
+        res.writableEnded ||
+        res.destroyed
+    ) {
+        return false;
+    }
+
+
+    res.write(
+        `data: ${JSON.stringify(data)}\n\n`
+    );
+
+
+    return true;
+
+}
+
+
+function startSSEResponse(
+    res
+) {
+
+    res.statusCode =
+        200;
+
+
+    res.setHeader(
+        "Content-Type",
+        "text/event-stream; charset=utf-8"
+    );
+
+
+    res.setHeader(
+        "Cache-Control",
+        "no-cache, no-transform"
+    );
+
+
+    res.setHeader(
+        "Connection",
+        "keep-alive"
+    );
+
+
+    res.setHeader(
+        "X-Accel-Buffering",
+        "no"
+    );
+
+
+    res.flushHeaders?.();
 
 }
 
@@ -1563,10 +2201,6 @@ async function uploadSupabaseFileToGemini(
         "application/octet-stream";
 
 
-    /* ---------------------------------------------
-       INIT GEMINI FILE UPLOAD
-       --------------------------------------------- */
-
     const startResponse =
         await fetch(
             `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${encodeURIComponent(GEMINI_API_KEY)}`,
@@ -1651,10 +2285,6 @@ async function uploadSupabaseFileToGemini(
 
     }
 
-
-    /* ---------------------------------------------
-       SEND BYTES
-       --------------------------------------------- */
 
     const uploadResponse =
         await fetch(
@@ -1886,26 +2516,20 @@ async function fetchUrlText(
 }
 
 
-async function callGeminiUrlContext(
+async function buildUrlContextMessages(
     query,
-    urls,
-    route,
-    isDeepResearch,
-    preferences
+    urls
 ) {
 
     const contextParts =
         await Promise.all(
             urls.map(
                 async url => ({
-
                     url,
-
                     content:
                         await fetchUrlText(
                             url
                         )
-
                 })
             )
         );
@@ -1925,28 +2549,48 @@ async function callGeminiUrlContext(
             );
 
 
-    return callModelRoute(
-        [
-            {
+    return [
+        {
 
-                role:
-                    "user",
+            role:
+                "user",
 
-                parts: [
-                    {
+            parts: [
+                {
 
-                        text:
+                    text:
 `${query}
 
 Use the following URL content when relevant.
 
 ${context}`
 
-                    }
-                ]
+                }
+            ]
 
-            }
-        ],
+        }
+    ];
+
+}
+
+
+async function callGeminiUrlContext(
+    query,
+    urls,
+    route,
+    isDeepResearch,
+    preferences
+) {
+
+    const messages =
+        await buildUrlContextMessages(
+            query,
+            urls
+        );
+
+
+    return callModelRoute(
+        messages,
         route,
         isDeepResearch,
         preferences
@@ -2028,10 +2672,6 @@ async function saveMessage(
         return;
     }
 
-
-    /*
-    Compatibility with old table schema.
-    */
 
     if (
         /attachments|sources/i
@@ -2155,6 +2795,18 @@ export default async function handler(
 
     const geminiFiles =
         [];
+
+
+    let streamResponseStarted =
+        false;
+
+
+    let streamCompleted =
+        false;
+
+
+    let streamAbortController =
+        null;
 
 
     try {
@@ -2389,10 +3041,7 @@ export default async function handler(
 
 
         /* =================================================
-           ATTACHMENT SOURCE
-
-           Prefer body.attachments.
-           Fall back to last message attachments.
+           ATTACHMENTS
            ================================================= */
 
         const bodyAttachments =
@@ -2473,11 +3122,6 @@ export default async function handler(
             });
 
 
-        /*
-        Do not expose provider/model names
-        to frontend response.
-        */
-
         console.log(
             "[NEYO Model Router]",
             {
@@ -2537,10 +3181,6 @@ export default async function handler(
                     })
                 );
 
-
-        /*
-        Ensure last user message exists.
-        */
 
         if (
             geminiMessages.length ===
@@ -2650,7 +3290,7 @@ export default async function handler(
             }
 
 
-            const userText =
+            const attachmentUserText =
                 cleanString(
                     lastMsg.content ||
                     ""
@@ -2667,7 +3307,7 @@ export default async function handler(
                 {
 
                     text:
-                        userText
+                        attachmentUserText
 
                 },
 
@@ -2797,9 +3437,227 @@ export default async function handler(
             );
 
 
-        /*
-        Attached file takes priority over URL handling.
-        */
+        /* =================================================
+           TRUE STREAMING RESPONSE
+           ================================================= */
+
+        if (
+            body.stream ===
+                true
+        ) {
+
+            streamAbortController =
+                new AbortController();
+
+
+            const abortStream =
+                () => {
+
+                    if (
+                        !streamAbortController
+                            ?.signal
+                            ?.aborted
+                    ) {
+
+                        try {
+
+                            streamAbortController
+                                .abort();
+
+                        } catch {}
+
+                    }
+
+                };
+
+
+            res.on(
+                "close",
+                () => {
+
+                    if (
+                        !streamCompleted
+                    ) {
+                        abortStream();
+                    }
+
+                }
+            );
+
+
+            let streamMessages =
+                geminiMessages;
+
+
+            if (
+                attachments.length ===
+                    0 &&
+                urls.length >
+                    0
+            ) {
+
+                const limitedUrls =
+                    urls.slice(
+                        0,
+                        MAX_URL_CONTEXT_SOURCES
+                    );
+
+
+                streamMessages =
+                    await buildUrlContextMessages(
+                        userText,
+                        limitedUrls
+                    );
+
+
+                sources =
+                    limitedUrls.map(
+                        url => ({
+                            title:
+                                url,
+                            url
+                        })
+                    );
+
+
+                usedUrlContext =
+                    true;
+
+            }
+
+
+            startSSEResponse(
+                res
+            );
+
+
+            streamResponseStarted =
+                true;
+
+
+            const streamResult =
+                await callModelRouteStream(
+                    streamMessages,
+                    modelRoute,
+                    isDeepResearch,
+                    preferences,
+                    {
+                        signal:
+                            streamAbortController
+                                .signal,
+
+                        onText:
+                            text => {
+
+                                writeSSE(
+                                    res,
+                                    {
+                                        type:
+                                            "delta",
+
+                                        content:
+                                            text
+                                    }
+                                );
+
+                            }
+                    }
+                );
+
+
+            reply =
+                streamResult.reply;
+
+
+            if (
+                !reply
+            ) {
+
+                throw new Error(
+                    "NEYO returned an empty response."
+                );
+
+            }
+
+
+            if (
+                !privateChat
+            ) {
+
+                await saveMessage(
+                    conversationId,
+                    "assistant",
+                    reply,
+                    [],
+                    sources
+                );
+
+            }
+
+
+            writeSSE(
+                res,
+                {
+                    type:
+                        "done",
+
+                    done:
+                        true,
+
+                    conversationId:
+                        privateChat
+                            ? null
+                            : conversationId,
+
+                    privateChat,
+
+                    sources:
+                        sources.length >
+                            0
+                            ? sources
+                            : [],
+
+                    usedUrlContext,
+
+                    creditType:
+                        reservedType,
+
+                    attachmentsReceived:
+                        rawAttachments.length,
+
+                    attachmentsAccepted:
+                        attachments.length
+                }
+            );
+
+
+            streamCompleted =
+                true;
+
+
+            if (
+                !res.writableEnded &&
+                !res.destroyed
+            ) {
+
+                res.write(
+                    "data: [DONE]\n\n"
+                );
+
+
+                res.end();
+
+            }
+
+
+            return;
+
+        }
+
+
+        /* =================================================
+           NORMAL JSON URL RESPONSE
+           ================================================= */
 
         if (
             attachments.length ===
@@ -2810,13 +3668,17 @@ export default async function handler(
 
             try {
 
+                const limitedUrls =
+                    urls.slice(
+                        0,
+                        MAX_URL_CONTEXT_SOURCES
+                    );
+
+
                 const urlResponse =
                     await callGeminiUrlContext(
                         userText,
-                        urls.slice(
-                            0,
-                            MAX_URL_CONTEXT_SOURCES
-                        ),
+                        limitedUrls,
                         modelRoute,
                         isDeepResearch,
                         preferences
@@ -2834,7 +3696,7 @@ export default async function handler(
 
 
                 sources =
-                    urls.map(
+                    limitedUrls.map(
                         url => ({
 
                             title:
@@ -2863,10 +3725,9 @@ export default async function handler(
         }
 
 
-        /*
-        Normal model call,
-        including attachment requests.
-        */
+        /* =================================================
+           NORMAL JSON MODEL RESPONSE
+           ================================================= */
 
         if (
             !reply
@@ -2927,7 +3788,7 @@ export default async function handler(
 
 
         /* =================================================
-           SUCCESS
+           NORMAL JSON SUCCESS
            ================================================= */
 
         return res
@@ -2988,6 +3849,7 @@ export default async function handler(
            ================================================= */
 
         if (
+            !streamCompleted &&
             userId &&
             (
                 reservedType ===
@@ -3018,6 +3880,49 @@ export default async function handler(
         }
 
 
+        /* =================================================
+           STREAM ERROR
+           ================================================= */
+
+        if (
+            streamResponseStarted
+        ) {
+
+            writeSSE(
+                res,
+                {
+                    type:
+                        "error",
+
+                    error:
+                        error?.name ===
+                            "AbortError"
+                            ? "Generation stopped."
+                            : error?.message ||
+                                "Unable to complete request."
+                }
+            );
+
+
+            if (
+                !res.writableEnded &&
+                !res.destroyed
+            ) {
+
+                res.end();
+
+            }
+
+
+            return;
+
+        }
+
+
+        /* =================================================
+           NORMAL JSON ERROR
+           ================================================= */
+
         return res
             .status(
                 500
@@ -3033,11 +3938,11 @@ export default async function handler(
 
     } finally {
 
-        /*
-        Delete temporary Gemini API copies only.
+        /* =================================================
+           DELETE TEMP MODEL FILES
 
-        Supabase originals remain intact.
-        */
+           Supabase originals remain intact.
+           ================================================= */
 
         if (
             geminiFiles.length >

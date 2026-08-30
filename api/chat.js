@@ -3303,6 +3303,57 @@ export default async function handler(
                 null;
 
 
+        // ---------------------------------------------
+        // FIX: Validate incoming conversationId before using it
+        // ---------------------------------------------
+        if (
+            !privateChat &&
+            conversationId
+        ) {
+
+            const {
+                data:
+                    existingConversation,
+                error:
+                    conversationLookupError
+            } =
+                await supabase
+                    .from(
+                        "chat_conversations"
+                    )
+                    .select(
+                        "id,user_id"
+                    )
+                    .eq(
+                        "id",
+                        conversationId
+                    )
+                    .eq(
+                        "user_id",
+                        userId
+                    )
+                    .maybeSingle();
+
+
+            if (
+                conversationLookupError ||
+                !existingConversation
+            ) {
+
+                console.warn(
+                    "[NEYO Chat] Invalid/stale conversation ID ignored:",
+                    conversationId
+                );
+
+
+                conversationId =
+                    null;
+
+            }
+
+        }
+
+
         if (
             !privateChat &&
             !conversationId

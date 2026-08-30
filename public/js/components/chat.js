@@ -1,6 +1,7 @@
 /*
 =========================================================
-NEYO — CHAT CORE (STREAMING)
+NEYO — CHAT CORE
+SMOOTH STREAMING v13
 
 FILE:
 public/js/components/chat.js
@@ -9,7 +10,9 @@ OWNS:
 - Conversation state
 - Conversation ID
 - Conversation session persistence
-- /api/chat request (streaming)
+- /api/chat request
+- True SSE streaming
+- Smooth visual streaming
 - Request lifecycle
 - Stop / Abort
 - Duplicate send protection
@@ -38,7 +41,7 @@ DOES NOT OWN:
        ===================================================== */
 
     const VERSION =
-        "neyo-chat-v12-streaming-live";
+        "neyo-chat-v13-smooth-streaming";
 
 
     if (
@@ -603,7 +606,7 @@ DOES NOT OWN:
 
 
     /* =====================================================
-       ADD / UPDATE / REMOVE MESSAGE
+       ADD MESSAGE
        ===================================================== */
 
     function addMessage(
@@ -670,6 +673,10 @@ DOES NOT OWN:
     }
 
 
+    /* =====================================================
+       UPDATE MESSAGE
+       ===================================================== */
+
     function updateMessageContent(
         id,
         newContent
@@ -723,6 +730,10 @@ DOES NOT OWN:
     }
 
 
+    /* =====================================================
+       REMOVE MESSAGE
+       ===================================================== */
+
     function removeMessage(
         id
     ) {
@@ -755,6 +766,8 @@ DOES NOT OWN:
         emit(
             "neyo:chat-message-removed",
             {
+
+                id,
 
                 message:
                     removed,
@@ -1163,7 +1176,7 @@ DOES NOT OWN:
             "Please analyze the attached file or files.";
 
 
-        const displayContent =
+        const displayUserContent =
             clean ||
             "Please analyze the attached file or files.";
 
@@ -1179,10 +1192,12 @@ DOES NOT OWN:
         const userMessage =
             addMessage(
                 "user",
-                displayContent,
+                displayUserContent,
                 {
+
                     attachments:
                         readyAttachments
+
                 }
             );
 
@@ -1195,10 +1210,10 @@ DOES NOT OWN:
 
 
         /*
-         * IMPORTANT:
+         * Build payload BEFORE assistant message exists.
          *
-         * Build payload now, while USER is still
-         * the final conversation message.
+         * Backend expects the final API message
+         * to be the user message.
          */
 
         const payload =
@@ -1213,15 +1228,9 @@ DOES NOT OWN:
             });
 
 
-        /*
-         * NO assistant placeholder here.
-         *
-         * messages.js will show Thinking...
-         * after neyo:chat-send-start.
-         *
-         * The assistant DOM/message will only be created
-         * when first real streamed content arrives.
-         */
+        /* =================================================
+           ASSISTANT STATE
+           ================================================= */
 
         let assistantId =
             null;
@@ -1229,6 +1238,38 @@ DOES NOT OWN:
 
         let assistantMessage =
             null;
+
+
+        /*
+         * receivedContent:
+         * Full real content received from backend.
+         *
+         * displayContent:
+         * Portion currently visible on screen.
+         */
+
+        let receivedContent =
+            "";
+
+
+        let displayContent =
+            "";
+
+
+        let typingFrame =
+            null;
+
+
+        let typingResolve =
+            null;
+
+
+        let streamFinished =
+            false;
+
+
+        let networkFinished =
+            false;
 
 
         generating =
@@ -1266,10 +1307,6 @@ DOES NOT OWN:
             null;
 
 
-        let accumulatedContent =
-            "";
-
-
         let responseEmitted =
             false;
 
@@ -1297,7 +1334,7 @@ DOES NOT OWN:
 
 
         /* =================================================
-           CREATE ASSISTANT ON FIRST TOKEN
+           ASSISTANT MESSAGE
            ================================================= */
 
         function ensureAssistantMessage() {
@@ -1305,7 +1342,18 @@ DOES NOT OWN:
             if (
                 assistantMessage
             ) {
+
                 return assistantMessage;
+
+            }
+
+
+            if (
+                !displayContent
+            ) {
+
+                return null;
+
             }
 
 
@@ -1316,10 +1364,12 @@ DOES NOT OWN:
             assistantMessage =
                 addMessage(
                     "assistant",
-                    accumulatedContent || "",
+                    displayContent,
                     {
+
                         id:
                             assistantId
+
                     }
                 );
 
@@ -1330,7 +1380,349 @@ DOES NOT OWN:
 
 
         /* =================================================
-           APPLY METADATA
+           SMOOTH STREAMING
+           ================================================= */
+
+        function getTypingStep(
+            remaining
+        ) {
+
+            /*
+             * Adaptive visual typing.
+             *
+             * Small backlog:
+             * character-by-character.
+             *
+             * Large backlog:
+             * speed up so renderer stays close
+             * to the real network stream.
+             */
+
+            if (
+                remaining >
+                1200
+            ) {
+                return 24;
+            }
+
+
+            if (
+                remaining >
+                800
+            ) {
+                return 18;
+            }
+
+
+            if (
+                remaining >
+                500
+            ) {
+                return 13;
+            }
+
+
+            if (
+                remaining >
+                300
+            ) {
+                return 9;
+            }
+
+
+            if (
+                remaining >
+                180
+            ) {
+                return 6;
+            }
+
+
+            if (
+                remaining >
+                100
+            ) {
+                return 4;
+            }
+
+
+            if (
+                remaining >
+                45
+            ) {
+                return 3;
+            }
+
+
+            if (
+                remaining >
+                16
+            ) {
+                return 2;
+            }
+
+
+            return 1;
+
+        }
+
+
+        function stopTypingAnimation() {
+
+            if (
+                typingFrame !==
+                null
+            ) {
+
+                cancelAnimationFrame(
+                    typingFrame
+                );
+
+
+                typingFrame =
+                    null;
+
+            }
+
+
+            if (
+                typingResolve
+            ) {
+
+                const resolve =
+                    typingResolve;
+
+
+                typingResolve =
+                    null;
+
+
+                resolve();
+
+            }
+
+        }
+
+
+        function scheduleSmoothTyping() {
+
+            if (
+                typingFrame !==
+                null
+            ) {
+                return;
+            }
+
+
+            const tick =
+                () => {
+
+                    typingFrame =
+                        null;
+
+
+                    if (
+                        controller.signal
+                            .aborted
+                    ) {
+
+                        if (
+                            typingResolve
+                        ) {
+
+                            const resolve =
+                                typingResolve;
+
+
+                            typingResolve =
+                                null;
+
+
+                            resolve();
+
+                        }
+
+
+                        return;
+
+                    }
+
+
+                    const remaining =
+                        receivedContent.length -
+                        displayContent.length;
+
+
+                    if (
+                        remaining <=
+                        0
+                    ) {
+
+                        if (
+                            networkFinished &&
+                            typingResolve
+                        ) {
+
+                            const resolve =
+                                typingResolve;
+
+
+                            typingResolve =
+                                null;
+
+
+                            resolve();
+
+                        }
+
+
+                        return;
+
+                    }
+
+
+                    const step =
+                        getTypingStep(
+                            remaining
+                        );
+
+
+                    const nextLength =
+                        Math.min(
+                            receivedContent.length,
+                            displayContent.length +
+                                step
+                        );
+
+
+                    displayContent =
+                        receivedContent.slice(
+                            0,
+                            nextLength
+                        );
+
+
+                    ensureAssistantMessage();
+
+
+                    if (
+                        assistantId
+                    ) {
+
+                        updateMessageContent(
+                            assistantId,
+                            displayContent
+                        );
+
+                    }
+
+
+                    const stillRemaining =
+                        receivedContent.length -
+                        displayContent.length;
+
+
+                    if (
+                        stillRemaining >
+                        0
+                    ) {
+
+                        typingFrame =
+                            requestAnimationFrame(
+                                tick
+                            );
+
+                        return;
+
+                    }
+
+
+                    if (
+                        networkFinished &&
+                        typingResolve
+                    ) {
+
+                        const resolve =
+                            typingResolve;
+
+
+                        typingResolve =
+                            null;
+
+
+                        resolve();
+
+                    }
+
+                };
+
+
+            typingFrame =
+                requestAnimationFrame(
+                    tick
+                );
+
+        }
+
+
+        function finishSmoothTyping() {
+
+            networkFinished =
+                true;
+
+
+            if (
+                displayContent.length >=
+                receivedContent.length
+            ) {
+
+                displayContent =
+                    receivedContent;
+
+
+                if (
+                    displayContent
+                ) {
+
+                    ensureAssistantMessage();
+
+
+                    if (
+                        assistantId
+                    ) {
+
+                        updateMessageContent(
+                            assistantId,
+                            displayContent
+                        );
+
+                    }
+
+                }
+
+
+                return Promise.resolve();
+
+            }
+
+
+            return new Promise(
+                resolve => {
+
+                    typingResolve =
+                        resolve;
+
+
+                    scheduleSmoothTyping();
+
+                }
+            );
+
+        }
+
+
+        /* =================================================
+           METADATA
            ================================================= */
 
         function applyMetadata(
@@ -1438,15 +1830,19 @@ DOES NOT OWN:
 
 
             /*
-             * Extra client-side safety.
-             * Server should already remove thought parts.
+             * Extra protection.
+             *
+             * Backend should already exclude
+             * thought/reasoning parts.
              */
 
             if (
                 event.thought ===
                 true
             ) {
+
                 return false;
+
             }
 
 
@@ -1464,43 +1860,53 @@ DOES NOT OWN:
                 delta
             ) {
 
-                accumulatedContent +=
+                /*
+                 * NETWORK SIDE:
+                 *
+                 * Store real response immediately.
+                 */
+
+                receivedContent +=
                     delta;
 
 
                 /*
-                 * FIRST TOKEN:
-                 * create assistant row now.
+                 * UI SIDE:
                  *
-                 * createMessage() in messages.js removes
-                 * Thinking immediately for assistant.
+                 * Paint progressively.
                  */
 
-                ensureAssistantMessage();
-
-
-                updateMessageContent(
-                    assistantId,
-                    accumulatedContent
-                );
+                scheduleSmoothTyping();
 
             }
 
 
-            return (
+            const done =
                 event.done ===
                     true ||
                 event.type ===
                     "done" ||
                 event.type ===
-                    "end"
-            );
+                    "end";
+
+
+            if (
+                done
+            ) {
+
+                streamFinished =
+                    true;
+
+            }
+
+
+            return done;
 
         }
 
 
         /* =================================================
-           FINALIZE
+           FINAL RESPONSE
            ================================================= */
 
         function finalizeResponse() {
@@ -1508,12 +1914,14 @@ DOES NOT OWN:
             if (
                 responseEmitted
             ) {
+
                 return null;
+
             }
 
 
             if (
-                !accumulatedContent
+                !receivedContent
             ) {
 
                 throw new Error(
@@ -1523,7 +1931,28 @@ DOES NOT OWN:
             }
 
 
+            /*
+             * At this point smooth renderer must
+             * have fully caught up.
+             */
+
+            displayContent =
+                receivedContent;
+
+
             ensureAssistantMessage();
+
+
+            if (
+                assistantId
+            ) {
+
+                updateMessageContent(
+                    assistantId,
+                    displayContent
+                );
+
+            }
 
 
             if (
@@ -1546,12 +1975,14 @@ DOES NOT OWN:
 
 
             assistantMessage =
-                conversation.find(
-                    message =>
-                        message.id ===
-                        assistantId
-                ) ||
-                assistantMessage;
+                assistantId
+                    ? conversation.find(
+                        message =>
+                            message.id ===
+                            assistantId
+                    ) ||
+                    assistantMessage
+                    : null;
 
 
             if (
@@ -1559,7 +1990,7 @@ DOES NOT OWN:
             ) {
 
                 assistantMessage.content =
-                    accumulatedContent;
+                    receivedContent;
 
 
                 if (
@@ -1581,7 +2012,7 @@ DOES NOT OWN:
                             assistantId,
 
                         content:
-                            accumulatedContent,
+                            receivedContent,
 
                         sources:
                             finalSources,
@@ -1604,7 +2035,7 @@ DOES NOT OWN:
                 requestId,
 
                 reply:
-                    accumulatedContent,
+                    receivedContent,
 
                 sources:
                     finalSources,
@@ -1680,7 +2111,7 @@ DOES NOT OWN:
 
 
             debug(
-                "REQUEST (streaming)",
+                "REQUEST (smooth streaming)",
                 {
 
                     requestId,
@@ -1871,12 +2302,8 @@ DOES NOT OWN:
                 createSSEParser();
 
 
-            let streamEnded =
-                false;
-
-
             while (
-                !streamEnded
+                !streamFinished
             ) {
 
                 const {
@@ -1889,7 +2316,9 @@ DOES NOT OWN:
                 if (
                     done
                 ) {
+
                     break;
+
                 }
 
 
@@ -1940,9 +2369,6 @@ DOES NOT OWN:
                         )
                     ) {
 
-                        streamEnded =
-                            true;
-
                         break;
 
                     }
@@ -1953,7 +2379,7 @@ DOES NOT OWN:
 
 
             /* =================================================
-               FLUSH DECODER
+               DECODER TAIL
                ================================================= */
 
             const decoderTail =
@@ -1984,6 +2410,10 @@ DOES NOT OWN:
             }
 
 
+            /* =================================================
+               SSE BUFFER TAIL
+               ================================================= */
+
             const remainingEvents =
                 parser.flush();
 
@@ -2007,6 +2437,13 @@ DOES NOT OWN:
             } catch {}
 
 
+            /* =================================================
+               WAIT FOR VISUAL STREAM
+               ================================================= */
+
+            await finishSmoothTyping();
+
+
             const result =
                 finalizeResponse();
 
@@ -2019,6 +2456,13 @@ DOES NOT OWN:
         ) {
 
             /* =================================================
+               STOP SMOOTH ANIMATION
+               ================================================= */
+
+            stopTypingAnimation();
+
+
+            /* =================================================
                ABORT
                ================================================= */
 
@@ -2028,6 +2472,15 @@ DOES NOT OWN:
                 controller.signal
                     .aborted
             ) {
+
+                /*
+                 * Freeze output exactly where user
+                 * stopped generation.
+                 */
+
+                receivedContent =
+                    displayContent;
+
 
                 emit(
                     "neyo:chat-aborted",
@@ -2042,24 +2495,14 @@ DOES NOT OWN:
                 );
 
 
-                /*
-                 * If some content already arrived,
-                 * keep the partial assistant response.
-                 *
-                 * If nothing arrived,
-                 * no assistant row exists,
-                 * so Thinking simply disappears through
-                 * neyo:chat-aborted listener in messages.js.
-                 */
-
                 if (
-                    accumulatedContent &&
+                    displayContent &&
                     assistantId
                 ) {
 
                     updateMessageContent(
                         assistantId,
-                        accumulatedContent
+                        displayContent
                     );
 
                 }
@@ -2118,10 +2561,9 @@ DOES NOT OWN:
             }
 
 
-            /*
-             * If no streamed assistant row exists yet,
-             * create one for the error.
-             */
+            const errorText =
+                `⚠️ ${userFacingError}`;
+
 
             if (
                 !assistantMessage
@@ -2134,7 +2576,7 @@ DOES NOT OWN:
                 assistantMessage =
                     addMessage(
                         "assistant",
-                        `⚠️ ${userFacingError}`,
+                        errorText,
                         {
 
                             id:
@@ -2150,7 +2592,7 @@ DOES NOT OWN:
 
                 updateMessageContent(
                     assistantId,
-                    `⚠️ ${userFacingError}`
+                    errorText
                 );
 
 
@@ -2826,7 +3268,7 @@ DOES NOT OWN:
        ===================================================== */
 
     debug(
-        "READY (streaming live)",
+        "READY (smooth streaming)",
         {
 
             version:
@@ -2839,6 +3281,9 @@ DOES NOT OWN:
                 readStoredConversationId(),
 
             streaming:
+                true,
+
+            smoothStreaming:
                 true,
 
             lazyAssistantMessage:
@@ -2859,6 +3304,9 @@ DOES NOT OWN:
                 currentConversationId,
 
             streaming:
+                true,
+
+            smoothStreaming:
                 true
 
         }

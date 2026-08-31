@@ -1,9 +1,10 @@
 /*
 =========================================================
 NEYO — COMPOSER SCROLLBAR
-PRODUCTION / RESPONSIVE / WIDTH‑STABLE VERSION
+PRODUCTION / RESPONSIVE / WIDTH-STABLE VERSION
 =========================================================
 */
+
 
 #glassInputContainer {
     position: relative !important;
@@ -20,9 +21,12 @@ PRODUCTION / RESPONSIVE / WIDTH‑STABLE VERSION
     --neyo-oneline-left: 56px;
     --neyo-oneline-right: 96px;
     --neyo-scrollbar-right: 8px;
-    --neyo-scrollbar-width: 3px;
+
+    /* THICK SCROLLBAR */
+    --neyo-scrollbar-width: 10px;
 
     box-sizing: border-box !important;
+
     transform: translateZ(0);
 
     transition:
@@ -33,251 +37,585 @@ PRODUCTION / RESPONSIVE / WIDTH‑STABLE VERSION
         box-shadow 180ms ease !important;
 }
 
+
 #glassInputContainer .composer-input-row,
 #glassInputContainer textarea#chatInput {
     width: 100% !important;
     max-width: 100% !important;
     min-width: 0 !important;
+
     box-sizing: border-box !important;
 }
 
-/* ===== TEXTAREA ===== */
+
+/* =========================================================
+   TEXTAREA
+   ========================================================= */
+
 #glassInputContainer textarea#chatInput {
     margin: 0 !important;
+
     border: 0 !important;
     outline: 0 !important;
+
     background: transparent !important;
+
     resize: none !important;
+
     overflow-x: hidden !important;
     overflow-y: auto !important;
+
     overflow-wrap: break-word !important;
+
     word-break: normal !important;
+
+    /*
+     * Native scrollbar remains hidden because
+     * NEYO uses the custom scrollbar below.
+     */
+
     scrollbar-width: none !important;
+
     -ms-overflow-style: none !important;
+
     overscroll-behavior: contain !important;
+
     -webkit-overflow-scrolling: touch;
 
-    /* ✅ ONLY padding transition – height is NOT animated */
-    transition: padding 160ms ease !important;
+    transition:
+        padding 160ms ease !important;
 }
+
 
 #glassInputContainer textarea#chatInput::-webkit-scrollbar,
 #glassInputContainer textarea#chatInput::-webkit-scrollbar-track,
 #glassInputContainer textarea#chatInput::-webkit-scrollbar-thumb {
     width: 0 !important;
     height: 0 !important;
+
     display: none !important;
 }
 
-/* ===== CONTROLS ===== */
+
+/* =========================================================
+   CONTROLS
+   ========================================================= */
+
 #glassInputContainer #attachBtn,
 #glassInputContainer #micBtn,
 #glassInputContainer #sendBtn {
-    width: var(--neyo-control-size) !important;
-    height: var(--neyo-control-size) !important;
-    min-width: var(--neyo-control-size) !important;
-    min-height: var(--neyo-control-size) !important;
-    max-width: var(--neyo-control-size) !important;
-    max-height: var(--neyo-control-size) !important;
-    flex: 0 0 var(--neyo-control-size) !important;
+    width:
+        var(--neyo-control-size) !important;
+
+    height:
+        var(--neyo-control-size) !important;
+
+    min-width:
+        var(--neyo-control-size) !important;
+
+    min-height:
+        var(--neyo-control-size) !important;
+
+    max-width:
+        var(--neyo-control-size) !important;
+
+    max-height:
+        var(--neyo-control-size) !important;
+
+    flex:
+        0 0 var(--neyo-control-size) !important;
+
     display: inline-flex !important;
+
     align-items: center !important;
+
     justify-content: center !important;
+
     padding: 0 !important;
+
     margin: 0 !important;
+
     box-sizing: border-box !important;
+
     transform: none !important;
-    transition: opacity 140ms ease, background-color 140ms ease, color 140ms ease, box-shadow 140ms ease !important;
+
+    transition:
+        opacity 140ms ease,
+        background-color 140ms ease,
+        color 140ms ease,
+        box-shadow 140ms ease !important;
+
     z-index: 30 !important;
 }
+
 
 #glassInputContainer #sendBtn {
     border-radius: 999px !important;
 }
 
-#glassInputContainer #attachBtn svg,
-#glassInputContainer #attachBtn i { width: 20px !important; height: 20px !important; flex: 0 0 auto !important; }
-#glassInputContainer #micBtn svg,
-#glassInputContainer #micBtn i { width: 19px !important; height: 19px !important; flex: 0 0 auto !important; }
-#glassInputContainer #sendBtn svg,
-#glassInputContainer #sendBtn i { width: 18px !important; height: 18px !important; flex: 0 0 auto !important; }
 
-/* ===== NORMAL POSITIONING ===== */
-#glassInputContainer:not(.is-writing-expanded) .composer-input-row {
+#glassInputContainer #attachBtn svg,
+#glassInputContainer #attachBtn i {
+    width: 20px !important;
+    height: 20px !important;
+
+    flex: 0 0 auto !important;
+}
+
+
+#glassInputContainer #micBtn svg,
+#glassInputContainer #micBtn i {
+    width: 19px !important;
+    height: 19px !important;
+
+    flex: 0 0 auto !important;
+}
+
+
+#glassInputContainer #sendBtn svg,
+#glassInputContainer #sendBtn i {
+    width: 18px !important;
+    height: 18px !important;
+
+    flex: 0 0 auto !important;
+}
+
+
+/* =========================================================
+   NORMAL POSITIONING
+   ========================================================= */
+
+#glassInputContainer:not(.is-writing-expanded)
+.composer-input-row {
     position: static !important;
+
     width: 100% !important;
+
     min-width: 0 !important;
+
     box-sizing: border-box !important;
 }
 
-#glassInputContainer:not(.is-writing-expanded) #attachBtn,
-#glassInputContainer:not(.is-writing-expanded) #micBtn,
-#glassInputContainer:not(.is-writing-expanded) #sendBtn {
+
+#glassInputContainer:not(.is-writing-expanded)
+#attachBtn,
+
+#glassInputContainer:not(.is-writing-expanded)
+#micBtn,
+
+#glassInputContainer:not(.is-writing-expanded)
+#sendBtn {
     position: absolute !important;
+
     top: auto !important;
-    bottom: var(--neyo-control-bottom) !important;
+
+    bottom:
+        var(--neyo-control-bottom) !important;
 }
 
-#glassInputContainer:not(.is-writing-expanded) #attachBtn {
-    left: var(--neyo-edge-x) !important;
+
+#glassInputContainer:not(.is-writing-expanded)
+#attachBtn {
+    left:
+        var(--neyo-edge-x) !important;
+
     right: auto !important;
 }
-#glassInputContainer:not(.is-writing-expanded) #sendBtn {
-    right: var(--neyo-edge-x) !important;
-    left: auto !important;
-}
-#glassInputContainer:not(.is-writing-expanded) #micBtn {
-    right: calc(var(--neyo-edge-x) + var(--neyo-control-size) + var(--neyo-control-gap)) !important;
+
+
+#glassInputContainer:not(.is-writing-expanded)
+#sendBtn {
+    right:
+        var(--neyo-edge-x) !important;
+
     left: auto !important;
 }
 
-/* ===== ONE-LINE CAPSULE ===== */
+
+#glassInputContainer:not(.is-writing-expanded)
+#micBtn {
+    right:
+        calc(
+            var(--neyo-edge-x) +
+            var(--neyo-control-size) +
+            var(--neyo-control-gap)
+        ) !important;
+
+    left: auto !important;
+}
+
+
+/* =========================================================
+   ONE-LINE CAPSULE
+   ========================================================= */
+
 #glassInputContainer:not(.is-writing-expanded):not(.composer-multiline) {
-    height: var(--neyo-pill-height) !important;
-    min-height: var(--neyo-pill-height) !important;
-    max-height: var(--neyo-pill-height) !important;
-    border-radius: var(--neyo-pill-radius) !important;
+    height:
+        var(--neyo-pill-height) !important;
+
+    min-height:
+        var(--neyo-pill-height) !important;
+
+    max-height:
+        var(--neyo-pill-height) !important;
+
+    border-radius:
+        var(--neyo-pill-radius) !important;
+
     padding: 0 !important;
+
     box-sizing: border-box !important;
 }
-#glassInputContainer:not(.is-writing-expanded):not(.composer-multiline) .composer-input-row {
-    height: var(--neyo-pill-height) !important;
-    min-height: var(--neyo-pill-height) !important;
-    max-height: var(--neyo-pill-height) !important;
+
+
+#glassInputContainer:not(.is-writing-expanded):not(.composer-multiline)
+.composer-input-row {
+    height:
+        var(--neyo-pill-height) !important;
+
+    min-height:
+        var(--neyo-pill-height) !important;
+
+    max-height:
+        var(--neyo-pill-height) !important;
+
     padding: 0 !important;
+
     margin: 0 !important;
 }
-#glassInputContainer:not(.is-writing-expanded):not(.composer-multiline) textarea#chatInput {
+
+
+#glassInputContainer:not(.is-writing-expanded):not(.composer-multiline)
+textarea#chatInput {
     position: relative !important;
-    height: var(--neyo-control-size) !important;
-    min-height: var(--neyo-control-size) !important;
-    max-height: var(--neyo-control-size) !important;
+
+    height:
+        var(--neyo-control-size) !important;
+
+    min-height:
+        var(--neyo-control-size) !important;
+
+    max-height:
+        var(--neyo-control-size) !important;
+
     padding-top: 8px !important;
+
     padding-bottom: 8px !important;
-    padding-left: var(--neyo-oneline-left) !important;
-    padding-right: var(--neyo-oneline-right) !important;
+
+    padding-left:
+        var(--neyo-oneline-left) !important;
+
+    padding-right:
+        var(--neyo-oneline-right) !important;
+
     line-height: 24px !important;
 }
 
-/* ===== MULTILINE ===== */
-#glassInputContainer:not(.is-writing-expanded).composer-multiline .composer-input-row {
+
+/* =========================================================
+   MULTILINE
+   ========================================================= */
+
+#glassInputContainer:not(.is-writing-expanded).composer-multiline
+.composer-input-row {
     display: block !important;
+
     width: 100% !important;
+
     padding: 0 !important;
-    padding-bottom: var(--neyo-rail-height) !important;
+
+    padding-bottom:
+        var(--neyo-rail-height) !important;
+
     box-sizing: border-box !important;
 }
-#glassInputContainer:not(.is-writing-expanded).composer-multiline textarea#chatInput {
+
+
+#glassInputContainer:not(.is-writing-expanded).composer-multiline
+textarea#chatInput {
     display: block !important;
+
     width: 100% !important;
-    /* ✅ sync with JS max height (132px) */
+
     max-height: 132px !important;
-    padding: 6px 20px 3px 14px !important;
+
+    padding:
+        6px
+        20px
+        3px
+        14px !important;
+
     line-height: 1.5 !important;
 }
 
-/* ===== EXPANDED ===== */
+
+/* =========================================================
+   EXPANDED
+   ========================================================= */
+
 #glassInputContainer.is-writing-expanded {
     border-radius: 24px !important;
 }
-#glassInputContainer.is-writing-expanded .composer-input-row {
+
+
+#glassInputContainer.is-writing-expanded
+.composer-input-row {
     position: static !important;
+
     width: 100% !important;
+
     height: 100% !important;
+
     min-width: 0 !important;
+
     min-height: 0 !important;
+
     padding: 0 !important;
+
     margin: 0 !important;
+
     overflow: hidden !important;
+
     box-sizing: border-box !important;
 }
-#glassInputContainer.is-writing-expanded textarea#chatInput {
+
+
+#glassInputContainer.is-writing-expanded
+textarea#chatInput {
     position: absolute !important;
+
     top: 0 !important;
+
     left: 0 !important;
+
     right: 0 !important;
-    bottom: var(--neyo-rail-height) !important;
+
+    bottom:
+        var(--neyo-rail-height) !important;
+
     width: 100% !important;
+
     height: auto !important;
+
     min-height: 0 !important;
+
     max-height: none !important;
-    padding: 16px var(--neyo-text-right) 10px var(--neyo-text-left) !important;
+
+    padding:
+        16px
+        var(--neyo-text-right)
+        10px
+        var(--neyo-text-left) !important;
+
     white-space: pre-wrap !important;
+
     font-size: 15.5px !important;
+
     line-height: 1.52 !important;
 }
-#glassInputContainer.is-writing-expanded #attachBtn,
-#glassInputContainer.is-writing-expanded #micBtn,
-#glassInputContainer.is-writing-expanded #sendBtn {
+
+
+#glassInputContainer.is-writing-expanded
+#attachBtn,
+
+#glassInputContainer.is-writing-expanded
+#micBtn,
+
+#glassInputContainer.is-writing-expanded
+#sendBtn {
     position: absolute !important;
+
     top: auto !important;
-    bottom: var(--neyo-control-bottom) !important;
+
+    bottom:
+        var(--neyo-control-bottom) !important;
 }
-#glassInputContainer.is-writing-expanded #attachBtn { left: var(--neyo-edge-x) !important; right: auto !important; }
-#glassInputContainer.is-writing-expanded #sendBtn { right: var(--neyo-edge-x) !important; left: auto !important; }
-#glassInputContainer.is-writing-expanded #micBtn {
-    right: calc(var(--neyo-edge-x) + var(--neyo-control-size) + var(--neyo-control-gap)) !important;
+
+
+#glassInputContainer.is-writing-expanded
+#attachBtn {
+    left:
+        var(--neyo-edge-x) !important;
+
+    right: auto !important;
+}
+
+
+#glassInputContainer.is-writing-expanded
+#sendBtn {
+    right:
+        var(--neyo-edge-x) !important;
+
     left: auto !important;
 }
-#glassInputContainer.is-writing-expanded .voice-transcribe-container {
+
+
+#glassInputContainer.is-writing-expanded
+#micBtn {
+    right:
+        calc(
+            var(--neyo-edge-x) +
+            var(--neyo-control-size) +
+            var(--neyo-control-gap)
+        ) !important;
+
+    left: auto !important;
+}
+
+
+#glassInputContainer.is-writing-expanded
+.voice-transcribe-container {
     position: absolute !important;
-    right: calc(var(--neyo-edge-x) + var(--neyo-control-size) + var(--neyo-control-gap)) !important;
-    bottom: var(--neyo-control-bottom) !important;
+
+    right:
+        calc(
+            var(--neyo-edge-x) +
+            var(--neyo-control-size) +
+            var(--neyo-control-gap)
+        ) !important;
+
+    bottom:
+        var(--neyo-control-bottom) !important;
+
     width: auto !important;
+
     min-width: 0 !important;
+
     z-index: 19 !important;
 }
 
-/* ===== CUSTOM SCROLLBAR ===== */
-#glassInputContainer .composer-custom-scrollbar {
+
+/* =========================================================
+   CUSTOM SCROLLBAR
+   ========================================================= */
+
+#glassInputContainer
+.composer-custom-scrollbar {
     position: absolute !important;
-    right: var(--neyo-scrollbar-right) !important;
-    width: var(--neyo-scrollbar-width) !important;
-    bottom: calc(var(--neyo-rail-height) + 5px) !important;
+
+    right:
+        var(--neyo-scrollbar-right) !important;
+
+    width:
+        var(--neyo-scrollbar-width) !important;
+
+    bottom:
+        calc(
+            var(--neyo-rail-height) + 5px
+        ) !important;
+
     z-index: 25 !important;
+
     border-radius: 999px !important;
-    background: rgba(0,0,0,0.045) !important;
+
+    background:
+        rgba(0, 0, 0, 0.045) !important;
+
     opacity: 0 !important;
+
     visibility: hidden !important;
+
     pointer-events: none !important;
-    transition: opacity 140ms ease, visibility 140ms ease !important;
+
+    transition:
+        opacity 140ms ease,
+        visibility 140ms ease !important;
 }
-#glassInputContainer:not(.is-writing-expanded) .composer-custom-scrollbar { top: 12px !important; }
-#glassInputContainer.is-writing-expanded .composer-custom-scrollbar { top: 42px !important; }
-#glassInputContainer .composer-custom-scrollbar.is-visible {
-    opacity: 0.34 !important;
+
+
+#glassInputContainer:not(.is-writing-expanded)
+.composer-custom-scrollbar {
+    top: 12px !important;
+}
+
+
+#glassInputContainer.is-writing-expanded
+.composer-custom-scrollbar {
+    top: 42px !important;
+}
+
+
+#glassInputContainer
+.composer-custom-scrollbar.is-visible {
+    opacity: 0.40 !important;
+
     visibility: visible !important;
 }
-#glassInputContainer .composer-custom-scrollbar.is-visible.is-active {
+
+
+#glassInputContainer
+.composer-custom-scrollbar.is-visible.is-active {
     opacity: 1 !important;
 }
-#glassInputContainer .composer-custom-scrollbar-thumb {
+
+
+/* =========================================================
+   CUSTOM THUMB
+   ========================================================= */
+
+#glassInputContainer
+.composer-custom-scrollbar-thumb {
     position: absolute !important;
+
     top: 0 !important;
+
     left: 0 !important;
+
     width: 100% !important;
-    min-height: 20px !important;
+
+    min-height: 28px !important;
+
     border-radius: 999px !important;
-    background: rgba(92,92,92,0.34) !important;
+
+    background:
+        rgba(92, 92, 92, 0.42) !important;
+
     box-shadow: none !important;
+
     pointer-events: none !important;
-    will-change: transform, height;
-    transition: opacity 120ms ease, background-color 120ms ease !important;
-}
-#glassInputContainer.is-writing-expanded .composer-custom-scrollbar-thumb {
-    min-height: 24px !important;
+
+    will-change:
+        transform,
+        height;
+
+    transition:
+        opacity 120ms ease,
+        background-color 120ms ease !important;
 }
 
-/* ===== DARK MODE ===== */
-body.dark-mode #glassInputContainer .composer-custom-scrollbar {
-    background: rgba(255,255,255,0.05) !important;
-}
-body.dark-mode #glassInputContainer .composer-custom-scrollbar-thumb {
-    background: rgba(255,255,255,0.30) !important;
+
+#glassInputContainer.is-writing-expanded
+.composer-custom-scrollbar-thumb {
+    min-height: 32px !important;
 }
 
-/* ===== RESPONSIVE ===== */
+
+/* =========================================================
+   DARK MODE
+   ========================================================= */
+
+body.dark-mode
+#glassInputContainer
+.composer-custom-scrollbar {
+    background:
+        rgba(255, 255, 255, 0.05) !important;
+}
+
+
+body.dark-mode
+#glassInputContainer
+.composer-custom-scrollbar-thumb {
+    background:
+        rgba(255, 255, 255, 0.34) !important;
+}
+
+
+/* =========================================================
+   RESPONSIVE
+   ========================================================= */
+
 @media (max-width: 767px) {
+
     #glassInputContainer {
         --neyo-pill-height: 54px;
         --neyo-pill-radius: 27px;
@@ -292,30 +630,83 @@ body.dark-mode #glassInputContainer .composer-custom-scrollbar-thumb {
         --neyo-oneline-right: 90px;
         --neyo-scrollbar-right: 6px;
     }
-    #glassInputContainer:not(.is-writing-expanded):not(.composer-multiline) textarea#chatInput {
+
+
+    #glassInputContainer:not(.is-writing-expanded):not(.composer-multiline)
+    textarea#chatInput {
         height: 38px !important;
+
         min-height: 38px !important;
+
         max-height: 38px !important;
+
         padding-top: 7px !important;
+
         padding-bottom: 7px !important;
+
         line-height: 24px !important;
     }
-    #glassInputContainer:not(.is-writing-expanded).composer-multiline textarea#chatInput {
-        max-height: min(112px, 24dvh) !important;
-        padding: 5px 18px 3px 12px !important;
+
+
+    #glassInputContainer:not(.is-writing-expanded).composer-multiline
+    textarea#chatInput {
+        max-height:
+            min(
+                112px,
+                24dvh
+            ) !important;
+
+        padding:
+            5px
+            18px
+            3px
+            12px !important;
+
         font-size: 16px !important;
+
         line-height: 1.5 !important;
     }
-    #glassInputContainer.is-writing-expanded { border-radius: 22px !important; }
-    #glassInputContainer.is-writing-expanded textarea#chatInput {
-        padding: 14px var(--neyo-text-right) 9px var(--neyo-text-left) !important;
+
+
+    #glassInputContainer.is-writing-expanded {
+        border-radius: 22px !important;
+    }
+
+
+    #glassInputContainer.is-writing-expanded
+    textarea#chatInput {
+        padding:
+            14px
+            var(--neyo-text-right)
+            9px
+            var(--neyo-text-left) !important;
+
         font-size: 16px !important;
+
         line-height: 1.5 !important;
     }
-    #glassInputContainer:not(.is-writing-expanded) .composer-custom-scrollbar { top: 10px !important; }
-    #glassInputContainer.is-writing-expanded .composer-custom-scrollbar { top: 38px !important; }
+
+
+    #glassInputContainer:not(.is-writing-expanded)
+    .composer-custom-scrollbar {
+        top: 10px !important;
+    }
+
+
+    #glassInputContainer.is-writing-expanded
+    .composer-custom-scrollbar {
+        top: 38px !important;
+    }
+
 }
+
+
+/* =========================================================
+   SMALL LANDSCAPE
+   ========================================================= */
+
 @media (max-height: 520px) and (orientation: landscape) {
+
     #glassInputContainer {
         --neyo-pill-height: 54px;
         --neyo-pill-radius: 27px;
@@ -327,18 +718,40 @@ body.dark-mode #glassInputContainer .composer-custom-scrollbar-thumb {
         --neyo-oneline-left: 52px;
         --neyo-oneline-right: 90px;
     }
-    #glassInputContainer:not(.is-writing-expanded):not(.composer-multiline) textarea#chatInput {
+
+
+    #glassInputContainer:not(.is-writing-expanded):not(.composer-multiline)
+    textarea#chatInput {
         height: 38px !important;
+
         min-height: 38px !important;
+
         max-height: 38px !important;
+
         padding-top: 7px !important;
+
         padding-bottom: 7px !important;
     }
-    #glassInputContainer:not(.is-writing-expanded).composer-multiline textarea#chatInput {
-        max-height: min(92px, 28dvh) !important;
+
+
+    #glassInputContainer:not(.is-writing-expanded).composer-multiline
+    textarea#chatInput {
+        max-height:
+            min(
+                92px,
+                28dvh
+            ) !important;
     }
+
 }
+
+
+/* =========================================================
+   VERY SMALL MOBILE
+   ========================================================= */
+
 @media (max-width: 380px) {
+
     #glassInputContainer {
         --neyo-pill-height: 54px;
         --neyo-pill-radius: 27px;
@@ -350,113 +763,296 @@ body.dark-mode #glassInputContainer .composer-custom-scrollbar-thumb {
         --neyo-oneline-right: 88px;
         --neyo-scrollbar-right: 5px;
     }
+
 }
 
-/* ===== TOUCH ===== */
+
+/* =========================================================
+   TOUCH
+   ========================================================= */
+
 @media (pointer: coarse) {
+
     #glassInputContainer #attachBtn,
     #glassInputContainer #micBtn,
     #glassInputContainer #sendBtn {
-        touch-action: manipulation !important;
-        -webkit-tap-highlight-color: transparent;
+        touch-action:
+            manipulation !important;
+
+        -webkit-tap-highlight-color:
+            transparent;
     }
+
 }
 
-/* ===== PERFECT CENTERING (one‑line) ===== */
+
+/* =========================================================
+   PERFECT CENTERING — ONE LINE
+   ========================================================= */
+
 #glassInputContainer:not(.is-writing-expanded):not(.composer-multiline) {
     position: relative !important;
+
     height: 56px !important;
+
     min-height: 56px !important;
+
     max-height: 56px !important;
+
     border-radius: 28px !important;
+
     padding: 0 !important;
+
     box-sizing: border-box !important;
 }
-#glassInputContainer:not(.is-writing-expanded):not(.composer-multiline) #attachBtn,
-#glassInputContainer:not(.is-writing-expanded):not(.composer-multiline) #micBtn,
-#glassInputContainer:not(.is-writing-expanded):not(.composer-multiline) #sendBtn {
+
+
+#glassInputContainer:not(.is-writing-expanded):not(.composer-multiline)
+#attachBtn,
+
+#glassInputContainer:not(.is-writing-expanded):not(.composer-multiline)
+#micBtn,
+
+#glassInputContainer:not(.is-writing-expanded):not(.composer-multiline)
+#sendBtn {
     position: absolute !important;
+
     top: 50% !important;
+
     bottom: auto !important;
+
     width: 40px !important;
+
     height: 40px !important;
+
     min-width: 40px !important;
+
     min-height: 40px !important;
+
     max-width: 40px !important;
+
     max-height: 40px !important;
+
     margin: 0 !important;
+
     padding: 0 !important;
-    transform: translateY(-50%) !important;
-    display: inline-flex !important;
-    align-items: center !important;
-    justify-content: center !important;
+
+    transform:
+        translateY(-50%) !important;
+
+    display:
+        inline-flex !important;
+
+    align-items:
+        center !important;
+
+    justify-content:
+        center !important;
 }
-#glassInputContainer:not(.is-writing-expanded):not(.composer-multiline) #attachBtn { left: 8px !important; right: auto !important; }
-#glassInputContainer:not(.is-writing-expanded):not(.composer-multiline) #sendBtn {
+
+
+#glassInputContainer:not(.is-writing-expanded):not(.composer-multiline)
+#attachBtn {
+    left: 8px !important;
+
+    right: auto !important;
+}
+
+
+#glassInputContainer:not(.is-writing-expanded):not(.composer-multiline)
+#sendBtn {
     right: 8px !important;
+
     left: auto !important;
-    border-radius: 999px !important;
+
+    border-radius:
+        999px !important;
 }
-#glassInputContainer:not(.is-writing-expanded):not(.composer-multiline) #micBtn { right: 54px !important; left: auto !important; }
-#glassInputContainer:not(.is-writing-expanded):not(.composer-multiline) textarea#chatInput {
+
+
+#glassInputContainer:not(.is-writing-expanded):not(.composer-multiline)
+#micBtn {
+    right: 54px !important;
+
+    left: auto !important;
+}
+
+
+#glassInputContainer:not(.is-writing-expanded):not(.composer-multiline)
+textarea#chatInput {
     position: absolute !important;
+
     top: 50% !important;
+
     left: 0 !important;
+
     right: 0 !important;
+
     bottom: auto !important;
+
     width: 100% !important;
+
     height: 40px !important;
+
     min-height: 40px !important;
+
     max-height: 40px !important;
+
     margin: 0 !important;
-    padding: 8px 96px 8px 56px !important;
+
+    padding:
+        8px
+        96px
+        8px
+        56px !important;
+
     line-height: 24px !important;
-    transform: translateY(-50%) !important;
-    box-sizing: border-box !important;
+
+    transform:
+        translateY(-50%) !important;
+
+    box-sizing:
+        border-box !important;
 }
-#glassInputContainer:not(.is-writing-expanded):not(.composer-multiline) textarea#chatInput::placeholder {
-    line-height: 24px !important;
+
+
+#glassInputContainer:not(.is-writing-expanded):not(.composer-multiline)
+textarea#chatInput::placeholder {
+    line-height:
+        24px !important;
 }
-#glassInputContainer:not(.is-writing-expanded):not(.composer-multiline) .composer-input-row {
-    position: static !important;
-    width: 100% !important;
-    height: 56px !important;
-    min-height: 56px !important;
-    max-height: 56px !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    box-sizing: border-box !important;
+
+
+#glassInputContainer:not(.is-writing-expanded):not(.composer-multiline)
+.composer-input-row {
+    position:
+        static !important;
+
+    width:
+        100% !important;
+
+    height:
+        56px !important;
+
+    min-height:
+        56px !important;
+
+    max-height:
+        56px !important;
+
+    margin:
+        0 !important;
+
+    padding:
+        0 !important;
+
+    box-sizing:
+        border-box !important;
 }
+
+
+/* =========================================================
+   MOBILE — ONE LINE
+   ========================================================= */
+
 @media (max-width: 767px) {
+
     #glassInputContainer:not(.is-writing-expanded):not(.composer-multiline) {
-        height: 54px !important;
-        min-height: 54px !important;
-        max-height: 54px !important;
-        border-radius: 27px !important;
+        height:
+            54px !important;
+
+        min-height:
+            54px !important;
+
+        max-height:
+            54px !important;
+
+        border-radius:
+            27px !important;
     }
-    #glassInputContainer:not(.is-writing-expanded):not(.composer-multiline) .composer-input-row {
-        height: 54px !important;
-        min-height: 54px !important;
-        max-height: 54px !important;
+
+
+    #glassInputContainer:not(.is-writing-expanded):not(.composer-multiline)
+    .composer-input-row {
+        height:
+            54px !important;
+
+        min-height:
+            54px !important;
+
+        max-height:
+            54px !important;
     }
-    #glassInputContainer:not(.is-writing-expanded):not(.composer-multiline) #attachBtn,
-    #glassInputContainer:not(.is-writing-expanded):not(.composer-multiline) #micBtn,
-    #glassInputContainer:not(.is-writing-expanded):not(.composer-multiline) #sendBtn {
-        width: 38px !important;
-        height: 38px !important;
-        min-width: 38px !important;
-        min-height: 38px !important;
-        max-width: 38px !important;
-        max-height: 38px !important;
+
+
+    #glassInputContainer:not(.is-writing-expanded):not(.composer-multiline)
+    #attachBtn,
+
+    #glassInputContainer:not(.is-writing-expanded):not(.composer-multiline)
+    #micBtn,
+
+    #glassInputContainer:not(.is-writing-expanded):not(.composer-multiline)
+    #sendBtn {
+        width:
+            38px !important;
+
+        height:
+            38px !important;
+
+        min-width:
+            38px !important;
+
+        min-height:
+            38px !important;
+
+        max-width:
+            38px !important;
+
+        max-height:
+            38px !important;
     }
-    #glassInputContainer:not(.is-writing-expanded):not(.composer-multiline) #attachBtn { left: 8px !important; }
-    #glassInputContainer:not(.is-writing-expanded):not(.composer-multiline) #sendBtn { right: 8px !important; }
-    #glassInputContainer:not(.is-writing-expanded):not(.composer-multiline) #micBtn { right: 51px !important; }
-    #glassInputContainer:not(.is-writing-expanded):not(.composer-multiline) textarea#chatInput {
-        height: 38px !important;
-        min-height: 38px !important;
-        max-height: 38px !important;
-        padding: 7px 90px 7px 52px !important;
-        line-height: 24px !important;
+
+
+    #glassInputContainer:not(.is-writing-expanded):not(.composer-multiline)
+    #attachBtn {
+        left:
+            8px !important;
     }
+
+
+    #glassInputContainer:not(.is-writing-expanded):not(.composer-multiline)
+    #sendBtn {
+        right:
+            8px !important;
+    }
+
+
+    #glassInputContainer:not(.is-writing-expanded):not(.composer-multiline)
+    #micBtn {
+        right:
+            51px !important;
+    }
+
+
+    #glassInputContainer:not(.is-writing-expanded):not(.composer-multiline)
+    textarea#chatInput {
+        height:
+            38px !important;
+
+        min-height:
+            38px !important;
+
+        max-height:
+            38px !important;
+
+        padding:
+            7px
+            90px
+            7px
+            52px !important;
+
+        line-height:
+            24px !important;
+    }
+
 }

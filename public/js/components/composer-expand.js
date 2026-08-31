@@ -1,7 +1,7 @@
 /*
 =========================================================
 NEYO — COMPOSER EXPAND
-Production v6 — Bug-Proof Expand Mode
+Production v6.1 — Lifecycle Safe
 
 Owns ONLY:
 - Explicit expand / collapse state
@@ -11,6 +11,7 @@ Owns ONLY:
 - Expand button visibility
 - Escape collapse
 - Viewport resize while expanded
+- Empty-input auto collapse
 - State synchronization
 
 Does NOT own:
@@ -41,7 +42,7 @@ Does NOT own:
 
 
   const VERSION =
-    "neyo-composer-expand-production-v6";
+    "neyo-composer-expand-production-v6.1";
 
 
   /* =====================================================
@@ -215,6 +216,17 @@ Does NOT own:
         min,
         value
       )
+    );
+  }
+
+
+  function hasInputText() {
+    return (
+      String(
+        input.value ?? ""
+      )
+        .trim()
+        .length > 0
     );
   }
 
@@ -762,6 +774,24 @@ Does NOT own:
 
 
     /*
+     * Empty composer should never open
+     * large writing mode.
+     */
+
+    if (
+      !hasInputText()
+    ) {
+      collapse({
+        focus,
+        reason:
+          "empty-expand-guard"
+      });
+
+      return false;
+    }
+
+
+    /*
      * Already expanded:
      * repair geometry only.
      */
@@ -831,7 +861,8 @@ Does NOT own:
 
 
     /*
-     * Always clean stale expanded classes and inline height.
+     * Always clean expanded classes
+     * and all inline expanded geometry.
      */
 
     syncClasses();
@@ -926,6 +957,25 @@ Does NOT own:
 
 
     /*
+     * Critical lifecycle repair:
+     * expanded + empty must immediately collapse.
+     */
+
+    if (
+      state.expanded &&
+      !hasInputText()
+    ) {
+      collapse({
+        focus: false,
+        reason:
+          "empty-input"
+      });
+
+      return true;
+    }
+
+
+    /*
      * JS state remains authoritative.
      */
 
@@ -1002,12 +1052,39 @@ Does NOT own:
 
 
   /* =====================================================
-     INPUT WATCH
+     INPUT LIFECYCLE
+
+     Critical fix:
+     if expanded composer becomes completely empty,
+     collapse immediately.
+
+     Partial deletion does NOT collapse.
      ===================================================== */
+
+  function handleInputChange() {
+
+    if (
+      state.expanded &&
+      !hasInputText()
+    ) {
+      collapse({
+        focus: false,
+
+        reason:
+          "empty-input"
+      });
+
+      return;
+    }
+
+
+    scheduleButtonVisibility();
+  }
+
 
   input.addEventListener(
     "input",
-    scheduleButtonVisibility,
+    handleInputChange,
     {
       passive: true
     }
@@ -1016,7 +1093,7 @@ Does NOT own:
 
   input.addEventListener(
     "change",
-    scheduleButtonVisibility,
+    handleInputChange,
     {
       passive: true
     }
@@ -1038,6 +1115,26 @@ Does NOT own:
     inputResizeObserver =
       new ResizeObserver(
         () => {
+
+          /*
+           * Resize must never create expanded mode.
+           */
+
+          if (
+            state.expanded &&
+            !hasInputText()
+          ) {
+            collapse({
+              focus: false,
+
+              reason:
+                "empty-resize"
+            });
+
+            return;
+          }
+
+
           scheduleButtonVisibility();
         }
       );
@@ -1223,6 +1320,26 @@ Does NOT own:
     () => {
 
       /*
+       * Expanded composer with empty text
+       * must never remain expanded.
+       */
+
+      if (
+        state.expanded &&
+        !hasInputText()
+      ) {
+        collapse({
+          focus: false,
+
+          reason:
+            "empty-layout"
+        });
+
+        return;
+      }
+
+
+      /*
        * Normal composer layout must NEVER auto-expand.
        */
 
@@ -1313,6 +1430,21 @@ Does NOT own:
 
 
           if (
+            state.expanded &&
+            !hasInputText()
+          ) {
+            collapse({
+              focus: false,
+
+              reason:
+                "empty-resize"
+            });
+
+            return;
+          }
+
+
+          if (
             state.expanded
           ) {
             refresh({
@@ -1379,6 +1511,21 @@ Does NOT own:
   window.addEventListener(
     "neyo:attachments-change",
     () => {
+
+      if (
+        state.expanded &&
+        !hasInputText()
+      ) {
+        collapse({
+          focus: false,
+
+          reason:
+            "empty-attachments-change"
+        });
+
+        return;
+      }
+
 
       if (
         state.expanded
@@ -1564,9 +1711,7 @@ Does NOT own:
      ===================================================== */
 
   /*
-   * Fresh page/load must ALWAYS start collapsed.
-   *
-   * Remove any stale class or inline expanded height.
+   * Fresh page/load always starts collapsed.
    */
 
   state.expanded =
@@ -1599,10 +1744,6 @@ Does NOT own:
 
   renderButton();
 
-
-  /*
-   * Wait for composer.js and CSS geometry.
-   */
 
   requestAnimationFrame(
     () => {

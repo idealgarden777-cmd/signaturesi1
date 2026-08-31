@@ -102,6 +102,58 @@
   <script src="https://unpkg.com/lucide@latest"></script>
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.8/purify.min.js"></script>
+
+  <!-- ===== SAFE UPDATE 1: Composer expand button styles ===== -->
+  <style>
+    #glassInputContainer {
+      position: relative;
+    }
+
+    #composerExpandBtn {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      z-index: 30;
+
+      width: 32px;
+      height: 32px;
+
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+
+      padding: 0;
+      margin: 0;
+
+      border: 0;
+      border-radius: 8px;
+
+      background: transparent;
+      color: #666;
+
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+
+      cursor: pointer;
+    }
+
+    #composerExpandBtn:hover {
+      background: rgba(0, 0, 0, 0.055);
+      color: #111;
+    }
+
+    #composerExpandBtn svg {
+      width: 17px;
+      height: 17px;
+      display: block;
+    }
+
+    .is-writing-expanded #composerExpandBtn {
+      top: 12px;
+      right: 12px;
+    }
+  </style>
 </head>
 
 <body>
@@ -1576,8 +1628,8 @@
   <!-- Checkout (v4) -->
   <script type="module" src="/js/components/checkout.js?v=4"></script>
 
-  <!-- Composer expand (restored) -->
-  <script type="module" src="/js/components/composer-expand.js?v=2"></script>
+  <!-- Composer expand (restored) — SAFE UPDATE 2: v2 → v4 -->
+  <script type="module" src="/js/components/composer-expand.js?v=4"></script>
 
   <!-- Composer scrollbar (NEW) -->
   <script type="module" src="/js/components/composer-scrollbar.js?v=1"></script>

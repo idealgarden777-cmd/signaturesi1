@@ -2,15 +2,11 @@
 =========================================================
 NEYO — COMPOSER EXPAND
 
-Collision-safe writing mode.
+Stable expand / collapse geometry.
+Keeps expand button away from send button.
 
-IMPORTANT:
-This file uses ONLY:
-
+Uses only:
 .is-writing-expanded
-
-It never uses legacy:
-.is-expanded
 =========================================================
 */
 
@@ -31,16 +27,16 @@ It never uses legacy:
 .composer-expand-btn {
     position: absolute !important;
 
-    top: 8px !important;
-    right: 10px !important;
+    top: 9px !important;
+    right: 12px !important;
 
-    z-index: 30 !important;
+    z-index: 60 !important;
 
-    width: 26px !important;
-    height: 26px !important;
+    width: 28px !important;
+    height: 28px !important;
 
-    min-width: 26px !important;
-    min-height: 26px !important;
+    min-width: 28px !important;
+    min-height: 28px !important;
 
     display: inline-flex !important;
 
@@ -56,22 +52,18 @@ It never uses legacy:
     background: transparent !important;
 
     color:
-        rgba(23, 23, 23, 0.54) !important;
+        rgba(23, 23, 23, 0.56) !important;
 
     cursor: pointer !important;
 
     opacity: 0.72 !important;
-
     visibility: visible !important;
-
     pointer-events: auto !important;
 
-    transform:
-        scale(1) !important;
+    transform: none !important;
 
     transition:
         opacity 140ms ease,
-        transform 140ms ease,
         background-color 140ms ease,
         color 140ms ease !important;
 }
@@ -83,8 +75,8 @@ It never uses legacy:
 
 .composer-expand-btn svg,
 .composer-expand-btn i {
-    width: 15px !important;
-    height: 15px !important;
+    width: 16px !important;
+    height: 16px !important;
 
     display: block !important;
 
@@ -97,36 +89,14 @@ It never uses legacy:
 
 
 /* =========================================================
-   BUTTON VISIBILITY
-   ========================================================= */
-
-.composer-expand-btn,
-.composer-expand-btn.is-visible,
-.glass-input-container.is-writing-expanded
-.composer-expand-btn {
-    opacity: 0.72 !important;
-
-    visibility: visible !important;
-
-    pointer-events: auto !important;
-
-    transform:
-        scale(1) !important;
-}
-
-
-/* =========================================================
    BUTTON HOVER
    ========================================================= */
 
-.composer-expand-btn:hover,
-.composer-expand-btn.is-visible:hover,
-.glass-input-container.is-writing-expanded
 .composer-expand-btn:hover {
     opacity: 1 !important;
 
     background:
-        rgba(0, 0, 0, 0.045) !important;
+        rgba(0, 0, 0, 0.05) !important;
 
     color:
         #171717 !important;
@@ -151,7 +121,7 @@ It never uses legacy:
 
     height: auto !important;
 
-    min-height: 56px !important;
+    min-height: 60px !important;
     max-height: none !important;
 }
 
@@ -164,22 +134,47 @@ It never uses legacy:
     .is-writing-expanded
 )
 .composer-input-row {
-    min-height: 44px !important;
+    position: relative !important;
+
+    min-height: 46px !important;
+
+    padding-top: 0 !important;
+
+    align-items: center !important;
 }
 
 
 /* =========================================================
    NORMAL TEXTAREA
 
-   Reserve small top-right space so typed content never
-   visually collides with the expand button.
+   Important:
+   reserve room for expand icon at upper-right.
    ========================================================= */
 
 .glass-input-container:not(
     .is-writing-expanded
 )
 textarea#chatInput {
-    padding-right: 34px !important;
+    padding-right: 44px !important;
+}
+
+
+/* =========================================================
+   KEEP SEND / MIC CONTROLS BELOW EXPAND BUTTON
+   ========================================================= */
+
+.glass-input-container:not(
+    .is-writing-expanded
+)
+.send-btn,
+
+.glass-input-container:not(
+    .is-writing-expanded
+)
+.mic-btn {
+    position: relative !important;
+
+    z-index: 20 !important;
 }
 
 
@@ -232,6 +227,27 @@ textarea#chatInput {
 
 
 /* =========================================================
+   EXPANDED BUTTON
+   ========================================================= */
+
+.glass-input-container.is-writing-expanded
+.composer-expand-btn {
+    top: 10px !important;
+    right: 12px !important;
+
+    z-index: 80 !important;
+
+    opacity: 0.78 !important;
+
+    visibility: visible !important;
+
+    pointer-events: auto !important;
+
+    background: transparent !important;
+}
+
+
+/* =========================================================
    ATTACHMENTS
    ========================================================= */
 
@@ -243,7 +259,7 @@ textarea#chatInput {
 
     padding:
         4px
-        38px
+        44px
         6px
         4px !important;
 }
@@ -269,6 +285,8 @@ textarea#chatInput {
     gap: 6px !important;
 
     overflow: hidden !important;
+
+    position: relative !important;
 }
 
 
@@ -292,8 +310,8 @@ textarea#chatInput {
     margin: 0 !important;
 
     padding:
-        36px
-        8px
+        38px
+        10px
         10px
         8px !important;
 
@@ -336,11 +354,15 @@ textarea#chatInput {
     position: relative !important;
 
     top: auto !important;
+    right: auto !important;
     bottom: 0 !important;
+    left: auto !important;
 
     margin: 0 !important;
 
     transform: none !important;
+
+    z-index: 20 !important;
 }
 
 
@@ -359,57 +381,20 @@ textarea#chatInput {
 
 
 /* =========================================================
-   COLLAPSE BUTTON
-   ========================================================= */
-
-.glass-input-container.is-writing-expanded
-.composer-expand-btn {
-    top: 10px !important;
-    right: 10px !important;
-
-    z-index: 40 !important;
-
-    visibility: visible !important;
-
-    opacity: 0.72 !important;
-
-    pointer-events: auto !important;
-
-    background: transparent !important;
-}
-
-
-.glass-input-container.is-writing-expanded
-.composer-expand-btn:hover {
-    opacity: 1 !important;
-
-    background:
-        rgba(0, 0, 0, 0.045) !important;
-}
-
-
-/* =========================================================
    DARK MODE
    ========================================================= */
 
 body.dark-mode
 .composer-expand-btn {
     color:
-        rgba(255, 255, 255, 0.58) !important;
+        rgba(255, 255, 255, 0.60) !important;
 }
 
 
 body.dark-mode
-.composer-expand-btn:hover,
-
-body.dark-mode
-.composer-expand-btn.is-visible:hover,
-
-body.dark-mode
-.glass-input-container.is-writing-expanded
 .composer-expand-btn:hover {
     background:
-        rgba(255, 255, 255, 0.07) !important;
+        rgba(255, 255, 255, 0.075) !important;
 
     color:
         #ffffff !important;
@@ -423,20 +408,14 @@ body.dark-mode
 @media (max-width: 767px) {
 
     .composer-expand-btn {
-        top: 7px !important;
-        right: 8px !important;
+        top: 8px !important;
+        right: 9px !important;
 
-        width: 26px !important;
-        height: 26px !important;
+        width: 27px !important;
+        height: 27px !important;
 
-        min-width: 26px !important;
-        min-height: 26px !important;
-
-        opacity: 0.72 !important;
-
-        visibility: visible !important;
-
-        pointer-events: auto !important;
+        min-width: 27px !important;
+        min-height: 27px !important;
     }
 
 
@@ -444,7 +423,7 @@ body.dark-mode
         .is-writing-expanded
     )
     textarea#chatInput {
-        padding-right: 32px !important;
+        padding-right: 42px !important;
     }
 
 
@@ -470,8 +449,8 @@ body.dark-mode
     .glass-input-container.is-writing-expanded
     textarea#chatInput {
         padding:
-            34px
-            7px
+            36px
+            8px
             8px
             7px !important;
 
@@ -481,14 +460,8 @@ body.dark-mode
 
     .glass-input-container.is-writing-expanded
     .composer-expand-btn {
-        top: 8px !important;
-        right: 8px !important;
-
-        visibility: visible !important;
-
-        opacity: 0.72 !important;
-
-        pointer-events: auto !important;
+        top: 9px !important;
+        right: 9px !important;
     }
 
 }

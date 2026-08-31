@@ -34,7 +34,7 @@ It never uses legacy:
     top: 8px !important;
     right: 10px !important;
 
-    z-index: 20 !important;
+    z-index: 30 !important;
 
     width: 26px !important;
     height: 26px !important;
@@ -48,6 +48,7 @@ It never uses legacy:
     justify-content: center !important;
 
     padding: 0 !important;
+    margin: 0 !important;
 
     border: 0 !important;
     border-radius: 8px !important;
@@ -59,14 +60,14 @@ It never uses legacy:
 
     cursor: pointer !important;
 
-    opacity: 0 !important;
+    opacity: 0.72 !important;
 
-    visibility: hidden !important;
+    visibility: visible !important;
 
-    pointer-events: none !important;
+    pointer-events: auto !important;
 
     transform:
-        scale(0.94) !important;
+        scale(1) !important;
 
     transition:
         opacity 140ms ease,
@@ -85,6 +86,8 @@ It never uses legacy:
     width: 15px !important;
     height: 15px !important;
 
+    display: block !important;
+
     pointer-events: none !important;
 
     color: inherit !important;
@@ -94,13 +97,14 @@ It never uses legacy:
 
 
 /* =========================================================
-   SMART VISIBILITY
+   BUTTON VISIBILITY
    ========================================================= */
 
+.composer-expand-btn,
 .composer-expand-btn.is-visible,
 .glass-input-container.is-writing-expanded
 .composer-expand-btn {
-    opacity: 0.60 !important;
+    opacity: 0.72 !important;
 
     visibility: visible !important;
 
@@ -111,6 +115,11 @@ It never uses legacy:
 }
 
 
+/* =========================================================
+   BUTTON HOVER
+   ========================================================= */
+
+.composer-expand-btn:hover,
 .composer-expand-btn.is-visible:hover,
 .glass-input-container.is-writing-expanded
 .composer-expand-btn:hover {
@@ -156,6 +165,21 @@ It never uses legacy:
 )
 .composer-input-row {
     min-height: 44px !important;
+}
+
+
+/* =========================================================
+   NORMAL TEXTAREA
+
+   Reserve small top-right space so typed content never
+   visually collides with the expand button.
+   ========================================================= */
+
+.glass-input-container:not(
+    .is-writing-expanded
+)
+textarea#chatInput {
+    padding-right: 34px !important;
 }
 
 
@@ -343,6 +367,8 @@ textarea#chatInput {
     top: 10px !important;
     right: 10px !important;
 
+    z-index: 40 !important;
+
     visibility: visible !important;
 
     opacity: 0.72 !important;
@@ -374,6 +400,9 @@ body.dark-mode
 
 
 body.dark-mode
+.composer-expand-btn:hover,
+
+body.dark-mode
 .composer-expand-btn.is-visible:hover,
 
 body.dark-mode
@@ -399,6 +428,23 @@ body.dark-mode
 
         width: 26px !important;
         height: 26px !important;
+
+        min-width: 26px !important;
+        min-height: 26px !important;
+
+        opacity: 0.72 !important;
+
+        visibility: visible !important;
+
+        pointer-events: auto !important;
+    }
+
+
+    .glass-input-container:not(
+        .is-writing-expanded
+    )
+    textarea#chatInput {
+        padding-right: 32px !important;
     }
 
 
@@ -437,6 +483,12 @@ body.dark-mode
     .composer-expand-btn {
         top: 8px !important;
         right: 8px !important;
+
+        visibility: visible !important;
+
+        opacity: 0.72 !important;
+
+        pointer-events: auto !important;
     }
 
 }

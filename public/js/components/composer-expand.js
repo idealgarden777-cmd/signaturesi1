@@ -1,14 +1,7 @@
 /*
 =========================================================
-NEO — COMPOSER EXPAND
-Production v4 — Baseline Safe + State Sync Fix
-
-Baseline:
-- Existing #composerExpandBtn HTML
-- Existing composer-expand.css
-- Existing .is-writing-expanded contract
-- Current NeyoComposer autosize/layout owner
-- Current NeyoComposerScrollbar owner
+NEYO — COMPOSER EXPAND
+Production v5 — Smart Visibility
 
 Owns:
 - Expand / collapse state
@@ -17,6 +10,7 @@ Owns:
 - Expand / collapse icon
 - aria-expanded / label / tooltip
 - Expanded-height calculation
+- Smart expand-button visibility
 - Viewport resize reaction
 - Escape-to-collapse
 - Focus preservation
@@ -38,7 +32,7 @@ Does NOT own:
   "use strict";
 
   const VERSION =
-    "neo-composer-expand-production-v4";
+    "neyo-composer-expand-production-v5";
 
 
   if (
@@ -83,7 +77,7 @@ Does NOT own:
     !expandButton
   ) {
     console.warn(
-      "[NEO Composer Expand] Required composer DOM is missing."
+      "[NEYO Composer Expand] Required composer DOM is missing."
     );
 
     return;
@@ -98,10 +92,6 @@ Does NOT own:
     Object.freeze({
       mobileBreakpoint:
         767,
-
-      /*
-       * Keep enough viewport space for topbar/chat context.
-       */
 
       desktopViewportRatio:
         0.48,
@@ -134,7 +124,19 @@ Does NOT own:
         20,
 
       resizeDebounceMs:
-        60
+        60,
+
+      /*
+       * Button appears when textarea is genuinely
+       * overflowing / large enough to benefit
+       * from expanded writing mode.
+       */
+
+      visibilityOverflowTolerance:
+        2,
+
+      visibilityMinScrollHeight:
+        104
     });
 
 
@@ -149,6 +151,9 @@ Does NOT own:
           "is-writing-expanded"
         ),
 
+    buttonVisible:
+      false,
+
     height:
       0,
 
@@ -162,6 +167,9 @@ Does NOT own:
       null,
 
     resizeTimer:
+      null,
+
+    visibilityFrame:
       null
   };
 
@@ -186,7 +194,7 @@ Does NOT own:
 
 
   /* =====================================================
-     VIEWPORT HELPERS
+     VIEWPORT
      ===================================================== */
 
   function isMobile() {
@@ -227,13 +235,7 @@ Does NOT own:
 
 
   /* =====================================================
-     TARGET HEIGHT
-
-     CSS remains geometry owner.
-     JS only supplies the expanded shell height.
-
-     Important:
-     width is NEVER touched.
+     EXPANDED HEIGHT
      ===================================================== */
 
   function calculateExpandedHeight() {
@@ -244,18 +246,15 @@ Does NOT own:
 
 
     let ratio =
-      CONFIG
-        .desktopViewportRatio;
+      CONFIG.desktopViewportRatio;
 
 
     let min =
-      CONFIG
-        .desktopMinHeight;
+      CONFIG.desktopMinHeight;
 
 
     let max =
-      CONFIG
-        .desktopMaxHeight;
+      CONFIG.desktopMaxHeight;
 
 
     if (
@@ -317,7 +316,7 @@ Does NOT own:
 
 
   /* =====================================================
-     ICON
+     ICONS
      ===================================================== */
 
   function refreshIcons() {
@@ -383,10 +382,6 @@ Does NOT own:
     );
 
 
-    /*
-     * Preserve existing old HTML tooltip contract.
-     */
-
     expandButton.dataset.tooltip =
       expanded
         ? "Collapse"
@@ -400,6 +395,123 @@ Does NOT own:
 
 
     refreshIcons();
+  }
+
+
+  /* =====================================================
+     SMART BUTTON VISIBILITY
+     ===================================================== */
+
+  function shouldShowExpandButton() {
+
+    /*
+     * Expanded composer must always expose
+     * the collapse control.
+     */
+
+    if (
+      state.expanded
+    ) {
+      return true;
+    }
+
+
+    const scrollHeight =
+      Math.ceil(
+        chatInput.scrollHeight || 0
+      );
+
+
+    const clientHeight =
+      Math.ceil(
+        chatInput.clientHeight || 0
+      );
+
+
+    const overflow =
+      scrollHeight >
+      clientHeight +
+        CONFIG
+          .visibilityOverflowTolerance;
+
+
+    const tallEnough =
+      scrollHeight >=
+      CONFIG
+        .visibilityMinScrollHeight;
+
+
+    return (
+      overflow ||
+      tallEnough
+    );
+  }
+
+
+  function applyButtonVisibility() {
+    const visible =
+      shouldShowExpandButton();
+
+
+    if (
+      state.buttonVisible ===
+      visible
+    ) {
+      return visible;
+    }
+
+
+    state.buttonVisible =
+      visible;
+
+
+    expandButton.classList.toggle(
+      "is-visible",
+      visible
+    );
+
+
+    emit(
+      "neyo:composer-expand-visibility",
+      {
+        visible,
+
+        expanded:
+          state.expanded,
+
+        scrollHeight:
+          chatInput.scrollHeight,
+
+        clientHeight:
+          chatInput.clientHeight
+      }
+    );
+
+
+    return visible;
+  }
+
+
+  function scheduleButtonVisibility() {
+    if (
+      state.visibilityFrame !==
+      null
+    ) {
+      cancelAnimationFrame(
+        state.visibilityFrame
+      );
+    }
+
+
+    state.visibilityFrame =
+      requestAnimationFrame(
+        () => {
+          state.visibilityFrame =
+            null;
+
+          applyButtonVisibility();
+        }
+      );
   }
 
 
@@ -422,12 +534,6 @@ Does NOT own:
     state.height =
       height;
 
-
-    /*
-     * Existing CSS contains !important height rules.
-     * Expanded controller is the explicit expanded-size
-     * owner, so inline important is intentional.
-     */
 
     container.style.setProperty(
       "height",
@@ -476,7 +582,7 @@ Does NOT own:
 
 
   /* =====================================================
-     REFRESH OWNED DEPENDENCIES
+     REFRESH DEPENDENCIES
      ===================================================== */
 
   function refreshComposer() {
@@ -496,11 +602,14 @@ Does NOT own:
         ?.refresh
         ?.();
     } catch {}
+
+
+    scheduleButtonVisibility();
   }
 
 
   /* =====================================================
-     FOCUS PRESERVATION
+     FOCUS
      ===================================================== */
 
   function restoreInputFocus({
@@ -534,12 +643,8 @@ Does NOT own:
 
         if (
           preserveCaret &&
-          Number.isInteger(
-            start
-          ) &&
-          Number.isInteger(
-            end
-          )
+          Number.isInteger(start) &&
+          Number.isInteger(end)
         ) {
           try {
             chatInput
@@ -566,6 +671,7 @@ Does NOT own:
     emitEvent = true,
     reason = "state-change"
   } = {}) {
+
     container.classList.toggle(
       "is-writing-expanded",
       state.expanded
@@ -594,8 +700,12 @@ Does NOT own:
 
 
     /*
-     * Refresh only after class + height are applied.
+     * Visibility must be recalculated after
+     * expanded/collapsed geometry changes.
      */
+
+    scheduleButtonVisibility();
+
 
     requestAnimationFrame(
       () => {
@@ -653,18 +763,15 @@ Does NOT own:
     focus = true,
     reason = "user"
   } = {}) {
+
     if (
       state.expanded
     ) {
-      /*
-       * State already says expanded.
-       * Re-sync shell geometry in case viewport,
-       * CSS, or another composer owner changed it.
-       */
-
       applyExpandedHeight();
 
       renderButton();
+
+      scheduleButtonVisibility();
 
 
       requestAnimationFrame(
@@ -706,16 +813,10 @@ Does NOT own:
     focus = true,
     reason = "user"
   } = {}) {
+
     if (
       !state.expanded
     ) {
-      /*
-       * Repair stale geometry even if state already
-       * says collapsed.
-       *
-       * This prevents old inline expanded dimensions
-       * from keeping the composer visually expanded.
-       */
 
       container.classList.remove(
         "is-writing-expanded"
@@ -733,6 +834,8 @@ Does NOT own:
 
 
       renderButton();
+
+      scheduleButtonVisibility();
 
 
       requestAnimationFrame(
@@ -773,6 +876,7 @@ Does NOT own:
   function toggle(
     options = {}
   ) {
+
     return state.expanded
       ? collapse(options)
       : expand(options);
@@ -781,35 +885,25 @@ Does NOT own:
 
   /* =====================================================
      REFRESH
-
-     Called after:
-     - viewport resize
-     - mobile keyboard
-     - attachments
-     - composer layout change
-
-     Does not change expanded/collapsed decision.
      ===================================================== */
 
   function refresh({
     reason = "refresh"
   } = {}) {
+
     if (
       state.expanded
     ) {
       applyExpandedHeight();
 
     } else {
-      /*
-       * Keep collapsed shell free of stale
-       * inline expanded geometry.
-       */
-
       clearExpandedHeight();
     }
 
 
     renderButton();
+
+    scheduleButtonVisibility();
 
 
     try {
@@ -829,7 +923,10 @@ Does NOT own:
           state.expanded,
 
         height:
-          state.height
+          state.height,
+
+        buttonVisible:
+          state.buttonVisible
       }
     );
 
@@ -840,9 +937,6 @@ Does NOT own:
 
   /* =====================================================
      BUTTON
-
-     Capture phase prevents old neo.js from also toggling
-     the same class while legacy code remains loaded.
      ===================================================== */
 
   expandButton.addEventListener(
@@ -867,40 +961,83 @@ Does NOT own:
 
 
   /* =====================================================
+     INPUT VISIBILITY WATCH
+     ===================================================== */
+
+  chatInput.addEventListener(
+    "input",
+    () => {
+      scheduleButtonVisibility();
+    },
+    {
+      passive: true
+    }
+  );
+
+
+  chatInput.addEventListener(
+    "change",
+    () => {
+      scheduleButtonVisibility();
+    },
+    {
+      passive: true
+    }
+  );
+
+
+  /* =====================================================
+     RESIZE OBSERVER
+
+     This is important because textarea autosize belongs
+     to NeyoComposer, not this controller.
+     We only observe its resulting geometry.
+     ===================================================== */
+
+  let textareaResizeObserver =
+    null;
+
+
+  if (
+    typeof ResizeObserver !==
+    "undefined"
+  ) {
+    textareaResizeObserver =
+      new ResizeObserver(
+        () => {
+          scheduleButtonVisibility();
+        }
+      );
+
+
+    textareaResizeObserver.observe(
+      chatInput
+    );
+  }
+
+
+  /* =====================================================
      ESCAPE
-
-     ChatGPT-style:
-     Escape collapses expanded writing canvas.
-
-     Important:
-     - does NOT clear text
-     - does NOT send
-     - does NOT stop generation
      ===================================================== */
 
   document.addEventListener(
     "keydown",
     event => {
+
       if (
         !state.expanded ||
-        event.key !==
-          "Escape"
+        event.key !== "Escape"
       ) {
         return;
       }
 
-
-      /*
-       * Don't steal Escape from an actual dialog/modal.
-       */
 
       const target =
         event.target;
 
 
       if (
-        target instanceof
-          Element &&
+        target instanceof Element &&
         target.closest(
           [
             "[role='dialog']",
@@ -987,9 +1124,6 @@ Does NOT own:
 
   /* =====================================================
      NEW CHAT
-
-     New Chat returns composer to compact state.
-     Text/attachments themselves are owned elsewhere.
      ===================================================== */
 
   window.addEventListener(
@@ -1001,15 +1135,15 @@ Does NOT own:
         reason:
           "new-chat"
       });
+
+
+      scheduleButtonVisibility();
     }
   );
 
 
   /* =====================================================
      CONVERSATION LOAD
-
-     Prevent a previous draft's expanded shell from leaking
-     into a newly opened history conversation.
      ===================================================== */
 
   window.addEventListener(
@@ -1021,6 +1155,9 @@ Does NOT own:
         reason:
           "conversation-load"
       });
+
+
+      scheduleButtonVisibility();
     }
   );
 
@@ -1038,19 +1175,21 @@ Does NOT own:
         reason:
           "composer-reset"
       });
+
+
+      scheduleButtonVisibility();
     }
   );
 
 
   /* =====================================================
      VIEWPORT
-
-     visualViewport matters for iPhone/Android keyboard.
      ===================================================== */
 
   function scheduleViewportRefresh(
     reason
   ) {
+
     if (
       state.resizeTimer !==
       null
@@ -1064,6 +1203,7 @@ Does NOT own:
     state.resizeTimer =
       window.setTimeout(
         () => {
+
           state.resizeTimer =
             null;
 
@@ -1079,6 +1219,7 @@ Does NOT own:
 
           state.resizing =
             false;
+
         },
         CONFIG.resizeDebounceMs
       );
@@ -1131,14 +1272,12 @@ Does NOT own:
 
   /* =====================================================
      ATTACHMENTS
-
-     Attachment shelf can alter top position around expand
-     button, but this controller does not own attachments.
      ===================================================== */
 
   window.addEventListener(
     "neyo:attachments-change",
     () => {
+
       if (
         state.expanded
       ) {
@@ -1146,6 +1285,9 @@ Does NOT own:
           reason:
             "attachments-change"
         });
+
+      } else {
+        scheduleButtonVisibility();
       }
     }
   );
@@ -1153,26 +1295,18 @@ Does NOT own:
 
   /* =====================================================
      COMPOSER LAYOUT
-
-     Avoid recursive composer→expand→composer loops.
-     Only recalculate shell height if viewport-derived size
-     actually changed.
      ===================================================== */
 
   window.addEventListener(
     "neyo:composer-layout",
     () => {
+
       if (
         !state.expanded
       ) {
-        /*
-         * Defensive cleanup:
-         * composer layout events can still fire while
-         * collapsed, so make sure expanded inline size
-         * cannot leak into the compact state.
-         */
-
         clearExpandedHeight();
+
+        scheduleButtonVisibility();
 
         return;
       }
@@ -1188,6 +1322,8 @@ Does NOT own:
           state.height
         ) < 1
       ) {
+        scheduleButtonVisibility();
+
         return;
       }
 
@@ -1223,6 +1359,9 @@ Does NOT own:
           ?.refresh
           ?.();
       } catch {}
+
+
+      scheduleButtonVisibility();
     }
   );
 
@@ -1256,6 +1395,9 @@ Does NOT own:
 
       expanded:
         state.expanded,
+
+      buttonVisible:
+        state.buttonVisible,
 
       height:
         state.height,
@@ -1295,8 +1437,15 @@ Does NOT own:
 
       refresh,
 
+      refreshVisibility:
+        applyButtonVisibility,
+
       isExpanded() {
         return state.expanded;
+      },
+
+      isButtonVisible() {
+        return state.buttonVisible;
       },
 
       getHeight() {
@@ -1328,9 +1477,6 @@ Does NOT own:
 
   /* =====================================================
      INIT
-
-     Preserve whichever class HTML/legacy CSS currently has,
-     then synchronize icon + aria state.
      ===================================================== */
 
   if (
@@ -1339,10 +1485,6 @@ Does NOT own:
     applyExpandedHeight();
 
   } else {
-    /*
-     * Start compact with clean geometry.
-     * Prevent stale inline expanded dimensions.
-     */
 
     clearExpandedHeight();
 
@@ -1358,9 +1500,23 @@ Does NOT own:
   renderButton();
 
 
+  /*
+   * Initial state must not assume textarea size
+   * before layout is complete.
+   */
+
   requestAnimationFrame(
     () => {
+
       refreshComposer();
+
+
+      requestAnimationFrame(
+        () => {
+          applyButtonVisibility();
+        }
+      );
+
     }
   );
 
@@ -1377,8 +1533,12 @@ Does NOT own:
       expanded:
         state.expanded,
 
+      buttonVisible:
+        state.buttonVisible,
+
       stateClass:
         "is-writing-expanded"
     }
   );
+
 })();

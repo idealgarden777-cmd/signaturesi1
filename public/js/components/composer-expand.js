@@ -1,7 +1,7 @@
 /*
 =========================================================
 NEYO — COMPOSER EXPAND
-Production v5 — Smart Visibility
+Production v5.1 — Smart Visibility / Baseline Safe
 
 Owns:
 - Expand / collapse state
@@ -32,8 +32,7 @@ Does NOT own:
   "use strict";
 
   const VERSION =
-    "neyo-composer-expand-production-v5";
-
+    "neyo-composer-expand-production-v5.1";
 
   if (
     window.NeyoComposerExpand
@@ -41,7 +40,6 @@ Does NOT own:
   ) {
     return;
   }
-
 
   /* =====================================================
      DOM
@@ -52,24 +50,20 @@ Does NOT own:
       "glassInputContainer"
     );
 
-
   const composerWrapper =
     document.getElementById(
       "composerWrapper"
     );
-
 
   const chatInput =
     document.getElementById(
       "chatInput"
     );
 
-
   const expandButton =
     document.getElementById(
       "composerExpandBtn"
     );
-
 
   if (
     !container ||
@@ -82,7 +76,6 @@ Does NOT own:
 
     return;
   }
-
 
   /* =====================================================
      CONFIG
@@ -126,12 +119,6 @@ Does NOT own:
       resizeDebounceMs:
         60,
 
-      /*
-       * Button appears when textarea is genuinely
-       * overflowing / large enough to benefit
-       * from expanded writing mode.
-       */
-
       visibilityOverflowTolerance:
         2,
 
@@ -139,17 +126,19 @@ Does NOT own:
         104
     });
 
-
   /* =====================================================
      STATE
+
+     Important:
+     Composer always starts collapsed.
+
+     A stale class must never make a fresh page load
+     start in expanded writing mode.
      ===================================================== */
 
   const state = {
     expanded:
-      container.classList
-        .contains(
-          "is-writing-expanded"
-        ),
+      false,
 
     buttonVisible:
       false,
@@ -173,7 +162,6 @@ Does NOT own:
       null
   };
 
-
   /* =====================================================
      EVENTS
      ===================================================== */
@@ -192,7 +180,6 @@ Does NOT own:
     );
   }
 
-
   /* =====================================================
      VIEWPORT
      ===================================================== */
@@ -204,7 +191,6 @@ Does NOT own:
     );
   }
 
-
   function isLandscapePhone() {
     return (
       window.innerHeight <=
@@ -213,7 +199,6 @@ Does NOT own:
         window.innerHeight
     );
   }
-
 
   /* =====================================================
      CLAMP
@@ -233,7 +218,6 @@ Does NOT own:
     );
   }
 
-
   /* =====================================================
      EXPANDED HEIGHT
      ===================================================== */
@@ -244,18 +228,14 @@ Does NOT own:
         ?.height ||
       window.innerHeight;
 
-
     let ratio =
       CONFIG.desktopViewportRatio;
-
 
     let min =
       CONFIG.desktopMinHeight;
 
-
     let max =
       CONFIG.desktopMaxHeight;
-
 
     if (
       isLandscapePhone()
@@ -288,7 +268,6 @@ Does NOT own:
           .mobileMaxHeight;
     }
 
-
     const available =
       Math.max(
         min,
@@ -296,11 +275,9 @@ Does NOT own:
           CONFIG.viewportGap
       );
 
-
     const calculated =
       viewportHeight *
       ratio;
-
 
     return Math.round(
       clamp(
@@ -314,7 +291,6 @@ Does NOT own:
     );
   }
 
-
   /* =====================================================
      ICONS
      ===================================================== */
@@ -327,21 +303,17 @@ Does NOT own:
     } catch {}
   }
 
-
   function renderButton() {
     const expanded =
       state.expanded;
 
-
     expandButton
       .replaceChildren();
-
 
     const icon =
       document.createElement(
         "i"
       );
-
 
     icon.setAttribute(
       "data-lucide",
@@ -350,29 +322,24 @@ Does NOT own:
         : "maximize-2"
     );
 
-
     icon.setAttribute(
       "size",
       "16"
     );
-
 
     icon.setAttribute(
       "aria-hidden",
       "true"
     );
 
-
     expandButton.appendChild(
       icon
     );
-
 
     expandButton.setAttribute(
       "aria-expanded",
       String(expanded)
     );
-
 
     expandButton.setAttribute(
       "aria-label",
@@ -381,29 +348,24 @@ Does NOT own:
         : "Expand composer"
     );
 
-
     expandButton.dataset.tooltip =
       expanded
         ? "Collapse"
         : "Expand";
-
 
     expandButton.title =
       expanded
         ? "Collapse composer"
         : "Expand composer";
 
-
     refreshIcons();
   }
-
 
   /* =====================================================
      SMART BUTTON VISIBILITY
      ===================================================== */
 
   function shouldShowExpandButton() {
-
     /*
      * Expanded composer must always expose
      * the collapse control.
@@ -415,31 +377,44 @@ Does NOT own:
       return true;
     }
 
+    /*
+     * Prefer canonical Composer overflow state when
+     * that controller is available.
+     */
+
+    try {
+      if (
+        window.NeyoComposer
+          ?.isOverflowing
+          ?.() === true
+      ) {
+        return true;
+      }
+    } catch {}
 
     const scrollHeight =
       Math.ceil(
-        chatInput.scrollHeight || 0
+        chatInput.scrollHeight ||
+        0
       );
-
 
     const clientHeight =
       Math.ceil(
-        chatInput.clientHeight || 0
+        chatInput.clientHeight ||
+        0
       );
 
-
     const overflow =
+      clientHeight > 0 &&
       scrollHeight >
-      clientHeight +
+        clientHeight +
         CONFIG
           .visibilityOverflowTolerance;
-
 
     const tallEnough =
       scrollHeight >=
       CONFIG
         .visibilityMinScrollHeight;
-
 
     return (
       overflow ||
@@ -447,50 +422,52 @@ Does NOT own:
     );
   }
 
-
   function applyButtonVisibility() {
     const visible =
       shouldShowExpandButton();
 
+    /*
+     * Always synchronize the actual DOM class.
+     *
+     * Do not rely only on cached JS state because another
+     * layout pass, CSS reload or external class mutation
+     * could otherwise leave the button visually stale.
+     */
 
-    if (
-      state.buttonVisible ===
-      visible
-    ) {
-      return visible;
-    }
+    expandButton
+      .classList
+      .toggle(
+        "is-visible",
+        visible
+      );
 
+    const changed =
+      state.buttonVisible !==
+      visible;
 
     state.buttonVisible =
       visible;
 
+    if (changed) {
+      emit(
+        "neyo:composer-expand-visibility",
+        {
+          visible,
 
-    expandButton.classList.toggle(
-      "is-visible",
-      visible
-    );
+          expanded:
+            state.expanded,
 
+          scrollHeight:
+            chatInput.scrollHeight,
 
-    emit(
-      "neyo:composer-expand-visibility",
-      {
-        visible,
-
-        expanded:
-          state.expanded,
-
-        scrollHeight:
-          chatInput.scrollHeight,
-
-        clientHeight:
-          chatInput.clientHeight
-      }
-    );
-
+          clientHeight:
+            chatInput.clientHeight
+        }
+      );
+    }
 
     return visible;
   }
-
 
   function scheduleButtonVisibility() {
     if (
@@ -501,7 +478,6 @@ Does NOT own:
         state.visibilityFrame
       );
     }
-
 
     state.visibilityFrame =
       requestAnimationFrame(
@@ -514,7 +490,6 @@ Does NOT own:
       );
   }
 
-
   /* =====================================================
      HEIGHT
      ===================================================== */
@@ -526,14 +501,11 @@ Does NOT own:
       return false;
     }
 
-
     const height =
       calculateExpandedHeight();
 
-
     state.height =
       height;
-
 
     container.style.setProperty(
       "height",
@@ -541,13 +513,11 @@ Does NOT own:
       "important"
     );
 
-
     container.style.setProperty(
       "min-height",
       `${height}px`,
       "important"
     );
-
 
     container.style.setProperty(
       "max-height",
@@ -555,31 +525,25 @@ Does NOT own:
       "important"
     );
 
-
     return true;
   }
-
 
   function clearExpandedHeight() {
     container.style.removeProperty(
       "height"
     );
 
-
     container.style.removeProperty(
       "min-height"
     );
-
 
     container.style.removeProperty(
       "max-height"
     );
 
-
     state.height =
       0;
   }
-
 
   /* =====================================================
      REFRESH DEPENDENCIES
@@ -595,7 +559,6 @@ Does NOT own:
         });
     } catch {}
 
-
     try {
       window
         .NeyoComposerScrollbar
@@ -603,10 +566,8 @@ Does NOT own:
         ?.();
     } catch {}
 
-
     scheduleButtonVisibility();
   }
-
 
   /* =====================================================
      FOCUS
@@ -621,14 +582,11 @@ Does NOT own:
       return false;
     }
 
-
     const start =
       chatInput.selectionStart;
 
-
     const end =
       chatInput.selectionEnd;
-
 
     requestAnimationFrame(
       () => {
@@ -639,7 +597,6 @@ Does NOT own:
         } catch {
           chatInput.focus();
         }
-
 
         if (
           preserveCaret &&
@@ -657,10 +614,8 @@ Does NOT own:
       }
     );
 
-
     return true;
   }
-
 
   /* =====================================================
      APPLY STATE
@@ -671,12 +626,10 @@ Does NOT own:
     emitEvent = true,
     reason = "state-change"
   } = {}) {
-
     container.classList.toggle(
       "is-writing-expanded",
       state.expanded
     );
-
 
     composerWrapper
       ?.classList
@@ -684,7 +637,6 @@ Does NOT own:
         "is-writing-expanded",
         state.expanded
       );
-
 
     if (
       state.expanded
@@ -695,17 +647,9 @@ Does NOT own:
       clearExpandedHeight();
     }
 
-
     renderButton();
 
-
-    /*
-     * Visibility must be recalculated after
-     * expanded/collapsed geometry changes.
-     */
-
     scheduleButtonVisibility();
-
 
     requestAnimationFrame(
       () => {
@@ -713,11 +657,9 @@ Does NOT own:
       }
     );
 
-
     if (focus) {
       restoreInputFocus();
     }
-
 
     if (emitEvent) {
       emit(
@@ -735,7 +677,6 @@ Does NOT own:
         }
       );
 
-
       emit(
         "neyo:composer-expand-change",
         {
@@ -750,10 +691,8 @@ Does NOT own:
       );
     }
 
-
     return true;
   }
-
 
   /* =====================================================
      EXPAND
@@ -763,16 +702,29 @@ Does NOT own:
     focus = true,
     reason = "user"
   } = {}) {
-
     if (
       state.expanded
     ) {
+      /*
+       * Keep state and DOM synchronized even if an
+       * external stylesheet/layout operation occurred.
+       */
+
+      container.classList.add(
+        "is-writing-expanded"
+      );
+
+      composerWrapper
+        ?.classList
+        .add(
+          "is-writing-expanded"
+        );
+
       applyExpandedHeight();
 
       renderButton();
 
       scheduleButtonVisibility();
-
 
       requestAnimationFrame(
         () => {
@@ -780,30 +732,24 @@ Does NOT own:
         }
       );
 
-
       if (focus) {
         restoreInputFocus();
       }
 
-
       return true;
     }
-
 
     state.expanded =
       true;
 
-
     state.lastExpandedAt =
       Date.now();
-
 
     return applyState({
       focus,
       reason
     });
   }
-
 
   /* =====================================================
      COLLAPSE
@@ -813,61 +759,78 @@ Does NOT own:
     focus = true,
     reason = "user"
   } = {}) {
+    /*
+     * Always make collapsed JS state authoritative.
+     *
+     * This also repairs a stale class if DOM and state
+     * somehow become unsynchronized.
+     */
 
-    if (
-      !state.expanded
-    ) {
-
-      container.classList.remove(
-        "is-writing-expanded"
-      );
-
-
-      composerWrapper
-        ?.classList
-        .remove(
-          "is-writing-expanded"
-        );
-
-
-      clearExpandedHeight();
-
-
-      renderButton();
-
-      scheduleButtonVisibility();
-
-
-      requestAnimationFrame(
-        () => {
-          refreshComposer();
-        }
-      );
-
-
-      if (focus) {
-        restoreInputFocus();
-      }
-
-
-      return true;
-    }
-
+    const wasExpanded =
+      state.expanded;
 
     state.expanded =
       false;
 
+    container.classList.remove(
+      "is-writing-expanded"
+    );
 
-    state.lastCollapsedAt =
-      Date.now();
+    composerWrapper
+      ?.classList
+      .remove(
+        "is-writing-expanded"
+      );
 
+    clearExpandedHeight();
 
-    return applyState({
-      focus,
-      reason
-    });
+    renderButton();
+
+    scheduleButtonVisibility();
+
+    requestAnimationFrame(
+      () => {
+        refreshComposer();
+      }
+    );
+
+    if (focus) {
+      restoreInputFocus();
+    }
+
+    if (wasExpanded) {
+      state.lastCollapsedAt =
+        Date.now();
+
+      emit(
+        "neyo:composer-collapsed",
+        {
+          reason,
+
+          expanded:
+            false,
+
+          height:
+            0
+        }
+      );
+
+      emit(
+        "neyo:composer-expand-change",
+        {
+          reason,
+
+          expanded:
+            false,
+
+          height:
+            0
+        }
+      );
+    }
+
+    return true;
   }
-
 
   /* =====================================================
      TOGGLE
@@ -876,12 +839,10 @@ Does NOT own:
   function toggle(
     options = {}
   ) {
-
     return state.expanded
       ? collapse(options)
       : expand(options);
   }
-
 
   /* =====================================================
      REFRESH
@@ -890,6 +851,22 @@ Does NOT own:
   function refresh({
     reason = "refresh"
   } = {}) {
+    /*
+     * JS state is authoritative.
+     * Repair DOM class if anything external changed it.
+     */
+
+    container.classList.toggle(
+      "is-writing-expanded",
+      state.expanded
+    );
+
+    composerWrapper
+      ?.classList
+      .toggle(
+        "is-writing-expanded",
+        state.expanded
+      );
 
     if (
       state.expanded
@@ -900,11 +877,9 @@ Does NOT own:
       clearExpandedHeight();
     }
 
-
     renderButton();
 
     scheduleButtonVisibility();
-
 
     try {
       window
@@ -912,7 +887,6 @@ Does NOT own:
         ?.refresh
         ?.();
     } catch {}
-
 
     emit(
       "neyo:composer-expand-layout",
@@ -930,10 +904,8 @@ Does NOT own:
       }
     );
 
-
     return true;
   }
-
 
   /* =====================================================
      BUTTON
@@ -948,7 +920,6 @@ Does NOT own:
 
       event.stopImmediatePropagation();
 
-
       toggle({
         focus: true,
 
@@ -958,7 +929,6 @@ Does NOT own:
     },
     true
   );
-
 
   /* =====================================================
      INPUT VISIBILITY WATCH
@@ -974,7 +944,6 @@ Does NOT own:
     }
   );
 
-
   chatInput.addEventListener(
     "change",
     () => {
@@ -985,18 +954,15 @@ Does NOT own:
     }
   );
 
-
   /* =====================================================
      RESIZE OBSERVER
 
-     This is important because textarea autosize belongs
-     to NeyoComposer, not this controller.
-     We only observe its resulting geometry.
+     Textarea autosize belongs to NeyoComposer.
+     This controller only watches resulting geometry.
      ===================================================== */
 
   let textareaResizeObserver =
     null;
-
 
   if (
     typeof ResizeObserver !==
@@ -1009,12 +975,10 @@ Does NOT own:
         }
       );
 
-
     textareaResizeObserver.observe(
       chatInput
     );
   }
-
 
   /* =====================================================
      ESCAPE
@@ -1023,7 +987,6 @@ Does NOT own:
   document.addEventListener(
     "keydown",
     event => {
-
       if (
         !state.expanded ||
         event.key !== "Escape"
@@ -1031,10 +994,8 @@ Does NOT own:
         return;
       }
 
-
       const target =
         event.target;
-
 
       if (
         target instanceof Element &&
@@ -1050,11 +1011,9 @@ Does NOT own:
         return;
       }
 
-
       event.preventDefault();
 
       event.stopPropagation();
-
 
       collapse({
         focus: true,
@@ -1065,7 +1024,6 @@ Does NOT own:
     },
     true
   );
-
 
   /* =====================================================
      EXTERNAL EVENTS
@@ -1087,7 +1045,6 @@ Does NOT own:
     }
   );
 
-
   window.addEventListener(
     "neyo:composer-collapse-request",
     event => {
@@ -1103,7 +1060,6 @@ Does NOT own:
       });
     }
   );
-
 
   window.addEventListener(
     "neyo:composer-toggle-expand-request",
@@ -1121,7 +1077,6 @@ Does NOT own:
     }
   );
 
-
   /* =====================================================
      NEW CHAT
      ===================================================== */
@@ -1135,12 +1090,8 @@ Does NOT own:
         reason:
           "new-chat"
       });
-
-
-      scheduleButtonVisibility();
     }
   );
-
 
   /* =====================================================
      CONVERSATION LOAD
@@ -1155,12 +1106,8 @@ Does NOT own:
         reason:
           "conversation-load"
       });
-
-
-      scheduleButtonVisibility();
     }
   );
-
 
   /* =====================================================
      COMPOSER RESET
@@ -1175,12 +1122,8 @@ Does NOT own:
         reason:
           "composer-reset"
       });
-
-
-      scheduleButtonVisibility();
     }
   );
-
 
   /* =====================================================
      VIEWPORT
@@ -1189,7 +1132,6 @@ Does NOT own:
   function scheduleViewportRefresh(
     reason
   ) {
-
     if (
       state.resizeTimer !==
       null
@@ -1199,32 +1141,25 @@ Does NOT own:
       );
     }
 
-
     state.resizeTimer =
       window.setTimeout(
         () => {
-
           state.resizeTimer =
             null;
 
-
           state.resizing =
             true;
-
 
           refresh({
             reason
           });
 
-
           state.resizing =
             false;
-
         },
         CONFIG.resizeDebounceMs
       );
   }
-
 
   window.addEventListener(
     "resize",
@@ -1238,7 +1173,6 @@ Does NOT own:
     }
   );
 
-
   window.addEventListener(
     "orientationchange",
     () => {
@@ -1250,7 +1184,6 @@ Does NOT own:
       passive: true
     }
   );
-
 
   if (
     window.visualViewport
@@ -1269,7 +1202,6 @@ Does NOT own:
       );
   }
 
-
   /* =====================================================
      ATTACHMENTS
      ===================================================== */
@@ -1277,7 +1209,6 @@ Does NOT own:
   window.addEventListener(
     "neyo:attachments-change",
     () => {
-
       if (
         state.expanded
       ) {
@@ -1292,7 +1223,6 @@ Does NOT own:
     }
   );
 
-
   /* =====================================================
      COMPOSER LAYOUT
      ===================================================== */
@@ -1300,21 +1230,35 @@ Does NOT own:
   window.addEventListener(
     "neyo:composer-layout",
     () => {
+      /*
+       * This event comes from composer.js.
+       *
+       * Never infer expanded state from textarea size.
+       * Expansion remains explicit-user-action only.
+       */
 
       if (
         !state.expanded
       ) {
         clearExpandedHeight();
 
+        container.classList.remove(
+          "is-writing-expanded"
+        );
+
+        composerWrapper
+          ?.classList
+          .remove(
+            "is-writing-expanded"
+          );
+
         scheduleButtonVisibility();
 
         return;
       }
 
-
       const next =
         calculateExpandedHeight();
-
 
       if (
         Math.abs(
@@ -1327,10 +1271,8 @@ Does NOT own:
         return;
       }
 
-
       state.height =
         next;
-
 
       container.style.setProperty(
         "height",
@@ -1338,20 +1280,17 @@ Does NOT own:
         "important"
       );
 
-
       container.style.setProperty(
         "min-height",
         `${next}px`,
         "important"
       );
 
-
       container.style.setProperty(
         "max-height",
         `${next}px`,
         "important"
       );
-
 
       try {
         window
@@ -1360,11 +1299,9 @@ Does NOT own:
           ?.();
       } catch {}
 
-
       scheduleButtonVisibility();
     }
   );
-
 
   /* =====================================================
      STATE REQUEST
@@ -1379,7 +1316,6 @@ Does NOT own:
       );
     }
   );
-
 
   /* =====================================================
      GET STATE
@@ -1412,7 +1348,6 @@ Does NOT own:
         state.lastCollapsedAt
     };
   }
-
 
   /* =====================================================
      PUBLIC API
@@ -1455,7 +1390,6 @@ Does NOT own:
       getState
     });
 
-
   Object.defineProperty(
     window,
     "NeyoComposerExpand",
@@ -1474,52 +1408,55 @@ Does NOT own:
     }
   );
 
-
   /* =====================================================
      INIT
+
+     Critical bug fix:
+     every fresh page starts collapsed.
+
+     Do not inherit accidental/stale DOM classes.
      ===================================================== */
 
-  if (
-    state.expanded
-  ) {
-    applyExpandedHeight();
+  state.expanded =
+    false;
 
-  } else {
+  container.classList.remove(
+    "is-writing-expanded"
+  );
 
-    clearExpandedHeight();
+  composerWrapper
+    ?.classList
+    .remove(
+      "is-writing-expanded"
+    );
 
+  clearExpandedHeight();
 
-    composerWrapper
-      ?.classList
-      .remove(
-        "is-writing-expanded"
-      );
-  }
+  expandButton.classList.remove(
+    "is-visible"
+  );
 
+  state.buttonVisible =
+    false;
 
   renderButton();
 
-
   /*
-   * Initial state must not assume textarea size
-   * before layout is complete.
+   * Wait until composer.js / CSS have completed initial
+   * geometry before deciding if expand control is useful.
    */
 
   requestAnimationFrame(
     () => {
-
       refreshComposer();
-
 
       requestAnimationFrame(
         () => {
           applyButtonVisibility();
         }
       );
-
     }
   );
-
 
   emit(
     "neyo:composer-expand-ready",
@@ -1531,7 +1468,7 @@ Does NOT own:
         true,
 
       expanded:
-        state.expanded,
+        false,
 
       buttonVisible:
         state.buttonVisible,

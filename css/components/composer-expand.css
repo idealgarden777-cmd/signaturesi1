@@ -2,8 +2,14 @@
 =========================================================
 NEYO — COMPOSER EXPAND
 
-Stable expand / collapse geometry.
-Keeps expand button away from send button.
+Smart expand / collapse visibility.
+
+Default:
+- Expand button hidden
+
+Visible when:
+- JS adds .is-visible
+- Composer is already expanded
 
 Uses only:
 .is-writing-expanded
@@ -22,6 +28,7 @@ Uses only:
 
 /* =========================================================
    EXPAND BUTTON — BASE
+   DEFAULT HIDDEN
    ========================================================= */
 
 .composer-expand-btn {
@@ -56,14 +63,18 @@ Uses only:
 
     cursor: pointer !important;
 
-    opacity: 0.72 !important;
-    visibility: visible !important;
-    pointer-events: auto !important;
+    opacity: 0 !important;
 
-    transform: none !important;
+    visibility: hidden !important;
+
+    pointer-events: none !important;
+
+    transform:
+        scale(0.96) !important;
 
     transition:
         opacity 140ms ease,
+        transform 140ms ease,
         background-color 140ms ease,
         color 140ms ease !important;
 }
@@ -89,9 +100,32 @@ Uses only:
 
 
 /* =========================================================
-   BUTTON HOVER
+   SMART VISIBILITY
+
+   JS adds .is-visible when composer content grows enough.
+   Expanded mode always shows collapse control.
    ========================================================= */
 
+.composer-expand-btn.is-visible,
+.glass-input-container.is-writing-expanded
+.composer-expand-btn {
+    opacity: 0.72 !important;
+
+    visibility: visible !important;
+
+    pointer-events: auto !important;
+
+    transform:
+        scale(1) !important;
+}
+
+
+/* =========================================================
+   HOVER
+   ========================================================= */
+
+.composer-expand-btn.is-visible:hover,
+.glass-input-container.is-writing-expanded
 .composer-expand-btn:hover {
     opacity: 1 !important;
 
@@ -138,8 +172,6 @@ Uses only:
 
     min-height: 46px !important;
 
-    padding-top: 0 !important;
-
     align-items: center !important;
 }
 
@@ -147,8 +179,8 @@ Uses only:
 /* =========================================================
    NORMAL TEXTAREA
 
-   Important:
-   reserve room for expand icon at upper-right.
+   Keeps a little space available for expand control
+   when it becomes visible.
    ========================================================= */
 
 .glass-input-container:not(
@@ -160,7 +192,7 @@ textarea#chatInput {
 
 
 /* =========================================================
-   KEEP SEND / MIC CONTROLS BELOW EXPAND BUTTON
+   NORMAL SEND / MIC
    ========================================================= */
 
 .glass-input-container:not(
@@ -242,6 +274,9 @@ textarea#chatInput {
     visibility: visible !important;
 
     pointer-events: auto !important;
+
+    transform:
+        scale(1) !important;
 
     background: transparent !important;
 }
@@ -392,6 +427,10 @@ body.dark-mode
 
 
 body.dark-mode
+.composer-expand-btn.is-visible:hover,
+
+body.dark-mode
+.glass-input-container.is-writing-expanded
 .composer-expand-btn:hover {
     background:
         rgba(255, 255, 255, 0.075) !important;
@@ -416,6 +455,26 @@ body.dark-mode
 
         min-width: 27px !important;
         min-height: 27px !important;
+
+        opacity: 0 !important;
+
+        visibility: hidden !important;
+
+        pointer-events: none !important;
+    }
+
+
+    .composer-expand-btn.is-visible,
+    .glass-input-container.is-writing-expanded
+    .composer-expand-btn {
+        opacity: 0.72 !important;
+
+        visibility: visible !important;
+
+        pointer-events: auto !important;
+
+        transform:
+            scale(1) !important;
     }
 
 

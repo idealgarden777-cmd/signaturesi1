@@ -1092,3 +1092,240 @@ body.dark-mode
     }
 
 }
+
+
+/* =========================================================
+   NEYO THINKING — PREMIUM MINIMAL
+   UI ONLY
+   ========================================================= */
+
+.message.assistant.is-thinking {
+    min-height: 24px !important;
+}
+
+
+.message.assistant.is-thinking
+.message-content {
+    display: flex !important;
+    align-items: center !important;
+
+    min-height: 24px !important;
+
+    margin: 0 !important;
+    padding: 0 !important;
+
+    color: #7b7b7b !important;
+
+    font-family:
+        "Inter",
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        sans-serif !important;
+
+    font-size: 14px !important;
+    font-weight: 400 !important;
+    line-height: 1.3 !important;
+
+    letter-spacing: -0.003em !important;
+}
+
+
+/* Main thinking row */
+
+.message.assistant.is-thinking
+.neyo-thinking-indicator {
+    display: inline-flex !important;
+    align-items: center !important;
+
+    gap: 7px !important;
+
+    width: auto !important;
+
+    margin: 0 !important;
+    padding: 0 !important;
+
+    border: 0 !important;
+
+    background: none !important;
+    background-image: none !important;
+
+    color: inherit !important;
+
+    box-shadow: none !important;
+
+    animation: none !important;
+
+    white-space: nowrap !important;
+}
+
+
+/* No gap while first stage is dots-only */
+
+.message.assistant.is-thinking
+.neyo-thinking-label:empty {
+    display: none !important;
+}
+
+
+/* Thinking / Working label */
+
+.message.assistant.is-thinking
+.neyo-thinking-label {
+    display: inline-block !important;
+
+    margin: 0 !important;
+    padding: 0 !important;
+
+    color: inherit !important;
+
+    font: inherit !important;
+
+    opacity: 0.94 !important;
+
+    transition:
+        opacity 160ms ease !important;
+}
+
+
+/* Three-dot container */
+
+.message.assistant.is-thinking
+.neyo-thinking-dots {
+    display: inline-flex !important;
+
+    align-items: center !important;
+    justify-content: center !important;
+
+    gap: 4px !important;
+
+    min-width: 20px !important;
+    height: 12px !important;
+
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+
+/* Individual dot */
+
+.message.assistant.is-thinking
+.neyo-thinking-dot {
+    width: 4px !important;
+    height: 4px !important;
+
+    flex:
+        0
+        0
+        4px !important;
+
+    display: block !important;
+
+    margin: 0 !important;
+    padding: 0 !important;
+
+    border-radius: 50% !important;
+
+    background: currentColor !important;
+
+    opacity: 0.25 !important;
+
+    transform: scale(0.92);
+
+    animation:
+        neyo-thinking-pulse
+        900ms
+        ease-in-out
+        infinite !important;
+}
+
+
+/* Staggered movement */
+
+.message.assistant.is-thinking
+.neyo-thinking-dot:nth-child(1) {
+    animation-delay: 0ms !important;
+}
+
+
+.message.assistant.is-thinking
+.neyo-thinking-dot:nth-child(2) {
+    animation-delay: 150ms !important;
+}
+
+
+.message.assistant.is-thinking
+.neyo-thinking-dot:nth-child(3) {
+    animation-delay: 300ms !important;
+}
+
+
+/* Premium subtle pulse */
+
+@keyframes neyo-thinking-pulse {
+
+    0%,
+    60%,
+    100% {
+        opacity: 0.22;
+        transform: scale(0.88);
+    }
+
+    30% {
+        opacity: 0.82;
+        transform: scale(1);
+    }
+
+}
+
+
+/* =========================================================
+   THINKING — DARK MODE
+   ========================================================= */
+
+body.dark-mode
+.message.assistant.is-thinking
+.message-content {
+    color: #9b9b9b !important;
+}
+
+
+/* =========================================================
+   THINKING — MOBILE
+   ========================================================= */
+
+@media (max-width: 767px) {
+
+    .message.assistant.is-thinking
+    .message-content {
+        min-height: 22px !important;
+
+        font-size: 14px !important;
+        line-height: 1.3 !important;
+    }
+
+
+    .message.assistant.is-thinking
+    .neyo-thinking-indicator {
+        gap: 6px !important;
+    }
+
+}
+
+
+/* =========================================================
+   THINKING — REDUCED MOTION
+   ========================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+
+    .message.assistant.is-thinking
+    .neyo-thinking-dot {
+        animation: none !important;
+
+        opacity: 0.55 !important;
+
+        transform: none !important;
+    }
+
+}

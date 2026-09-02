@@ -96,6 +96,14 @@ neo.js may remain loaded.
         null;
 
 
+    let thinkingStageTimer =
+        null;
+
+
+    let workingStageTimer =
+        null;
+
+
     let nearBottom =
         true;
 
@@ -1493,6 +1501,36 @@ neo.js may remain loaded.
        THINKING
        ===================================================== */
 
+    function clearThinkingTimers() {
+
+        if (thinkingStageTimer) {
+
+            clearTimeout(
+                thinkingStageTimer
+            );
+
+
+            thinkingStageTimer =
+                null;
+
+        }
+
+
+        if (workingStageTimer) {
+
+            clearTimeout(
+                workingStageTimer
+            );
+
+
+            workingStageTimer =
+                null;
+
+        }
+
+    }
+
+
     function showThinking() {
 
         removeThinking();
@@ -1532,6 +1570,12 @@ neo.js may remain loaded.
         );
 
 
+        element.setAttribute(
+            "aria-label",
+            "NEYO is responding"
+        );
+
+
         const content =
             document.createElement(
                 "div"
@@ -1542,22 +1586,77 @@ neo.js may remain loaded.
             "message-content";
 
 
-        const shimmer =
+        const indicator =
             document.createElement(
                 "span"
             );
 
 
-        shimmer.className =
-            "thinking-shimmer";
+        indicator.className =
+            "thinking-shimmer neyo-thinking-indicator";
 
 
-        shimmer.textContent =
-            "Thinking...";
+        const label =
+            document.createElement(
+                "span"
+            );
+
+
+        label.className =
+            "neyo-thinking-label";
+
+
+        label.textContent =
+            "";
+
+
+        const dots =
+            document.createElement(
+                "span"
+            );
+
+
+        dots.className =
+            "neyo-thinking-dots";
+
+
+        dots.setAttribute(
+            "aria-hidden",
+            "true"
+        );
+
+
+        for (
+            let index = 0;
+            index < 3;
+            index += 1
+        ) {
+
+            const dot =
+                document.createElement(
+                    "span"
+                );
+
+
+            dot.className =
+                "neyo-thinking-dot";
+
+
+            dots.appendChild(
+                dot
+            );
+
+        }
+
+
+        indicator.append(
+            label,
+            dots
+        );
 
 
         content.appendChild(
-            shimmer
+            indicator
         );
 
 
@@ -1573,6 +1672,58 @@ neo.js may remain loaded.
 
         thinkingElement =
             element;
+
+
+        thinkingStageTimer =
+            setTimeout(
+                () => {
+
+                    if (
+                        thinkingElement !==
+                        element
+                    ) {
+                        return;
+                    }
+
+
+                    label.textContent =
+                        "Thinking";
+
+
+                    element.setAttribute(
+                        "aria-label",
+                        "NEYO is thinking"
+                    );
+
+                },
+                1200
+            );
+
+
+        workingStageTimer =
+            setTimeout(
+                () => {
+
+                    if (
+                        thinkingElement !==
+                        element
+                    ) {
+                        return;
+                    }
+
+
+                    label.textContent =
+                        "Working";
+
+
+                    element.setAttribute(
+                        "aria-label",
+                        "NEYO is working"
+                    );
+
+                },
+                3000
+            );
 
 
         updateHero();
@@ -1596,6 +1747,9 @@ neo.js may remain loaded.
 
 
     function removeThinking() {
+
+        clearThinkingTimers();
+
 
         const element =
             thinkingElement ||
@@ -1632,6 +1786,9 @@ neo.js may remain loaded.
        ===================================================== */
 
     function clearMessages() {
+
+        clearThinkingTimers();
+
 
         thinkingElement =
             null;

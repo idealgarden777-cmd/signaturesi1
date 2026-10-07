@@ -351,10 +351,159 @@ Does NOT own:
 
                     }
 
+
+                    // Premium frame: header with language + copy button.
+                    // Labels come from CSS so "Copy message" stays clean.
+                    if (
+                        !pre.parentElement?.classList.contains(
+                            "neyo-code"
+                        )
+                    ) {
+
+                        const frame =
+                            document.createElement(
+                                "div"
+                            );
+
+                        frame.className =
+                            "neyo-code";
+
+                        const head =
+                            document.createElement(
+                                "div"
+                            );
+
+                        head.className =
+                            "neyo-code-head";
+
+                        head.dataset.lang =
+                            pre.dataset.language ||
+                            "code";
+
+                        const copy =
+                            document.createElement(
+                                "button"
+                            );
+
+                        copy.type =
+                            "button";
+
+                        copy.className =
+                            "neyo-code-copy";
+
+                        copy.setAttribute(
+                            "aria-label",
+                            "Copy code"
+                        );
+
+                        copy.innerHTML =
+                            '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>';
+
+                        head.appendChild(
+                            copy
+                        );
+
+                        pre.replaceWith(
+                            frame
+                        );
+
+                        frame.append(
+                            head,
+                            pre
+                        );
+
+                    }
+
+                }
+            );
+
+
+            // Tables scroll sideways on small screens.
+            root.querySelectorAll(
+                "table"
+            ).forEach(
+                table => {
+
+                    if (
+                        table.parentElement?.classList.contains(
+                            "neyo-table-wrap"
+                        )
+                    ) {
+                        return;
+                    }
+
+                    const wrap =
+                        document.createElement(
+                            "div"
+                        );
+
+                    wrap.className =
+                        "neyo-table-wrap";
+
+                    table.replaceWith(
+                        wrap
+                    );
+
+                    wrap.appendChild(
+                        table
+                    );
+
                 }
             );
 
         };
+
+
+    // One click handler for every code "Copy" button.
+    document.addEventListener(
+        "click",
+        event => {
+
+            const button =
+                event.target.closest?.(
+                    ".neyo-code-copy"
+                );
+
+            if (!button) {
+                return;
+            }
+
+            const code =
+                button
+                    .closest(".neyo-code")
+                    ?.querySelector("pre code, pre");
+
+            const text =
+                code?.innerText || "";
+
+            const done =
+                () => {
+
+                    button.classList.add(
+                        "is-copied"
+                    );
+
+                    setTimeout(
+                        () =>
+                            button.classList.remove(
+                                "is-copied"
+                            ),
+                        1600
+                    );
+
+                };
+
+            try {
+
+                navigator.clipboard
+                    .writeText(text)
+                    .then(done)
+                    .catch(() => {});
+
+            } catch {}
+
+        }
+    );
 
 
     /* =====================================================

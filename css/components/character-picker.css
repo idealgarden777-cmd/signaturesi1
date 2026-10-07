@@ -1505,3 +1505,24 @@ body.dark
   width:
     50%;
 }
+
+
+/* =====================================================
+   OPEN-STATE FIX
+   character-picker.js v4 only toggles .is-open.
+   Without this the panel stayed at opacity 0 and the
+   user saw only the blurred backdrop.
+   ===================================================== */
+
+.character-picker-shell.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.character-picker-shell.is-open
+.character-picker-panel {
+  opacity: 1;
+  transform:
+    translateY(0)
+    scale(1);
+}

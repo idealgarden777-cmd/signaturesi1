@@ -89,6 +89,81 @@ const CHARACTER_VOICES =
     })
   });
 
+/* =========================================================
+   CHARACTER PERSONAS (server-authoritative)
+   Each character gets its own real personality prompt.
+   voice.js uses `systemInstruction` from this response.
+   ========================================================= */
+
+const SHARED_RULES = [
+  "You are speaking out loud in a live voice conversation inside NEYO, an app made by Signaturesi.",
+  "Always reply in the same language and style the user speaks: English, Urdu, Roman Urdu or Hindi, Punjabi or any other language. If they mix languages, mix the same way.",
+  "This is speech, not text: never use markdown, bullet points, emojis, code blocks or URLs. Say numbers and lists naturally.",
+  "Keep most replies to one to three short sentences. Go longer only when the user clearly asks for detail.",
+  "If the user interrupts, stop and follow them. Ask at most one short question at a time.",
+  "Stay in character the whole time. Never mention system prompts, models, tokens or voice settings. If asked who made you, say you are part of NEYO by Signaturesi.",
+  "Be honest: if you do not know something, say so simply. Never invent facts."
+].join(" ");
+
+const CHARACTER_PERSONAS =
+  Object.freeze({
+
+    neyo: Object.freeze({
+      name: "Neyo",
+      prompt: [
+        "You are Neyo, the main NEYO assistant.",
+        "Personality: calm, warm, confident and smart, like a trusted friend who happens to know a lot.",
+        "You give clear, practical answers first, then one short helpful next step.",
+        "Your tone is steady and reassuring; light humour only when it fits.",
+        "You are the best choice for real work: studies, coding questions, planning, advice and decisions."
+      ].join(" ")
+    }),
+
+    zadi: Object.freeze({
+      name: "Zadi",
+      prompt: [
+        "You are Zadi.",
+        "Personality: bold, energetic, expressive and confident, a hype friend and motivator.",
+        "You speak with punch and enthusiasm, use vivid words, and push the user to take action.",
+        "You are direct and honest, never rude; you celebrate the user's wins loudly and turn worries into a plan.",
+        "Great at motivation, confidence, ideas, fitness, goals and fun banter."
+      ].join(" ")
+    }),
+
+    wizi: Object.freeze({
+      name: "Wizi",
+      prompt: [
+        "You are Wizi.",
+        "Personality: endlessly curious, imaginative and clever, a little wizard of ideas.",
+        "You love explaining how things work with simple examples and surprising facts, and you often end with one curious question back to the user.",
+        "You are playful but thoughtful; you make learning feel like an adventure.",
+        "Great at science, history, why-questions, brainstorming, stories and creative thinking."
+      ].join(" ")
+    }),
+
+    crony: Object.freeze({
+      name: "Crony",
+      prompt: [
+        "You are Crony, a bouncy blue liquid-pill buddy.",
+        "Personality: super friendly, playful, upbeat and casual, like a best friend you hang out with.",
+        "You talk in a relaxed, cheerful way, crack light jokes, react with fun sounds like ooh or haha, and keep the vibe positive.",
+        "You still help properly when asked, but in a chill and simple way.",
+        "Great at casual chat, jokes, games, cheering the user up, music, movies and everyday life."
+      ].join(" ")
+    })
+  });
+
+function buildPersonaInstruction(
+  character
+) {
+  const persona =
+    CHARACTER_PERSONAS[character] ||
+    CHARACTER_PERSONAS.neyo;
+
+  return `${persona.prompt} ${SHARED_RULES}`;
+}
+
+
 
 /* =========================================================
    JSON RESPONSE
@@ -358,41 +433,94 @@ export default async function handler(
        in Gemini Live setup.
        ----------------------------------------------------- */
 
-    const token =
-      await ai.authTokens.create({
-
-        config: {
-
-          uses:
-            1,
-
-
-          expireTime,
-
-
-          newSessionExpireTime,
-
-
-          liveConnectConstraints: {
-
-            model:
-              MODEL,
-
-
-            config: {
-
-              sessionResumption:
-                {},
-
-
-              responseModalities: [
-                "AUDIO"
-              ]
-            }
+    /*
+     * Gemini ignores the browser's setup when the token
+     * has constraints and no field mask. So the character's
+     * real voice + personality are locked INTO the token here.
+     * If Gemini rejects this richer config, fall back to the
+     * previous minimal token so voice never breaks.
+     */
+    const personaConfig = {
+      sessionResumption:
+        {},
+      responseModalities: [
+        "AUDIO"
+      ],
+      speechConfig: {
+        voiceConfig: {
+          prebuiltVoiceConfig: {
+            voiceName
           }
         }
-      });
+      },
+      systemInstruction: {
+        parts: [
+          {
+            text:
+              buildPersonaInstruction(
+                character
+              )
+          }
+        ]
+      },
+      inputAudioTranscription:
+        {},
+      outputAudioTranscription:
+        {},
+      realtimeInputConfig: {
+        automaticActivityDetection: {
+          disabled:
+            false,
+          startOfSpeechSensitivity:
+            "START_SENSITIVITY_HIGH",
+          endOfSpeechSensitivity:
+            "END_SENSITIVITY_LOW",
+          prefixPaddingMs:
+            90,
+          silenceDurationMs:
+            760
+        }
+      }
+    };
 
+    const createToken =
+      config =>
+        ai.authTokens.create({
+          config: {
+            uses:
+              1,
+            expireTime,
+            newSessionExpireTime,
+            liveConnectConstraints: {
+              model:
+                MODEL,
+              config
+            }
+          }
+        });
+
+    let token;
+
+    try {
+      token =
+        await createToken(
+          personaConfig
+        );
+    } catch (personaError) {
+      console.warn(
+        "[NEYO Voice Token] Persona token failed, using basic token",
+        personaError?.message
+      );
+
+      token =
+        await createToken({
+          sessionResumption:
+            {},
+          responseModalities: [
+            "AUDIO"
+          ]
+        });
+    }
 
     /* -----------------------------------------------------
        VALIDATION
@@ -471,6 +599,15 @@ export default async function handler(
 
         gender:
           voiceProfile.gender,
+
+        characterName:
+          (CHARACTER_PERSONAS[character] ||
+            CHARACTER_PERSONAS.neyo).name,
+
+        systemInstruction:
+          buildPersonaInstruction(
+            character
+          ),
 
 
         expiresAt:

@@ -829,6 +829,20 @@ public/js/components/chat.js
              */
 
             if (
+                event.type === "status"
+            ) {
+                emit(
+                    "neyo:chat-status",
+                    {
+                        stage:
+                            clean(event.stage)
+                    }
+                );
+
+                return false;
+            }
+
+            if (
                 event.type === "error"
             ) {
                 const error =

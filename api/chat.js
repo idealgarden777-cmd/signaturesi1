@@ -3267,6 +3267,38 @@ export default async function handler(
             streamResponseStarted =
                 true;
 
+            // Tell the client what NEYO is doing so the
+            // character thinking indicator can follow it.
+            writeSSE(
+                res,
+                {
+                    type:
+                        "status",
+                    stage:
+                        isDeepResearch
+                            ? "research"
+                            : usedUrlContext
+                                ? "links"
+                                : attachments.length > 0
+                                    ? (
+                                        attachments.every(
+                                            item =>
+                                                String(
+                                                    item?.mime ||
+                                                    item?.mimeType ||
+                                                    item?.type ||
+                                                    ""
+                                                ).startsWith(
+                                                    "image/"
+                                                )
+                                        )
+                                            ? "image"
+                                            : "files"
+                                    )
+                                    : "thinking"
+                }
+            );
+
 
             streamHeartbeatTimer =
                 setInterval(

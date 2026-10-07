@@ -1,6 +1,6 @@
 /*
 =========================================================
-NEYO — PERSONALITIES PANEL v2
+NEYO — PERSONALITIES PANEL v3
 Owns:
 - Character cards (Neyo, Zadi, Wizi, Crony) in
   Settings > NEYO Personalities
@@ -93,8 +93,38 @@ Storage:
 
 
   /* ---------------- character thinking indicator ---------------- */
+  /*
+   * Natural, non-looping thinking:
+   * - the mascot picks a new small action at random moments
+   *   (blink, glance, tilt, hop, squish, thought bubble), tuned per character
+   * - the label follows what the backend is really doing
+   *   (reading a link, reading a file, researching, thinking, writing)
+   */
 
   const NAMES = { neyo: "Neyo", zadi: "Zadi", wizi: "Wizi", crony: "Crony" };
+
+  const TEMPERAMENT = {
+    neyo: { pace: 1.25, tilt: 5, hop: 2, hopChance: 0.12, glanceUp: 0.25, squish: 0.04 },
+    zadi: { pace: 0.7, tilt: 9, hop: 6, hopChance: 0.38, glanceUp: 0.15, squish: 0.1 },
+    wizi: { pace: 1.05, tilt: 10, hop: 3, hopChance: 0.14, glanceUp: 0.55, squish: 0.05 },
+    crony: { pace: 0.85, tilt: 7, hop: 4, hopChance: 0.22, glanceUp: 0.2, squish: 0.16 }
+  };
+
+  const STAGE_TEXT = {
+    thinking: "is thinking",
+    pondering: "is working it out",
+    almost: "is almost there",
+    links: "is reading the link",
+    files: "is reading your file",
+    image: "is looking at your image",
+    research: "is researching",
+    writing: "is writing"
+  };
+
+  let activeThinking = null;
+
+  const rand = (min, max) => min + Math.random() * (max - min);
+  const chance = p => Math.random() < p;
 
   function buildMascot(id) {
     const mascot = document.createElement("span");
@@ -106,8 +136,135 @@ Storage:
       eye.className = "personality-mascot-eye";
       mascot.appendChild(eye);
     }
+    const bubble = document.createElement("span");
+    bubble.className = "neyo-thinking-bubble";
+    mascot.appendChild(bubble);
     return mascot;
   }
+
+  function startLife(mascot, id) {
+    const t = TEMPERAMENT[id] || TEMPERAMENT.neyo;
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+    const timers = new Set();
+    const later = (fn, ms) => {
+      const handle = setTimeout(() => {
+        timers.delete(handle);
+        if (mascot.isConnected) fn();
+      }, ms);
+      timers.add(handle);
+    };
+
+    const setBody = ({ x = 0, y = 0, r = 0, sx = 1, sy = 1 }, ms) => {
+      mascot.style.transitionDuration = `${Math.round(ms)}ms`;
+      mascot.style.transform =
+        `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) rotate(${r.toFixed(1)}deg) scale(${sx.toFixed(3)}, ${sy.toFixed(3)})`;
+    };
+
+    const setEyes = (x, y, blink = false) => {
+      mascot.style.setProperty("--eye-x", `${x.toFixed(1)}px`);
+      mascot.style.setProperty("--eye-y", `${y.toFixed(1)}px`);
+      mascot.classList.toggle("is-blinking", blink);
+    };
+
+    const blink = (twice = false) => {
+      mascot.classList.add("is-blinking");
+      later(() => {
+        mascot.classList.remove("is-blinking");
+        if (twice) later(() => blink(false), rand(110, 170));
+      }, rand(90, 140));
+    };
+
+    const glance = () => {
+      if (chance(t.glanceUp)) {
+        setEyes(rand(-1, 1.5), -2);
+      } else {
+        const side = chance(0.5) ? -1 : 1;
+        setEyes(side * rand(1, 1.8), rand(-0.5, 0.8));
+      }
+    };
+
+    const act = () => {
+      const roll = Math.random();
+
+      if (roll < t.hopChance) {
+        // small hop with anticipation squash
+        setBody({ y: 1, sx: 1 + t.squish, sy: 1 - t.squish }, 120 * t.pace);
+        later(() => setBody({ y: -t.hop, sx: 1 - t.squish * 0.6, sy: 1 + t.squish * 0.6, r: rand(-t.tilt, t.tilt) * 0.4 }, 200 * t.pace), 120 * t.pace);
+        later(() => setBody({ y: 0, sx: 1 + t.squish * 0.5, sy: 1 - t.squish * 0.5 }, 180 * t.pace), 340 * t.pace);
+        later(() => setBody({}, 260 * t.pace), 540 * t.pace);
+      } else if (roll < 0.45) {
+        // pondering tilt + glance
+        setBody({ r: rand(-t.tilt, t.tilt), y: rand(-1.5, 0.5) }, rand(380, 700) * t.pace);
+        glance();
+        if (chance(0.35)) mascot.classList.add("is-pondering");
+        later(() => mascot.classList.remove("is-pondering"), rand(900, 1600));
+      } else if (roll < 0.62) {
+        blink(chance(0.3));
+      } else if (roll < 0.78) {
+        // look back to center, settle
+        setEyes(0, 0);
+        setBody({ r: rand(-2, 2), y: 0 }, rand(500, 800) * t.pace);
+      } else if (roll < 0.9 && t.squish > 0.08) {
+        // playful squish / wobble
+        setBody({ sx: 1 + t.squish, sy: 1 - t.squish, r: rand(-4, 4) }, 160 * t.pace);
+        later(() => setBody({ sx: 1 - t.squish * 0.5, sy: 1 + t.squish * 0.5 }, 200 * t.pace), 170 * t.pace);
+        later(() => setBody({}, 300 * t.pace), 380 * t.pace);
+      } else {
+        // idea pop
+        mascot.classList.add("has-idea");
+        later(() => mascot.classList.remove("has-idea"), rand(700, 1100));
+        setEyes(rand(-0.5, 0.5), -1.5);
+      }
+
+      // random small blinks between actions feel alive
+      if (chance(0.25)) later(() => blink(false), rand(200, 600));
+
+      later(act, rand(650, 1500) * t.pace);
+    };
+
+    if (!reduce) {
+      later(act, rand(150, 450));
+    }
+
+    return () => timers.forEach(clearTimeout);
+  }
+
+  function setStage(stage) {
+    if (!activeThinking || !activeThinking.label.isConnected) {
+      return;
+    }
+    if (!STAGE_TEXT[stage] || activeThinking.stage === stage) {
+      return;
+    }
+    activeThinking.stage = stage;
+    const { label, name } = activeThinking;
+    label.classList.add("is-swapping");
+    setTimeout(() => {
+      label.textContent = `${name} ${STAGE_TEXT[stage]}`;
+      label.classList.remove("is-swapping");
+    }, 160);
+  }
+
+  function initialStageFor(detail = {}) {
+    const attachments = Array.isArray(detail.attachments) ? detail.attachments : [];
+    const text = String(detail.text || "");
+    let deep = false;
+    try {
+      deep = Boolean(window.NeyoChat?.getPreferences?.()?.isDeepResearch);
+    } catch {}
+
+    if (deep) return "research";
+    if (attachments.length) {
+      const allImages = attachments.every(file =>
+        String(file?.mime || file?.mimeType || file?.type || "").startsWith("image/")
+      );
+      return allImages ? "image" : "files";
+    }
+    if (/https?:\/\/\S+/i.test(text)) return "links";
+    return "thinking";
+  }
+
+  let pendingStage = "thinking";
 
   function decorateThinking(message) {
     if (!message || message.dataset.characterThinking === "1") {
@@ -118,6 +275,8 @@ Storage:
       return;
     }
 
+    activeThinking?.stop?.();
+
     const id = getCharacter();
     const name = NAMES[id] || "Neyo";
     message.dataset.characterThinking = "1";
@@ -125,21 +284,37 @@ Storage:
 
     const row = document.createElement("span");
     row.className = "neyo-character-thinking";
-    row.setAttribute("aria-label", `${name} is thinking`);
+    row.setAttribute("role", "status");
 
     const label = document.createElement("span");
     label.className = "neyo-character-thinking-label";
-    label.textContent = `${name} is thinking`;
+    label.textContent = `${name} ${STAGE_TEXT[pendingStage] || STAGE_TEXT.thinking}`;
 
-    const dots = document.createElement("span");
-    dots.className = "neyo-character-thinking-dots";
-    dots.setAttribute("aria-hidden", "true");
-    for (let i = 0; i < 3; i += 1) {
-      dots.appendChild(document.createElement("i"));
-    }
-
-    row.append(buildMascot(id), label, dots);
+    const mascot = buildMascot(id);
+    row.append(mascot, label);
     content.replaceChildren(row);
+
+    const stopLife = startLife(mascot, id);
+    const startedStage = pendingStage;
+    const stageTimers = [];
+
+    activeThinking = {
+      label,
+      name,
+      stage: startedStage,
+      stop: () => {
+        stopLife();
+        stageTimers.forEach(clearTimeout);
+      }
+    };
+
+    // Natural progression only while plain thinking.
+    stageTimers.push(setTimeout(() => {
+      if (activeThinking?.stage === "thinking") setStage("pondering");
+    }, rand(4200, 5600)));
+    stageTimers.push(setTimeout(() => {
+      if (["thinking", "pondering"].includes(activeThinking?.stage)) setStage("almost");
+    }, rand(11000, 14000)));
   }
 
   function scan(root) {
@@ -155,6 +330,32 @@ Storage:
   }
 
   function watchThinking() {
+    // Stage hints from the chat engine (what the backend is doing).
+    window.addEventListener(
+      "neyo:chat-send-start",
+      event => {
+        pendingStage = initialStageFor(event.detail || {});
+        setStage(pendingStage);
+      },
+      true
+    );
+
+    window.addEventListener("neyo:chat-status", event => {
+      const stage = String(event.detail?.stage || "");
+      if (STAGE_TEXT[stage]) {
+        pendingStage = stage;
+        setStage(stage);
+      }
+    });
+
+    ["neyo:chat-response", "neyo:chat-send-end", "neyo:chat-error", "neyo:chat-aborted"].forEach(name =>
+      window.addEventListener(name, () => {
+        activeThinking?.stop?.();
+        activeThinking = null;
+        pendingStage = "thinking";
+      })
+    );
+
     const target = document.getElementById("chatMessages") || document.body;
     scan(target);
     try {

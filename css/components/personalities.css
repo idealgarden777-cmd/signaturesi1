@@ -100,48 +100,51 @@ html.dark .personality-card.active,
 }
 
 /* =========================================================
-   CHARACTER THINKING INDICATOR (chat)
+   CHARACTER THINKING INDICATOR (chat) — v4 natural
+   Motion is driven by personalities-panel.js with random
+   timing, so nothing here loops mechanically.
    ========================================================= */
 
 .neyo-character-thinking {
   display: inline-flex;
   align-items: center;
-  gap: 9px;
+  gap: 10px;
+  padding-top: 6px;
   white-space: nowrap;
 }
 
 .neyo-thinking-mascot {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   gap: 4px;
   border-radius: 7px;
   box-shadow: 0 3px 8px rgba(0, 0, 0, 0.14);
-  animation: neyoThinkingBob 1.4s ease-in-out infinite;
+  transform-origin: 50% 100%;
+  transition-property: transform;
+  transition-timing-function: cubic-bezier(0.34, 1.3, 0.64, 1);
+  transition-duration: 400ms;
+  will-change: transform;
+}
+
+.neyo-thinking-mascot[data-character="wizi"] { border-radius: 50%; }
+.neyo-thinking-mascot[data-character="zadi"] { border-radius: 11px 4px 11px 4px; clip-path: none; }
+.neyo-thinking-mascot[data-character="crony"] {
+  width: 16px;
+  margin: 0 4px;
+  gap: 3px;
+  border-radius: 999px;
 }
 
 .neyo-thinking-mascot .personality-mascot-eye {
   width: 4px;
   height: 5px;
-  animation: neyoThinkingLook 2.8s ease-in-out infinite;
-}
-
-.neyo-thinking-mascot[data-character="wizi"] {
-  border-radius: 50%;
-}
-
-.neyo-thinking-mascot[data-character="zadi"] {
-  border-radius: 6px;
-}
-
-.neyo-thinking-mascot[data-character="crony"] {
-  width: 15px;
-  margin: 0 3px;
-  gap: 3px;
-  border-radius: 999px;
+  transform: translate(var(--eye-x, 0px), var(--eye-y, 0px));
+  transition: transform 260ms cubic-bezier(0.3, 0.9, 0.4, 1), height 90ms ease;
 }
 
 .neyo-thinking-mascot[data-character="crony"] .personality-mascot-eye {
@@ -149,45 +152,63 @@ html.dark .personality-card.active,
   height: 4px;
 }
 
+.neyo-thinking-mascot.is-blinking .personality-mascot-eye {
+  height: 1px;
+}
+
+/* pondering: one eye squints a little */
+.neyo-thinking-mascot.is-pondering .personality-mascot-eye:first-child {
+  height: 3px;
+}
+
+/* thought bubble that appears only now and then */
+.neyo-thinking-bubble,
+.neyo-thinking-bubble::after {
+  position: absolute;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 260ms ease, transform 320ms cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+
+.neyo-thinking-bubble {
+  width: 4px;
+  height: 4px;
+  top: -5px;
+  right: -5px;
+  transform: scale(0.3);
+}
+
+.neyo-thinking-bubble::after {
+  content: "";
+  width: 6px;
+  height: 6px;
+  top: -8px;
+  right: -6px;
+  transform: scale(0.3);
+  transition-delay: 120ms;
+}
+
+.neyo-thinking-mascot.has-idea .neyo-thinking-bubble,
+.neyo-thinking-mascot.has-idea .neyo-thinking-bubble::after {
+  opacity: 0.45;
+  transform: scale(1);
+}
+
 .neyo-character-thinking-label {
-  background: linear-gradient(90deg, #8a8a8a 0%, #8a8a8a 35%, #d0d0d0 50%, #8a8a8a 65%, #8a8a8a 100%);
-  background-size: 220% 100%;
+  background: linear-gradient(90deg, #8a8a8a 0%, #8a8a8a 38%, #cfcfcf 50%, #8a8a8a 62%, #8a8a8a 100%);
+  background-size: 240% 100%;
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  animation: neyoThinkingShimmer 1.8s linear infinite;
+  animation: neyoThinkingShimmer 2.6s ease-in-out infinite;
+  transition: opacity 160ms ease, transform 160ms ease;
 }
 
-.neyo-character-thinking-dots {
-  display: inline-flex;
-  gap: 3px;
-}
-
-.neyo-character-thinking-dots i {
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: currentColor;
-  opacity: 0.25;
-  animation: neyoThinkingDot 900ms ease-in-out infinite;
-}
-
-.neyo-character-thinking-dots i:nth-child(2) { animation-delay: 150ms; }
-.neyo-character-thinking-dots i:nth-child(3) { animation-delay: 300ms; }
-
-@keyframes neyoThinkingBob {
-  0%, 100% { transform: translateY(0) rotate(0deg); }
-  30% { transform: translateY(-3px) rotate(-4deg); }
-  60% { transform: translateY(0) rotate(3deg); }
-}
-
-@keyframes neyoThinkingLook {
-  0%, 20% { transform: translateX(0) scaleY(1); }
-  30% { transform: translateX(-1.5px) scaleY(1); }
-  45% { transform: translateX(-1.5px) scaleY(0.15); }
-  50% { transform: translateX(-1.5px) scaleY(1); }
-  65%, 80% { transform: translateX(1.5px) scaleY(1); }
-  100% { transform: translateX(0) scaleY(1); }
+.neyo-character-thinking-label.is-swapping {
+  opacity: 0;
+  transform: translateY(2px);
 }
 
 @keyframes neyoThinkingShimmer {
@@ -195,161 +216,21 @@ html.dark .personality-card.active,
   100% { background-position: -120% 0; }
 }
 
-@keyframes neyoThinkingDot {
-  0%, 60%, 100% { opacity: 0.22; transform: translateY(0); }
-  30% { opacity: 0.8; transform: translateY(-2px); }
-}
-
 body.dark-mode .neyo-character-thinking-label,
 html.dark .neyo-character-thinking-label,
 [data-theme="dark"] .neyo-character-thinking-label {
-  background-image: linear-gradient(90deg, #8f8f8f 0%, #8f8f8f 35%, #f0f0f0 50%, #8f8f8f 65%, #8f8f8f 100%);
+  background-image: linear-gradient(90deg, #8f8f8f 0%, #8f8f8f 38%, #f0f0f0 50%, #8f8f8f 62%, #8f8f8f 100%);
 }
 
 @media (prefers-reduced-motion: reduce) {
   .neyo-thinking-mascot,
-  .neyo-thinking-mascot .personality-mascot-eye,
-  .neyo-character-thinking-label,
-  .neyo-character-thinking-dots i {
-    animation: none;
+  .neyo-thinking-mascot .personality-mascot-eye {
+    transition: none;
   }
 
   .neyo-character-thinking-label {
+    animation: none;
     color: #8a8a8a;
     background: none;
-  }
-}
-
-/* =========================================================
-   CHARACTER THINKING — LIVELY ANIMATIONS (v3)
-   Each character thinks in its own way.
-   ========================================================= */
-
-.neyo-character-thinking {
-  padding-top: 4px;
-}
-
-.neyo-thinking-mascot {
-  position: relative;
-  width: 24px;
-  height: 24px;
-  transform-origin: 50% 100%;
-  will-change: transform;
-}
-
-/* tiny thought bubbles above the head */
-.neyo-thinking-mascot::before,
-.neyo-thinking-mascot::after {
-  content: "";
-  position: absolute;
-  border-radius: 50%;
-  background: currentColor;
-  opacity: 0;
-  pointer-events: none;
-}
-
-.neyo-thinking-mascot::before {
-  width: 4px;
-  height: 4px;
-  top: -5px;
-  right: -4px;
-  animation: neyoThoughtPop 1.6s ease-in-out infinite;
-}
-
-.neyo-thinking-mascot::after {
-  width: 6px;
-  height: 6px;
-  top: -12px;
-  right: -10px;
-  animation: neyoThoughtPop 1.6s ease-in-out 0.35s infinite;
-}
-
-/* Neyo: calm bob, eyes look around */
-.neyo-thinking-mascot[data-character="neyo"] {
-  animation: neyoThinkCalm 1.8s ease-in-out infinite;
-}
-
-/* Zadi: energetic squash & bounce */
-.neyo-thinking-mascot[data-character="zadi"] {
-  border-radius: 11px 4px 11px 4px;
-  clip-path: none;
-  animation: neyoThinkBounce 0.9s cubic-bezier(0.3, 0, 0.3, 1) infinite;
-}
-
-/* Wizi: floating tilt, like pondering */
-.neyo-thinking-mascot[data-character="wizi"] {
-  animation: neyoThinkFloat 2.2s ease-in-out infinite;
-}
-
-/* Crony: liquid wobble */
-.neyo-thinking-mascot[data-character="crony"] {
-  width: 16px;
-  animation: neyoThinkWobble 1.2s ease-in-out infinite;
-}
-
-.neyo-thinking-mascot .personality-mascot-eye {
-  width: 4px;
-  height: 5px;
-  animation: neyoThinkingLook 2.4s ease-in-out infinite;
-}
-
-.neyo-thinking-mascot[data-character="zadi"] .personality-mascot-eye {
-  animation: neyoThinkBlinkFast 1.8s ease-in-out infinite;
-}
-
-.neyo-thinking-mascot[data-character="wizi"] .personality-mascot-eye {
-  animation: neyoThinkLookUp 2.2s ease-in-out infinite;
-}
-
-@keyframes neyoThinkCalm {
-  0%, 100% { transform: translateY(0) rotate(0deg); }
-  25% { transform: translateY(-3px) rotate(-5deg); }
-  50% { transform: translateY(0) rotate(0deg); }
-  75% { transform: translateY(-3px) rotate(5deg); }
-}
-
-@keyframes neyoThinkBounce {
-  0%, 100% { transform: translateY(0) scale(1.12, 0.86); }
-  35% { transform: translateY(-7px) scale(0.92, 1.1); }
-  55% { transform: translateY(-7px) scale(1, 1) rotate(6deg); }
-  80% { transform: translateY(0) scale(1.08, 0.9); }
-}
-
-@keyframes neyoThinkFloat {
-  0%, 100% { transform: translateY(0) rotate(-8deg); }
-  50% { transform: translateY(-5px) rotate(8deg); }
-}
-
-@keyframes neyoThinkWobble {
-  0%, 100% { transform: scale(1, 1) rotate(0deg); border-radius: 999px; }
-  25% { transform: scale(1.18, 0.86) rotate(-6deg); border-radius: 45% 55% 50% 50%; }
-  50% { transform: scale(0.9, 1.12) translateY(-4px) rotate(0deg); border-radius: 999px; }
-  75% { transform: scale(1.1, 0.92) rotate(6deg); border-radius: 55% 45% 50% 50%; }
-}
-
-@keyframes neyoThinkBlinkFast {
-  0%, 30%, 60%, 100% { transform: scaleY(1); }
-  35%, 65% { transform: scaleY(0.1); }
-}
-
-@keyframes neyoThinkLookUp {
-  0%, 100% { transform: translate(0, 0); }
-  30%, 60% { transform: translate(1.5px, -2px); }
-  70% { transform: translate(1.5px, -2px) scaleY(0.15); }
-  75% { transform: translate(1.5px, -2px); }
-}
-
-@keyframes neyoThoughtPop {
-  0%, 15% { opacity: 0; transform: scale(0.3) translateY(2px); }
-  40%, 70% { opacity: 0.45; transform: scale(1) translateY(0); }
-  100% { opacity: 0; transform: scale(0.6) translateY(-3px); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .neyo-thinking-mascot,
-  .neyo-thinking-mascot::before,
-  .neyo-thinking-mascot::after,
-  .neyo-thinking-mascot .personality-mascot-eye {
-    animation: none !important;
   }
 }

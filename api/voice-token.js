@@ -7,6 +7,7 @@ Fixed character voices:
 - Neyo → Kore
 - Zadi → Orus
 - Wizi → Charon
+- Crony → Puck
 
 Purpose:
 - Keep Gemini API key server-side
@@ -73,6 +74,15 @@ const CHARACTER_VOICES =
     wizi: Object.freeze({
       voice:
         "Charon",
+
+      gender:
+        "male"
+    }),
+
+
+    crony: Object.freeze({
+      voice:
+        "Puck",
 
       gender:
         "male"

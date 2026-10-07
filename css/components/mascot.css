@@ -1594,3 +1594,137 @@ and
       27px;
   }
 }
+
+
+/* =====================================================
+   CRONY — LIQUID SKY-BLUE PILL
+   Character #4
+   Tall matte-blue capsule with dark ink features.
+   Jelly squash / stretch follows real audio levels.
+   ===================================================== */
+
+#neyoMascot[
+  data-character="crony"
+] {
+  --face-bg:
+    linear-gradient(
+      160deg,
+      #A6D8FC 0%,
+      #86C6F9 55%,
+      #62B0F0 100%
+    );
+  --face-border:
+    rgba(42, 124, 201, 0.18);
+  --feature:
+    #111111;
+  --eye-color:
+    #111111;
+  --mouth-color:
+    #111111;
+}
+
+#neyoMascot[
+  data-character="crony"
+]
+.neyo-mascot-face {
+  width:
+    62%;
+  height:
+    100%;
+  margin:
+    0 auto;
+  border-radius:
+    999px;
+  clip-path:
+    none;
+  box-shadow:
+    inset -10px -22px 34px rgba(42, 124, 201, 0.38),
+    inset 8px 20px 30px rgba(255, 255, 255, 0.34),
+    0 18px 30px rgba(98, 176, 240, 0.22);
+  scale:
+    calc(1 + var(--neyo-output-level, 0) * 0.07)
+    calc(1 - var(--neyo-output-level, 0) * 0.06);
+  transform-origin:
+    50% 100%;
+  animation:
+    crony-jelly 3.6s ease-in-out infinite;
+}
+
+#neyoMascot[
+  data-character="crony"
+]
+.neyo-mascot-face::before {
+  background:
+    radial-gradient(
+      ellipse at 32% 14%,
+      rgba(255, 255, 255, 0.45),
+      transparent 46%
+    );
+}
+
+#neyoMascot[
+  data-character="crony"
+]
+.neyo-eye {
+  top:
+    32%;
+}
+
+#neyoMascot[
+  data-character="crony"
+]
+.neyo-eye-left {
+  left:
+    12%;
+}
+
+#neyoMascot[
+  data-character="crony"
+]
+.neyo-eye-right {
+  right:
+    12%;
+}
+
+#neyoMascot[
+  data-character="crony"
+]
+.neyo-mouth {
+  top:
+    56%;
+  width:
+    58px;
+}
+
+@keyframes crony-jelly {
+  0%,
+  100% {
+    border-radius:
+      999px;
+  }
+
+  30% {
+    border-radius:
+      48% 52% 50% 50% / 30% 30% 34% 34%;
+  }
+
+  65% {
+    border-radius:
+      52% 48% 50% 50% / 32% 32% 30% 30%;
+  }
+}
+
+@media (
+  prefers-reduced-motion:
+    reduce
+) {
+  #neyoMascot[
+    data-character="crony"
+  ]
+  .neyo-mascot-face {
+    animation:
+      none;
+    scale:
+      1;
+  }
+}

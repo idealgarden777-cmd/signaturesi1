@@ -1,0 +1,56 @@
+/*
+=========================================================
+NEYO — MASCOT LIFE v1
+Replaces the mechanical looping keyframes with the live
+values written by mascot.js (body + gaze) and
+mascot-life.js (random, phase-aware behaviour).
+Load AFTER mascot.css and voice-mode.css.
+=========================================================
+*/
+
+#neyoMascot {
+  transform-origin: 50% 88%;
+  translate:
+    calc(var(--neyo-body-x, 0px) + var(--life-x, 0px))
+    calc(var(--neyo-body-y, 0px) + var(--life-y, 0px));
+  rotate: calc(var(--neyo-body-rotation, 0deg) + var(--life-rot, 0deg));
+  scale:
+    calc(var(--neyo-body-scale, 1) * var(--life-sx, 1))
+    calc(var(--neyo-body-scale, 1) * var(--life-sy, 1));
+}
+
+/* no more fixed loops on the body */
+#neyoMascot[data-phase="idle"],
+#neyoMascot[data-phase="speaking"] {
+  animation: none;
+}
+
+#neyoMascot[data-phase="thinking"] .neyo-mascot-face,
+#neyoMascot[data-phase="thinking"] .neyo-eye-left,
+#neyoMascot[data-phase="thinking"] .neyo-eye-right {
+  animation: none;
+}
+
+/* eyes + mouth follow the gaze together */
+#neyoMascot .neyo-mascot-features {
+  translate:
+    calc(var(--neyo-gaze-x, 0px) + var(--life-gx, 0px))
+    calc(var(--neyo-gaze-y, 0px) + var(--life-gy, 0px));
+}
+
+/* the mouth follows the eyes a little less, which reads as depth */
+#neyoMascot .neyo-mouth {
+  translate:
+    calc(var(--life-gx, 0px) * -0.35)
+    calc(var(--life-gy, 0px) * -0.3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #neyoMascot,
+  #neyoMascot .neyo-mascot-features,
+  #neyoMascot .neyo-mouth {
+    translate: none;
+    rotate: none;
+    scale: none;
+  }
+}

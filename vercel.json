@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "api/chat.js": {
+      "includeFiles": "node_modules/z3-solver/build/**"
+    }
+  }
+}

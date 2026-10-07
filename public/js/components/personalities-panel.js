@@ -122,6 +122,9 @@ Storage:
     searching: "is searching the web",
     reading: "is reading sources",
     verifying: "is fact-checking",
+    reasoning: "is reasoning it through",
+    checking: "is double-checking the maths",
+    solving: "is solving the logic",
     writing: "is writing"
   };
 

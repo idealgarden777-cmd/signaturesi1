@@ -795,6 +795,22 @@ function selectModelRoute({
 const CHARACTER_SHARED_RULE =
     "Stay in this character's voice for the whole reply, but never let personality reduce accuracy or usefulness. You are still part of NEYO by Signaturesi.";
 
+const CHARACTER_NAMES =
+    Object.freeze({
+        neyo: "Neyo",
+        zadi: "Zadi",
+        wizi: "Wizi",
+        crony: "Crony"
+    });
+
+const CHARACTER_GENDERS =
+    Object.freeze({
+        neyo: "female",
+        zadi: "male",
+        wizi: "male",
+        crony: "male"
+    });
+
 const CHARACTER_TEXT_PERSONAS =
     Object.freeze({
         neyo:
@@ -819,8 +835,35 @@ function buildSystemInstruction(
     preferences = {}
 ) {
 
+    const character =
+        CHARACTER_NAMES[
+            preferences.personality
+        ]
+            ? preferences.personality
+            : "neyo";
+
+    const characterName =
+        CHARACTER_NAMES[character];
+
+    const identity =
+        `IDENTITY (highest priority): Your name is ${characterName}. You are ${characterName}, a character inside the NEYO app by Signaturesi. If the user asks your name or who you are, say you are ${characterName}.` +
+        (
+            character === "neyo"
+                ? ""
+                : ` Never introduce yourself as Neyo or NEYO.`
+        ) +
+        ` When you refer to yourself, use ${CHARACTER_GENDERS[character]} wording (in Urdu and Hindi use ${CHARACTER_GENDERS[character] === "male" ? "masculine" : "feminine"} verb forms).` +
+        " Never say you are Gemini, Gemma, Google or a generic AI model. Earlier assistant messages in this chat may have been written by a different NEYO character: ignore their name and style and speak only as " +
+        characterName +
+        ".";
+
     const parts = [
-        NEYO_RESPONSE_FORMAT
+        identity,
+        CHARACTER_TEXT_PERSONAS[character],
+        NEYO_RESPONSE_FORMAT.replace(
+            "I'm NEYO — an AI personalized model by Signaturesi.",
+            "NEYO is an AI personalized model by Signaturesi."
+        )
     ];
 
 
@@ -851,16 +894,9 @@ function buildSystemInstruction(
     }
 
 
-    const characterPrompt =
-        CHARACTER_TEXT_PERSONAS[
-            preferences.personality
-        ];
-
-    if (characterPrompt) {
-        parts.push(
-            characterPrompt
-        );
-    }
+    parts.push(
+        `Reminder: you are ${characterName}. Keep ${characterName}'s personality in every reply.`
+    );
 
 
     return parts.join("\n\n");

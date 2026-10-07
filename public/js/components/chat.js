@@ -46,6 +46,27 @@ public/js/components/chat.js
        HELPERS
        ===================================================== */
 
+    function readSelectedCharacter() {
+        try {
+            const stored =
+                String(
+                    localStorage.getItem(
+                        "neo_default_personality"
+                    ) || ""
+                )
+                    .trim()
+                    .toLowerCase();
+
+            if (
+                ["neyo", "zadi", "wizi", "crony"].includes(stored)
+            ) {
+                return stored;
+            }
+        } catch {}
+
+        return preferences.personality || "neyo";
+    }
+
     function debug(...args) {
         if (CONFIG.debug) {
             console.log("[NEYO Chat]", ...args);
@@ -421,7 +442,7 @@ public/js/components/chat.js
                 preferences.language,
 
             personality:
-                preferences.personality,
+                readSelectedCharacter(),
 
             privateChat,
 

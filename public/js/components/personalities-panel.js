@@ -314,7 +314,16 @@ Storage:
 
     const mascot = buildMascot(id);
     row.append(mascot, label);
-    content.replaceChildren(row);
+
+    // Live thoughts (the model's own thinking, streamed while it works).
+    const thought = document.createElement("span");
+    thought.className = "neyo-character-thought";
+    thought.hidden = true;
+
+    const box = document.createElement("span");
+    box.className = "neyo-character-thinking-box";
+    box.append(row, thought);
+    content.replaceChildren(box);
 
     const stopLife = startLife(mascot, id);
     const startedStage = pendingStage;
@@ -322,6 +331,8 @@ Storage:
 
     activeThinking = {
       label,
+      thought,
+      thoughtText: "",
       name,
       stage: startedStage,
       stop: () => {
@@ -361,6 +372,25 @@ Storage:
       },
       true
     );
+
+    window.addEventListener("neyo:chat-thought", event => {
+      const piece = String(event.detail?.text || "");
+      if (!activeThinking || !activeThinking.thought?.isConnected || !piece) {
+        return;
+      }
+      activeThinking.thoughtText = (activeThinking.thoughtText + piece).slice(-2000);
+      const lines = activeThinking.thoughtText
+        .replace(/[*_`#>]+/g, "")
+        .split(/\n+/)
+        .map(line => line.trim())
+        .filter(Boolean);
+      const last = lines[lines.length - 1] || "";
+      activeThinking.thought.textContent = last.length > 160 ? `…${last.slice(-160)}` : last;
+      activeThinking.thought.hidden = !last;
+      if (["thinking", "pondering", "almost", "writing"].includes(activeThinking.stage)) {
+        setStage("reasoning");
+      }
+    });
 
     window.addEventListener("neyo:chat-status", event => {
       const stage = String(event.detail?.stage || "");

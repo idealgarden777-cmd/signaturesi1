@@ -13,10 +13,6 @@ import {
 } from "../lib/deep-research.js";
 
 import {
-    reviewAnswer
-} from "../lib/reasoning.js";
-
-import {
     runToolAgent
 } from "../lib/agent-tools.js";
 
@@ -933,11 +929,72 @@ function buildSystemInstruction(
    MODEL BODY
    ========================================================= */
 
+// Effort dial: "high" = the model thinks before answering,
+// "low" = answers straight away. Each model family has its own knob.
+function buildThinkingConfig(
+    model = "",
+    effort = ""
+) {
+
+    if (
+        effort !== "high" &&
+        effort !== "low"
+    ) {
+        return null;
+    }
+
+    const high =
+        effort === "high";
+
+    // Gemma 4 sends its thoughts anyway; Gemini needs includeThoughts.
+    if (/gemma-4/i.test(model)) {
+        return {
+            thinkingLevel:
+                high ? "high" : "minimal"
+        };
+    }
+
+    if (/gemini-3/i.test(model)) {
+        return high
+            ? { thinkingLevel: "high", includeThoughts: true }
+            : { thinkingLevel: "minimal" };
+    }
+
+    if (/gemini-2\.5-pro/i.test(model)) {
+        return high
+            ? { thinkingBudget: -1, includeThoughts: true }
+            : { thinkingBudget: 128 };
+    }
+
+    if (/gemini-2\.5/i.test(model)) {
+        return high
+            ? { thinkingBudget: -1, includeThoughts: true }
+            : { thinkingBudget: 0 };
+    }
+
+    return null;
+
+}
+
+
+const SELF_CHECK_RULE =
+    "Think carefully before answering. Then check your answer against the question: if it can be read two ways, use the most natural reading and state that assumption in one short line; no contradictions or impossible options; numbers must add up and match any tool results; never assume the user's gender, age or feelings (address the user neutrally).";
+
+
 function buildGeminiBody(
     contents,
     isDeepResearch = false,
-    preferences = {}
+    preferences = {},
+    model = ""
 ) {
+
+    const thinkingConfig =
+        preferences.noThinkingConfig
+            ? null
+            : buildThinkingConfig(
+                model,
+                preferences.thinkingEffort
+            );
 
     return {
 
@@ -948,6 +1005,11 @@ function buildGeminiBody(
                     text:
                         buildSystemInstruction(
                             preferences
+                        ) +
+                        (
+                            preferences.thinkingEffort === "high"
+                                ? `\n\n${SELF_CHECK_RULE}`
+                                : ""
                         )
                 }
             ]
@@ -978,7 +1040,13 @@ function buildGeminiBody(
                         "maximum"
                 )
                     ? 8192
-                    : 6144
+                    : 6144,
+
+            ...(
+                thinkingConfig
+                    ? { thinkingConfig }
+                    : {}
+            )
 
         }
 
@@ -1025,7 +1093,8 @@ async function callGemini(
                         buildGeminiBody(
                             messages,
                             isDeepResearch,
-                            preferences
+                            preferences,
+                            model
                         )
                     )
 
@@ -1039,6 +1108,32 @@ async function callGemini(
             .catch(
                 () => ({})
             );
+
+
+    if (
+        !response.ok &&
+        response.status === 400 &&
+        preferences.thinkingEffort &&
+        !preferences.noThinkingConfig
+    ) {
+
+        // This model rejected the effort setting: run it without.
+        console.warn(
+            "[EFFORT] thinking config rejected, retrying without",
+            model
+        );
+
+        return callGemini(
+            messages,
+            model,
+            isDeepResearch,
+            {
+                ...preferences,
+                noThinkingConfig: true
+            }
+        );
+
+    }
 
 
     if (!response.ok) {
@@ -1311,13 +1406,16 @@ async function callGeminiStream(
     model,
     isDeepResearch = false,
     preferences = {},
-    {
+    streamOptions = {}
+) {
+
+    const {
         signal,
         onText,
         onHeaders,
-        onFirstText
-    } = {}
-) {
+        onFirstText,
+        onThought
+    } = streamOptions;
 
     if (!GEMINI_API_KEY) {
 
@@ -1355,7 +1453,8 @@ async function callGeminiStream(
                         buildGeminiBody(
                             messages,
                             isDeepResearch,
-                            preferences
+                            preferences,
+                            model
                         )
                     ),
 
@@ -1423,6 +1522,33 @@ async function callGeminiStream(
             false;
 
 
+        if (
+            response.status === 400 &&
+            preferences.thinkingEffort &&
+            !preferences.noThinkingConfig
+        ) {
+
+            // This model rejected the effort setting: run it without.
+            console.warn(
+                "[EFFORT] thinking config rejected, retrying without",
+                model,
+                error.message
+            );
+
+            return callGeminiStream(
+                messages,
+                model,
+                isDeepResearch,
+                {
+                    ...preferences,
+                    noThinkingConfig: true
+                },
+                streamOptions
+            );
+
+        }
+
+
         throw error;
 
     }
@@ -1484,6 +1610,37 @@ async function callGeminiStream(
             const data
             of events
         ) {
+
+            if (
+                typeof onThought ===
+                    "function"
+            ) {
+
+                const thought =
+                    (
+                        data
+                            ?.candidates?.[0]
+                            ?.content
+                            ?.parts ||
+                        []
+                    )
+                        .filter(
+                            part =>
+                                part?.thought === true &&
+                                typeof part.text === "string"
+                        )
+                        .map(
+                            part =>
+                                part.text
+                        )
+                        .join("");
+
+                if (thought) {
+                    onThought(thought);
+                }
+
+            }
+
 
             const text =
                 extractVisibleStreamText(
@@ -2413,6 +2570,30 @@ const DEEP_RESEARCH_GROUNDING_MODEL =
     "gemini-2.5-flash-lite";
 
 
+// Greetings / thanks / "ok" need no tools: answer at once.
+const SMALL_TALK_WORDS =
+    /^(hi+|hii+|hello+|hey+|hy|helo|salam|salaam|assalam ?o ?alaikum|assalamualaikum|aoa|slm|walaikum ?assalam|thanks?|thank you|thank u|thnx|thx|ty|shukriya|shukria|jazakallah|jazak allah|good|nice|great|cool|wow|lol|haha+|hehe+|bye|allah hafiz|khuda hafiz|good (morning|night|evening|afternoon)|kaise ho|kese ho|kaisi ho|kesi ho|kya haal hai|kia haal hai|how are you|how r u|what'?s up|sup)( (neyo|zadi|wizi|crony|yaar|yar|bhai|dost|jani|ji))*$/i;
+
+function isSmallTalk(
+    text = ""
+) {
+
+    const clean =
+        String(text)
+            .toLowerCase()
+            .replace(/[^\p{L}\p{N}' ]+/gu, " ")
+            .replace(/\s+/g, " ")
+            .trim();
+
+    return (
+        clean.length > 0 &&
+        clean.length <= 40 &&
+        SMALL_TALK_WORDS.test(clean)
+    );
+
+}
+
+
 async function applyDeepResearch(
     messages,
     userText,
@@ -2422,6 +2603,23 @@ async function applyDeepResearch(
 
     const live =
         mode === "live";
+
+    if (
+        live &&
+        isSmallTalk(userText)
+    ) {
+
+        console.log(
+            "[FAST_LANE] small talk, no tools"
+        );
+
+        return {
+            messages,
+            sources: [],
+            effort: "low"
+        };
+
+    }
 
     const list =
         Array.isArray(messages)
@@ -2484,7 +2682,9 @@ async function applyDeepResearch(
             if (!agent.used) {
                 return {
                     messages,
-                    sources: []
+                    sources: [],
+                    effort:
+                        agent.effort || "low"
                 };
             }
 
@@ -2536,13 +2736,8 @@ async function applyDeepResearch(
                     list,
                 sources:
                     agent.sources || [],
-                review:
-                    agent.review
-                        ? {
-                            evidence:
-                                agent.toolText
-                        }
-                        : null
+                effort:
+                    agent.effort || "low"
             };
 
         } catch (error) {
@@ -2829,6 +3024,10 @@ export default async function handler(
 
     const totalStarted =
         Date.now();
+
+
+    let userMessageSaved =
+        Promise.resolve();
 
 
     let userId =
@@ -3475,18 +3674,24 @@ export default async function handler(
         }
 
 
-        if (!privateChat) {
-
-            await saveMessage(
-                conversationId,
-                "user",
-                userText ||
-                "Attachment",
-                attachments,
-                []
-            );
-
-        }
+        // Saved in the background; awaited before the reply is saved
+        // so the order in history stays user -> assistant.
+        userMessageSaved =
+            privateChat
+                ? Promise.resolve()
+                : saveMessage(
+                    conversationId,
+                    "user",
+                    userText ||
+                    "Attachment",
+                    attachments,
+                    []
+                ).catch(error => {
+                    console.error(
+                        "[NEYO Chat] user message save failed:",
+                        error?.message || error
+                    );
+                });
 
 
         /* =================================================
@@ -3591,6 +3796,13 @@ export default async function handler(
             streamResponseStarted =
                 true;
 
+
+            // Where the time goes (sent to the browser console).
+            const timing = {
+                beforeStreamMs:
+                    elapsed(totalStarted)
+            };
+
             // Tell the client what NEYO is doing so the
             // character thinking indicator can follow it.
             writeSSE(
@@ -3628,10 +3840,14 @@ export default async function handler(
                 attachments.length === 0 &&
                 !usedUrlContext;
 
-            // Set when the answer used reasoning/maths/code/law tools:
-            // the draft is held back, reviewed once, then sent.
-            let reviewPlan =
-                null;
+            // Effort dial for the writer: "high" = think first, "low" = answer
+            // at once. The planner decides; heavy tools force "high".
+            let writerEffort =
+                isDeepResearch ||
+                autoEffort === "deep" ||
+                attachments.length > 0
+                    ? "high"
+                    : "";
 
             if (
                 (
@@ -3671,14 +3887,17 @@ export default async function handler(
                 streamMessages =
                     researched.messages;
 
-                reviewPlan =
-                    researched.review
-                        ? {
-                            ...researched.review,
-                            question:
-                                userText
-                        }
-                        : null;
+                timing.toolsMs =
+                    elapsed(totalStarted) -
+                    timing.beforeStreamMs;
+
+                if (
+                    researched.effort &&
+                    !writerEffort
+                ) {
+                    writerEffort =
+                        researched.effort;
+                }
 
                 sources = [
                     ...sources,
@@ -3731,13 +3950,57 @@ export default async function handler(
                 Date.now();
 
 
+            if (!writerEffort) {
+                writerEffort =
+                    autoEffort === "light"
+                        ? "low"
+                        : "high";
+            }
+
+            timing.effort =
+                writerEffort;
+
+            let thoughtChars =
+                0;
+
             const streamResult =
                 await callModelRouteStream(
                     streamMessages,
                     modelRoute,
                     isDeepResearch,
-                    preferences,
                     {
+                        ...preferences,
+                        thinkingEffort:
+                            writerEffort
+                    },
+                    {
+
+                        // Live thinking: short pieces of the model's
+                        // thoughts while it works.
+                        onThought:
+                            thought => {
+
+                                if (
+                                    thoughtChars > 6000
+                                ) {
+                                    return;
+                                }
+
+                                thoughtChars +=
+                                    thought.length;
+
+                                writeSSE(
+                                    res,
+                                    {
+                                        type:
+                                            "thought",
+                                        content:
+                                            thought.slice(0, 600)
+                                    }
+                                );
+
+                            },
+
 
                         signal:
                             streamAbortController
@@ -3780,6 +4043,11 @@ export default async function handler(
                                 firstTokenLogged =
                                     true;
 
+                                timing.firstTokenMs =
+                                    elapsed(
+                                        totalStarted
+                                    );
+
 
                                 logTiming(
                                     "FIRST_TOKEN_MS",
@@ -3802,15 +4070,6 @@ export default async function handler(
 
                         onText:
                             text => {
-
-                                if (
-                                    reviewPlan
-                                ) {
-
-                                    // Held for the review pass.
-                                    return;
-
-                                }
 
                                 writeSSE(
                                     res,
@@ -3843,7 +4102,7 @@ export default async function handler(
             );
 
 
-            let reply =
+            const reply =
                 streamResult.reply;
 
 
@@ -3856,68 +4115,14 @@ export default async function handler(
             }
 
 
-            if (
-                reviewPlan
-            ) {
+            timing.modelMs =
+                elapsed(modelStarted);
 
-                writeSSE(
-                    res,
-                    {
-                        type:
-                            "status",
-                        stage:
-                            "reviewing"
-                    }
-                );
-
-                const reviewed =
-                    await reviewAnswer({
-                        apiKey:
-                            GEMINI_API_KEY,
-                        question:
-                            reviewPlan.question,
-                        draft:
-                            reply,
-                        evidence:
-                            reviewPlan.evidence
-                    });
-
-                reply =
-                    reviewed.answer || reply;
-
-                // Send the checked answer in small pieces so it
-                // still appears to type out.
-                const pieces =
-                    reply.match(/[\s\S]{1,48}/g) || [];
-
-                for (
-                    const piece of pieces
-                ) {
-
-                    writeSSE(
-                        res,
-                        {
-                            type:
-                                "delta",
-                            content:
-                                piece
-                        }
-                    );
-
-                    await new Promise(
-                        resolve =>
-                            setTimeout(
-                                resolve,
-                                6
-                            )
-                    );
-
-                }
-
-            }
 
 
             if (!privateChat) {
+
+                await userMessageSaved;
 
                 await saveMessage(
                     conversationId,
@@ -3966,7 +4171,13 @@ export default async function handler(
                     usedUrlContext,
 
                     creditType:
-                        reservedType
+                        reservedType,
+
+                    timing: {
+                        ...timing,
+                        totalMs:
+                            elapsed(totalStarted)
+                    }
                 }
             );
 
@@ -4137,6 +4348,8 @@ export default async function handler(
 
 
         if (!privateChat) {
+
+            await userMessageSaved;
 
             await saveMessage(
                 conversationId,
@@ -4309,6 +4522,10 @@ export default async function handler(
 
 
     } finally {
+
+        // Never leave the user-message save half done.
+        await userMessageSaved;
+
 
         if (
             streamHeartbeatTimer

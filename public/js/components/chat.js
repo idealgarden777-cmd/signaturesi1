@@ -704,6 +704,7 @@ public/js/components/chat.js
                 received.length -
                 displayed.length;
 
+            if (pending > 1500) return 40;
             if (pending > 700) return 16;
             if (pending > 350) return 10;
             if (pending > 180) return 6;
@@ -829,6 +830,20 @@ public/js/components/chat.js
              */
 
             if (
+                event.type === "thought"
+            ) {
+                emit(
+                    "neyo:chat-thought",
+                    {
+                        text:
+                            String(event.content || "")
+                    }
+                );
+
+                return false;
+            }
+
+            if (
                 event.type === "status"
             ) {
                 emit(
@@ -933,6 +948,10 @@ public/js/components/chat.js
 
             if (done) {
                 doneReceived = true;
+
+                if (event.timing) {
+                    console.info("[NEYO timing ms]", event.timing);
+                }
             }
 
             return done;

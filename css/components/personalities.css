@@ -234,3 +234,36 @@ html.dark .neyo-character-thinking-label,
     background: none;
   }
 }
+
+
+/* Live thoughts under the thinking mascot (v5) */
+.neyo-character-thinking-box {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  max-width: 100%;
+}
+
+.neyo-character-thought {
+  display: block;
+  max-width: min(560px, 100%);
+  padding-left: 44px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: #8a8a8a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0.9;
+  animation: neyoThoughtIn 220ms ease;
+}
+
+.neyo-character-thought[hidden] {
+  display: none;
+}
+
+@keyframes neyoThoughtIn {
+  from { opacity: 0; transform: translateY(2px); }
+  to { opacity: 0.9; transform: none; }
+}

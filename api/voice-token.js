@@ -175,7 +175,7 @@ function buildPersonaInstruction(
     new Date();
 
   const dateRule =
-    `Today is ${now.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: "UTC" })}. ` +
+    `Today is ${now.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: "Asia/Karachi" })}. ` +
     "Your training knowledge is older than today. For anything current or time-sensitive (news, today's events, prices, rates, scores, weather, who holds a position, people, companies, AI models, products, releases, dates), call the web_search tool first (or Google Search if web_search is not available) and answer from what it finds. When unsure, search. " +
     "Before calling web_search, say a very short filler in the user's language like 'ek second, dekhta hoon' and then call it. Write the query in English with the month and year when it is about something recent. " +
     "Results have Published dates: the newest dated information wins, say 'as of <date>' for numbers that change, and never present old news as current. " +

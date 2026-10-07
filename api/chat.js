@@ -873,7 +873,7 @@ function buildSystemInstruction(
         new Date();
 
     const dateLine =
-        `CURRENT DATE: Today is ${now.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: "UTC" })} (${now.toISOString().slice(0, 10)}). ` +
+        `CURRENT DATE: Today is ${now.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: "Asia/Karachi" })} (${new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Karachi" }).format(now)}, Pakistan time). ` +
         "Your built-in training knowledge is older than today. When the message includes LIVE WEB RESULTS or deep research sources, trust them for anything current. " +
         "If the user asks about something recent and no web results are included, say your information may be out of date instead of presenting old facts as current.";
 

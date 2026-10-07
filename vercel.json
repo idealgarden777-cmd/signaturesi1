@@ -1,7 +1,7 @@
 {
   "functions": {
     "api/chat.js": {
-      "includeFiles": "node_modules/z3-solver/build/**"
+      "includeFiles": "{node_modules/z3-solver/build/**,node_modules/@jitl/quickjs-wasmfile-release-sync/dist/**}"
     }
   }
 }

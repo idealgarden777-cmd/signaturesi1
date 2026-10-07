@@ -1,6 +1,6 @@
 /*
 =========================================================
-NEYO — MASCOT MOUTH FIX v1
+NEYO — MASCOT MOUTH + EXPRESSIONS v2
 mascot.js sets data-mouth to many modes (smile-wide, smirk,
 curious, surprise, serious, listening, error, speak-soft,
 speak-medium, speak-active ...) but mascot.css only drew
@@ -101,9 +101,9 @@ Load AFTER mascot.css.
   opacity: 1;
   animation: none;
   transform:
-    translateY(var(--neyo-speech-y, 0px))
-    scaleY(clamp(0.24, calc(0.24 + (var(--neyo-speech-scale, 1) - 1) * 1.15), 1.25));
-  transition: transform 70ms linear;
+    translateY(calc(var(--neyo-speech-y, 0px) + var(--bar-lift, 0px)))
+    scaleY(clamp(0.24, calc(0.24 + (var(--neyo-speech-scale, 1) - 1) * 1.15 * var(--mood-amp, 1)), 1.45));
+  transition: transform 70ms linear, margin 220ms ease;
 }
 
 #neyoMascot[data-mouth^="speak"] .neyo-mouth-bar:nth-child(1),
@@ -129,6 +129,147 @@ Load AFTER mascot.css.
 #neyoMascot[data-character="crony"] .neyo-mouth-bar {
   width: 4px;
   flex-basis: 4px;
+}
+
+/* =========================================================
+   TALKING WITH MOOD
+   The same live voice bars, shaped by the current mood.
+   ========================================================= */
+
+#neyoMascot[data-phase="speaking"] .neyo-mouth {
+  transition: transform 260ms ease, top 220ms ease, gap 220ms ease;
+}
+
+/* happy, friendly, empathetic: bars form a smile */
+#neyoMascot[data-phase="speaking"]:is([data-mood="happy"], [data-mood="friendly"], [data-mood="empathetic"], [data-mood="calm"]) .neyo-mouth-bar:nth-child(1),
+#neyoMascot[data-phase="speaking"]:is([data-mood="happy"], [data-mood="friendly"], [data-mood="empathetic"], [data-mood="calm"]) .neyo-mouth-bar:nth-child(5) {
+  --bar-lift: -9px;
+}
+
+#neyoMascot[data-phase="speaking"]:is([data-mood="happy"], [data-mood="friendly"], [data-mood="empathetic"], [data-mood="calm"]) .neyo-mouth-bar:nth-child(2),
+#neyoMascot[data-phase="speaking"]:is([data-mood="happy"], [data-mood="friendly"], [data-mood="empathetic"], [data-mood="calm"]) .neyo-mouth-bar:nth-child(4) {
+  --bar-lift: -4px;
+}
+
+#neyoMascot[data-phase="speaking"][data-mood="happy"] { --mood-amp: 1.15; }
+#neyoMascot[data-phase="speaking"]:is([data-mood="empathetic"], [data-mood="calm"]) { --mood-amp: 0.75; }
+
+/* excited: big, wide, bouncy */
+#neyoMascot[data-phase="speaking"][data-mood="excited"] { --mood-amp: 1.4; }
+#neyoMascot[data-phase="speaking"][data-mood="excited"] .neyo-mouth { gap: 5px; }
+#neyoMascot[data-phase="speaking"][data-mood="excited"] .neyo-mouth-bar:nth-child(1),
+#neyoMascot[data-phase="speaking"][data-mood="excited"] .neyo-mouth-bar:nth-child(5) { --bar-lift: -4px; }
+
+/* serious / focused: small and flat */
+#neyoMascot[data-phase="speaking"]:is([data-mood="serious"], [data-mood="focused"]) { --mood-amp: 0.6; }
+#neyoMascot[data-phase="speaking"]:is([data-mood="serious"], [data-mood="focused"]) .neyo-mouth { gap: 3px; }
+
+/* playful / skeptical: smirk, mouth slides and tilts to one side */
+#neyoMascot[data-phase="speaking"]:is([data-mood="playful"], [data-mood="skeptical"]) .neyo-mouth {
+  transform: translate(-40%, -50%) rotate(-8deg);
+}
+#neyoMascot[data-phase="speaking"][data-mood="playful"] .neyo-mouth-bar:nth-child(5) { --bar-lift: -5px; }
+#neyoMascot[data-phase="speaking"][data-mood="skeptical"] { --mood-amp: 0.7; }
+
+/* confused: crooked, uneven */
+#neyoMascot[data-phase="speaking"][data-mood="confused"] .neyo-mouth {
+  transform: translate(-50%, -50%) rotate(7deg);
+}
+#neyoMascot[data-phase="speaking"][data-mood="confused"] .neyo-mouth-bar:nth-child(2) { --bar-lift: 3px; }
+#neyoMascot[data-phase="speaking"][data-mood="confused"] .neyo-mouth-bar:nth-child(4) { --bar-lift: -3px; }
+
+/* curious / surprised: round "O" mouth that opens with the voice */
+#neyoMascot[data-phase="speaking"]:is([data-mood="curious"], [data-mood="surprised"]) .neyo-mouth-bar {
+  opacity: 0;
+}
+
+#neyoMascot[data-phase="speaking"]:is([data-mood="curious"], [data-mood="surprised"]) .neyo-mouth::before {
+  width: 18px;
+  height: 18px;
+  border: 5px solid var(--mouth-color);
+  border-radius: 50%;
+  background: none;
+  opacity: 1;
+  transform:
+    translate(-50%, -50%)
+    scale(calc(0.72 + var(--neyo-output-level, 0) * 0.55), calc(0.6 + var(--neyo-output-level, 0) * 0.85));
+  transition: transform 80ms linear;
+}
+
+#neyoMascot[data-phase="speaking"][data-mood="curious"] .neyo-mouth::before {
+  transform:
+    translate(-30%, -50%)
+    scale(calc(0.62 + var(--neyo-output-level, 0) * 0.4), calc(0.55 + var(--neyo-output-level, 0) * 0.7));
+}
+
+/* =========================================================
+   MISSING EYE SHAPES
+   mascot.js asks for these but mascot.css never drew them.
+   ========================================================= */
+
+/* soft-arc: gentle, warm smile eyes */
+#neyoMascot[data-eye="soft-arc"] .neyo-eye-core {
+  width: 30px;
+  height: 11px;
+  border: 0;
+  border-top: 4px solid var(--eye-color);
+  border-radius: 50% 50% 0 0;
+  background: transparent;
+}
+
+/* pill: tall focused eyes */
+#neyoMascot[data-eye="pill"] .neyo-eye-core {
+  width: 14px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--eye-color);
+}
+
+/* oval: open, attentive */
+#neyoMascot[data-eye="oval"] .neyo-eye-core {
+  width: 20px;
+  height: 25px;
+  border-radius: 50%;
+  background: var(--eye-color);
+}
+
+/* asymmetric: one squints, one raised (curious / playful / confused) */
+#neyoMascot[data-eye="asymmetric"] .neyo-eye-left .neyo-eye-core {
+  width: 26px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--eye-color);
+  transform: rotate(6deg);
+}
+
+#neyoMascot[data-eye="asymmetric"] .neyo-eye-right .neyo-eye-core {
+  width: 20px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--eye-color);
+  transform: translateY(-4px);
+}
+
+/* loop: ring eyes while thinking hard */
+#neyoMascot[data-eye="loop"] .neyo-eye-core {
+  width: 20px;
+  height: 20px;
+  border: 5px solid var(--eye-color);
+  border-radius: 50%;
+  background: transparent;
+}
+
+/* diamond: sharp, serious thinking */
+#neyoMascot[data-eye="diamond"] .neyo-eye-core {
+  width: 15px;
+  height: 15px;
+  border-radius: 3px;
+  background: var(--eye-color);
+  transform: rotate(45deg);
+}
+
+#neyoMascot[data-character="crony"]:is([data-eye="pill"], [data-eye="oval"], [data-eye="asymmetric"], [data-eye="loop"], [data-eye="diamond"]) .neyo-eye-core {
+  zoom: 0.8;
 }
 
 @keyframes neyoMouthListen {

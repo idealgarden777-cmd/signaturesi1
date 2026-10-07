@@ -127,6 +127,7 @@ Storage:
     solving: "is solving the logic",
     analyzing: "is analyzing the code",
     mapping: "is mapping the ideas",
+    reviewing: "is double-checking the answer",
     writing: "is writing"
   };
 

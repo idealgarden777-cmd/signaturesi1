@@ -13,6 +13,10 @@ import {
 } from "../lib/deep-research.js";
 
 import {
+    reviewAnswer
+} from "../lib/reasoning.js";
+
+import {
     runToolAgent
 } from "../lib/agent-tools.js";
 
@@ -2531,7 +2535,14 @@ async function applyDeepResearch(
                 messages:
                     list,
                 sources:
-                    agent.sources || []
+                    agent.sources || [],
+                review:
+                    agent.review
+                        ? {
+                            evidence:
+                                agent.toolText
+                        }
+                        : null
             };
 
         } catch (error) {
@@ -3617,6 +3628,11 @@ export default async function handler(
                 attachments.length === 0 &&
                 !usedUrlContext;
 
+            // Set when the answer used reasoning/maths/code/law tools:
+            // the draft is held back, reviewed once, then sent.
+            let reviewPlan =
+                null;
+
             if (
                 (
                     isDeepResearch ||
@@ -3654,6 +3670,15 @@ export default async function handler(
 
                 streamMessages =
                     researched.messages;
+
+                reviewPlan =
+                    researched.review
+                        ? {
+                            ...researched.review,
+                            question:
+                                userText
+                        }
+                        : null;
 
                 sources = [
                     ...sources,
@@ -3778,6 +3803,15 @@ export default async function handler(
                         onText:
                             text => {
 
+                                if (
+                                    reviewPlan
+                                ) {
+
+                                    // Held for the review pass.
+                                    return;
+
+                                }
+
                                 writeSSE(
                                     res,
                                     {
@@ -3809,7 +3843,7 @@ export default async function handler(
             );
 
 
-            const reply =
+            let reply =
                 streamResult.reply;
 
 
@@ -3818,6 +3852,67 @@ export default async function handler(
                 throw new Error(
                     "NEYO returned an empty response."
                 );
+
+            }
+
+
+            if (
+                reviewPlan
+            ) {
+
+                writeSSE(
+                    res,
+                    {
+                        type:
+                            "status",
+                        stage:
+                            "reviewing"
+                    }
+                );
+
+                const reviewed =
+                    await reviewAnswer({
+                        apiKey:
+                            GEMINI_API_KEY,
+                        question:
+                            reviewPlan.question,
+                        draft:
+                            reply,
+                        evidence:
+                            reviewPlan.evidence
+                    });
+
+                reply =
+                    reviewed.answer || reply;
+
+                // Send the checked answer in small pieces so it
+                // still appears to type out.
+                const pieces =
+                    reply.match(/[\s\S]{1,48}/g) || [];
+
+                for (
+                    const piece of pieces
+                ) {
+
+                    writeSSE(
+                        res,
+                        {
+                            type:
+                                "delta",
+                            content:
+                                piece
+                        }
+                    );
+
+                    await new Promise(
+                        resolve =>
+                            setTimeout(
+                                resolve,
+                                6
+                            )
+                    );
+
+                }
 
             }
 

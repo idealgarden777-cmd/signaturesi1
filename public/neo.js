@@ -200,7 +200,7 @@
 
         // Hardening for General preferences
         if (key === "language" && !["auto", "english", "urdu", "roman-urdu"].includes(value)) finalValue = "auto";
-        if (key === "defaultPersonality" && !["neyo", "zadi", "wizi"].includes(value)) finalValue = "neyo";
+        if (key === "defaultPersonality" && !["neyo", "zadi", "wizi", "crony"].includes(value)) finalValue = "neyo";
         if (key === "openOn" && !["new-chat", "last-chat"].includes(value)) finalValue = "new-chat";
 
         setPreference(key, finalValue);
@@ -282,7 +282,7 @@
         const menu = document.getElementById("settingsDefaultPersonalityMenu");
         const valueSpan = document.getElementById("settingsDefaultPersonalityValue");
         if (!button || !menu || !valueSpan) return;
-        const labels = { neyo: "Neyo", zadi: "Zadi", wizi: "Wizi" };
+        const labels = { neyo: "Neyo", zadi: "Zadi", wizi: "Wizi", crony: "Crony" };
         valueSpan.textContent = labels[val] || labels.neyo;
         menu.querySelectorAll(".settings-select-option").forEach(opt => {
             const active = opt.dataset.value === val;
@@ -1222,7 +1222,8 @@
             labels: {
                 neyo: "Neyo",
                 zadi: "Zadi",
-                wizi: "Wizi"
+                wizi: "Wizi",
+                crony: "Crony"
             }
         });
     }
@@ -2780,6 +2781,7 @@
                     privateChat: privateChat,
                     language: getPreference("language"),
                     personality: getPreference("defaultPersonality"),
+                    responseStyle: localStorage.getItem("neo_response_style") || "default",
                     isDeepResearch: isDeepResearchMode,
                     title
                 })

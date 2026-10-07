@@ -160,7 +160,14 @@ function buildPersonaInstruction(
     CHARACTER_PERSONAS[character] ||
     CHARACTER_PERSONAS.neyo;
 
-  return `${persona.prompt} ${SHARED_RULES}`;
+  const gender =
+    CHARACTER_VOICES[character]?.gender ||
+    "female";
+
+  const genderRule =
+    `Your voice is ${gender}. When you talk about yourself, use ${gender} wording (in Urdu and Hindi use ${gender === "male" ? "masculine" : "feminine"} verb forms).`;
+
+  return `${persona.prompt} ${genderRule} ${SHARED_RULES}`;
 }
 
 

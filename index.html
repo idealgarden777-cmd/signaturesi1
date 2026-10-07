@@ -99,6 +99,7 @@
   <link rel="stylesheet" href="/css/components/voice-mode.css?v=5">
   <link rel="stylesheet" href="/css/components/mascot.css?v=8">
   <link rel="stylesheet" href="/css/components/character-picker.css?v=5">
+  <link rel="stylesheet" href="/css/components/personalities.css?v=1">
 
   <!-- KaTeX -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css">
@@ -925,6 +926,16 @@
                   >
                     Wizi
                   </button>
+
+                  <button
+                    type="button"
+                    class="settings-select-option"
+                    data-value="crony"
+                    role="option"
+                    aria-selected="false"
+                  >
+                    Crony
+                  </button>
                 </div>
               </div>
             </div>
@@ -1080,11 +1091,33 @@
         <!-- PANEL: PERSONALITIES – EXISTING -->
         <div class="neo-settings-panel" id="settingsPanelPersonalities">
           <h2>NEYO Personalities</h2>
-          <p class="settings-subtitle">Choose how NEYO should respond. Custom personality is Pro only.</p>
+          <p class="settings-subtitle">Choose who NEYO talks as and how it responds. Custom personality is Pro only.</p>
+
+          <span class="neo-settings-section-title personality-section-title">Characters</span>
+          <div class="personality-grid personality-character-grid" id="personalityCharacterGrid">
+            <button class="personality-card personality-character-card" type="button" data-character-choice="neyo" aria-pressed="false">
+              <span class="personality-avatar personality-mascot" data-character="neyo" aria-hidden="true"><span class="personality-mascot-eye"></span><span class="personality-mascot-eye"></span></span>
+              <strong>Neyo</strong><small>Calm, smart and reliable</small>
+            </button>
+            <button class="personality-card personality-character-card" type="button" data-character-choice="zadi" aria-pressed="false">
+              <span class="personality-avatar personality-mascot" data-character="zadi" aria-hidden="true"><span class="personality-mascot-eye"></span><span class="personality-mascot-eye"></span></span>
+              <strong>Zadi</strong><small>Bold, energetic motivator</small>
+            </button>
+            <button class="personality-card personality-character-card" type="button" data-character-choice="wizi" aria-pressed="false">
+              <span class="personality-avatar personality-mascot" data-character="wizi" aria-hidden="true"><span class="personality-mascot-eye"></span><span class="personality-mascot-eye"></span></span>
+              <strong>Wizi</strong><small>Curious idea explorer</small>
+            </button>
+            <button class="personality-card personality-character-card" type="button" data-character-choice="crony" aria-pressed="false">
+              <span class="personality-avatar personality-mascot" data-character="crony" aria-hidden="true"><span class="personality-mascot-eye"></span><span class="personality-mascot-eye"></span></span>
+              <strong>Crony</strong><small>Playful, upbeat buddy</small>
+            </button>
+          </div>
+
+          <span class="neo-settings-section-title personality-section-title">Response style</span>
           <div class="personality-grid" id="personalityGrid">
             <button class="personality-card active" type="button" data-personality="default">
               <span class="personality-avatar"><i data-lucide="zap" size="20"></i></span>
-              <strong>Default NEYO</strong><small>Balanced and helpful</small>
+              <strong>Default</strong><small>Balanced and helpful</small>
             </button>
             <button class="personality-card" type="button" data-personality="teacher">
               <span class="personality-avatar"><i data-lucide="graduation-cap" size="20"></i></span>
@@ -1866,7 +1899,7 @@
   <!-- ========================================================= -->
 
   <!-- Main working app -->
-  <script src="/neo.js?v=86"></script>
+  <script src="/neo.js?v=87"></script>
 
   <!-- Model menu (v6) — cache busted -->
   <script type="module" src="/js/components/model-menu.js?v=6"></script>
@@ -1900,6 +1933,7 @@
   <script type="module" src="/js/components/voice-mode.js?v=5"></script>
   <script type="module" src="/js/components/character-picker.js?v=2"></script>
   <script src="/js/components/character-picker-dropdown.js?v=1"></script>
+  <script src="/js/components/personalities-panel.js?v=1"></script>
 
   <!-- Native tooltips (restored) -->
   <script type="module" src="/js/components/native-tooltips.js?v=1"></script>

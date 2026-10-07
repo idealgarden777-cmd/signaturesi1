@@ -1,0 +1,100 @@
+/*
+=========================================================
+NEYO — PERSONALITIES PANEL v1
+Characters section (mini mascots) above Response style.
+Reuses .personality-card / .personality-grid from
+settings.css so both sections look identical.
+=========================================================
+*/
+
+.personality-section-title {
+  margin-top: 22px;
+}
+
+.personality-section-title + .personality-grid {
+  margin-top: 8px;
+}
+
+/* ---------- mini mascot avatar ---------- */
+
+.personality-mascot {
+  position: relative;
+  gap: 6px;
+  background: #0d0d0d;
+  border-radius: 11px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
+}
+
+.personality-mascot-eye {
+  width: 6px;
+  height: 7px;
+  border-radius: 50%;
+  background: #ffffff;
+}
+
+/* Neyo: rounded square (default above) */
+
+/* Zadi: soft diamond */
+.personality-mascot[data-character="zadi"] {
+  border-radius: 9px;
+  clip-path: polygon(50% 2%, 95% 28%, 98% 66%, 72% 95%, 31% 98%, 4% 72%, 3% 31%, 29% 5%);
+  box-shadow: none;
+}
+
+/* Wizi: round orb */
+.personality-mascot[data-character="wizi"] {
+  border-radius: 50%;
+}
+
+/* Crony: blue liquid pill */
+.personality-mascot[data-character="crony"] {
+  width: 26px;
+  margin-left: 6px;
+  gap: 4px;
+  border-radius: 999px;
+  background: linear-gradient(160deg, #9fd2ff 0%, #4fa3f7 45%, #1f6fd6 100%);
+  box-shadow: 0 4px 10px rgba(31, 111, 214, 0.28);
+}
+
+.personality-mascot[data-character="crony"] .personality-mascot-eye {
+  width: 5px;
+  height: 6px;
+  background: #0d2a4d;
+}
+
+/* ---------- hover life ---------- */
+
+.personality-character-card:hover .personality-mascot-eye {
+  animation: neyoPersonalityBlink 900ms ease;
+}
+
+@keyframes neyoPersonalityBlink {
+  0%, 40%, 100% { transform: scaleY(1); }
+  50% { transform: scaleY(0.15); }
+}
+
+/* ---------- dark mode ---------- */
+
+body.dark-mode .personality-mascot:not([data-character="crony"]),
+html.dark .personality-mascot:not([data-character="crony"]),
+[data-theme="dark"] .personality-mascot:not([data-character="crony"]) {
+  background: #f2f2f2;
+}
+
+body.dark-mode .personality-mascot:not([data-character="crony"]) .personality-mascot-eye,
+html.dark .personality-mascot:not([data-character="crony"]) .personality-mascot-eye,
+[data-theme="dark"] .personality-mascot:not([data-character="crony"]) .personality-mascot-eye {
+  background: #111111;
+}
+
+body.dark-mode .personality-card.active,
+html.dark .personality-card.active,
+[data-theme="dark"] .personality-card.active {
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .personality-character-card:hover .personality-mascot-eye {
+    animation: none;
+  }
+}

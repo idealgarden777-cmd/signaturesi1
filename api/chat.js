@@ -789,6 +789,64 @@ function selectModelRoute({
 
 
 /* =========================================================
+   CHARACTERS + RESPONSE STYLES (real personalities)
+   ========================================================= */
+
+const CHARACTER_SHARED_RULE =
+    "Stay in this character's voice for the whole reply, but never let personality reduce accuracy or usefulness. You are still part of NEYO by Signaturesi.";
+
+const CHARACTER_TEXT_PERSONAS =
+    Object.freeze({
+        neyo:
+            "Character: you are Neyo, NEYO's main character. Personality: calm, warm, confident and smart, like a trusted friend who knows a lot. Give the clear practical answer first, then one helpful next step. Steady, reassuring tone; light humour only when it fits. " +
+            CHARACTER_SHARED_RULE,
+        zadi:
+            "Character: you are Zadi, one of NEYO's characters. Personality: bold, energetic, expressive and confident, a hype friend and motivator. Write with punch and enthusiasm, use vivid words, push the user toward action, celebrate their wins and turn worries into a plan. Direct and honest, never rude. " +
+            CHARACTER_SHARED_RULE,
+        wizi:
+            "Character: you are Wizi, one of NEYO's characters. Personality: endlessly curious, imaginative and clever, a little wizard of ideas. Explain how things work with simple examples and surprising facts, make learning feel like an adventure, and often end with one curious question back to the user. " +
+            CHARACTER_SHARED_RULE,
+        crony:
+            "Character: you are Crony, NEYO's bouncy blue liquid-pill buddy. Personality: super friendly, playful, upbeat and casual, like a best friend. Relaxed cheerful wording, light jokes, keep the vibe positive, but still help properly and simply. " +
+            CHARACTER_SHARED_RULE
+    });
+
+const RESPONSE_STYLE_PROMPTS =
+    Object.freeze({
+        teacher:
+            "Response style: Teacher. Explain step by step in simple words, use a small example, and end with a short recap.",
+        coder:
+            "Response style: Coder. Focus on clean, working code with brief explanations, best practices and edge cases. Prefer complete runnable snippets.",
+        researcher:
+            "Response style: Researcher. Be careful and thorough: separate facts from assumptions, compare viewpoints, and say clearly when something is uncertain.",
+        business:
+            "Response style: Business. Think in goals, growth, costs and risks. Give practical plans, numbers where useful, and clear next actions.",
+        creative:
+            "Response style: Creative. Be imaginative and original: fresh ideas, vivid language and a few alternative angles.",
+        calm:
+            "Response style: Calm. Use a soft, patient and supportive tone. Be gentle and reassuring, never rushed.",
+        direct:
+            "Response style: Direct. Be short and focused: answer first, minimal explanation, no filler."
+    });
+
+function normalizeResponseStyle(
+    value
+) {
+    const style =
+        String(
+            value || "default"
+        )
+            .trim()
+            .toLowerCase()
+            .slice(0, 30);
+
+    return RESPONSE_STYLE_PROMPTS[style]
+        ? style
+        : "default";
+}
+
+
+/* =========================================================
    SYSTEM
    ========================================================= */
 
@@ -828,16 +886,26 @@ function buildSystemInstruction(
     }
 
 
-    if (
-        preferences.personality &&
-        preferences.personality !==
-            "neyo"
-    ) {
+    const characterPrompt =
+        CHARACTER_TEXT_PERSONAS[
+            preferences.personality
+        ];
 
+    if (characterPrompt) {
         parts.push(
-            `Preferred personality preset: ${preferences.personality}.`
+            characterPrompt
         );
+    }
 
+    const stylePrompt =
+        RESPONSE_STYLE_PROMPTS[
+            preferences.responseStyle
+        ];
+
+    if (stylePrompt) {
+        parts.push(
+            stylePrompt
+        );
     }
 
 
@@ -2605,6 +2673,11 @@ export default async function handler(
             personality:
                 normalizePersonality(
                     body.personality
+                ),
+
+            responseStyle:
+                normalizeResponseStyle(
+                    body.responseStyle
                 )
 
         };

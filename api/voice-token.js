@@ -167,7 +167,15 @@ function buildPersonaInstruction(
   const genderRule =
     `Your voice is ${gender}. When you talk about yourself, use ${gender} wording (in Urdu and Hindi use ${gender === "male" ? "masculine" : "feminine"} verb forms).`;
 
-  return `${persona.prompt} ${genderRule} ${SHARED_RULES}`;
+  const now =
+    new Date();
+
+  const dateRule =
+    `Today is ${now.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: "UTC" })}. ` +
+    "Your training knowledge is older than today. For anything current or time-sensitive (news, today's events, prices, rates, scores, weather, who holds a position, new releases, dates), use the Google Search tool first and answer from what it finds. " +
+    "Say the result naturally in a short spoken sentence, never read out links or long lists. If search finds nothing, say you couldn't confirm the latest.";
+
+  return `${persona.prompt} ${genderRule} ${dateRule} ${SHARED_RULES}`;
 }
 
 
@@ -470,6 +478,12 @@ export default async function handler(
           }
         ]
       },
+      tools: [
+        {
+          googleSearch:
+            {}
+        }
+      ],
       inputAudioTranscription:
         {},
       outputAudioTranscription:
@@ -513,7 +527,21 @@ export default async function handler(
         await createToken(
           personaConfig
         );
-    } catch (personaError) {
+    } catch (searchError) {
+      console.warn(
+        "[NEYO Voice Token] Token with Google Search failed, retrying without it",
+        searchError?.message
+      );
+      try {
+        const {
+          tools: _tools,
+          ...withoutTools
+        } = personaConfig;
+        token =
+          await createToken(
+            withoutTools
+          );
+      } catch (personaError) {
       console.warn(
         "[NEYO Voice Token] Persona token failed, using basic token",
         personaError?.message
@@ -527,6 +555,7 @@ export default async function handler(
             "AUDIO"
           ]
         });
+      }
     }
 
     /* -----------------------------------------------------

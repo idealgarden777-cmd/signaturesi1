@@ -6,7 +6,10 @@ import {
 
 import {
     runDeepResearch,
-    buildResearchPrompt
+    buildResearchPrompt,
+    runLiveSearch,
+    buildLiveSearchPrompt,
+    decideSearch
 } from "../lib/deep-research.js";
 
 
@@ -862,8 +865,17 @@ function buildSystemInstruction(
         characterName +
         ".";
 
+    const now =
+        new Date();
+
+    const dateLine =
+        `CURRENT DATE: Today is ${now.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: "UTC" })} (${now.toISOString().slice(0, 10)}). ` +
+        "Your built-in training knowledge is older than today. When the message includes LIVE WEB RESULTS or deep research sources, trust them for anything current. " +
+        "If the user asks about something recent and no web results are included, say your information may be out of date instead of presenting old facts as current.";
+
     const parts = [
         identity,
+        dateLine,
         CHARACTER_TEXT_PERSONAS[character],
         NEYO_RESPONSE_FORMAT.replace(
             "I'm NEYO — an AI personalized model by Signaturesi.",
@@ -2380,6 +2392,12 @@ const DEEP_RESEARCH_PLANNER_MODEL =
     ) ||
     NEYO_FREE_FALLBACK_MODEL;
 
+const SEARCH_ROUTER_MODEL =
+    cleanEnv(
+        process.env.NEYO_SEARCH_ROUTER_MODEL
+    ) ||
+    DEEP_RESEARCH_PLANNER_MODEL;
+
 const DEEP_RESEARCH_GROUNDING_MODEL =
     cleanEnv(
         process.env.NEYO_RESEARCH_GROUNDING_MODEL
@@ -2390,8 +2408,12 @@ const DEEP_RESEARCH_GROUNDING_MODEL =
 async function applyDeepResearch(
     messages,
     userText,
-    onStatus = () => {}
+    onStatus = () => {},
+    mode = "deep"
 ) {
+
+    const live =
+        mode === "live";
 
     const list =
         Array.isArray(messages)
@@ -2423,10 +2445,46 @@ async function applyDeepResearch(
 
     let research = null;
 
+    let routed = null;
+
+    if (live) {
+
+        routed =
+            await decideSearch({
+                question:
+                    userText,
+                context,
+                apiKey:
+                    GEMINI_API_KEY,
+                model:
+                    SEARCH_ROUTER_MODEL
+            }).catch(() => null);
+
+        console.log(
+            "[SEARCH_ROUTER]",
+            routed?.by,
+            routed?.search,
+            (routed?.queries || []).join(" | ")
+        );
+
+        if (!routed?.search) {
+            return {
+                messages,
+                sources: []
+            };
+        }
+
+        onStatus("searching", {
+            queries:
+                routed.queries
+        });
+
+    }
+
     try {
 
         research =
-            await runDeepResearch({
+            await (live ? runLiveSearch : runDeepResearch)({
                 question:
                     userText,
                 context,
@@ -2436,6 +2494,15 @@ async function applyDeepResearch(
                     DEEP_RESEARCH_PLANNER_MODEL,
                 groundingModel:
                     DEEP_RESEARCH_GROUNDING_MODEL,
+                options:
+                    routed
+                        ? {
+                            queries:
+                                routed.queries,
+                            news:
+                                routed.news
+                        }
+                        : undefined,
                 onStatus
             });
 
@@ -2448,11 +2515,26 @@ async function applyDeepResearch(
 
     }
 
+    if (
+        live &&
+        !research?.contextText
+    ) {
+        return {
+            messages,
+            sources: []
+        };
+    }
+
     const prompt =
-        buildResearchPrompt(
-            userText,
-            research
-        );
+        live
+            ? buildLiveSearchPrompt(
+                userText,
+                research
+            )
+            : buildResearchPrompt(
+                userText,
+                research
+            );
 
     let last =
         list[list.length - 1];
@@ -3429,8 +3511,16 @@ export default async function handler(
                 }
             );
 
+            const wantsLiveSearch =
+                !isDeepResearch &&
+                attachments.length === 0 &&
+                !usedUrlContext;
+
             if (
-                isDeepResearch &&
+                (
+                    isDeepResearch ||
+                    wantsLiveSearch
+                ) &&
                 attachments.length === 0 &&
                 userText
             ) {
@@ -3445,13 +3535,20 @@ export default async function handler(
                                 {
                                     type:
                                         "status",
-                                    stage,
+                                    stage:
+                                        stage === "planning" &&
+                                        !isDeepResearch
+                                            ? "searching"
+                                            : stage,
                                     count:
                                         info.count,
                                     queries:
                                         info.queries
                                 }
-                            )
+                            ),
+                        isDeepResearch
+                            ? "deep"
+                            : "live"
                     );
 
                 streamMessages =
@@ -3765,7 +3862,10 @@ export default async function handler(
 
 
         if (
-            isDeepResearch &&
+            (
+                isDeepResearch ||
+                !usedUrlContext
+            ) &&
             attachments.length === 0 &&
             userText
         ) {
@@ -3773,7 +3873,11 @@ export default async function handler(
             const researched =
                 await applyDeepResearch(
                     normalMessages,
-                    userText
+                    userText,
+                    () => {},
+                    isDeepResearch
+                        ? "deep"
+                        : "live"
                 );
 
             normalMessages =

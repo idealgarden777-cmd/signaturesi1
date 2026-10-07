@@ -12,6 +12,10 @@ import {
     decideSearch
 } from "../lib/deep-research.js";
 
+import {
+    runToolAgent
+} from "../lib/agent-tools.js";
+
 
 /* =========================================================
    SUPABASE
@@ -2446,6 +2450,98 @@ async function applyDeepResearch(
     let research = null;
 
     let routed = null;
+
+    // NEW: the model itself picks and chains tools (search, maths,
+    // currency, weather, time, read page, its own Python code).
+    if (
+        live &&
+        cleanEnv(process.env.NEYO_TOOL_AGENT).toLowerCase() !== "off"
+    ) {
+
+        try {
+
+            const agent =
+                await runToolAgent({
+                    question:
+                        userText,
+                    context,
+                    apiKey:
+                        GEMINI_API_KEY,
+                    model:
+                        cleanEnv(process.env.NEYO_TOOL_AGENT_MODEL) ||
+                        SEARCH_ROUTER_MODEL,
+                    plannerModel:
+                        DEEP_RESEARCH_PLANNER_MODEL,
+                    groundingModel:
+                        DEEP_RESEARCH_GROUNDING_MODEL,
+                    onStatus
+                });
+
+            if (!agent.used) {
+                return {
+                    messages,
+                    sources: []
+                };
+            }
+
+            const agentPrompt =
+                buildLiveSearchPrompt(
+                    userText,
+                    {
+                        contextText:
+                            agent.toolText +
+                            (agent.research?.contextText || "")
+                    }
+                );
+
+            let agentLast =
+                list[list.length - 1];
+
+            if (
+                !agentLast ||
+                agentLast.role !== "user"
+            ) {
+                agentLast = {
+                    role: "user",
+                    parts: []
+                };
+                list.push(agentLast);
+            }
+
+            const agentTextPart =
+                agentLast.parts.find(
+                    part =>
+                        typeof part.text === "string"
+                );
+
+            if (agentTextPart) {
+                agentTextPart.text =
+                    agentTextPart.text.includes(userText) && userText
+                        ? agentTextPart.text.replace(userText, agentPrompt)
+                        : `${agentTextPart.text}\n\n${agentPrompt}`;
+            } else {
+                agentLast.parts.unshift({
+                    text: agentPrompt
+                });
+            }
+
+            return {
+                messages:
+                    list,
+                sources:
+                    agent.sources || []
+            };
+
+        } catch (error) {
+
+            console.warn(
+                "[TOOL_AGENT_FALLBACK]",
+                error?.message || error
+            );
+
+        }
+
+    }
 
     if (live) {
 

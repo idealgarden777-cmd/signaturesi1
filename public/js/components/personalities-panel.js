@@ -1,6 +1,6 @@
 /*
 =========================================================
-NEYO — PERSONALITIES PANEL v3
+NEYO — PERSONALITIES PANEL v4
 Owns:
 - Character cards (Neyo, Zadi, Wizi, Crony) in
   Settings > NEYO Personalities
@@ -118,6 +118,9 @@ Storage:
     files: "is reading your file",
     image: "is looking at your image",
     research: "is researching",
+    planning: "is planning the research",
+    searching: "is searching the web",
+    reading: "is reading sources",
     writing: "is writing"
   };
 
@@ -229,18 +232,30 @@ Storage:
     return () => timers.forEach(clearTimeout);
   }
 
-  function setStage(stage) {
+  function stageText(stage, info = {}) {
+    const count = Number(info.count) || 0;
+    if (stage === "reading" && count > 0) {
+      return `is reading ${count} ${count === 1 ? "source" : "sources"}`;
+    }
+    if (stage === "writing" && count > 0) {
+      return `is writing from ${count} ${count === 1 ? "source" : "sources"}`;
+    }
+    return STAGE_TEXT[stage] || STAGE_TEXT.thinking;
+  }
+
+  function setStage(stage, info = {}) {
     if (!activeThinking || !activeThinking.label.isConnected) {
       return;
     }
-    if (!STAGE_TEXT[stage] || activeThinking.stage === stage) {
+    const text = `${activeThinking.name} ${stageText(stage, info)}`;
+    if (!STAGE_TEXT[stage] || activeThinking.label.textContent === text) {
       return;
     }
     activeThinking.stage = stage;
-    const { label, name } = activeThinking;
+    const { label } = activeThinking;
     label.classList.add("is-swapping");
     setTimeout(() => {
-      label.textContent = `${name} ${STAGE_TEXT[stage]}`;
+      label.textContent = text;
       label.classList.remove("is-swapping");
     }, 160);
   }
@@ -344,7 +359,7 @@ Storage:
       const stage = String(event.detail?.stage || "");
       if (STAGE_TEXT[stage]) {
         pendingStage = stage;
-        setStage(stage);
+        setStage(stage, event.detail || {});
       }
     });
 

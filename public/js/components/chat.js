@@ -835,7 +835,13 @@ public/js/components/chat.js
                     "neyo:chat-status",
                     {
                         stage:
-                            clean(event.stage)
+                            clean(event.stage),
+                        count:
+                            Number(event.count) || 0,
+                        queries:
+                            Array.isArray(event.queries)
+                                ? event.queries
+                                : []
                     }
                 );
 

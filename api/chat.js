@@ -4,6 +4,11 @@ import {
     getAuthenticatedUser
 } from "../lib/auth.js";
 
+import {
+    runDeepResearch,
+    buildResearchPrompt
+} from "../lib/deep-research.js";
+
 
 /* =========================================================
    SUPABASE
@@ -2366,6 +2371,131 @@ ${context}`
 
 
 /* =========================================================
+   DEEP RESEARCH (own search + scraping, lib/deep-research.js)
+   ========================================================= */
+
+const DEEP_RESEARCH_PLANNER_MODEL =
+    cleanEnv(
+        process.env.NEYO_RESEARCH_PLANNER_MODEL
+    ) ||
+    NEYO_FREE_FALLBACK_MODEL;
+
+const DEEP_RESEARCH_GROUNDING_MODEL =
+    cleanEnv(
+        process.env.NEYO_RESEARCH_GROUNDING_MODEL
+    ) ||
+    "gemini-2.5-flash-lite";
+
+
+async function applyDeepResearch(
+    messages,
+    userText,
+    onStatus = () => {}
+) {
+
+    const list =
+        Array.isArray(messages)
+            ? messages.map(
+                message => ({
+                    ...message,
+                    parts:
+                        Array.isArray(message.parts)
+                            ? message.parts.map(
+                                part => ({ ...part })
+                            )
+                            : []
+                })
+            )
+            : [];
+
+    const context =
+        list
+            .slice(-5, -1)
+            .map(
+                message =>
+                    `${message.role === "model" ? "Assistant" : "User"}: ` +
+                    message.parts
+                        .map(part => part.text || "")
+                        .join(" ")
+                        .slice(0, 600)
+            )
+            .join("\n");
+
+    let research = null;
+
+    try {
+
+        research =
+            await runDeepResearch({
+                question:
+                    userText,
+                context,
+                apiKey:
+                    GEMINI_API_KEY,
+                plannerModel:
+                    DEEP_RESEARCH_PLANNER_MODEL,
+                groundingModel:
+                    DEEP_RESEARCH_GROUNDING_MODEL,
+                onStatus
+            });
+
+    } catch (error) {
+
+        console.error(
+            "[DEEP_RESEARCH_FAILED]",
+            error?.message || error
+        );
+
+    }
+
+    const prompt =
+        buildResearchPrompt(
+            userText,
+            research
+        );
+
+    let last =
+        list[list.length - 1];
+
+    if (
+        !last ||
+        last.role !== "user"
+    ) {
+        last = {
+            role: "user",
+            parts: []
+        };
+        list.push(last);
+    }
+
+    const textPart =
+        last.parts.find(
+            part =>
+                typeof part.text === "string"
+        );
+
+    if (textPart) {
+        textPart.text =
+            textPart.text.includes(userText) && userText
+                ? textPart.text.replace(userText, prompt)
+                : `${textPart.text}\n\n${prompt}`;
+    } else {
+        last.parts.unshift({
+            text: prompt
+        });
+    }
+
+    return {
+        messages:
+            list,
+        sources:
+            research?.sources || []
+    };
+
+}
+
+
+/* =========================================================
    SAVE MESSAGE
    ========================================================= */
 
@@ -3299,6 +3429,41 @@ export default async function handler(
                 }
             );
 
+            if (
+                isDeepResearch &&
+                attachments.length === 0 &&
+                userText
+            ) {
+
+                const researched =
+                    await applyDeepResearch(
+                        streamMessages,
+                        userText,
+                        (stage, info = {}) =>
+                            writeSSE(
+                                res,
+                                {
+                                    type:
+                                        "status",
+                                    stage,
+                                    count:
+                                        info.count,
+                                    queries:
+                                        info.queries
+                                }
+                            )
+                    );
+
+                streamMessages =
+                    researched.messages;
+
+                sources = [
+                    ...sources,
+                    ...researched.sources
+                ];
+
+            }
+
 
             streamHeartbeatTimer =
                 setInterval(
@@ -3595,6 +3760,29 @@ export default async function handler(
 
             usedUrlContext =
                 true;
+
+        }
+
+
+        if (
+            isDeepResearch &&
+            attachments.length === 0 &&
+            userText
+        ) {
+
+            const researched =
+                await applyDeepResearch(
+                    normalMessages,
+                    userText
+                );
+
+            normalMessages =
+                researched.messages;
+
+            sources = [
+                ...sources,
+                ...researched.sources
+            ];
 
         }
 

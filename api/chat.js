@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { applyContextCache, dropContextCache } from "../lib/context-cache.js";
 
 import {
     getAuthenticatedUser
@@ -694,7 +695,34 @@ function selectHistoryMessages(
     }
 
 
-    return selected.reverse();
+    selected.reverse();
+
+
+    // Context cache: when old messages are cut, cut in steps of 8,
+    // so the start of the chat stays the same for a few turns
+    // and the cached part can be reused.
+    const start =
+        messages.length - selected.length;
+
+    if (start > 0) {
+
+        const stableStart =
+            Math.ceil(start / 8) * 8;
+
+        const drop =
+            stableStart - start;
+
+        if (
+            drop > 0 &&
+            selected.length - drop >= 2
+        ) {
+            return selected.slice(drop);
+        }
+
+    }
+
+
+    return selected;
 
 }
 
@@ -1075,7 +1103,17 @@ async function callGemini(
     }
 
 
-    const response =
+        const cached =
+        preferences.noContextCache
+            ? { body: buildGeminiBody(messages, isDeepResearch, preferences, model), cacheName: null }
+            : await applyContextCache({
+                apiKey: GEMINI_API_KEY,
+                model,
+                body: buildGeminiBody(messages, isDeepResearch, preferences, model)
+            });
+
+
+const response =
         await fetch(
             `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`,
             {
@@ -1090,12 +1128,7 @@ async function callGemini(
 
                 body:
                     JSON.stringify(
-                        buildGeminiBody(
-                            messages,
-                            isDeepResearch,
-                            preferences,
-                            model
-                        )
+                        cached.body
                     )
 
             }
@@ -1108,6 +1141,29 @@ async function callGemini(
             .catch(
                 () => ({})
             );
+
+
+    if (
+        !response.ok &&
+        cached.cacheName
+    ) {
+
+        // The cache expired or was refused: same call without it.
+        console.warn("[CACHE] request rejected, retrying without cache", model, response.status);
+
+        dropContextCache(cached.cacheName);
+
+        return callGemini(
+            messages,
+            model,
+            isDeepResearch,
+            {
+                ...preferences,
+                noContextCache: true
+            }
+        );
+
+    }
 
 
     if (
@@ -1430,6 +1486,16 @@ async function callGeminiStream(
         Date.now();
 
 
+    const cached =
+        preferences.noContextCache
+            ? { body: buildGeminiBody(messages, isDeepResearch, preferences, model), cacheName: null }
+            : await applyContextCache({
+                apiKey: GEMINI_API_KEY,
+                model,
+                body: buildGeminiBody(messages, isDeepResearch, preferences, model)
+            });
+
+
     const response =
         await fetch(
             `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:streamGenerateContent?alt=sse&key=${encodeURIComponent(GEMINI_API_KEY)}`,
@@ -1450,12 +1516,7 @@ async function callGeminiStream(
 
                 body:
                     JSON.stringify(
-                        buildGeminiBody(
-                            messages,
-                            isDeepResearch,
-                            preferences,
-                            model
-                        )
+                        cached.body
                     ),
 
                 signal
@@ -1520,6 +1581,27 @@ async function callGeminiStream(
 
         error.emittedText =
             false;
+
+
+        if (cached.cacheName) {
+
+            // The cache expired or was refused: same call without it.
+            console.warn("[CACHE] stream rejected, retrying without cache", model, response.status);
+
+            dropContextCache(cached.cacheName);
+
+            return callGeminiStream(
+                messages,
+                model,
+                isDeepResearch,
+                {
+                    ...preferences,
+                    noContextCache: true
+                },
+                streamOptions
+            );
+
+        }
 
 
         if (

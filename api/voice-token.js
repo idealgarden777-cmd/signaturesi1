@@ -375,9 +375,8 @@ async function handleVoiceSearch(
   }
 
   const today =
-    new Date()
-      .toISOString()
-      .slice(0, 10);
+    new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Karachi" })
+      .format(new Date());
 
   try {
     const research =

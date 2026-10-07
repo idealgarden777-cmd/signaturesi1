@@ -325,3 +325,35 @@ body.dark-mode .neyo-cite,
 html.dark .neyo-cite {
     background: rgba(255, 255, 255, 0.1);
 }
+
+/* ---------- voice mode ---------- */
+
+.voice-src-bar {
+    display: flex;
+    justify-content: center;
+    min-height: 0;
+    margin-top: 10px;
+    opacity: 0;
+    transform: translateY(4px);
+    transition: opacity 200ms ease, transform 200ms ease;
+    pointer-events: none;
+}
+
+.voice-src-bar.is-visible {
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+}
+
+.voice-src-bar .neyo-sources-btn {
+    margin-left: 0;
+    background: var(--neyo-bg, #fff);
+}
+
+#neyoVoiceMode.is-searching .voice-mode-status {
+    animation: neyo-voice-search-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes neyo-voice-search-pulse {
+    50% { opacity: 0.45; }
+}

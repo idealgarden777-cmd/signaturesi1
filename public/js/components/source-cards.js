@@ -388,6 +388,14 @@
         });
     }
 
+    /* Shared with voice mode (voice-search-ui.js). */
+    window.NeyoSources = Object.freeze({
+        normalize,
+        buildButton,
+        openPanel,
+        closePanel
+    });
+
     /* ---------- live stream ---------- */
 
     window.addEventListener("neyo:chat-message-updated", event => {

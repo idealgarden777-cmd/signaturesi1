@@ -2139,12 +2139,75 @@ After neo.js removal this file continues unchanged.
       return;
     }
 
+    /* =================================================
+       WEB SEARCH TOOL CALL
+       ================================================= */
+
+    if (
+      message?.toolCall
+    ) {
+      handleToolCall(
+        message.toolCall,
+        generation
+      );
+      return;
+    }
+
+    if (
+      message?.toolCallCancellation
+    ) {
+      emit(
+        "neyo:voice-search",
+        {
+          stage:
+            "cancelled"
+        }
+      );
+      return;
+    }
+
     const content =
       message
         ?.serverContent;
 
     if (!content) {
       return;
+    }
+
+    /* Google Search fallback: show its sources too. */
+    const grounding =
+      content.groundingMetadata?.groundingChunks;
+
+    if (
+      Array.isArray(
+        grounding
+      ) &&
+      grounding.length
+    ) {
+      const groundSources =
+        grounding
+          .map(chunk => ({
+            url:
+              chunk?.web?.uri,
+            title:
+              chunk?.web?.title ||
+              chunk?.web?.domain
+          }))
+          .filter(item => item.url);
+
+      if (
+        groundSources.length
+      ) {
+        emit(
+          "neyo:voice-sources",
+          {
+            sources:
+              groundSources,
+            character:
+              sessionCharacterId
+          }
+        );
+      }
     }
 
     const userText =
@@ -2296,6 +2359,239 @@ After neo.js removal this file continues unchanged.
     ) {
       finishTurnWhenPlaybackEnds(
         generation
+      );
+    }
+  }
+
+  /* =====================================================
+     WEB SEARCH TOOL (same search as text chat)
+     ===================================================== */
+
+  async function runVoiceSearch(
+    query
+  ) {
+    const controller =
+      new AbortController();
+
+    const timer =
+      setTimeout(
+        () => controller.abort(),
+        16_000
+      );
+
+    try {
+      const response =
+        await fetch(
+          CONFIG.tokenEndpoint,
+          {
+            method:
+              "POST",
+            headers: {
+              "Content-Type":
+                "application/json"
+            },
+            body:
+              JSON.stringify({
+                action:
+                  "search",
+                query
+              }),
+            signal:
+              controller.signal
+          }
+        );
+
+      if (
+        !response.ok
+      ) {
+        throw new Error(
+          `search ${response.status}`
+        );
+      }
+
+      return await response.json();
+
+    } finally {
+      clearTimeout(
+        timer
+      );
+    }
+  }
+
+  async function handleToolCall(
+    toolCall,
+    generation
+  ) {
+    const calls =
+      Array.isArray(
+        toolCall?.functionCalls
+      )
+        ? toolCall.functionCalls
+        : [];
+
+    if (
+      !calls.length
+    ) {
+      return;
+    }
+
+    responsePending =
+      true;
+
+    setPhase(
+      "thinking",
+      {
+        searching:
+          true
+      }
+    );
+
+    const functionResponses =
+      await Promise.all(
+        calls.map(async call => {
+          const name =
+            call?.name ||
+            "";
+
+          if (
+            name !==
+            "web_search"
+          ) {
+            return {
+              id:
+                call?.id,
+              name,
+              response: {
+                error:
+                  "Unknown tool."
+              }
+            };
+          }
+
+          const query =
+            cleanText(
+              call?.args?.query ||
+              "",
+              300
+            ).trim();
+
+          emit(
+            "neyo:voice-search",
+            {
+              stage:
+                "start",
+              query,
+              character:
+                sessionCharacterId
+            }
+          );
+
+          try {
+            const data =
+              await runVoiceSearch(
+                query
+              );
+
+            const sources =
+              Array.isArray(
+                data?.sources
+              )
+                ? data.sources
+                : [];
+
+            emit(
+              "neyo:voice-search",
+              {
+                stage:
+                  "done",
+                query,
+                count:
+                  sources.length
+              }
+            );
+
+            if (
+              sources.length
+            ) {
+              emit(
+                "neyo:voice-sources",
+                {
+                  query,
+                  sources,
+                  character:
+                    sessionCharacterId
+                }
+              );
+            }
+
+            return {
+              id:
+                call?.id,
+              name,
+              response: {
+                today:
+                  data?.today,
+                found:
+                  Boolean(
+                    data?.found
+                  ),
+                results:
+                  data?.results ||
+                  "No results found.",
+                instructions:
+                  "Answer in a short spoken reply in the user's language. Newest dated result wins; say 'as of <date>' for changing numbers. Do not read URLs or [n] numbers."
+              }
+            };
+
+          } catch (error) {
+            emit(
+              "neyo:voice-search",
+              {
+                stage:
+                  "error",
+                query
+              }
+            );
+
+            return {
+              id:
+                call?.id,
+              name,
+              response: {
+                found:
+                  false,
+                results:
+                  "",
+                error:
+                  "Search failed. Tell the user you couldn't check the latest right now."
+              }
+            };
+          }
+        })
+      );
+
+    if (
+      generation !==
+        socketGeneration ||
+      !socket ||
+      socket.readyState !==
+        WebSocket.OPEN
+    ) {
+      return;
+    }
+
+    try {
+      socket.send(
+        JSON.stringify({
+          toolResponse: {
+            functionResponses
+          }
+        })
+      );
+    } catch (error) {
+      console.warn(
+        "[NEYO Voice] Could not send search result",
+        error
       );
     }
   }

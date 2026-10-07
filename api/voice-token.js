@@ -24,6 +24,10 @@ IMPORTANT:
 */
 
 import { GoogleGenAI } from "@google/genai";
+import {
+  runLiveSearch,
+  isNewsQuery
+} from "../lib/deep-research.js";
 
 
 /* =========================================================
@@ -172,8 +176,10 @@ function buildPersonaInstruction(
 
   const dateRule =
     `Today is ${now.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: "UTC" })}. ` +
-    "Your training knowledge is older than today. For anything current or time-sensitive (news, today's events, prices, rates, scores, weather, who holds a position, new releases, dates), use the Google Search tool first and answer from what it finds. " +
-    "Say the result naturally in a short spoken sentence, never read out links or long lists. If search finds nothing, say you couldn't confirm the latest.";
+    "Your training knowledge is older than today. For anything current or time-sensitive (news, today's events, prices, rates, scores, weather, who holds a position, people, companies, AI models, products, releases, dates), call the web_search tool first (or Google Search if web_search is not available) and answer from what it finds. When unsure, search. " +
+    "Before calling web_search, say a very short filler in the user's language like 'ek second, dekhta hoon' and then call it. Write the query in English with the month and year when it is about something recent. " +
+    "Results have Published dates: the newest dated information wins, say 'as of <date>' for numbers that change, and never present old news as current. " +
+    "Say the result naturally in a short spoken sentence, never read out links, numbers in brackets or long lists. If search finds nothing, say you couldn't confirm the latest.";
 
   return `${persona.prompt} ${genderRule} ${dateRule} ${SHARED_RULES}`;
 }
@@ -301,6 +307,163 @@ function resolveCharacter(
 
 
 /* =========================================================
+   VOICE WEB SEARCH
+   Same fresh search pipeline as text chat (lib/deep-research).
+   The live model calls the web_search function; voice.js
+   runs it through this endpoint and sends the result back.
+   ========================================================= */
+
+const WEB_SEARCH_TOOL = {
+  name:
+    "web_search",
+  description:
+    "Search the live web for fresh, current information (news, prices, scores, weather, people, companies, AI models, releases, anything after your training). Returns dated results; newest wins.",
+  parameters: {
+    type:
+      "OBJECT",
+    properties: {
+      query: {
+        type:
+          "STRING",
+        description:
+          "Short English web search query, include month and year for recent topics."
+      }
+    },
+    required: [
+      "query"
+    ]
+  }
+};
+
+const VOICE_SEARCH_PLANNER_MODEL =
+  String(
+    process.env.NEYO_RESEARCH_PLANNER_MODEL ||
+    process.env.NEYO_FREE_FALLBACK_MODEL ||
+    "gemini-3.1-flash-lite"
+  ).trim();
+
+const VOICE_SEARCH_GROUNDING_MODEL =
+  String(
+    process.env.NEYO_RESEARCH_GROUNDING_MODEL ||
+    "gemini-2.5-flash-lite"
+  ).trim();
+
+async function handleVoiceSearch(
+  req,
+  res,
+  apiKey,
+  body
+) {
+  const query =
+    String(
+      body?.query ||
+      ""
+    )
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 300);
+
+  if (!query) {
+    return sendJson(
+      res,
+      400,
+      {
+        error:
+          "Missing query."
+      }
+    );
+  }
+
+  const today =
+    new Date()
+      .toISOString()
+      .slice(0, 10);
+
+  try {
+    const research =
+      await runLiveSearch({
+        question:
+          query,
+        apiKey,
+        plannerModel:
+          VOICE_SEARCH_PLANNER_MODEL,
+        groundingModel:
+          VOICE_SEARCH_GROUNDING_MODEL,
+        options: {
+          queries: [
+            query
+          ],
+          news:
+            isNewsQuery(
+              query
+            ),
+          maxPages:
+            4,
+          totalContextChars:
+            9000,
+          budgetMs:
+            11000
+        }
+      });
+
+    const sources =
+      Array.isArray(
+        research?.sources
+      )
+        ? research.sources.slice(0, 8)
+        : [];
+
+    console.log(
+      "[VOICE_SEARCH]",
+      query,
+      sources.length,
+      research?.tookMs
+    );
+
+    return sendJson(
+      res,
+      200,
+      {
+        today,
+        query,
+        found:
+          Boolean(
+            research?.contextText
+          ),
+        results:
+          String(
+            research?.contextText ||
+            ""
+          ).slice(0, 9000),
+        sources
+      }
+    );
+
+  } catch (error) {
+    console.error(
+      "[VOICE_SEARCH_FAILED]",
+      error?.message ||
+      error
+    );
+
+    return sendJson(
+      res,
+      200,
+      {
+        today,
+        query,
+        found:
+          false,
+        results:
+          "",
+        sources: []
+      }
+    );
+  }
+}
+
+
+/* =========================================================
    HANDLER
    ========================================================= */
 
@@ -360,6 +523,27 @@ export default async function handler(
     );
   }
 
+
+  /* -------------------------------------------------------
+     VOICE WEB SEARCH (tool call from the live session)
+     ------------------------------------------------------- */
+
+  const requestBody =
+    getRequestBody(
+      req
+    );
+
+  if (
+    requestBody?.action ===
+    "search"
+  ) {
+    return handleVoiceSearch(
+      req,
+      res,
+      apiKey,
+      requestBody
+    );
+  }
 
   /* -------------------------------------------------------
      CHARACTER
@@ -480,8 +664,9 @@ export default async function handler(
       },
       tools: [
         {
-          googleSearch:
-            {}
+          functionDeclarations: [
+            WEB_SEARCH_TOOL
+          ]
         }
       ],
       inputAudioTranscription:
@@ -527,7 +712,23 @@ export default async function handler(
         await createToken(
           personaConfig
         );
-    } catch (searchError) {
+    } catch (functionError) {
+      console.warn(
+        "[NEYO Voice Token] Token with web_search tool failed, trying Google Search",
+        functionError?.message
+      );
+      try {
+        token =
+          await createToken({
+            ...personaConfig,
+            tools: [
+              {
+                googleSearch:
+                  {}
+              }
+            ]
+          });
+      } catch (searchError) {
       console.warn(
         "[NEYO Voice Token] Token with Google Search failed, retrying without it",
         searchError?.message
@@ -555,6 +756,7 @@ export default async function handler(
             "AUDIO"
           ]
         });
+      }
       }
     }
 

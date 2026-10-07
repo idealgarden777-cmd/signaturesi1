@@ -777,6 +777,98 @@ Does NOT own:
     );
 
 
+    /*
+     * "Copy message" reads innerText, which turns KaTeX into
+     * broken lines (each symbol twice). Just before that copy,
+     * swap every formula for its TeX ($...$), then put it back.
+     */
+    const swapMathForCopy =
+        root => {
+
+            const swapped = [];
+
+            root
+                .querySelectorAll(".katex-display, .katex")
+                .forEach(
+                    node => {
+
+                        if (
+                            node.closest(".katex-display") &&
+                            !node.classList.contains("katex-display")
+                        ) {
+                            return;
+                        }
+
+                        if (!node.isConnected) {
+                            return;
+                        }
+
+                        const tex =
+                            node.querySelector(
+                                'annotation[encoding="application/x-tex"]'
+                            )?.textContent;
+
+                        if (!tex) {
+                            return;
+                        }
+
+                        const display =
+                            node.classList.contains("katex-display");
+
+                        const text =
+                            document.createElement(
+                                display ? "div" : "span"
+                            );
+
+                        text.textContent =
+                            display
+                                ? `$$${tex.trim()}$$`
+                                : `$${tex.trim()}$`;
+
+                        node.replaceWith(text);
+
+                        swapped.push([text, node]);
+
+                    }
+                );
+
+            return () =>
+                swapped.forEach(
+                    ([text, node]) =>
+                        text.replaceWith(node)
+                );
+
+        };
+
+
+    document.addEventListener(
+        "click",
+        event => {
+
+            const button =
+                event.target.closest?.(
+                    ".copy-msg-btn, .share-msg-btn"
+                );
+
+            const content =
+                button
+                    ?.closest(".message")
+                    ?.querySelector(".message-content");
+
+            if (!content) {
+                return;
+            }
+
+            const restore =
+                swapMathForCopy(content);
+
+            setTimeout(restore, 0);
+
+        },
+        true
+    );
+
+
     const markdownToHtml =
         markdown => {
 

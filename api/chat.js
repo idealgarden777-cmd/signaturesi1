@@ -2485,14 +2485,16 @@ async function applyDeepResearch(
             }
 
             const agentPrompt =
-                buildLiveSearchPrompt(
-                    userText,
-                    {
-                        contextText:
-                            agent.toolText +
-                            (agent.research?.contextText || "")
-                    }
-                );
+                agent.research?.contextText
+                    ? buildLiveSearchPrompt(
+                        userText,
+                        {
+                            contextText:
+                                agent.toolText +
+                                agent.research.contextText
+                        }
+                    )
+                    : `${userText}\n\n${agent.toolText}\nThese tool results were computed just now and are exact: use them, follow any rules above, and never contradict them. Do not mention the tools by name.`;
 
             let agentLast =
                 list[list.length - 1];

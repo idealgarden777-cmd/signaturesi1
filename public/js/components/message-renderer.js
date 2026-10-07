@@ -528,6 +528,11 @@ Does NOT own:
             leaves math text untouched.
             */
 
+            renderPendingMath(
+                root
+            );
+
+
             const renderer =
                 window.renderMathInElement;
 
@@ -601,6 +606,177 @@ Does NOT own:
        MARKDOWN → HTML
        ===================================================== */
 
+    /* =====================================================
+       MATH PROTECTION
+       Maths is pulled out BEFORE Markdown so marked can't break
+       it (\frac, _, *, and | inside tables), then rendered with
+       KaTeX and put back.
+       ===================================================== */
+
+    const MATH_TOKEN =
+        index =>
+            `NEYOMATHTOKEN${index}END`;
+
+    const protectMath =
+        input => {
+
+            const store = [];
+
+            const keep =
+                (tex, display) => {
+                    store.push({
+                        tex: String(tex || "").trim(),
+                        display
+                    });
+                    return MATH_TOKEN(store.length - 1);
+                };
+
+            // Leave code blocks and inline code untouched.
+            const parts =
+                input.split(/(```[\s\S]*?(?:```|$)|`[^`\n]+`)/g);
+
+            const out =
+                parts.map(
+                    (part, index) => {
+
+                        if (index % 2 === 1) {
+                            return part;
+                        }
+
+                        return part
+                            .replace(
+                                /\$\$([\s\S]+?)\$\$/g,
+                                (m, tex) => keep(tex, true)
+                            )
+                            .replace(
+                                /\\\[([\s\S]+?)\\\]/g,
+                                (m, tex) => keep(tex, true)
+                            )
+                            .replace(
+                                /\\\(([\s\S]+?)\\\)/g,
+                                (m, tex) => keep(tex, false)
+                            )
+                            .replace(
+                                // $x$ inline: no space just inside the
+                                // dollars, no digit right after the
+                                // closing one (so "$5 and $10" stays text).
+                                /(^|[^\\$])\$(?!\s)([^$\n]*?[^\s\\$])\$(?!\d)/g,
+                                (m, before, tex) =>
+                                    before + keep(tex, false)
+                            );
+
+                    }
+                );
+
+            return {
+                text: out.join(""),
+                store
+            };
+
+        };
+
+
+    const mathHtml =
+        ({ tex, display }) => {
+
+            if (
+                window.katex &&
+                typeof window.katex.renderToString === "function"
+            ) {
+
+                try {
+
+                    return window.katex.renderToString(
+                        tex,
+                        {
+                            displayMode: display,
+                            throwOnError: false,
+                            strict: "ignore"
+                        }
+                    );
+
+                } catch {}
+
+            }
+
+            // KaTeX not loaded yet: keep the TeX and render later.
+            return `<span class="neyo-math" data-display="${display ? "1" : "0"}">${escapeHtml(tex)}</span>`;
+
+        };
+
+
+    const restoreMath =
+        (html, store) => {
+
+            if (!store.length) {
+                return html;
+            }
+
+            return html.replace(
+                /NEYOMATHTOKEN(\d+)END/g,
+                (m, index) => {
+
+                    const item =
+                        store[Number(index)];
+
+                    if (!item) {
+                        return m;
+                    }
+
+                    const rendered =
+                        mathHtml(item);
+
+                    return item.display
+                        ? `<span class="neyo-math-block">${rendered}</span>`
+                        : rendered;
+
+                }
+            );
+
+        };
+
+
+    const renderPendingMath =
+        (root = document) => {
+
+            if (!window.katex) {
+                return;
+            }
+
+            root
+                .querySelectorAll?.(".neyo-math")
+                .forEach(
+                    span => {
+
+                        try {
+
+                            window.katex.render(
+                                span.textContent || "",
+                                span,
+                                {
+                                    displayMode:
+                                        span.dataset.display === "1",
+                                    throwOnError: false,
+                                    strict: "ignore"
+                                }
+                            );
+
+                            span.classList.remove("neyo-math");
+
+                        } catch {}
+
+                    }
+                );
+
+        };
+
+
+    window.addEventListener(
+        "load",
+        () => renderPendingMath(document)
+    );
+
+
     const markdownToHtml =
         markdown => {
 
@@ -629,15 +805,24 @@ Does NOT own:
                 configureMarked();
 
 
+                const math =
+                    protectMath(
+                        input
+                    );
+
+
                 const html =
                     window.marked
                         .parse(
-                            input
+                            math.text
                         );
 
 
-                return sanitizeHtml(
-                    html
+                return restoreMath(
+                    sanitizeHtml(
+                        html
+                    ),
+                    math.store
                 );
 
             }

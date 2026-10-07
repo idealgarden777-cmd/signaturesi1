@@ -402,7 +402,11 @@ async function handleVoiceSearch(
           totalContextChars:
             9000,
           budgetMs:
-            11000
+            11000,
+          verifyChars:
+            12000,
+          verifyTimeoutMs:
+            6000
         }
       });
 

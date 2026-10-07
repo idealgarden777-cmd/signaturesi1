@@ -121,6 +121,7 @@ Storage:
     planning: "is planning the research",
     searching: "is searching the web",
     reading: "is reading sources",
+    verifying: "is fact-checking",
     writing: "is writing"
   };
 

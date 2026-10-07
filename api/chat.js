@@ -2464,6 +2464,7 @@ async function applyDeepResearch(
             "[SEARCH_ROUTER]",
             routed?.by,
             routed?.search,
+            routed?.hard ? "hard" : "simple",
             (routed?.queries || []).join(" | ")
         );
 
@@ -2500,7 +2501,9 @@ async function applyDeepResearch(
                             queries:
                                 routed.queries,
                             news:
-                                routed.news
+                                routed.news,
+                            hard:
+                                routed.hard
                         }
                         : undefined,
                 onStatus

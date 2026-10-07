@@ -16,6 +16,8 @@
   "dependencies": {
     "@google/genai": "^1.27.0",
     "@supabase/supabase-js": "^2.57.4",
+    "acorn": "^8.19.0",
+    "acorn-walk": "^8.3.5",
     "dompurify": "^3.2.6",
     "jszip": "^3.10.1",
     "mammoth": "^1.10.0",

@@ -125,6 +125,8 @@ Storage:
     reasoning: "is reasoning it through",
     checking: "is double-checking the maths",
     solving: "is solving the logic",
+    analyzing: "is analyzing the code",
+    mapping: "is mapping the ideas",
     writing: "is writing"
   };
 

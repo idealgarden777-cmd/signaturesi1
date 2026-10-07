@@ -1,35 +1,23 @@
 /*
 =========================================================
-NEYO — PERSONALITIES PANEL v1
+NEYO — PERSONALITIES PANEL v2
 Owns:
 - Character cards (Neyo, Zadi, Wizi, Crony) in
   Settings > NEYO Personalities
-- Response style cards (Default, Teacher, Coder ...)
+- Character thinking indicator in chat (mini mascot +
+  "Zadi is thinking")
 - Keeps chat character, mascot and voice character
   in sync through localStorage + neyo:character-select
 Storage:
 - neo_default_personality  (character, read by neo.js
   and sent to /api/chat as `personality`)
-- neo_response_style       (sent to /api/chat as
-  `responseStyle`)
 =========================================================
 */
 (() => {
   "use strict";
 
   const CHARACTER_KEY = "neo_default_personality";
-  const STYLE_KEY = "neo_response_style";
   const CHARACTERS = ["neyo", "zadi", "wizi", "crony"];
-  const STYLES = [
-    "default",
-    "teacher",
-    "coder",
-    "researcher",
-    "business",
-    "creative",
-    "calm",
-    "direct"
-  ];
 
   const read = (key, fallback, allowed) => {
     try {
@@ -47,13 +35,7 @@ Storage:
   };
 
   const getCharacter = () => read(CHARACTER_KEY, "neyo", CHARACTERS);
-  const getStyle = () => read(STYLE_KEY, "default", STYLES);
 
-  const isPro = () => {
-    const badge = document.getElementById("userPlanBadge");
-    const text = String(badge?.textContent || "").toLowerCase();
-    return Boolean(text) && !text.includes("free");
-  };
 
   /* ---------------- UI sync ---------------- */
 
@@ -82,17 +64,6 @@ Storage:
       });
   }
 
-  function syncStyleUi() {
-    const current = getStyle();
-
-    document
-      .querySelectorAll("#personalityGrid [data-personality]")
-      .forEach(card => {
-        const active = card.dataset.personality === current;
-        card.classList.toggle("active", active);
-        card.setAttribute("aria-pressed", String(active));
-      });
-  }
 
   /* ---------------- actions ---------------- */
 
@@ -119,20 +90,78 @@ Storage:
     }
   }
 
-  function selectStyle(id) {
-    if (id === "custom") {
-      if (!isPro()) {
-        document.getElementById("settingsUpgradeBtn")?.click();
-      }
+
+
+  /* ---------------- character thinking indicator ---------------- */
+
+  const NAMES = { neyo: "Neyo", zadi: "Zadi", wizi: "Wizi", crony: "Crony" };
+
+  function buildMascot(id) {
+    const mascot = document.createElement("span");
+    mascot.className = "neyo-thinking-mascot personality-mascot";
+    mascot.dataset.character = id;
+    mascot.setAttribute("aria-hidden", "true");
+    for (let i = 0; i < 2; i += 1) {
+      const eye = document.createElement("span");
+      eye.className = "personality-mascot-eye";
+      mascot.appendChild(eye);
+    }
+    return mascot;
+  }
+
+  function decorateThinking(message) {
+    if (!message || message.dataset.characterThinking === "1") {
+      return;
+    }
+    const content = message.querySelector(".message-content");
+    if (!content) {
       return;
     }
 
-    if (!STYLES.includes(id)) {
-      return;
+    const id = getCharacter();
+    const name = NAMES[id] || "Neyo";
+    message.dataset.characterThinking = "1";
+    message.dataset.character = id;
+
+    const row = document.createElement("span");
+    row.className = "neyo-character-thinking";
+    row.setAttribute("aria-label", `${name} is thinking`);
+
+    const label = document.createElement("span");
+    label.className = "neyo-character-thinking-label";
+    label.textContent = `${name} is thinking`;
+
+    const dots = document.createElement("span");
+    dots.className = "neyo-character-thinking-dots";
+    dots.setAttribute("aria-hidden", "true");
+    for (let i = 0; i < 3; i += 1) {
+      dots.appendChild(document.createElement("i"));
     }
 
-    write(STYLE_KEY, id);
-    syncStyleUi();
+    row.append(buildMascot(id), label, dots);
+    content.replaceChildren(row);
+  }
+
+  function scan(root) {
+    if (!root || root.nodeType !== 1) {
+      return;
+    }
+    if (root.matches?.(".message.assistant.is-thinking")) {
+      decorateThinking(root);
+    }
+    root
+      .querySelectorAll?.(".message.assistant.is-thinking")
+      .forEach(decorateThinking);
+  }
+
+  function watchThinking() {
+    const target = document.getElementById("chatMessages") || document.body;
+    scan(target);
+    try {
+      new MutationObserver(records => {
+        records.forEach(record => record.addedNodes.forEach(scan));
+      }).observe(target, { childList: true, subtree: true });
+    } catch {}
   }
 
   /* ---------------- wiring ---------------- */
@@ -148,12 +177,6 @@ Storage:
           return;
         }
 
-        const styleCard = event.target.closest?.("#personalityGrid [data-personality]");
-        if (styleCard) {
-          event.preventDefault();
-          selectStyle(styleCard.dataset.personality);
-          return;
-        }
 
         const settingsOption = event.target.closest?.(
           "#settingsDefaultPersonalityMenu .settings-select-option"
@@ -168,7 +191,6 @@ Storage:
         if (event.target.closest?.("#sidebarPersonalitiesBtn, #personalMemoryBtn, [data-settings-tab='personalities']")) {
           setTimeout(() => {
             syncCharacterUi();
-            syncStyleUi();
           }, 0);
         }
       },
@@ -189,7 +211,7 @@ Storage:
     });
 
     syncCharacterUi();
-    syncStyleUi();
+    watchThinking();
 
     // Start mascot + voice on the saved character once modules are ready.
     const restore = () => {
@@ -214,8 +236,6 @@ Storage:
 
   window.NeyoPersonalities = Object.freeze({
     getCharacter,
-    getStyle,
-    selectCharacter: id => selectCharacter(String(id || "").toLowerCase()),
-    selectStyle: id => selectStyle(String(id || "").toLowerCase())
+    selectCharacter: id => selectCharacter(String(id || "").toLowerCase())
   });
 })();

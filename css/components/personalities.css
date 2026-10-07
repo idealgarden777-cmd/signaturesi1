@@ -1,7 +1,7 @@
 /*
 =========================================================
-NEYO — PERSONALITIES PANEL v1
-Characters section (mini mascots) above Response style.
+NEYO — PERSONALITIES PANEL v2
+Characters section (mini mascots) + chat thinking indicator.
 Reuses .personality-card / .personality-grid from
 settings.css so both sections look identical.
 =========================================================
@@ -96,5 +96,126 @@ html.dark .personality-card.active,
 @media (prefers-reduced-motion: reduce) {
   .personality-character-card:hover .personality-mascot-eye {
     animation: none;
+  }
+}
+
+/* =========================================================
+   CHARACTER THINKING INDICATOR (chat)
+   ========================================================= */
+
+.neyo-character-thinking {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  white-space: nowrap;
+}
+
+.neyo-thinking-mascot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  gap: 4px;
+  border-radius: 7px;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.14);
+  animation: neyoThinkingBob 1.4s ease-in-out infinite;
+}
+
+.neyo-thinking-mascot .personality-mascot-eye {
+  width: 4px;
+  height: 5px;
+  animation: neyoThinkingLook 2.8s ease-in-out infinite;
+}
+
+.neyo-thinking-mascot[data-character="wizi"] {
+  border-radius: 50%;
+}
+
+.neyo-thinking-mascot[data-character="zadi"] {
+  border-radius: 6px;
+}
+
+.neyo-thinking-mascot[data-character="crony"] {
+  width: 15px;
+  margin: 0 3px;
+  gap: 3px;
+  border-radius: 999px;
+}
+
+.neyo-thinking-mascot[data-character="crony"] .personality-mascot-eye {
+  width: 3px;
+  height: 4px;
+}
+
+.neyo-character-thinking-label {
+  background: linear-gradient(90deg, #8a8a8a 0%, #8a8a8a 35%, #d0d0d0 50%, #8a8a8a 65%, #8a8a8a 100%);
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: neyoThinkingShimmer 1.8s linear infinite;
+}
+
+.neyo-character-thinking-dots {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.neyo-character-thinking-dots i {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.25;
+  animation: neyoThinkingDot 900ms ease-in-out infinite;
+}
+
+.neyo-character-thinking-dots i:nth-child(2) { animation-delay: 150ms; }
+.neyo-character-thinking-dots i:nth-child(3) { animation-delay: 300ms; }
+
+@keyframes neyoThinkingBob {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  30% { transform: translateY(-3px) rotate(-4deg); }
+  60% { transform: translateY(0) rotate(3deg); }
+}
+
+@keyframes neyoThinkingLook {
+  0%, 20% { transform: translateX(0) scaleY(1); }
+  30% { transform: translateX(-1.5px) scaleY(1); }
+  45% { transform: translateX(-1.5px) scaleY(0.15); }
+  50% { transform: translateX(-1.5px) scaleY(1); }
+  65%, 80% { transform: translateX(1.5px) scaleY(1); }
+  100% { transform: translateX(0) scaleY(1); }
+}
+
+@keyframes neyoThinkingShimmer {
+  0% { background-position: 120% 0; }
+  100% { background-position: -120% 0; }
+}
+
+@keyframes neyoThinkingDot {
+  0%, 60%, 100% { opacity: 0.22; transform: translateY(0); }
+  30% { opacity: 0.8; transform: translateY(-2px); }
+}
+
+body.dark-mode .neyo-character-thinking-label,
+html.dark .neyo-character-thinking-label,
+[data-theme="dark"] .neyo-character-thinking-label {
+  background-image: linear-gradient(90deg, #8f8f8f 0%, #8f8f8f 35%, #f0f0f0 50%, #8f8f8f 65%, #8f8f8f 100%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .neyo-thinking-mascot,
+  .neyo-thinking-mascot .personality-mascot-eye,
+  .neyo-character-thinking-label,
+  .neyo-character-thinking-dots i {
+    animation: none;
+  }
+
+  .neyo-character-thinking-label {
+    color: #8a8a8a;
+    background: none;
   }
 }

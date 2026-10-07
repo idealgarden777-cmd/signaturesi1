@@ -2781,7 +2781,6 @@
                     privateChat: privateChat,
                     language: getPreference("language"),
                     personality: getPreference("defaultPersonality"),
-                    responseStyle: localStorage.getItem("neo_response_style") || "default",
                     isDeepResearch: isDeepResearchMode,
                     title
                 })

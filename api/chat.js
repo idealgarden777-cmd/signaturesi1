@@ -789,7 +789,7 @@ function selectModelRoute({
 
 
 /* =========================================================
-   CHARACTERS + RESPONSE STYLES (real personalities)
+   CHARACTERS (real chat personalities)
    ========================================================= */
 
 const CHARACTER_SHARED_RULE =
@@ -810,41 +810,6 @@ const CHARACTER_TEXT_PERSONAS =
             "Character: you are Crony, NEYO's bouncy blue liquid-pill buddy. Personality: super friendly, playful, upbeat and casual, like a best friend. Relaxed cheerful wording, light jokes, keep the vibe positive, but still help properly and simply. " +
             CHARACTER_SHARED_RULE
     });
-
-const RESPONSE_STYLE_PROMPTS =
-    Object.freeze({
-        teacher:
-            "Response style: Teacher. Explain step by step in simple words, use a small example, and end with a short recap.",
-        coder:
-            "Response style: Coder. Focus on clean, working code with brief explanations, best practices and edge cases. Prefer complete runnable snippets.",
-        researcher:
-            "Response style: Researcher. Be careful and thorough: separate facts from assumptions, compare viewpoints, and say clearly when something is uncertain.",
-        business:
-            "Response style: Business. Think in goals, growth, costs and risks. Give practical plans, numbers where useful, and clear next actions.",
-        creative:
-            "Response style: Creative. Be imaginative and original: fresh ideas, vivid language and a few alternative angles.",
-        calm:
-            "Response style: Calm. Use a soft, patient and supportive tone. Be gentle and reassuring, never rushed.",
-        direct:
-            "Response style: Direct. Be short and focused: answer first, minimal explanation, no filler."
-    });
-
-function normalizeResponseStyle(
-    value
-) {
-    const style =
-        String(
-            value || "default"
-        )
-            .trim()
-            .toLowerCase()
-            .slice(0, 30);
-
-    return RESPONSE_STYLE_PROMPTS[style]
-        ? style
-        : "default";
-}
-
 
 /* =========================================================
    SYSTEM
@@ -894,17 +859,6 @@ function buildSystemInstruction(
     if (characterPrompt) {
         parts.push(
             characterPrompt
-        );
-    }
-
-    const stylePrompt =
-        RESPONSE_STYLE_PROMPTS[
-            preferences.responseStyle
-        ];
-
-    if (stylePrompt) {
-        parts.push(
-            stylePrompt
         );
     }
 
@@ -2673,11 +2627,6 @@ export default async function handler(
             personality:
                 normalizePersonality(
                     body.personality
-                ),
-
-            responseStyle:
-                normalizeResponseStyle(
-                    body.responseStyle
                 )
 
         };

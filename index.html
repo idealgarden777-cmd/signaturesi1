@@ -99,7 +99,7 @@
   <link rel="stylesheet" href="/css/components/voice-mode.css?v=5">
   <link rel="stylesheet" href="/css/components/mascot.css?v=8">
   <link rel="stylesheet" href="/css/components/character-picker.css?v=5">
-  <link rel="stylesheet" href="/css/components/personalities.css?v=1">
+  <link rel="stylesheet" href="/css/components/personalities.css?v=2">
 
   <!-- KaTeX -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css">
@@ -1091,7 +1091,7 @@
         <!-- PANEL: PERSONALITIES – EXISTING -->
         <div class="neo-settings-panel" id="settingsPanelPersonalities">
           <h2>NEYO Personalities</h2>
-          <p class="settings-subtitle">Choose who NEYO talks as and how it responds. Custom personality is Pro only.</p>
+          <p class="settings-subtitle">Choose who talks with you in chat. Each character has its own real personality.</p>
 
           <span class="neo-settings-section-title personality-section-title">Characters</span>
           <div class="personality-grid personality-character-grid" id="personalityCharacterGrid">
@@ -1113,45 +1113,6 @@
             </button>
           </div>
 
-          <span class="neo-settings-section-title personality-section-title">Response style</span>
-          <div class="personality-grid" id="personalityGrid">
-            <button class="personality-card active" type="button" data-personality="default">
-              <span class="personality-avatar"><i data-lucide="zap" size="20"></i></span>
-              <strong>Default</strong><small>Balanced and helpful</small>
-            </button>
-            <button class="personality-card" type="button" data-personality="teacher">
-              <span class="personality-avatar"><i data-lucide="graduation-cap" size="20"></i></span>
-              <strong>Teacher</strong><small>Simple learning style</small>
-            </button>
-            <button class="personality-card" type="button" data-personality="coder">
-              <span class="personality-avatar"><i data-lucide="code" size="20"></i></span>
-              <strong>Coder</strong><small>Clean coding help</small>
-            </button>
-            <button class="personality-card" type="button" data-personality="researcher">
-              <span class="personality-avatar"><i data-lucide="search" size="20"></i></span>
-              <strong>Researcher</strong><small>Careful deep answers</small>
-            </button>
-            <button class="personality-card" type="button" data-personality="business">
-              <span class="personality-avatar"><i data-lucide="chart-line" size="20"></i></span>
-              <strong>Business</strong><small>Growth and planning</small>
-            </button>
-            <button class="personality-card" type="button" data-personality="creative">
-              <span class="personality-avatar"><i data-lucide="palette" size="20"></i></span>
-              <strong>Creative</strong><small>Ideas and writing</small>
-            </button>
-            <button class="personality-card" type="button" data-personality="calm">
-              <span class="personality-avatar"><i data-lucide="leaf" size="20"></i></span>
-              <strong>Calm</strong><small>Soft supportive tone</small>
-            </button>
-            <button class="personality-card" type="button" data-personality="direct">
-              <span class="personality-avatar"><i data-lucide="target" size="20"></i></span>
-              <strong>Direct</strong><small>Short and focused</small>
-            </button>
-            <button class="personality-card pro-personality" type="button" data-personality="custom">
-              <span class="personality-avatar"><i data-lucide="sparkles" size="20"></i></span>
-              <strong>Custom</strong><small>Pro only</small>
-            </button>
-          </div>
         </div>
 
         <!-- PANEL: BILLING – EXISTING -->
@@ -1899,7 +1860,7 @@
   <!-- ========================================================= -->
 
   <!-- Main working app -->
-  <script src="/neo.js?v=87"></script>
+  <script src="/neo.js?v=88"></script>
 
   <!-- Model menu (v6) — cache busted -->
   <script type="module" src="/js/components/model-menu.js?v=6"></script>
@@ -1933,7 +1894,7 @@
   <script type="module" src="/js/components/voice-mode.js?v=5"></script>
   <script type="module" src="/js/components/character-picker.js?v=2"></script>
   <script src="/js/components/character-picker-dropdown.js?v=1"></script>
-  <script src="/js/components/personalities-panel.js?v=1"></script>
+  <script src="/js/components/personalities-panel.js?v=2"></script>
 
   <!-- Native tooltips (restored) -->
   <script type="module" src="/js/components/native-tooltips.js?v=1"></script>

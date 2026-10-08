@@ -2,7 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { applyContextCache, dropContextCache } from "../lib/context-cache.js";
 import { decideLocally } from "../lib/decide.js";
 import { createPrivacySession, PRIVACY_RULE, privacyEnabled } from "../lib/privacy.js";
-import { MEMORY_RULE, memoryEnabled, createMemoryFilter, applyMemoryMarkers, saveMemories, loadMemoryBox, autoCodeCopies, looksLikeFact, extractFactsWithModel, touchMemories, wantsForget, wantsRemember, pickKeysToForget } from "../lib/memory.js";
+import { MEMORY_RULE, memoryEnabled, createMemoryFilter, applyMemoryMarkers, saveMemories, loadMemoryBox, autoCodeCopies, looksLikeFact, extractFactsWithModel, touchMemories, wantsForget, wantsRemember, pickKeysToForget, resolveForgets } from "../lib/memory.js";
 
 import {
     getAuthenticatedUser
@@ -4395,8 +4395,13 @@ export default async function handler(
                 privateChat || !memoryEnabled()
                     ? null
                     : (async () => {
+                        const boxKeys =
+                            [...memoryLoaded.box.keys()];
                         const copies =
-                            [...signals.copies];
+                            resolveForgets(
+                                signals.copies,
+                                boxKeys
+                            );
                         const forgetAsked =
                             wantsForget(userText);
                         if (
@@ -4435,15 +4440,18 @@ export default async function handler(
                             !copies.some(copy => copy.forget)
                         ) {
                             copies.push(
-                                ...await pickKeysToForget({
+                                ...resolveForgets(
+                                    await pickKeysToForget({
                                     apiKey:
                                         GEMINI_API_KEY,
                                     model:
                                         NEYO_FREE_FALLBACK_MODEL,
                                     userText,
                                     keys:
-                                        [...memoryLoaded.box.keys()]
-                                })
+                                        boxKeys
+                                    }),
+                                    boxKeys
+                                )
                             );
                         }
                         const used =

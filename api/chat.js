@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { applyContextCache, dropContextCache } from "../lib/context-cache.js";
 import { decideLocally } from "../lib/decide.js";
+import { createPrivacySession, PRIVACY_RULE, privacyEnabled } from "../lib/privacy.js";
 
 import {
     getAuthenticatedUser
@@ -1034,6 +1035,11 @@ function buildGeminiBody(
                     text:
                         buildSystemInstruction(
                             preferences
+                        ) +
+                        (
+                            privacyEnabled()
+                                ? `\n\n${PRIVACY_RULE}`
+                                : ""
                         ) +
                         (
                             preferences.thinkingEffort === "high"
@@ -3279,6 +3285,32 @@ export default async function handler(
         }
 
 
+        // ZERO-TRUST PRIVACY: scrub keys, passwords, cards, IDs and
+        // mask emails / phones before anything leaves this server.
+        // The real text is kept only for saving in the user's own DB.
+        const originalUserText =
+            cleanString(
+                lastMsg.content || ""
+            );
+
+        const privacy =
+            createPrivacySession();
+
+        messages.forEach(message => {
+            if (
+                message &&
+                typeof message.content === "string"
+            ) {
+                message.content =
+                    privacy.scrub(message.content);
+            }
+        });
+
+        if (privacy.changed) {
+            console.log("[PRIVACY] masked", privacy.counts);
+        }
+
+
         const preferences = {
 
             intelligence:
@@ -3758,7 +3790,7 @@ export default async function handler(
                         title:
                             cleanString(
                                 body.title ||
-                                userText ||
+                                originalUserText ||
                                 attachments[0]
                                     ?.name ||
                                 "New conversation",
@@ -3790,7 +3822,7 @@ export default async function handler(
                 : saveMessage(
                     conversationId,
                     "user",
-                    userText ||
+                    originalUserText ||
                     "Attachment",
                     attachments,
                     []
@@ -4076,6 +4108,10 @@ export default async function handler(
             let thoughtChars =
                 0;
 
+            // Put masked emails / phones back as the answer streams.
+            const privacyStream =
+                privacy.createStreamRestorer();
+
             const streamResult =
                 await callModelRouteStream(
                     streamMessages,
@@ -4108,7 +4144,9 @@ export default async function handler(
                                         type:
                                             "thought",
                                         content:
-                                            thought.slice(0, 600)
+                                            privacy.restore(
+                                                thought.slice(0, 600)
+                                            )
                                     }
                                 );
 
@@ -4184,6 +4222,13 @@ export default async function handler(
                         onText:
                             text => {
 
+                                const safeText =
+                                    privacyStream.push(text);
+
+                                if (!safeText) {
+                                    return;
+                                }
+
                                 writeSSE(
                                     res,
                                     {
@@ -4191,7 +4236,7 @@ export default async function handler(
                                             "delta",
 
                                         content:
-                                            text
+                                            safeText
                                     }
                                 );
 
@@ -4215,8 +4260,25 @@ export default async function handler(
             );
 
 
+            const privacyTail =
+                privacyStream.flush();
+
+            if (privacyTail) {
+                writeSSE(
+                    res,
+                    {
+                        type:
+                            "delta",
+                        content:
+                            privacyTail
+                    }
+                );
+            }
+
             const reply =
-                streamResult.reply;
+                privacy.restore(
+                    streamResult.reply
+                );
 
 
             if (!reply) {
@@ -4282,6 +4344,11 @@ export default async function handler(
                     sources,
 
                     usedUrlContext,
+
+                    privacy:
+                        privacy.changed
+                            ? privacy.counts
+                            : null,
 
                     creditType:
                         reservedType,
@@ -4442,12 +4509,14 @@ export default async function handler(
 
 
         const reply =
+            privacy.restore(
             extractFinalReply(
                 modelResponse
                     ?.data
                     ?.candidates?.[0]
                     ?.content
                     ?.parts
+            )
             );
 
 

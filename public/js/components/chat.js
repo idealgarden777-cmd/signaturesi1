@@ -986,6 +986,12 @@ public/js/components/chat.js
                         new CustomEvent("neyo:memory", { detail: event.memory })
                     );
                 }
+
+                if (event.workspace) {
+                    window.dispatchEvent(
+                        new CustomEvent("neyo:workspace-suggestions", { detail: event.workspace })
+                    );
+                }
             }
 
             return done;

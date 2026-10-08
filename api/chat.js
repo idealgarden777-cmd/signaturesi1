@@ -2,7 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { applyContextCache, dropContextCache } from "../lib/context-cache.js";
 import { decideLocally } from "../lib/decide.js";
 import { createPrivacySession, PRIVACY_RULE, privacyEnabled } from "../lib/privacy.js";
-import { loadWorkspaceContext } from "../lib/workspaces.js";
+import { loadWorkspaceContext, saveWorkspaceSuggestions, WORKSPACE_RULE } from "../lib/workspaces.js";
 import { MEMORY_RULE, memoryEnabled, createMemoryFilter, applyMemoryMarkers, saveMemories, loadMemoryBox, autoCodeCopies, looksLikeFact, extractFactsWithModel, touchMemories, wantsForget, wantsRemember, pickKeysToForget, resolveForgets } from "../lib/memory.js";
 
 import {
@@ -549,6 +549,38 @@ function normalizeWorkspace(
 }
 
 
+// NEYO's <<WS_ACTION>> lines -> pending suggestions a person approves.
+async function saveSuggestionsFor(
+    workspaceId,
+    userId,
+    actions,
+    restore
+) {
+    if (!workspaceId || !Array.isArray(actions) || !actions.length) {
+        return null;
+    }
+    const fix = value =>
+        typeof value === "string" && typeof restore === "function"
+            ? restore(value)
+            : value;
+    const list =
+        await saveWorkspaceSuggestions(
+            String(workspaceId),
+            userId,
+            actions.map(action => {
+                const out = {};
+                for (const key of Object.keys(action || {})) {
+                    out[key] = fix(action[key]);
+                }
+                return out;
+            })
+        );
+    return list.length
+        ? { id: String(workspaceId), suggestions: list }
+        : null;
+}
+
+
 function normalizePrivateChat(
     value
 ) {
@@ -992,6 +1024,12 @@ function buildSystemInstruction(
         parts.push(
             preferences.workspaceContext
         );
+
+        if (preferences.workspaceCanSuggest) {
+            parts.push(
+                WORKSPACE_RULE
+            );
+        }
 
     }
 
@@ -3436,6 +3474,8 @@ export default async function handler(
             if (wsContext?.text) {
                 preferences.workspaceContext =
                     privacy.scrub(wsContext.text);
+                preferences.workspaceCanSuggest =
+                    wsContext.role !== "viewer";
                 console.log("[WORKSPACE] context", wsContext.name, wsContext.text.length);
             }
         }
@@ -4591,6 +4631,16 @@ export default async function handler(
             let memoryResult =
                 null;
 
+            const workspaceSuggested =
+                preferences.workspaceCanSuggest
+                    ? saveSuggestionsFor(
+                        body.workspaceId,
+                        userId,
+                        signals.actions,
+                        privacy.restore
+                    ).catch(() => null)
+                    : Promise.resolve(null);
+
 
             if (!reply) {
 
@@ -4663,6 +4713,9 @@ export default async function handler(
                         privacy.changed
                             ? privacy.counts
                             : null,
+
+                    workspace:
+                        await workspaceSuggested,
 
                     memory:
                         memoryResult &&
@@ -4838,8 +4891,7 @@ export default async function handler(
         );
 
 
-        const reply =
-            privacy.restore(
+        const finalSignals =
             applyMemoryMarkers(
             extractFinalReply(
                 modelResponse
@@ -4848,8 +4900,22 @@ export default async function handler(
                     ?.content
                     ?.parts
             )
-            ).text
             );
+
+        const reply =
+            privacy.restore(
+                finalSignals.text
+            );
+
+        const workspaceSuggested =
+            preferences.workspaceCanSuggest
+                ? await saveSuggestionsFor(
+                    body.workspaceId,
+                    userId,
+                    finalSignals.actions,
+                    privacy.restore
+                ).catch(() => null)
+                : null;
 
 
         if (!reply) {
@@ -4908,6 +4974,9 @@ export default async function handler(
                         : undefined,
 
                 usedUrlContext,
+
+                workspace:
+                    workspaceSuggested || undefined,
 
                 creditType:
                     reservedType,

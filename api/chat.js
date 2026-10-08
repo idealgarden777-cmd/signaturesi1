@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { applyContextCache, dropContextCache } from "../lib/context-cache.js";
 import { decideLocally } from "../lib/decide.js";
 import { createPrivacySession, PRIVACY_RULE, privacyEnabled } from "../lib/privacy.js";
+import { loadMcpTools } from "../lib/mcp.js";
 import { MEMORY_RULE, memoryEnabled, createMemoryFilter, applyMemoryMarkers, saveMemories, loadMemoryBox, autoCodeCopies, looksLikeFact, extractFactsWithModel, touchMemories, wantsForget, wantsRemember, pickKeysToForget, resolveForgets } from "../lib/memory.js";
 
 import {
@@ -2693,11 +2694,32 @@ async function applyDeepResearch(
     messages,
     userText,
     onStatus = () => {},
-    mode = "deep"
+    mode = "deep",
+    extra = {}
 ) {
 
     const live =
         mode === "live";
+
+    // ONE-CLICK MCP: tools of the user's connected apps (GitHub...),
+    // only when the message is about them (0 cost otherwise).
+    const mcpTools =
+        live &&
+        extra.userId &&
+        !extra.privateChat
+            ? await loadMcpTools(
+                supabase,
+                {
+                    userId:
+                        extra.userId,
+                    question:
+                        userText
+                }
+            ).catch(error => {
+                console.warn("[MCP] load failed", error?.message || error);
+                return null;
+            })
+            : null;
 
     // Zero-token decision (plain rules, no AI call): skip the
     // tool planner when it is clearly not needed, and pick effort.
@@ -2723,7 +2745,8 @@ async function applyDeepResearch(
 
     if (
         live &&
-        decision.lane === "direct"
+        decision.lane === "direct" &&
+        !mcpTools
     ) {
 
         return {
@@ -2790,7 +2813,9 @@ async function applyDeepResearch(
                         DEEP_RESEARCH_PLANNER_MODEL,
                     groundingModel:
                         DEEP_RESEARCH_GROUNDING_MODEL,
-                    onStatus
+                    onStatus,
+                    extraTools:
+                        mcpTools
                 });
 
             // Rules spotted a hard question -> think, whatever the planner said.
@@ -4053,7 +4078,11 @@ export default async function handler(
                             ),
                         isDeepResearch
                             ? "deep"
-                            : "live"
+                            : "live",
+                        {
+                            userId,
+                            privateChat
+                        }
                     );
 
                 streamMessages =
@@ -4684,7 +4713,11 @@ export default async function handler(
                     () => {},
                     isDeepResearch
                         ? "deep"
-                        : "live"
+                        : "live",
+                    {
+                        userId,
+                        privateChat
+                    }
                 );
 
             normalMessages =

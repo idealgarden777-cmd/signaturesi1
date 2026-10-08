@@ -1277,10 +1277,18 @@
             <h2>Workspace</h2>
             <p>Manage your workspace preferences.</p>
           </div>
-          <div class="neo-settings-placeholder">
-            <i data-lucide="briefcase-business" size="28"></i>
-            <strong>Workspace settings</strong>
-            <small>Coming soon.</small>
+          <!-- CONNECTED APPS (one-click MCP) -->
+          <div class="neo-settings-section">
+            <span class="neo-settings-section-title">Connected apps</span>
+            <div id="mcpConnections" class="mcp-connections">
+              <div class="settings-row" data-mcp-server="github">
+                <div>
+                  <strong>GitHub</strong>
+                  <small class="mcp-status">Let NEYO read your repos, issues and pull requests, and act on them when you ask.</small>
+                </div>
+                <button type="button" class="settings-primary-btn mcp-action" data-mcp-action="connect" disabled>Connect</button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -1924,6 +1932,7 @@
   <script src="/js/components/source-cards.js?v=4" defer></script>
   <script src="/js/components/user-collapse.js?v=1" defer></script>
   <script src="/js/components/memory-chip.js?v=1" defer></script>
+  <script src="/js/components/mcp-connect.js?v=2" defer></script>
   <script src="/js/components/voice-search-ui.js?v=1" defer></script>
 
 

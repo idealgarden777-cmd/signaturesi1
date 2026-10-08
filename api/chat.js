@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { applyContextCache, dropContextCache } from "../lib/context-cache.js";
 import { decideLocally } from "../lib/decide.js";
 import { createPrivacySession, PRIVACY_RULE, privacyEnabled } from "../lib/privacy.js";
+import { loadWorkspaceContext } from "../lib/workspaces.js";
 import { MEMORY_RULE, memoryEnabled, createMemoryFilter, applyMemoryMarkers, saveMemories, loadMemoryBox, autoCodeCopies, looksLikeFact, extractFactsWithModel, touchMemories, wantsForget, wantsRemember, pickKeysToForget, resolveForgets } from "../lib/memory.js";
 
 import {
@@ -985,6 +986,14 @@ function buildSystemInstruction(
 
     const workspace =
         preferences.workspace || {};
+
+    if (preferences.workspaceContext) {
+
+        parts.push(
+            preferences.workspaceContext
+        );
+
+    }
 
     if (workspace.instructions) {
 
@@ -3411,6 +3420,25 @@ export default async function handler(
             normalizePrivateChat(
                 body.privateChat
             );
+
+
+        // NEYO Workspace picked in the composer: its project, members,
+        // tasks, decisions, notes and files become context for NEYO.
+        if (body.workspaceId) {
+            const lastUserText =
+                [...messages].reverse().find(m => m?.role === "user")?.content || "";
+            const wsContext =
+                await loadWorkspaceContext(
+                    String(body.workspaceId),
+                    userId,
+                    typeof lastUserText === "string" ? lastUserText : ""
+                );
+            if (wsContext?.text) {
+                preferences.workspaceContext =
+                    privacy.scrub(wsContext.text);
+                console.log("[WORKSPACE] context", wsContext.name, wsContext.text.length);
+            }
+        }
 
 
         const isDeepResearch =

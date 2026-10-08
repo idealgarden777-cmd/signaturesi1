@@ -418,6 +418,17 @@ public/js/components/chat.js
         return null;
     }
 
+    // NEYO Workspace picked for this chat (workspaces.js).
+    function readWorkspaceId() {
+        try {
+            const api = window.NeyoWorkspaces;
+            if (api && typeof api.activeId === "function") {
+                return api.activeId() || null;
+            }
+        } catch {}
+        return null;
+    }
+
     function buildPayload(
         prompt,
         attachments
@@ -470,6 +481,9 @@ public/js/components/chat.js
 
             workspace:
                 readWorkspace(),
+
+            workspaceId:
+                readWorkspaceId(),
 
             stream:
                 true

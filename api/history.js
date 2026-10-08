@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { getAuthenticatedUser } from "../lib/auth.js";
+import { handleWorkspaces } from "../lib/workspaces.js";
 
 const DEFAULT_HISTORY_LIMIT = 100;
 const MAX_HISTORY_LIMIT = 200;
@@ -676,6 +677,14 @@ export default async function handler(
     setResponseHeaders(
         res
     );
+
+
+    // NEYO Workspaces live here so no extra Vercel function is needed.
+    if (
+        String(req.query?.resource || "") === "workspaces"
+    ) {
+        return handleWorkspaces(req, res);
+    }
 
 
     const allowedMethods = [

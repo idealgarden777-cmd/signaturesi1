@@ -407,6 +407,17 @@ public/js/components/chat.js
         ).slice(0, 80);
     }
 
+    // Settings > Workspace (saved in this browser).
+    function readWorkspace() {
+        try {
+            const api = window.NeyoWorkspace;
+            if (api && typeof api.get === "function") {
+                return api.get();
+            }
+        } catch {}
+        return null;
+    }
+
     function buildPayload(
         prompt,
         attachments
@@ -456,6 +467,9 @@ public/js/components/chat.js
                     prompt,
                     attachments
                 ),
+
+            workspace:
+                readWorkspace(),
 
             stream:
                 true

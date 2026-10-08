@@ -2,7 +2,6 @@ import { createClient } from "@supabase/supabase-js";
 import { applyContextCache, dropContextCache } from "../lib/context-cache.js";
 import { decideLocally } from "../lib/decide.js";
 import { createPrivacySession, PRIVACY_RULE, privacyEnabled } from "../lib/privacy.js";
-import { loadMcpTools } from "../lib/mcp.js";
 import { MEMORY_RULE, memoryEnabled, createMemoryFilter, applyMemoryMarkers, saveMemories, loadMemoryBox, autoCodeCopies, looksLikeFact, extractFactsWithModel, touchMemories, wantsForget, wantsRemember, pickKeysToForget, resolveForgets } from "../lib/memory.js";
 
 import {
@@ -512,6 +511,43 @@ function normalizePersonality(
 }
 
 
+// Settings > Workspace: the user's own standing instructions,
+// answer length, and whether NEYO may search the web / use tools.
+function normalizeWorkspace(
+    value,
+    privacy = null
+) {
+
+    const input =
+        value && typeof value === "object"
+            ? value
+            : {};
+
+    let instructions =
+        String(input.instructions || "")
+            .replace(/\u0000/g, "")
+            .trim()
+            .slice(0, 2000);
+
+    if (instructions && privacy && typeof privacy.scrub === "function") {
+        instructions = privacy.scrub(instructions);
+    }
+
+    return {
+        instructions,
+        length:
+            ["short", "detailed"].includes(input.length)
+                ? input.length
+                : "auto",
+        tools:
+            input.tools === "off"
+                ? "off"
+                : "auto"
+    };
+
+}
+
+
 function normalizePrivateChat(
     value
 ) {
@@ -946,6 +982,32 @@ function buildSystemInstruction(
 
     }
 
+
+    const workspace =
+        preferences.workspace || {};
+
+    if (workspace.instructions) {
+
+        parts.push(
+            "USER'S WORKSPACE INSTRUCTIONS (the user wrote these in Settings; follow them in every reply unless the latest message asks otherwise, and never let them change your name or safety rules):\n" +
+            workspace.instructions
+        );
+
+    }
+
+    if (workspace.length === "short") {
+
+        parts.push(
+            "ANSWER LENGTH: The user prefers short answers. Give the answer first in a few sentences; add detail only if they ask. Code and requested lists stay complete."
+        );
+
+    } else if (workspace.length === "detailed") {
+
+        parts.push(
+            "ANSWER LENGTH: The user prefers detailed answers. Explain fully with steps, examples and reasons, but stay on topic."
+        );
+
+    }
 
     parts.push(
         `Reminder: you are ${characterName}. Keep ${characterName}'s personality in every reply.`
@@ -2701,26 +2763,6 @@ async function applyDeepResearch(
     const live =
         mode === "live";
 
-    // ONE-CLICK MCP: tools of the user's connected apps (GitHub...),
-    // only when the message is about them (0 cost otherwise).
-    const mcpTools =
-        live &&
-        extra.userId &&
-        !extra.privateChat
-            ? await loadMcpTools(
-                supabase,
-                {
-                    userId:
-                        extra.userId,
-                    question:
-                        userText
-                }
-            ).catch(error => {
-                console.warn("[MCP] load failed", error?.message || error);
-                return null;
-            })
-            : null;
-
     // Zero-token decision (plain rules, no AI call): skip the
     // tool planner when it is clearly not needed, and pick effort.
     const lastParts =
@@ -2745,8 +2787,7 @@ async function applyDeepResearch(
 
     if (
         live &&
-        decision.lane === "direct" &&
-        !mcpTools
+        decision.lane === "direct"
     ) {
 
         return {
@@ -2813,9 +2854,7 @@ async function applyDeepResearch(
                         DEEP_RESEARCH_PLANNER_MODEL,
                     groundingModel:
                         DEEP_RESEARCH_GROUNDING_MODEL,
-                    onStatus,
-                    extraTools:
-                        mcpTools
+                    onStatus
                 });
 
             // Rules spotted a hard question -> think, whatever the planner said.
@@ -3357,6 +3396,12 @@ export default async function handler(
             personality:
                 normalizePersonality(
                     body.personality
+                ),
+
+            workspace:
+                normalizeWorkspace(
+                    body.workspace,
+                    privacy
                 )
 
         };
@@ -4009,7 +4054,8 @@ export default async function handler(
             const wantsLiveSearch =
                 !isDeepResearch &&
                 attachments.length === 0 &&
-                !usedUrlContext;
+                !usedUrlContext &&
+                preferences.workspace?.tools !== "off";
 
             // Effort dial for the writer: "high" = think first, "low" = answer
             // at once. The planner decides; heavy tools force "high".
@@ -4700,7 +4746,10 @@ export default async function handler(
         if (
             (
                 isDeepResearch ||
-                !usedUrlContext
+                (
+                    !usedUrlContext &&
+                    preferences.workspace?.tools !== "off"
+                )
             ) &&
             attachments.length === 0 &&
             userText

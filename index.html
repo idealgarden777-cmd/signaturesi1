@@ -1271,22 +1271,42 @@
 
         </div>
 
-        <!-- PANEL: WORKSPACE – PLACEHOLDER -->
+        <!-- PANEL: WORKSPACE -->
         <div class="neo-settings-panel" id="settingsPanelWorkspace">
           <div class="neo-settings-panel-header">
             <h2>Workspace</h2>
             <p>Manage your workspace preferences.</p>
           </div>
-          <!-- CONNECTED APPS (one-click MCP) -->
+          <!-- WORKSPACE PREFERENCES (saved in this browser) -->
           <div class="neo-settings-section">
-            <span class="neo-settings-section-title">Connected apps</span>
-            <div id="mcpConnections" class="mcp-connections">
-              <div class="settings-row" data-mcp-server="github">
-                <div>
-                  <strong>GitHub</strong>
-                  <small class="mcp-status">Let NEYO read your repos, issues and pull requests, and act on them when you ask.</small>
-                </div>
-                <button type="button" class="settings-primary-btn mcp-action" data-mcp-action="connect" disabled>Connect</button>
+            <span class="neo-settings-section-title">Instructions</span>
+            <div class="ws-block">
+              <small class="ws-help">NEYO follows these in every chat. Example: "Mera naam Ali hai, main web developer hoon, Roman Urdu mein simple jawab do."</small>
+              <textarea id="wsInstructions" class="ws-textarea" rows="5" maxlength="2000" placeholder="Write how NEYO should answer you…"></textarea>
+              <div class="ws-foot"><small id="wsCount">0 / 2000</small><button type="button" class="settings-primary-btn" id="wsSave">Save</button></div>
+            </div>
+          </div>
+          <div class="neo-settings-section">
+            <span class="neo-settings-section-title">Answers</span>
+            <div class="settings-row">
+              <div>
+                <strong>Answer length</strong>
+                <small>Auto lets NEYO decide.</small>
+              </div>
+              <div class="settings-segmented-control" id="wsLength" role="group" aria-label="Answer length">
+                <button type="button" data-value="short" aria-pressed="false">Short</button>
+                <button type="button" data-value="auto" aria-pressed="true" class="active">Auto</button>
+                <button type="button" data-value="detailed" aria-pressed="false">Detailed</button>
+              </div>
+            </div>
+            <div class="settings-row">
+              <div>
+                <strong>Web search &amp; tools</strong>
+                <small>Off = faster answers from NEYO's own knowledge (Deep research still works).</small>
+              </div>
+              <div class="settings-segmented-control" id="wsTools" role="group" aria-label="Web search and tools">
+                <button type="button" data-value="auto" aria-pressed="true" class="active">Auto</button>
+                <button type="button" data-value="off" aria-pressed="false">Off</button>
               </div>
             </div>
           </div>
@@ -1923,7 +1943,7 @@
 
   <script type="module" src="/js/components/attachments.js?v=8"></script>
 
-  <script type="module" src="/js/components/chat.js?v=16"></script>
+  <script type="module" src="/js/components/chat.js?v=17"></script>
 
   <script type="module" src="/js/components/messages.js?v=3"></script>
 
@@ -1932,7 +1952,7 @@
   <script src="/js/components/source-cards.js?v=4" defer></script>
   <script src="/js/components/user-collapse.js?v=1" defer></script>
   <script src="/js/components/memory-chip.js?v=1" defer></script>
-  <script src="/js/components/mcp-connect.js?v=2" defer></script>
+  <script src="/js/components/workspace-settings.js?v=1" defer></script>
   <script src="/js/components/voice-search-ui.js?v=1" defer></script>
 
 

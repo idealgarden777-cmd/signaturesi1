@@ -2,8 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { applyContextCache, dropContextCache } from "../lib/context-cache.js";
 import { decideLocally } from "../lib/decide.js";
 import { createPrivacySession, PRIVACY_RULE, privacyEnabled } from "../lib/privacy.js";
-import { savePack, findExactPack, findRelatedChunks, relatedChunksPrompt } from "../lib/packs.js";
-import { MEMORY_RULE, memoryEnabled, createSignalFilter, extractSignals, saveMemories, loadMemoryPrompt } from "../lib/memory.js";
+import { MEMORY_RULE, memoryEnabled, createMemoryFilter, applyMemoryMarkers, saveMemories, loadMemoryBox, autoCodeCopies, looksLikeFact, extractFactsWithModel } from "../lib/memory.js";
 
 import {
     getAuthenticatedUser
@@ -3996,13 +3995,15 @@ export default async function handler(
                     ? "high"
                     : "";
 
-            // ANSWER PACKS (0 tokens): same question asked in another
-            // chat -> glue the saved answer; else bring related chunks.
-            // AUTO_PASTE: saved facts that match this question (0 tokens).
+            // MEMORY BOX: saved chunks + facts for this user (0 tokens).
+            // The model sees the key list; AUTO_PASTE markers expand here.
+            const emptyMemory =
+                { box: new Map(), prompt: "" };
+
             const memoryPromise =
                 privateChat
-                    ? Promise.resolve("")
-                    : loadMemoryPrompt(
+                    ? Promise.resolve(emptyMemory)
+                    : loadMemoryBox(
                         supabase,
                         {
                             userId,
@@ -4011,65 +4012,13 @@ export default async function handler(
                             scrub:
                                 privacy.scrub
                         }
-                    ).catch(() => "");
+                    ).catch(() => emptyMemory);
 
             let packHit =
                 null;
 
             let packChunks =
                 [];
-
-            if (
-                !privateChat &&
-                !isDeepResearch &&
-                attachments.length === 0 &&
-                userText
-            ) {
-
-                const smallTalk =
-                    isSmallTalk(userText);
-
-                const lane =
-                    decideLocally(
-                        userText,
-                        { smallTalk }
-                    ).lane;
-
-                [packHit, packChunks] =
-                    await Promise.all([
-                        lane === "tools"
-                            ? null
-                            : findExactPack(
-                                supabase,
-                                {
-                                    userId,
-                                    conversationId:
-                                        String(conversationId || ""),
-                                    question:
-                                        originalUserText
-                                }
-                            ).catch(() => null),
-                        smallTalk
-                            ? []
-                            : findRelatedChunks(
-                                supabase,
-                                {
-                                    userId,
-                                    question:
-                                        originalUserText
-                                }
-                            ).catch(() => [])
-                    ]);
-
-                if (packHit) {
-                    timing.pack = "hit";
-                    console.log("[PACKS] exact hit, 0 model tokens");
-                } else if (packChunks.length) {
-                    timing.pack = `related:${packChunks.length}`;
-                    console.log("[PACKS] related chunks", packChunks.length);
-                }
-
-            }
 
             if (
                 !packHit &&
@@ -4188,46 +4137,13 @@ export default async function handler(
             timing.effort =
                 writerEffort;
 
-            if (
-                !packHit &&
-                packChunks.length
-            ) {
-
-                const lastStream =
-                    streamMessages[streamMessages.length - 1];
-
-                if (lastStream?.role === "user") {
-
-                    streamMessages = [
-                        ...streamMessages.slice(0, -1),
-                        {
-                            ...lastStream,
-                            parts: [
-                                ...(lastStream.parts || []),
-                                {
-                                    text:
-                                        relatedChunksPrompt(
-                                            packChunks.map(chunk => ({
-                                                ...chunk,
-                                                question:
-                                                    privacy.scrub(chunk.question || ""),
-                                                content:
-                                                    privacy.scrub(chunk.content || "")
-                                            }))
-                                        )
-                                }
-                            ]
-                        }
-                    ];
-
-                }
-
-            }
+            const memoryLoaded =
+                packHit
+                    ? emptyMemory
+                    : await memoryPromise;
 
             const memoryPrompt =
-                packHit
-                    ? ""
-                    : await memoryPromise;
+                memoryLoaded.prompt;
 
             if (memoryPrompt) {
 
@@ -4251,7 +4167,9 @@ export default async function handler(
 
             // AUTO_COPY: memory signals are cut out of the live text.
             const signalFilter =
-                createSignalFilter();
+                createMemoryFilter(
+                    memoryLoaded.box
+                );
 
             let thoughtChars =
                 0;
@@ -4461,31 +4379,64 @@ export default async function handler(
             }
 
             const signals =
-                extractSignals(
-                    streamResult.reply
+                applyMemoryMarkers(
+                    streamResult.reply,
+                    memoryLoaded.box
                 );
 
             const reply =
                 privacy.restore(
-                    signals.clean
+                    signals.text
                 );
 
+            // AUTO_COPY: the writer's signals; if it forgot and the user
+            // clearly told a fact, one tiny backup call extracts it.
             const memorySaved =
-                signals.copies.length &&
-                !privateChat
-                    ? saveMemories(
-                    supabase,
-                    {
-                        userId,
-                        copies:
-                            signals.copies,
-                        restore:
-                            privacy.restore
-                    }
-                    ).catch(error =>
+                privateChat || !memoryEnabled()
+                    ? null
+                    : (async () => {
+                        const copies =
+                            [...signals.copies];
+                        if (
+                            !copies.some(copy => copy.chunk) &&
+                            !signals.pastes.length &&
+                            !isDeepResearch
+                        ) {
+                            copies.push(
+                                ...autoCodeCopies(
+                                    signals.text,
+                                    userText
+                                )
+                            );
+                        }
+                        if (
+                            !copies.some(copy => !copy.chunk) &&
+                            looksLikeFact(userText)
+                        ) {
+                            copies.push(
+                                ...await extractFactsWithModel({
+                                    apiKey:
+                                        GEMINI_API_KEY,
+                                    model:
+                                        NEYO_FREE_FALLBACK_MODEL,
+                                    userText
+                                })
+                            );
+                        }
+                        if (copies.length) {
+                            await saveMemories(
+                                supabase,
+                                {
+                                    userId,
+                                    copies,
+                                    restore:
+                                        privacy.restore
+                                }
+                            );
+                        }
+                    })().catch(error =>
                         console.warn("[MEMORY] save error", error?.message || error)
-                    )
-                    : null;
+                    );
 
 
             if (!reply) {
@@ -4515,21 +4466,6 @@ export default async function handler(
                         [],
                         sources
                     ),
-                    packHit || isDeepResearch || attachments.length > 0
-                        ? null
-                        : savePack(
-                            supabase,
-                            {
-                                userId,
-                                conversationId:
-                                    String(conversationId || ""),
-                                question:
-                                    originalUserText,
-                                reply
-                            }
-                        ).catch(error =>
-                            console.warn("[PACKS] save error", error?.message || error)
-                        )
                 ]);
 
             }
@@ -4735,7 +4671,7 @@ export default async function handler(
 
         const reply =
             privacy.restore(
-            extractSignals(
+            applyMemoryMarkers(
             extractFinalReply(
                 modelResponse
                     ?.data
@@ -4743,7 +4679,7 @@ export default async function handler(
                     ?.content
                     ?.parts
             )
-            ).clean
+            ).text
             );
 
 

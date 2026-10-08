@@ -1,0 +1,50 @@
+/* NEYO • long user messages: fold + "Show more" */
+
+.message.user.neyo-user-collapsed .message-wrapper > .message-content {
+    max-height: 220px !important;
+    overflow: hidden !important;
+    -webkit-mask-image: linear-gradient(180deg, #000 62%, transparent 100%);
+    mask-image: linear-gradient(180deg, #000 62%, transparent 100%);
+}
+
+.message.user .neyo-user-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    align-self: flex-end;
+    margin: 2px 4px 0 0;
+    padding: 4px 10px;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 999px;
+    background: #fff;
+    color: #555;
+    font: 500 12.5px/1.2 Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.message.user .neyo-user-toggle:hover {
+    background: #f4f4f4;
+    color: #171717;
+}
+
+.message.user .neyo-user-toggle svg {
+    transition: transform 0.2s ease;
+}
+
+.message.user:not(.neyo-user-collapsed) .neyo-user-toggle svg {
+    transform: rotate(180deg);
+}
+
+body.dark-mode .message.user .neyo-user-toggle,
+[data-theme="dark"] .message.user .neyo-user-toggle {
+    background: #1f1f1f;
+    border-color: rgba(255, 255, 255, 0.1);
+    color: #bbb;
+}
+
+body.dark-mode .message.user .neyo-user-toggle:hover,
+[data-theme="dark"] .message.user .neyo-user-toggle:hover {
+    background: #2a2a2a;
+    color: #fff;
+}

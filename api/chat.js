@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { applyContextCache, dropContextCache } from "../lib/context-cache.js";
+import { decideLocally } from "../lib/decide.js";
 
 import {
     getAuthenticatedUser
@@ -2686,19 +2687,38 @@ async function applyDeepResearch(
     const live =
         mode === "live";
 
+    // Zero-token decision (plain rules, no AI call): skip the
+    // tool planner when it is clearly not needed, and pick effort.
+    const lastParts =
+        Array.isArray(messages) && messages.length
+            ? messages[messages.length - 1]?.parts || []
+            : [];
+
+    const decision =
+        decideLocally(
+            userText,
+            {
+                hasAttachments:
+                    lastParts.some(part => part.fileData || part.inlineData),
+                smallTalk:
+                    isSmallTalk(userText)
+            }
+        );
+
+    if (live) {
+        console.log("[DECIDE]", decision.lane, decision.effort, decision.reason);
+    }
+
     if (
         live &&
-        isSmallTalk(userText)
+        decision.lane === "direct"
     ) {
-
-        console.log(
-            "[FAST_LANE] small talk, no tools"
-        );
 
         return {
             messages,
             sources: [],
-            effort: "low"
+            effort: decision.effort,
+            lane: "direct"
         };
 
     }
@@ -2761,12 +2781,18 @@ async function applyDeepResearch(
                     onStatus
                 });
 
+            // Rules spotted a hard question -> think, whatever the planner said.
+            if (decision.effort === "high") {
+                agent.effort = "high";
+            }
+
             if (!agent.used) {
                 return {
                     messages,
                     sources: [],
                     effort:
-                        agent.effort || "low"
+                        agent.effort || "low",
+                    lane: decision.lane
                 };
             }
 
@@ -3972,6 +3998,11 @@ export default async function handler(
                 timing.toolsMs =
                     elapsed(totalStarted) -
                     timing.beforeStreamMs;
+
+                if (researched.lane) {
+                    timing.lane =
+                        researched.lane;
+                }
 
                 if (
                     researched.effort &&

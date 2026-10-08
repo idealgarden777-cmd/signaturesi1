@@ -1731,6 +1731,24 @@
     // --------------------------------------------------------
     // KATEX MATH RENDERING
     // --------------------------------------------------------
+    // Same look after refresh as during the live answer:
+    // use the shared NEYO renderer (code cards, tables, maths).
+    function renderAssistantContent(element, text) {
+        if (!element) return;
+        const shared = window.NeyoMessageRenderer;
+        if (shared && typeof shared.renderInto === "function") {
+            try {
+                shared.renderInto(element, String(text || ""), { role: "assistant", markdown: true });
+                element.dataset.neyoRendered = "1";
+                return;
+            } catch (error) {
+                console.warn("Shared renderer failed:", error);
+            }
+        }
+        element.innerHTML = safeParseMarkdown(text);
+        renderNeoMath(element);
+    }
+
     function renderNeoMath(element) {
         if (!element || typeof window.renderMathInElement !== "function") return;
         try {
@@ -2276,7 +2294,7 @@
                 thinking.textContent = "Thinking...";
                 contentElement.appendChild(thinking);
             } else {
-                contentElement.innerHTML = safeParseMarkdown(content);
+                renderAssistantContent(contentElement, content);
             }
             message.appendChild(contentElement);
             if (sources && sources.length > 0 && !isThinking) {
@@ -2300,7 +2318,9 @@
         chatMessages.appendChild(message);
         if (role === "assistant" && !isThinking) {
             const mathRoot = message.querySelector(".message-content");
-            renderNeoMath(mathRoot);
+            if (mathRoot && mathRoot.dataset.neyoRendered !== "1") {
+                renderNeoMath(mathRoot);
+            }
         }
         if (scrollArea) {
             scrollArea.scrollTop = scrollArea.scrollHeight;
@@ -2825,8 +2845,7 @@
                 const content = aiBubble.querySelector(".message-content");
                 if (content) {
                     content.style.color = "";
-                    content.innerHTML = safeParseMarkdown(reply);
-                    renderNeoMath(content);
+                    renderAssistantContent(content, reply);
                 }
                 if (sources && sources.length > 0) {
                     renderSourcePills(aiBubble, sources);

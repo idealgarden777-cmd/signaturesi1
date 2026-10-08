@@ -163,7 +163,7 @@
         }
         store.set(messageEl, sources);
 
-        messageEl.querySelectorAll(".neyo-sources-btn, .neyo-sources-bar, .neyo-sources, .message-sources")
+        messageEl.querySelectorAll(".neyo-sources-btn, .neyo-sources-bar, .neyo-sources, .message-sources, .neo-source-pills")
             .forEach(node => node.remove());
 
         const btn = buildButton(sources);
@@ -411,15 +411,17 @@
     /* ---------- history + re-renders ---------- */
 
     function upgradeLegacy(root) {
-        root.querySelectorAll?.(".message-sources").forEach(box => {
-            const messageEl = box.closest("[data-neyo-message-id]");
+        // ".neo-source-pills" = old pills that the classic renderer
+        // draws for chats opened after a refresh.
+        root.querySelectorAll?.(".message-sources, .neo-source-pills").forEach(box => {
+            const messageEl = box.closest("[data-neyo-message-id]") || box.closest(".message");
             if (!messageEl) {
                 return;
             }
             const sources = normalize(
                 Array.from(box.querySelectorAll("a")).map(a => ({
                     url: a.href,
-                    title: a.getAttribute("title") || a.textContent
+                    title: a.getAttribute("title") || a.textContent.replace(/\s*↗\s*$/, "").trim()
                 }))
             );
             if (sources.length) {
@@ -446,7 +448,7 @@
                 touched.add(messageEl);
             }
             mutation.addedNodes.forEach(node => {
-                if (node instanceof Element && (node.matches(".message-sources") || node.querySelector(".message-sources"))) {
+                if (node instanceof Element && (node.matches(".message-sources, .neo-source-pills") || node.querySelector(".message-sources, .neo-source-pills"))) {
                     touched.add(document.body);
                 }
             });

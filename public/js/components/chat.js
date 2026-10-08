@@ -952,6 +952,12 @@ public/js/components/chat.js
                 if (event.timing) {
                     console.info("[NEYO timing ms]", event.timing);
                 }
+
+                if (event.memory) {
+                    window.dispatchEvent(
+                        new CustomEvent("neyo:memory", { detail: event.memory })
+                    );
+                }
             }
 
             return done;

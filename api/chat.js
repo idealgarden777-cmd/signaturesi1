@@ -2,7 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { applyContextCache, dropContextCache } from "../lib/context-cache.js";
 import { decideLocally } from "../lib/decide.js";
 import { createPrivacySession, PRIVACY_RULE, privacyEnabled } from "../lib/privacy.js";
-import { MEMORY_RULE, memoryEnabled, createMemoryFilter, applyMemoryMarkers, saveMemories, loadMemoryBox, autoCodeCopies, looksLikeFact, extractFactsWithModel } from "../lib/memory.js";
+import { MEMORY_RULE, memoryEnabled, createMemoryFilter, applyMemoryMarkers, saveMemories, loadMemoryBox, autoCodeCopies, looksLikeFact, extractFactsWithModel, touchMemories, wantsForget, wantsRemember, pickKeysToForget } from "../lib/memory.js";
 
 import {
     getAuthenticatedUser
@@ -4397,7 +4397,10 @@ export default async function handler(
                     : (async () => {
                         const copies =
                             [...signals.copies];
+                        const forgetAsked =
+                            wantsForget(userText);
                         if (
+                            !forgetAsked &&
                             !copies.some(copy => copy.chunk) &&
                             !signals.pastes.length &&
                             !isDeepResearch
@@ -4410,8 +4413,12 @@ export default async function handler(
                             );
                         }
                         if (
-                            !copies.some(copy => !copy.chunk) &&
-                            looksLikeFact(userText)
+                            !forgetAsked &&
+                            !copies.some(copy => !copy.chunk && !copy.forget) &&
+                            (
+                                looksLikeFact(userText) ||
+                                wantsRemember(userText)
+                            )
                         ) {
                             copies.push(
                                 ...await extractFactsWithModel({
@@ -4423,20 +4430,55 @@ export default async function handler(
                                 })
                             );
                         }
-                        if (copies.length) {
-                            await saveMemories(
-                                supabase,
-                                {
-                                    userId,
-                                    copies,
-                                    restore:
-                                        privacy.restore
-                                }
+                        if (
+                            forgetAsked &&
+                            !copies.some(copy => copy.forget)
+                        ) {
+                            copies.push(
+                                ...await pickKeysToForget({
+                                    apiKey:
+                                        GEMINI_API_KEY,
+                                    model:
+                                        NEYO_FREE_FALLBACK_MODEL,
+                                    userText,
+                                    keys:
+                                        [...memoryLoaded.box.keys()]
+                                })
                             );
                         }
-                    })().catch(error =>
-                        console.warn("[MEMORY] save error", error?.message || error)
-                    );
+                        const used =
+                            [
+                                ...signals.pastes,
+                                ...(memoryLoaded.openedKeys || [])
+                            ];
+                        const [result] =
+                            await Promise.all([
+                                copies.length
+                                    ? saveMemories(
+                                        supabase,
+                                        {
+                                            userId,
+                                            copies,
+                                            restore:
+                                                privacy.restore
+                                        }
+                                    )
+                                    : { saved: [], forgot: [] },
+                                used.length
+                                    ? touchMemories(
+                                        supabase,
+                                        { userId, keys: used }
+                                    )
+                                    : null
+                            ]);
+                        return result;
+                    })().catch(error => {
+                        console.warn("[MEMORY] save error", error?.message || error);
+                        return null;
+                    });
+
+            let memoryResult =
+                null;
 
 
             if (!reply) {
@@ -4457,7 +4499,7 @@ export default async function handler(
 
                 await userMessageSaved;
 
-                await Promise.all([
+                [memoryResult] = await Promise.all([
                     memorySaved,
                     saveMessage(
                         conversationId,
@@ -4509,6 +4551,15 @@ export default async function handler(
                     privacy:
                         privacy.changed
                             ? privacy.counts
+                            : null,
+
+                    memory:
+                        memoryResult &&
+                        (
+                            memoryResult.saved?.length ||
+                            memoryResult.forgot?.length
+                        )
+                            ? memoryResult
                             : null,
 
                     creditType:

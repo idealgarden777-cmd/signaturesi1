@@ -28,9 +28,14 @@ GitHub Actions runs the same checks on every push to `main` (`.github/workflows/
 
 ## Security rules
 
-- Every API route that spends the Gemini key checks: same website (`APP_ORIGIN`), logged-in user, per-user rate limit (`lib/guard.js`).
+- Every voice API route checks: same website (`APP_ORIGIN`), logged-in user, per-user rate limit (`lib/guard.js`). The limit is shared across all servers through Supabase (`supabase/neyo_rate_limit.sql`) and falls back to a per-server limit if that is unavailable.
+- Chat messages are limited by the credit system (`reserve_message`).
 - Passwords, card numbers and API keys are hidden before a message reaches the AI (`lib/privacy.js`) and are never saved to memory (`lib/memory.js`).
 - Secrets live only in Vercel environment variables, never in the browser.
+
+## Health check
+
+`GET /api/history?resource=health` returns `200` when Gemini, `APP_ORIGIN` and the database are ready, `503` otherwise. Point an uptime monitor at it.
 
 ## Environment variables (Vercel)
 

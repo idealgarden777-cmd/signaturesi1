@@ -668,6 +668,41 @@ async function setConversationPinned(
 
 
 /* =====================================================
+   HEALTH
+   ===================================================== */
+
+async function handleHealth(req, res) {
+    const started = Date.now();
+    const checks = {
+        gemini: Boolean(process.env.GEMINI_API_KEY),
+        appOrigin: Boolean(process.env.APP_ORIGIN),
+        database: false
+    };
+
+    try {
+        const lookup = createSupabaseAdmin()
+            .from("chat_conversations")
+            .select("id", { head: true, count: "exact" })
+            .limit(1);
+        const timeout = new Promise(resolve => setTimeout(() => resolve({ error: { message: "timeout" } }), 3000));
+        const { error } = await Promise.race([lookup, timeout]);
+        checks.database = !error;
+    } catch {
+        checks.database = false;
+    }
+
+    const ok = Object.values(checks).every(Boolean);
+    return res.status(ok ? 200 : 503).json({
+        ok,
+        service: "neyo",
+        checks,
+        ms: Date.now() - started,
+        time: new Date().toISOString()
+    });
+}
+
+
+/* =====================================================
    HANDLER
    ===================================================== */
 
@@ -678,6 +713,15 @@ export default async function handler(
     setResponseHeaders(
         res
     );
+
+
+    // Health check for uptime monitors: /api/history?resource=health
+    // Says only yes/no per service, never any secret or user data.
+    if (
+        String(req.query?.resource || "") === "health"
+    ) {
+        return handleHealth(req, res);
+    }
 
 
     // NEYO Workspaces live here so no extra Vercel function is needed.

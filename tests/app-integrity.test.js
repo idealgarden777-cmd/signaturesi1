@@ -56,3 +56,15 @@ test("every API route loads without crashing", async () => {
         assert.equal(typeof mod.default, "function", route);
     }
 });
+
+test("health check answers fast and never leaks secrets", async () => {
+    const { fakeRes } = await import("./helpers/env.js");
+    const history = (await import("../api/history.js")).default;
+    const { res, out } = fakeRes();
+    const started = Date.now();
+    await history({ method: "GET", headers: {}, query: { resource: "health" } }, res);
+    assert.ok(Date.now() - started < 5000);
+    assert.ok([200, 503].includes(out.statusCode));
+    assert.deepEqual(Object.keys(out.body.checks).sort(), ["appOrigin", "database", "gemini"]);
+    assert.ok(!JSON.stringify(out.body).includes("test-gemini-key"));
+});

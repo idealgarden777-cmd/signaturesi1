@@ -1,5 +1,5 @@
 /* =========================================================
-   NEYO MINI APPS v1 — apps NEYO writes, run in a sandbox.
+   NEYO MINI APPS v2 — apps NEYO writes, run in a sandbox.
    The card reuses the Smart UI card look (.sui-card).
    ========================================================= */
 
@@ -12,12 +12,32 @@
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 
-.message.assistant .message-content .nya-title-row .sui-title {
+.message.assistant .message-content .nya-kicker {
   margin: 0;
   min-width: 0;
+  flex: 1;
+}
+
+.message.assistant .message-content .nya-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--r-strong);
+  font-weight: 600;
+}
+
+.message.assistant .message-content .nya-name::before {
+  content: "·";
+  margin: 0 6px 0 2px;
+  color: var(--r-soft);
+  font-weight: 400;
+}
+
+.message.assistant .message-content .nya-head {
+  margin: -4px -6px 0 0;
 }
 
 .message.assistant .message-content .nya-tools {
@@ -27,7 +47,8 @@
 }
 
 .message.assistant .message-content .nya-tool {
-  padding: 5px 9px;
+  padding: 4px 8px;
+  font-size: 13px;
 }
 
 .message.assistant .message-content .nya-tool.is-on {
@@ -35,11 +56,11 @@
   background: var(--sui-sunken);
 }
 
+/* the app shares the card's own background, so it reads as part of NEYO */
 .message.assistant .message-content .nya-stage {
   position: relative;
-  margin-top: 12px;
-  border: 1px solid var(--sui-line);
-  border-radius: 14px;
+  margin: 10px -4px 0;
+  border-radius: 12px;
   overflow: hidden;
   background: var(--sui-bg);
 }

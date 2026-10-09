@@ -105,10 +105,52 @@ locked sandbox:
         return document.body.classList.contains("dark-mode");
     }
 
-    function accentColor() {
-        const v = getComputedStyle(document.body).getPropertyValue("--neyo-accent").trim();
-        const custom = document.body.dataset.neyoAccent && document.body.dataset.neyoAccent !== "neutral";
-        return custom && /^#|^rgb|^hsl/.test(v) ? v : "";
+    /* the app wears NEYO's real colours: read them from the card it sits in */
+    let probe = null;
+    function toRgb(color) {
+        try {
+            probe = probe || document.createElement("canvas").getContext("2d");
+            probe.fillStyle = "#000";
+            probe.fillStyle = color;
+            const c = probe.fillStyle;
+            if (c.startsWith("#")) return [1, 3, 5].map(i => parseInt(c.slice(i, i + 2), 16));
+            return (c.match(/[\d.]+/g) || [0, 0, 0]).slice(0, 3).map(Number);
+        } catch {
+            return [0, 0, 0];
+        }
+    }
+    function hex(color) {
+        return "#" + toRgb(color).map(n => Math.round(n).toString(16).padStart(2, "0")).join("");
+    }
+    function light(color) {
+        const [r, g, b] = toRgb(color).map(n => {
+            n /= 255;
+            return n <= 0.03928 ? n / 12.92 : ((n + 0.055) / 1.055) ** 2.4;
+        });
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.45;
+    }
+
+    function palette(host) {
+        const dark = isDark();
+        const cs = host && host.isConnected ? getComputedStyle(host) : null;
+        const v = (name, fallback) => (cs && cs.getPropertyValue(name).trim()) || fallback;
+        let bg = cs ? cs.backgroundColor : "";
+        if (!bg || bg === "transparent" || /rgba\(.*,\s*0\)$/.test(bg)) bg = dark ? "#171717" : "#ffffff";
+        const accent = v("--sui-accent", dark ? "#ffffff" : "#0f0f10");
+        return {
+            dark,
+            bg: hex(bg),
+            fg: hex(v("--r-text", dark ? "#e7e7ea" : "#1d1d1f")),
+            strong: hex(v("--r-strong", dark ? "#ffffff" : "#0f0f10")),
+            muted: hex(v("--r-muted", dark ? "#a1a1a8" : "#6e6e73")),
+            line: hex(v("--r-line", dark ? "#2c2c31" : "#ececee")),
+            soft: hex(v("--r-surface", dark ? "#1f1f23" : "#f7f7f8")),
+            accent: hex(accent),
+            accentFg: light(accent) ? "#111111" : "#ffffff",
+            good: dark ? "#3ccf91" : "#15935f",
+            bad: dark ? "#ff6b6b" : "#d64545",
+            warn: dark ? "#f2b84b" : "#c98a12"
+        };
     }
 
     function loadStore(key) {
@@ -133,25 +175,109 @@ locked sandbox:
 
     const CSP = "default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval'; style-src 'unsafe-inline'; img-src data: blob:; media-src data: blob:; font-src data:; connect-src 'none'; worker-src blob:; frame-src 'none'; form-action 'none'; base-uri 'none'";
 
-    function baseStyle() {
-        return `
-:root{--bg:#ffffff;--card:#f6f6f7;--fg:#141416;--muted:#6b6b73;--line:#e4e4e8;--accent:#141416;--accent-fg:#ffffff;--good:#15935f;--bad:#d64545;--warn:#c98a12;--radius:12px;color-scheme:light}
-:root.dark{--bg:#17171a;--card:#222227;--fg:#f4f4f6;--muted:#a1a1aa;--line:#34343b;--accent:#f4f4f6;--accent-fg:#141416;color-scheme:dark}
+    /* NEYO kit: every app starts already looking like NEYO.
+       Element defaults use :where() (zero weight) so an app's own CSS still wins. */
+    const KIT_CSS = `
+:root{--bg:#fff;--fg:#1d1d1f;--strong:#0f0f10;--muted:#6e6e73;--line:#ececee;--soft:#f7f7f8;--card:var(--soft);--accent:#0f0f10;--accent-fg:#fff;--good:#15935f;--bad:#d64545;--warn:#c98a12;
+--accent-soft:color-mix(in srgb,var(--accent) 10%,transparent);--hover:color-mix(in srgb,var(--fg) 6%,transparent);
+--r-sm:10px;--r:14px;--r-lg:18px;--ease:cubic-bezier(.2,.8,.2,1);--shadow:0 1px 2px rgba(0,0,0,.04),0 8px 24px -12px rgba(0,0,0,.14);
+--font:-apple-system,BlinkMacSystemFont,"Inter","Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color-scheme:light}
+:root.dark{--shadow:0 1px 2px rgba(0,0,0,.3),0 10px 28px -12px rgba(0,0,0,.6);color-scheme:dark}
 *,*::before,*::after{box-sizing:border-box}
-html,body{margin:0;background:var(--bg);color:var(--fg)}
-body{padding:16px;font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,"Noto Sans",Arial,sans-serif;-webkit-font-smoothing:antialiased;overflow-x:hidden}
-button{font:inherit;cursor:pointer;border:1px solid var(--line);background:var(--card);color:var(--fg);padding:8px 14px;border-radius:10px;transition:transform .12s,background .15s}
-button:hover{border-color:var(--muted)}button:active{transform:scale(.97)}
-button.primary,button[data-primary]{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
-input,select,textarea{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:8px 10px}
-input[type=range]{padding:0;accent-color:var(--accent)}
-:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-canvas{max-width:100%;display:block;touch-action:none}
-h1,h2,h3{line-height:1.2;margin:0 0 .5em}h1{font-size:22px}h2{font-size:18px}
+html{-webkit-text-size-adjust:100%}
+:where(html,body){margin:0;background:var(--bg);color:var(--fg)}
+:where(body){padding:6px 4px 10px;font:15px/1.55 var(--font);letter-spacing:-.006em;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+::selection{background:var(--accent-soft)}
+:where(h1,h2,h3,h4){color:var(--strong);margin:0 0 .35em;line-height:1.2;letter-spacing:-.02em}
+:where(h1){font-size:21px;font-weight:650}:where(h2){font-size:17px;font-weight:620}:where(h3){font-size:15px;font-weight:600}
+:where(p){margin:0 0 .6em}:where(small){color:var(--muted)}
+:where(a){color:var(--strong);text-underline-offset:3px}
+:where(hr){border:0;border-top:1px solid var(--line);margin:14px 0}
+:where(button){font:inherit;font-size:14px;font-weight:550;letter-spacing:-.005em;height:38px;padding:0 16px;display:inline-flex;align-items:center;justify-content:center;gap:7px;cursor:pointer;border-radius:12px;border:1px solid var(--line);background:var(--bg);color:var(--strong);white-space:nowrap;user-select:none;-webkit-tap-highlight-color:transparent;transition:background .15s var(--ease),border-color .15s var(--ease),transform .12s var(--ease),opacity .15s}
+:where(button:hover){background:var(--hover)}
+:where(button:active){transform:scale(.97)}
+:where(button:disabled){opacity:.4;cursor:default;transform:none}
+:where(button.primary,button[data-primary]){background:var(--accent);border-color:transparent;color:var(--accent-fg)}
+:where(button.primary:hover,button[data-primary]:hover){background:color-mix(in srgb,var(--accent) 88%,var(--bg))}
+:where(button.ghost){border-color:transparent;background:transparent}
+:where(button.ghost:hover){background:var(--hover)}
+:where(button.danger){color:var(--bad)}
+:where(button.icon){width:38px;padding:0}
+:where(button.sm){height:30px;padding:0 11px;font-size:13px;border-radius:10px}
+:where(button.sm.icon){width:30px}
+:where(button.lg){height:46px;padding:0 22px;font-size:15px;border-radius:14px}
+:where(button.pill){border-radius:999px}
+:where(button.on,button[aria-pressed=true]){background:var(--accent);color:var(--accent-fg);border-color:transparent}
+:where(input,select,textarea){font:inherit;font-size:14px;color:var(--strong);background:var(--soft);border:1px solid transparent;border-radius:12px;outline:none;transition:border-color .15s,box-shadow .15s,background .15s}
+:where(input:not([type=checkbox],[type=radio],[type=range],[type=color]),select){height:40px;padding:0 12px}
+:where(textarea){padding:10px 12px;min-height:90px;resize:vertical}
+:where(input,select,textarea):focus{background:var(--bg);border-color:color-mix(in srgb,var(--accent) 55%,var(--line));box-shadow:0 0 0 3px var(--accent-soft)}
+:where(input)::placeholder,:where(textarea)::placeholder{color:var(--muted)}
+:where(input[type=checkbox],input[type=radio]){accent-color:var(--accent);width:17px;height:17px;margin:0}
+:where(input[type=color]){width:38px;height:38px;padding:3px;border-radius:12px;background:var(--soft);cursor:pointer}
+:where(input[type=range]){-webkit-appearance:none;appearance:none;width:100%;height:22px;background:transparent;padding:0;border:0;box-shadow:none}
+:where(input[type=range])::-webkit-slider-runnable-track{height:4px;border-radius:4px;background:var(--line)}
+:where(input[type=range])::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;margin-top:-7px;border-radius:50%;background:var(--bg);border:2px solid var(--accent);box-shadow:0 1px 3px rgba(0,0,0,.18)}
+:where(input[type=range])::-moz-range-track{height:4px;border-radius:4px;background:var(--line)}
+:where(input[type=range])::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:var(--bg);border:2px solid var(--accent)}
+:where(label){font-size:13px;color:var(--muted);font-weight:500}
+:where(table){width:100%;border-collapse:collapse;font-size:14px}
+:where(th){text-align:left;font-size:12px;font-weight:600;color:var(--muted);padding:8px 10px;border-bottom:1px solid var(--line)}
+:where(td){padding:9px 10px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
+:where(canvas,svg){max-width:100%}
+:where(canvas){display:block;touch-action:none}
+:where(kbd){font:12px var(--mono);padding:2px 6px;border-radius:6px;border:1px solid var(--line);background:var(--soft);color:var(--strong)}
+:focus-visible{outline:2px solid color-mix(in srgb,var(--accent) 70%,transparent);outline-offset:2px}
+.app{max-width:720px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+.header{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.header h1,.header h2{margin:0}
+.sub{color:var(--muted);font-size:13.5px;margin:3px 0 0}
+.muted{color:var(--muted)}.strong{color:var(--strong);font-weight:600}.small{font-size:13px}
+.card{background:var(--soft);border-radius:var(--r-lg);padding:16px}
+.card.outline{background:var(--bg);border:1px solid var(--line)}
+.stage{position:relative;background:var(--soft);border-radius:var(--r-lg);overflow:hidden;display:grid;place-items:center;min-height:120px}
+.stage>canvas{width:100%;height:auto}
+.overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;padding:20px;background:color-mix(in srgb,var(--bg) 72%,transparent);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);animation:kit-in .22s var(--ease)}
+.overlay[hidden]{display:none}
+.overlay h2{margin:0}
+.row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.row.between{justify-content:space-between}.row.center,.center{justify-content:center;text-align:center}
+.stack{display:flex;flex-direction:column;gap:10px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+.grid.two{grid-template-columns:repeat(2,minmax(0,1fr))}.grid.three{grid-template-columns:repeat(3,minmax(0,1fr))}
+.spacer{flex:1}
+.field{display:flex;flex-direction:column;gap:6px}
+.stat{background:var(--soft);border-radius:var(--r);padding:12px 14px;min-width:0}
+.stat .label{font-size:12px;color:var(--muted);font-weight:500}
+.stat .value{font-size:22px;font-weight:650;color:var(--strong);letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1.25}
+.big{font-size:44px;font-weight:650;letter-spacing:-.035em;color:var(--strong);font-variant-numeric:tabular-nums;line-height:1.05}
+.chip{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 11px;border-radius:999px;background:var(--soft);color:var(--fg);font-size:13px;font-weight:500;font-variant-numeric:tabular-nums}
+.chip b{color:var(--strong);font-weight:650}
+.chip.accent{background:var(--accent-soft);color:var(--strong)}
+.badge{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:7px;font-size:12px;font-weight:600;background:var(--soft);color:var(--fg)}
+.badge.good{color:var(--good);background:color-mix(in srgb,var(--good) 12%,transparent)}
+.badge.bad{color:var(--bad);background:color-mix(in srgb,var(--bad) 12%,transparent)}
+.badge.warn{color:var(--warn);background:color-mix(in srgb,var(--warn) 14%,transparent)}
+.seg{display:inline-flex;padding:3px;gap:2px;border-radius:12px;background:var(--soft)}
+.seg button{height:32px;border:0;background:transparent;border-radius:9px;color:var(--muted);font-weight:550;padding:0 13px}
+.seg button:hover{background:transparent;color:var(--strong)}
+.seg button.on,.seg button[aria-pressed=true]{background:var(--bg);color:var(--strong);box-shadow:0 1px 2px rgba(0,0,0,.08),0 0 0 1px var(--line)}
+.list{display:flex;flex-direction:column}
+.list>*{display:flex;align-items:center;gap:10px;padding:10px 2px;border-bottom:1px solid var(--line)}
+.list>*:last-child{border-bottom:0}
+.progress{height:6px;border-radius:6px;background:var(--line);overflow:hidden}
+.progress>i{display:block;height:100%;background:var(--accent);border-radius:inherit;transition:width .3s var(--ease)}
+.good{color:var(--good)}.bad{color:var(--bad)}.warn{color:var(--warn)}
+.pad{display:grid;grid-template-columns:repeat(3,46px);gap:6px;justify-content:center}
+.pad button{width:46px;height:46px;padding:0;border-radius:14px}
+.toast{position:fixed;left:50%;bottom:14px;translate:-50% 0;background:var(--strong);color:var(--bg);font-size:13.5px;font-weight:500;padding:9px 14px;border-radius:12px;box-shadow:var(--shadow);animation:kit-in .22s var(--ease);z-index:9}
+.fade-in{animation:kit-in .25s var(--ease)}
+@keyframes kit-in{from{opacity:0;translate:0 4px}to{opacity:1;translate:none}}
+@media (max-width:480px){.big{font-size:36px}.grid.three{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
 `;
-    }
 
-    function bootScript(id, store, dark, accent) {
+    function bootScript(id, store, colors) {
         // runs inside the sandbox; talks to NEYO only by postMessage
         return `(function(){
 var ID=${JSON.stringify(id)};
@@ -161,9 +287,12 @@ var timer=0;function save(){clearTimeout(timer);timer=setTimeout(function(){send
 var mem={getItem:function(k){k=String(k);return Object.prototype.hasOwnProperty.call(store,k)?store[k]:null},setItem:function(k,v){store[String(k)]=String(v);save()},removeItem:function(k){delete store[String(k)];save()},clear:function(){store={};save()},key:function(i){return Object.keys(store)[i]||null},get length(){return Object.keys(store).length}};
 try{Object.defineProperty(window,"localStorage",{value:mem,configurable:true})}catch(e){}
 try{Object.defineProperty(window,"sessionStorage",{value:mem,configurable:true})}catch(e){}
-function setTheme(d,a){var r=document.documentElement;r.classList.toggle("dark",!!d);if(a){r.style.setProperty("--accent",a);r.style.setProperty("--accent-fg","#ffffff")}else{r.style.removeProperty("--accent");r.style.removeProperty("--accent-fg")}}
-setTheme(${dark ? "true" : "false"},${JSON.stringify(accent || "")});
-window.addEventListener("message",function(e){if(e.source!==parent)return;var m=e.data||{};if(m.__neyoHost&&m.type==="theme")setTheme(m.dark,m.accent)});
+var colors={},fns=[];
+var NAMES={bg:"--bg",fg:"--fg",strong:"--strong",muted:"--muted",line:"--line",soft:"--soft",accent:"--accent",accentFg:"--accent-fg",good:"--good",bad:"--bad",warn:"--warn"};
+function setTheme(c){if(!c)return;colors=c;var r=document.documentElement;r.classList.toggle("dark",!!c.dark);for(var k in NAMES){if(c[k])r.style.setProperty(NAMES[k],c[k])}for(var i=0;i<fns.length;i++){try{fns[i](colors)}catch(e){}}}
+window.NEYO=Object.freeze({colors:function(){return Object.assign({},colors)},onTheme:function(fn){if(typeof fn==="function")fns.push(fn)},toast:function(text,ms){var t=document.createElement("div");t.className="toast";t.textContent=String(text);document.body.appendChild(t);setTimeout(function(){t.remove()},ms||1800)}});
+setTheme(${JSON.stringify(colors)});
+window.addEventListener("message",function(e){if(e.source!==parent)return;var m=e.data||{};if(m.__neyoHost&&m.type==="theme")setTheme(m.colors)});
 window.addEventListener("error",function(e){send("error",{message:String(e.message||"Script error"),line:e.lineno||0})});
 window.addEventListener("unhandledrejection",function(e){var r=e.reason;send("error",{message:String(r&&r.message||r||"Promise error")})});
 document.addEventListener("securitypolicyviolation",function(e){send("blocked",{url:String(e.blockedURI||"").slice(0,200)})});
@@ -175,9 +304,9 @@ window.open=function(){return null};
 })();`;
     }
 
-    function buildDoc(source, id, store) {
-        const head = `<meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${CSP}"><meta name="viewport" content="width=device-width,initial-scale=1"><style>${baseStyle()}</style><script>${bootScript(id, store, isDark(), accentColor())}<\/script>`;
-        const dark = isDark() ? ' class="dark"' : "";
+    function buildDoc(source, id, store, colors = palette(null)) {
+        const head = `<meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${CSP}"><meta name="viewport" content="width=device-width,initial-scale=1"><style>${KIT_CSS}</style><script>${bootScript(id, store, colors)}<\/script>`;
+        const dark = colors.dark ? ' class="dark"' : "";
         if (/<head[^>]*>/i.test(source)) return source.replace(/<head[^>]*>/i, match => `${match}${head}`);
         if (/<html[^>]*>/i.test(source)) return source.replace(/<html[^>]*>/i, match => `${match}<head>${head}</head>`);
         return `<!doctype html><html${dark}><head>${head}</head><body>${source}</body></html>`;
@@ -196,16 +325,17 @@ window.open=function(){return null};
         const root = el("section", "sui-card nya-card is-new");
         root.setAttribute("aria-label", title);
         const head = el("header", "sui-head nya-head");
-        const kicker = el("div", "sui-kicker");
-        kicker.append(icon("app", 14), el("span", "", "Mini App"));
+        // one slim bar: the app shows its own big title inside
+        const kicker = el("div", "sui-kicker nya-kicker");
+        kicker.append(icon("app", 14), el("span", "", "Mini App"), el("span", "nya-name", title));
         const titleRow = el("div", "nya-title-row");
         const tools = el("div", "nya-tools");
         const restartBtn = button("restart", "Restart", "sui-btn nya-tool");
         const codeBtn = button("code", "Code", "sui-btn nya-tool");
         const fullBtn = button("expand", "Full screen", "sui-btn nya-tool");
         tools.append(restartBtn, codeBtn, fullBtn);
-        titleRow.append(el("h4", "sui-title", title), tools);
-        head.append(kicker, titleRow);
+        titleRow.append(kicker, tools);
+        head.append(titleRow);
 
         const stage = el("div", "nya-stage");
         const frame = document.createElement("iframe");
@@ -244,6 +374,7 @@ window.open=function(){return null};
         let autoHeight = 420;
         const ctrl = {
             frame,
+            root,
             onMessage(msg) {
                 switch (msg.type) {
                     case "size": {
@@ -288,7 +419,7 @@ window.open=function(){return null};
             issue.hidden = true;
             loading.hidden = false;
             frames.forEach((c, win) => { if (c === ctrl) frames.delete(win); });
-            frame.srcdoc = buildDoc(source, id, loadStore(key));
+            frame.srcdoc = buildDoc(source, id, loadStore(key), palette(root));
             // contentWindow exists right after srcdoc is set
             requestAnimationFrame(() => { if (frame.contentWindow) frames.set(frame.contentWindow, ctrl); });
             if (frame.contentWindow) frames.set(frame.contentWindow, ctrl);
@@ -449,12 +580,15 @@ window.open=function(){return null};
     });
 
     // follow NEYO light/dark + accent
+    let themeTimer = 0;
     new MutationObserver(() => {
-        const dark = isDark();
-        const accent = accentColor();
-        frames.forEach((ctrl, win) => {
-            try { win.postMessage({ __neyoHost: true, type: "theme", dark, accent }, "*"); } catch {}
-        });
+        // wait a beat: the theme cross-fade changes colours after the class flips
+        clearTimeout(themeTimer);
+        themeTimer = setTimeout(() => {
+            frames.forEach((ctrl, win) => {
+                try { win.postMessage({ __neyoHost: true, type: "theme", colors: palette(ctrl.root) }, "*"); } catch {}
+            });
+        }, 360);
     }).observe(document.body, { attributes: true, attributeFilter: ["class", "data-neyo-accent"] });
 
     window.addEventListener("neyo:message-rendered", event => {
@@ -485,6 +619,6 @@ window.open=function(){return null};
         enhanceAll,
         buildDoc,
         textOf: node => node?._nyaText?.() || "",
-        version: 1
+        version: 2
     });
 })();

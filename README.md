@@ -33,6 +33,10 @@ GitHub Actions runs the same checks on every push to `main` (`.github/workflows/
 - Passwords, card numbers and API keys are hidden before a message reaches the AI (`lib/privacy.js`) and are never saved to memory (`lib/memory.js`).
 - Secrets live only in Vercel environment variables, never in the browser.
 
+## Smart UI cards
+
+NEYO can add one live card to an answer: calculator, checklist/timeline, chart, tabs, compare or quiz. The model writes a ```neyo-ui block with JSON (rule in `lib/smart-ui.js`); `public/js/components/smart-ui.js` draws it with safe DOM/SVG (no AI HTML, formulas use an own parser in `smart-ui-core.js`). Broken data is dropped, the written answer stays. Tests: `tests/smart-ui.test.js`.
+
 ## Health check
 
 `GET /api/history?resource=health` returns `200` when Gemini, `APP_ORIGIN` and the database are ready, `503` otherwise. Point an uptime monitor at it.

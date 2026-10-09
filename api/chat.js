@@ -3,6 +3,7 @@ import { applyContextCache, dropContextCache } from "../lib/context-cache.js";
 import { decideLocally } from "../lib/decide.js";
 import { createPrivacySession, PRIVACY_RULE, privacyEnabled } from "../lib/privacy.js";
 import { loadWorkspaceContext, saveWorkspaceSuggestions, WORKSPACE_RULE } from "../lib/workspaces.js";
+import { SMART_UI_RULE } from "../lib/smart-ui.js";
 import { MEMORY_RULE, memoryEnabled, createMemoryFilter, applyMemoryMarkers, saveMemories, loadMemoryBox, autoCodeCopies, looksLikeFact, extractFactsWithModel, touchMemories, wantsForget, wantsRemember, pickKeysToForget, resolveForgets } from "../lib/memory.js";
 
 import {
@@ -987,6 +988,12 @@ function buildSystemInstruction(
             "NEYO is an AI personalized model by Signaturesi."
         )
     ];
+
+
+    // Live cards (calculator, checklist, chart, tabs, compare, quiz)
+    if (preferences.smartUi !== false) {
+        parts.push(SMART_UI_RULE);
+    }
 
 
     if (

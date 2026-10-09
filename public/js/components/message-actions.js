@@ -94,14 +94,32 @@ Does NOT own:
             }
 
 
-            return (
-                message
-                    .querySelector(
-                        ".message-content"
-                    )
-                    ?.innerText ||
-                ""
-            ).trim();
+            const content =
+                message.querySelector(
+                    ".message-content"
+                );
+
+            if (!content) {
+                return "";
+            }
+
+            // Smart UI cards copy as clean text, not button labels
+            const swaps = [];
+            content.querySelectorAll(".sui-card").forEach(card => {
+                const text = window.NeyoSmartUI?.textOf?.(card);
+                if (!text) return;
+                const stand = document.createElement("p");
+                stand.textContent = text;
+                stand.style.whiteSpace = "pre-wrap";
+                card.replaceWith(stand);
+                swaps.push([stand, card]);
+            });
+
+            const text = (content.innerText || "").trim();
+
+            swaps.forEach(([stand, card]) => stand.replaceWith(card));
+
+            return text;
 
         };
 

@@ -93,7 +93,22 @@
 
   window.NeyoWorkspaces = {
     activeId: () => readActive()?.id || null,
-    open: id => openPanel(id)
+    open: id => openPanel(id),
+    // Smart UI cards: "Save to Workspace"
+    saveItem: async (title, body) => {
+      const active = readActive();
+      if (!active) throw new Error("No workspace selected.");
+      await api("POST", {
+        action: "add_item",
+        id: active.id,
+        kind: "ai",
+        title: String(title || "NEYO card").slice(0, 120),
+        body: String(body || "").slice(0, 8000)
+      });
+      if (state.current?.workspace?.id === active.id) select(active.id);
+      toast(`Saved to "${active.name}".`);
+      return true;
+    }
   };
 
   async function api(method, body, query = "") {

@@ -374,7 +374,8 @@ function cleanPrefix(value) {
 
 export const VIEW_BLOCKS = [
     "text", "heading", "stat", "grid", "card", "input", "progress", "chart",
-    "table", "list", "timeline", "callout", "kv", "badges", "tabs", "accordion", "divider"
+    "table", "list", "timeline", "callout", "kv", "badges", "tabs", "accordion", "divider",
+    "clock", "countdown", "stopwatch", "timer"
 ];
 
 const BLOCK_ALIASES = {
@@ -391,7 +392,11 @@ const BLOCK_ALIASES = {
     markdown: "text", md: "text", paragraph: "text", p: "text",
     title: "heading", h: "heading",
     hr: "divider", separator: "divider",
-    faq: "accordion", expand: "accordion"
+    faq: "accordion", expand: "accordion",
+    worldclock: "clock", world_clock: "clock", time: "clock", watch: "clock",
+    count_down: "countdown", countdown_timer: "countdown",
+    stop_watch: "stopwatch",
+    pomodoro: "timer", focus_timer: "timer", study_timer: "timer"
 };
 
 const TONES = ["neutral", "accent", "good", "bad", "warn", "info"];
@@ -432,6 +437,58 @@ function cleanShow(value) {
     return validExpr(v) ? v.slice(0, 300) : "";
 }
 
+/* "" = the user's own timezone; null = not a real IANA zone */
+function validZone(value) {
+    const tz = String(value ?? "").trim();
+    if (!tz || /^(local|auto|my|user)$/i.test(tz)) return "";
+    try {
+        new Intl.DateTimeFormat("en-US", { timeZone: tz });
+        return tz.slice(0, 40);
+    } catch {
+        return null;
+    }
+}
+
+/* "2026-12-31" -> "2026-12-31T00:00:00" (user's local midnight); keeps full ISO */
+export function cleanTarget(value) {
+    const v = String(value ?? "").trim();
+    if (!v) return "";
+    const local = /^\d{4}-\d{2}-\d{2}$/.test(v) ? `${v}T00:00:00` : /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2})?$/.test(v) ? v.replace(" ", "T") : v;
+    if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?$/.test(local)) return "";
+    return Number.isFinite(Date.parse(local)) ? local : "";
+}
+
+/* live time helpers (shared with the renderer and tests) */
+export function splitDuration(ms) {
+    const total = Math.max(0, Math.floor(ms / 1000));
+    return { days: Math.floor(total / 86400), hours: Math.floor(total / 3600) % 24, minutes: Math.floor(total / 60) % 60, seconds: total % 60 };
+}
+
+export function clockText(ms, { hours = true, tenths = false } = {}) {
+    const safe = Math.max(0, ms);
+    const d = splitDuration(safe);
+    const pad = n => String(n).padStart(2, "0");
+    const h = d.days * 24 + d.hours;
+    const main = hours || h ? `${h ? `${h}:` : ""}${pad(d.minutes)}:${pad(d.seconds)}` : `${pad(d.minutes)}:${pad(d.seconds)}`;
+    return tenths ? `${main}.${Math.floor((safe % 1000) / 100)}` : main;
+}
+
+/* pomodoro: which phase is running after `elapsed` ms */
+export function pomodoroPhase(block, elapsedMs) {
+    const phases = [];
+    for (let round = 1; round <= block.rounds; round++) {
+        phases.push({ kind: "work", round, ms: block.work * 60000 });
+        phases.push({ kind: round === block.rounds ? "long" : "short", round, ms: (round === block.rounds ? block.long : block.short) * 60000 });
+    }
+    let left = Math.max(0, elapsedMs);
+    for (let i = 0; i < phases.length; i++) {
+        if (left < phases[i].ms) return { ...phases[i], index: i, remaining: phases[i].ms - left, done: false };
+        left -= phases[i].ms;
+    }
+    const last = phases[phases.length - 1];
+    return { ...last, index: phases.length - 1, remaining: 0, done: true };
+}
+
 function normKids(raw, ctx, depth) {
     return list(raw, VIEW_LIMITS.kids)
         .map(child => normBlock(child, ctx, depth + 1))
@@ -448,6 +505,7 @@ function normBlock(raw, ctx, depth = 0) {
         if (alias === "input" && !raw.kind) raw = { ...raw, kind: type };
         if (alias === "chart" && !raw.kind) raw = { ...raw, kind: type };
         if (alias === "progress" && !raw.style && type !== "meter") raw = { ...raw, style: "ring" };
+        if (type === "pomodoro" && !raw.mode) raw = { ...raw, mode: "pomodoro" };
         if (alias === "list" && !raw.style) raw = { ...raw, style: type === "steps" ? "number" : type === "checklist" ? "check" : "bullet" };
         if (alias === "callout" && !raw.tone) raw = { ...raw, tone: type === "warning" ? "warn" : type === "tip" ? "good" : "info" };
         type = alias;
@@ -658,6 +716,49 @@ function normBlock(raw, ctx, depth = 0) {
         case "divider":
             body = {};
             break;
+        case "clock": {
+            const zones = list(raw.zones ?? raw.timezones ?? raw.cities ?? (raw.timezone || raw.tz ? [raw.timezone || raw.tz] : []), 6)
+                .map(zone => typeof zone === "string" ? { tz: zone } : zone)
+                .map(zone => ({ label: cleanText(zone?.label ?? zone?.city ?? zone?.name, 24), tz: validZone(zone?.tz ?? zone?.timezone ?? zone?.zone) }))
+                .filter(zone => zone.tz !== null);
+            body = {
+                label: cleanText(raw.label ?? raw.title, LIMITS.label),
+                zones: zones.length ? zones : [{ label: "", tz: "" }],
+                style: ["analog", "both"].includes(raw.style) ? raw.style : "digital",
+                hour12: raw.hour12 !== false && raw.format !== "24h",
+                seconds: raw.seconds !== false,
+                date: raw.date !== false && raw.showDate !== false
+            };
+            break;
+        }
+        case "countdown": {
+            const to = cleanTarget(raw.to ?? raw.target ?? raw.date ?? raw.until);
+            body = to ? {
+                label: cleanText(raw.label ?? raw.title, LIMITS.label),
+                to,
+                done: cleanText(raw.done ?? raw.doneText, 60) || "Time's up!"
+            } : null;
+            break;
+        }
+        case "stopwatch":
+            body = { label: cleanText(raw.label ?? raw.title, LIMITS.label), laps: raw.laps !== false };
+            break;
+        case "timer": {
+            const pomodoro = String(raw.mode || "").toLowerCase() === "pomodoro";
+            const presets = list(raw.presets, 6).map(v => num(v, NaN)).filter(v => v > 0 && v <= 600);
+            body = {
+                label: cleanText(raw.label ?? raw.title, LIMITS.label),
+                mode: pomodoro ? "pomodoro" : "timer",
+                minutes: clamp(num(raw.minutes ?? raw.duration, pomodoro ? 25 : 5), 0.1, 600),
+                presets,
+                work: clamp(num(raw.work, 25), 1, 180),
+                short: clamp(num(raw.short ?? raw.break, 5), 1, 60),
+                long: clamp(num(raw.long ?? raw.longBreak, 15), 1, 90),
+                rounds: Math.round(clamp(num(raw.rounds, 4), 1, 12)),
+                sound: raw.sound !== false
+            };
+            break;
+        }
     }
 
     if (!body) {
@@ -802,6 +903,15 @@ function viewLines(blocks, vars, state, lines, indent = "") {
             case "kv": block.items.forEach(item => lines.push(`${indent}${item.label}: ${f(item.value)}`)); break;
             case "badges": lines.push(indent + block.items.map(item => item.text).join(" · ")); break;
             case "divider": lines.push(""); break;
+            case "clock": lines.push(`${indent}${block.label || "Live clock"}: ${block.zones.map(z => z.label || z.tz || "local time").join(", ")}`); break;
+            case "countdown": {
+                const left = Date.parse(block.to) - Date.now();
+                const d = splitDuration(left);
+                lines.push(`${indent}${block.label || "Countdown"}: ${left > 0 ? `${d.days}d ${d.hours}h ${d.minutes}m left` : block.done}`);
+                break;
+            }
+            case "stopwatch": lines.push(`${indent}${block.label || "Stopwatch"}`); break;
+            case "timer": lines.push(`${indent}${block.label || (block.mode === "pomodoro" ? "Pomodoro" : "Timer")}: ${block.mode === "pomodoro" ? `${block.work} min focus / ${block.short} min break x ${block.rounds}` : `${formatNumber(block.minutes)} min`}`); break;
             case "grid": viewLines(block.blocks, vars, state, lines, indent); break;
             case "card":
                 lines.push("", `${indent}${block.title}${block.tag ? ` (${block.tag})` : ""}`);

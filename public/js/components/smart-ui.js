@@ -26,8 +26,8 @@ import {
     formatNumber,
     compactNumber,
     niceScale
-} from "./smart-ui-core.js?v=2";
-import { buildView } from "./smart-ui-view.js?v=1";
+} from "./smart-ui-core.js?v=3";
+import { buildView } from "./smart-ui-view.js?v=2";
 
 (() => {
     "use strict";

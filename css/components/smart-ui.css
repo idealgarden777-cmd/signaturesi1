@@ -1561,3 +1561,214 @@ body.dark-mode .message.assistant .neyo-check[data-state="revised"] .neyo-check-
   .message.assistant .neyo-check,
   .message.assistant .neyo-check-dot { animation: none !important; }
 }
+
+/* =========================================================
+   LIVE TIME BLOCKS (v3): clock, countdown, stopwatch, timer
+   ========================================================= */
+.message.assistant .message-content .suv-clock,
+.message.assistant .message-content .suv-countdown,
+.message.assistant .message-content .suv-stopwatch,
+.message.assistant .message-content .suv-timer {
+  position: relative;
+  padding: 18px;
+  border: 1px solid var(--sui-line);
+  border-radius: 16px;
+  background: var(--sui-sunken);
+  text-align: center;
+  container-type: inline-size;
+  min-width: 0;
+}
+.message.assistant .message-content .suv-live-label {
+  margin-bottom: 10px;
+  color: var(--r-muted);
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.message.assistant .message-content .suv-live-dot {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--r-muted);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.message.assistant .message-content .suv-live-dot::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--sui-ok);
+  animation: suv-pulse 1.6s ease-in-out infinite;
+}
+@keyframes suv-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+
+/* clock */
+.message.assistant .message-content .suv-clock-list {
+  display: grid;
+  gap: 14px;
+  justify-items: center;
+}
+.message.assistant .message-content .suv-clock.is-multi .suv-clock-list {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+.message.assistant .message-content .suv-clock-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.message.assistant .message-content .suv-clock-zone {
+  color: var(--r-muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+.message.assistant .message-content .suv-clock-time {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  color: var(--r-strong);
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+  font-size: clamp(38px, 9vw, 64px);
+}
+.message.assistant .message-content .suv-clock-time { white-space: nowrap; font-size: min(64px, 15cqw); }
+.message.assistant .message-content .suv-clock.is-multi .suv-clock-list { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+.message.assistant .message-content .suv-clock.is-multi .suv-clock-time { font-size: 28px; }
+.message.assistant .message-content .suv-clock.is-multi .suv-clock-date { font-size: 12.5px; }
+.message.assistant .message-content .suv-clock-period {
+  font-size: 0.34em;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--r-muted);
+  text-transform: uppercase;
+}
+.message.assistant .message-content .suv-clock-date { color: var(--r-muted); font-size: 14px; }
+.message.assistant .message-content .suv-analog { width: 150px; height: 150px; }
+.message.assistant .message-content .suv-clock.is-multi .suv-analog { width: 110px; height: 110px; }
+.message.assistant .message-content .suv-analog-face { fill: var(--sui-bg); stroke: var(--sui-line); stroke-width: 1.5; }
+.message.assistant .message-content .suv-tick { stroke: var(--r-muted); stroke-width: 0.6; opacity: 0.5; }
+.message.assistant .message-content .suv-tick.is-hour { stroke: var(--r-strong); stroke-width: 1.6; opacity: 0.9; }
+.message.assistant .message-content .suv-hand { stroke: var(--r-strong); stroke-linecap: round; }
+.message.assistant .message-content .suv-hand.is-h { stroke-width: 3.6; }
+.message.assistant .message-content .suv-hand.is-m { stroke-width: 2.4; }
+.message.assistant .message-content .suv-hand.is-s { stroke: var(--sui-bad); stroke-width: 1; }
+.message.assistant .message-content .suv-hand-pin { fill: var(--sui-bad); }
+.message.assistant .message-content .suv-clock.is-analog .suv-clock-time { font-size: 22px; }
+
+/* countdown */
+.message.assistant .message-content .suv-cd-units {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+.message.assistant .message-content .suv-cd-cell {
+  padding: 12px 4px;
+  border-radius: 12px;
+  background: var(--sui-bg);
+  border: 1px solid var(--sui-line);
+}
+.message.assistant .message-content .suv-cd-value {
+  color: var(--r-strong);
+  font-size: clamp(26px, 6vw, 40px);
+  font-weight: 650;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+.message.assistant .message-content .suv-cd-name { color: var(--r-muted); font-size: 12px; margin-top: 2px; }
+.message.assistant .message-content .suv-cd-done { color: var(--sui-ok); font-size: 24px; font-weight: 650; padding: 10px 0; }
+.message.assistant .message-content .suv-cd-when { margin-top: 10px; color: var(--r-muted); font-size: 13px; }
+
+/* stopwatch + timer */
+.message.assistant .message-content .suv-big-time {
+  color: var(--r-strong);
+  font-size: clamp(40px, 10vw, 60px);
+  font-weight: 650;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+  white-space: nowrap;
+  font-size: min(60px, 20cqw);
+}
+.message.assistant .message-content .suv-live-btns {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+.message.assistant .message-content .suv-live-btns .sui-btn { min-width: 72px; justify-content: center; }
+.message.assistant .message-content .suv-laps {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  max-height: 180px;
+  overflow: auto;
+  text-align: left;
+}
+.message.assistant .message-content .suv-lap {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 14px;
+  padding: 7px 4px;
+  border-top: 1px solid var(--sui-line);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.message.assistant .message-content .suv-lap-split { color: var(--r-muted); }
+.message.assistant .message-content .suv-timer-face {
+  position: relative;
+  width: min(210px, 80cqw);
+  aspect-ratio: 1;
+  margin: 0 auto;
+  display: grid;
+  place-items: center;
+}
+.message.assistant .message-content .suv-timer-ring { position: absolute; inset: 0; width: 100%; height: 100%; }
+.message.assistant .message-content .suv-timer-face .suv-big-time { position: relative; font-size: min(44px, 17cqw); }
+.message.assistant .message-content .suv-ring-track { fill: none; stroke: var(--sui-line); stroke-width: 6; }
+.message.assistant .message-content .suv-ring-bar {
+  fill: none;
+  stroke: var(--sui-accent);
+  stroke-width: 6;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.25s linear;
+}
+.message.assistant .message-content .suv-timer[data-phase="short"] .suv-ring-bar,
+.message.assistant .message-content .suv-timer[data-phase="long"] .suv-ring-bar { stroke: var(--sui-ok); }
+.message.assistant .message-content .suv-timer.is-finished .suv-big-time { color: var(--sui-ok); }
+.message.assistant .message-content .suv-timer-phase { margin-bottom: 8px; font-weight: 600; color: var(--r-strong); }
+.message.assistant .message-content .suv-pomo-dots { display: flex; justify-content: center; gap: 7px; margin-top: 12px; }
+.message.assistant .message-content .suv-pomo-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1.5px solid var(--r-muted);
+}
+.message.assistant .message-content .suv-pomo-dot.is-done { background: var(--sui-accent); border-color: var(--sui-accent); }
+.message.assistant .message-content .suv-pomo-dot.is-now { border-color: var(--sui-accent); box-shadow: 0 0 0 3px var(--sui-accent-soft); }
+.message.assistant .message-content .suv-timer-presets { display: flex; justify-content: center; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.message.assistant .message-content .suv-chip {
+  padding: 5px 12px;
+  border: 1px solid var(--sui-line);
+  border-radius: 999px;
+  background: var(--sui-bg);
+  color: var(--r-strong);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.message.assistant .message-content .suv-chip.is-active { border-color: var(--r-strong); box-shadow: inset 0 0 0 1px var(--r-strong); }
+
+@media (prefers-reduced-motion: reduce) {
+  .message.assistant .message-content .suv-live-dot::before { animation: none; }
+  .message.assistant .message-content .suv-ring-bar { transition: none; }
+}

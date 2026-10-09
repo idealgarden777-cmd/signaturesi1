@@ -22,8 +22,11 @@ import {
     isVisible,
     chartNumbers,
     formatNumber,
-    compactNumber
-} from "./smart-ui-core.js?v=2";
+    compactNumber,
+    splitDuration,
+    clockText,
+    pomodoroPhase
+} from "./smart-ui-core.js?v=3";
 
 const SVG = "http://www.w3.org/2000/svg";
 
@@ -39,11 +42,120 @@ const TONE_ICON = {
     down: '<path d="M7 10l5 5 5-5"/>'
 };
 
+/* ---------------- live time: one shared ticker ----------------
+   Each live block keeps its tick function on its own node; the
+   ticker holds only weak refs, so removed cards are freed and a
+   cached card that comes back on screen keeps ticking. Times are
+   computed from Date.now(), so they stay right in hidden tabs. */
+const tickers = new Set();
+let tickHandle = 0;
+
+function tickAll() {
+    if (typeof document !== "undefined" && document.hidden) return;
+    tickers.forEach(ref => {
+        const node = ref.deref();
+        if (!node) {
+            tickers.delete(ref);
+            return;
+        }
+        if (!node.isConnected) return;
+        try { node._neyoTick?.(); } catch (error) { console.warn("[NEYO view] tick failed", error); }
+    });
+    if (!tickers.size) {
+        clearInterval(tickHandle);
+        tickHandle = 0;
+    }
+}
+
+function addTicker(node, fn) {
+    node._neyoTick = fn;
+    fn();
+    tickers.add(typeof WeakRef === "function" ? new WeakRef(node) : { deref: () => node });
+    if (!tickHandle) tickHandle = setInterval(tickAll, 200);
+    if (typeof document !== "undefined" && !addTicker.wired) {
+        addTicker.wired = true;
+        document.addEventListener("visibilitychange", tickAll);
+    }
+}
+
+let audioCtx = null;
+function chime() {
+    try {
+        audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+        const t = audioCtx.currentTime;
+        [0, 0.28, 0.56].forEach((at, i) => {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.frequency.value = i === 2 ? 1046 : 880;
+            gain.gain.setValueAtTime(0.0001, t + at);
+            gain.gain.exponentialRampToValueAtTime(0.25, t + at + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.0001, t + at + 0.24);
+            osc.connect(gain).connect(audioCtx.destination);
+            osc.start(t + at);
+            osc.stop(t + at + 0.26);
+        });
+    } catch {}
+}
+
+function alertUser(title, text, sound) {
+    if (sound) chime();
+    try { navigator.vibrate?.([200, 100, 200]); } catch {}
+    try {
+        if (document.hidden && "Notification" in window && Notification.permission === "granted") {
+            new Notification(title, { body: text, silent: !sound });
+        }
+    } catch {}
+    const before = document.title;
+    let n = 0;
+    const flash = setInterval(() => {
+        document.title = n % 2 ? before : `⏰ ${title}`;
+        if (++n > 7 || !document.hidden) {
+            clearInterval(flash);
+            document.title = before;
+        }
+    }, 900);
+}
+
+function askNotify() {
+    try {
+        if ("Notification" in window && Notification.permission === "default") Notification.requestPermission().catch?.(() => {});
+    } catch {}
+}
+
+function zoneParts(date, tz, hour12, seconds) {
+    const opts = { hour: "numeric", minute: "2-digit", hour12 };
+    if (seconds) opts.second = "2-digit";
+    if (tz) opts.timeZone = tz;
+    const time = new Intl.DateTimeFormat(undefined, opts).formatToParts(date);
+    const dateOpts = { weekday: "long", day: "numeric", month: "short", year: "numeric" };
+    if (tz) dateOpts.timeZone = tz;
+    const hm = { hour: "numeric", minute: "numeric", second: "numeric", hour12: false };
+    if (tz) hm.timeZone = tz;
+    const raw = Object.fromEntries(new Intl.DateTimeFormat("en-GB", hm).formatToParts(date).map(p => [p.type, p.value]));
+    return {
+        main: time.filter(p => p.type !== "dayPeriod").map(p => p.value).join("").trim(),
+        period: time.find(p => p.type === "dayPeriod")?.value || "",
+        date: new Intl.DateTimeFormat(undefined, dateOpts).format(date),
+        h: Number(raw.hour) % 24,
+        m: Number(raw.minute),
+        s: Number(raw.second)
+    };
+}
+
+function zoneName(tz) {
+    if (!tz) {
+        try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch {}
+        return tz ? `${tz.split("/").pop().replace(/_/g, " ")} (you)` : "Your time";
+    }
+    return tz.split("/").pop().replace(/_/g, " ");
+}
+
 export function buildView(card, body, state, persist, kit) {
     const { el, svg, icon, buildChart } = kit;
     state.values = state.values && typeof state.values === "object" ? state.values : {};
     state.checks = state.checks && typeof state.checks === "object" ? state.checks : {};
     state.tabs = state.tabs && typeof state.tabs === "object" ? state.tabs : {};
+    state.live = state.live && typeof state.live === "object" ? state.live : {};
     const live = Object.keys(card.values || {}).length > 0;
     const updaters = [];
     const vars = () => viewVars(card, state);
@@ -531,6 +643,257 @@ export function buildView(card, body, state, persist, kit) {
 
         divider() {
             return el("hr", "suv-divider");
+        },
+
+        clock(block) {
+            const node = el("div", `suv-clock is-${block.style}${block.zones.length > 1 ? " is-multi" : ""}`);
+            if (block.label) node.append(el("div", "suv-live-label", block.label));
+            const list = el("div", "suv-clock-list");
+            node.append(list);
+            const painters = block.zones.map(zone => {
+                const item = el("div", "suv-clock-item");
+                const name = el("div", "suv-clock-zone", zone.label || zoneName(zone.tz));
+                let hands = null;
+                if (block.style !== "digital") {
+                    const face = svg("svg", { viewBox: "0 0 100 100", class: "suv-analog", role: "img" });
+                    face.append(svg("circle", { cx: 50, cy: 50, r: 47, class: "suv-analog-face" }));
+                    for (let i = 0; i < 60; i++) {
+                        const a = (i / 60) * Math.PI * 2;
+                        const r1 = i % 5 ? 42 : 38;
+                        face.append(svg("line", { x1: 50 + r1 * Math.sin(a), y1: 50 - r1 * Math.cos(a), x2: 50 + 44 * Math.sin(a), y2: 50 - 44 * Math.cos(a), class: i % 5 ? "suv-tick" : "suv-tick is-hour" }));
+                    }
+                    hands = {
+                        h: svg("line", { x1: 50, y1: 50, x2: 50, y2: 27, class: "suv-hand is-h" }),
+                        m: svg("line", { x1: 50, y1: 50, x2: 50, y2: 15, class: "suv-hand is-m" }),
+                        s: svg("line", { x1: 50, y1: 56, x2: 50, y2: 12, class: "suv-hand is-s" })
+                    };
+                    face.append(hands.h, hands.m, block.seconds ? hands.s : svg("g"), svg("circle", { cx: 50, cy: 50, r: 2.6, class: "suv-hand-pin" }));
+                    item.append(face);
+                }
+                const digital = el("div", "suv-clock-time");
+                digital.setAttribute("aria-live", "off");
+                const main = el("span", "suv-clock-main");
+                const period = el("span", "suv-clock-period");
+                digital.append(main, period);
+                const date = el("div", "suv-clock-date");
+                const text = el("div", "suv-clock-text");
+                text.append(name, digital);
+                if (block.date) text.append(date);
+                item.append(text);
+                list.append(item);
+                return now => {
+                    const p = zoneParts(now, zone.tz, block.hour12, block.seconds);
+                    main.textContent = p.main;
+                    period.textContent = p.period;
+                    if (block.date) date.textContent = p.date;
+                    if (hands) {
+                        const sec = p.s + (now.getMilliseconds() / 1000);
+                        hands.s.setAttribute("transform", `rotate(${sec * 6} 50 50)`);
+                        hands.m.setAttribute("transform", `rotate(${(p.m + p.s / 60) * 6} 50 50)`);
+                        hands.h.setAttribute("transform", `rotate(${((p.h % 12) + p.m / 60) * 30} 50 50)`);
+                    }
+                };
+            });
+            const live = el("div", "suv-live-dot", "Live");
+            node.append(live);
+            addTicker(node, () => {
+                const now = new Date();
+                painters.forEach(paint => paint(now));
+            });
+            return node;
+        },
+
+        countdown(block) {
+            const node = el("div", "suv-countdown");
+            const target = Date.parse(block.to);
+            if (block.label) node.append(el("div", "suv-live-label", block.label));
+            const units = el("div", "suv-cd-units");
+            const cells = ["days", "hours", "minutes", "seconds"].map(key => {
+                const cell = el("div", "suv-cd-cell");
+                const value = el("div", "suv-cd-value", "0");
+                cell.append(value, el("div", "suv-cd-name", { days: "Days", hours: "Hours", minutes: "Min", seconds: "Sec" }[key]));
+                units.append(cell);
+                return [key, value];
+            });
+            const done = el("div", "suv-cd-done", block.done);
+            done.hidden = true;
+            const when = el("div", "suv-cd-when", new Intl.DateTimeFormat(undefined, { weekday: "short", day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(target)));
+            node.append(units, done, when);
+            let fired = target <= Date.now();
+            addTicker(node, () => {
+                const left = target - Date.now();
+                const d = splitDuration(left);
+                cells.forEach(([key, value]) => {
+                    const text = key === "days" ? String(d.days) : String(d[key]).padStart(2, "0");
+                    if (value.textContent !== text) value.textContent = text;
+                });
+                const over = left <= 0;
+                units.hidden = over;
+                done.hidden = !over;
+                if (over && !fired) {
+                    fired = true;
+                    alertUser(block.label || "Countdown", block.done, true);
+                }
+            });
+            return node;
+        },
+
+        stopwatch(block) {
+            const st = state.live[block.path] = { running: false, base: 0, since: 0, laps: [], ...(state.live[block.path] || {}) };
+            const node = el("div", "suv-stopwatch");
+            if (block.label) node.append(el("div", "suv-live-label", block.label));
+            const time = el("div", "suv-big-time");
+            const buttons = el("div", "suv-live-btns");
+            const go = el("button", "sui-btn is-primary");
+            const lap = el("button", "sui-btn");
+            const reset = el("button", "sui-btn");
+            [go, lap, reset].forEach(b => { b.type = "button"; });
+            lap.textContent = "Lap";
+            reset.textContent = "Reset";
+            buttons.append(go, ...(block.laps ? [lap] : []), reset);
+            const laps = el("ol", "suv-laps");
+            node.append(time, buttons, laps);
+            const elapsed = () => st.base + (st.running ? Date.now() - st.since : 0);
+            const paintLaps = () => {
+                laps.textContent = "";
+                st.laps.slice(-20).forEach((ms, i, arr) => {
+                    const prev = i ? arr[i - 1] : 0;
+                    const li = el("li", "suv-lap");
+                    li.append(el("span", "", `Lap ${st.laps.length - arr.length + i + 1}`), el("span", "suv-lap-split", `+${clockText(ms - prev, { hours: false, tenths: true })}`), el("span", "", clockText(ms, { hours: false, tenths: true })));
+                    laps.prepend(li);
+                });
+            };
+            const paintButtons = () => {
+                go.textContent = st.running ? "Pause" : elapsed() ? "Resume" : "Start";
+                lap.disabled = !st.running;
+                reset.disabled = !elapsed();
+            };
+            go.addEventListener("click", () => {
+                if (st.running) { st.base = elapsed(); st.running = false; }
+                else { st.since = Date.now(); st.running = true; }
+                persist(); paintButtons();
+            });
+            lap.addEventListener("click", () => { st.laps.push(elapsed()); persist(); paintLaps(); });
+            reset.addEventListener("click", () => { Object.assign(st, { running: false, base: 0, since: 0, laps: [] }); persist(); paintLaps(); paintButtons(); time.textContent = clockText(0, { hours: false, tenths: true }); });
+            paintLaps();
+            paintButtons();
+            addTicker(node, () => { time.textContent = clockText(elapsed(), { hours: false, tenths: true }); });
+            return node;
+        },
+
+        timer(block) {
+            const pomodoro = block.mode === "pomodoro";
+            const st = state.live[block.path] = { running: false, base: 0, since: 0, total: block.minutes * 60000, fired: -1, ...(state.live[block.path] || {}) };
+            const node = el("div", `suv-timer${pomodoro ? " is-pomodoro" : ""}`);
+            if (block.label) node.append(el("div", "suv-live-label", block.label));
+            const phase = el("div", "suv-timer-phase");
+            const R = 54;
+            const C = 2 * Math.PI * R;
+            const ring = svg("svg", { viewBox: "0 0 128 128", class: "suv-timer-ring" });
+            const track = svg("circle", { cx: 64, cy: 64, r: R, class: "suv-ring-track" });
+            const bar = svg("circle", { cx: 64, cy: 64, r: R, class: "suv-ring-bar", "stroke-dasharray": C.toFixed(2), transform: "rotate(-90 64 64)" });
+            ring.append(track, bar);
+            const face = el("div", "suv-timer-face");
+            const time = el("div", "suv-big-time");
+            face.append(ring, time);
+            const dots = el("div", "suv-pomo-dots");
+            const presets = el("div", "suv-timer-presets");
+            const buttons = el("div", "suv-live-btns");
+            const go = el("button", "sui-btn is-primary");
+            const reset = el("button", "sui-btn");
+            const skip = el("button", "sui-btn");
+            [go, reset, skip].forEach(b => { b.type = "button"; });
+            reset.textContent = "Reset";
+            skip.textContent = "Skip";
+            buttons.append(go, reset, ...(pomodoro ? [skip] : []));
+            node.append(...(pomodoro ? [phase] : []), face, ...(pomodoro ? [dots] : []), ...(block.presets.length && !pomodoro ? [presets] : []), buttons);
+
+            const elapsed = () => st.base + (st.running ? Date.now() - st.since : 0);
+            const totalMs = () => pomodoro ? (block.work + block.short) * 60000 * block.rounds + (block.long - block.short) * 60000 : st.total;
+            const stop = () => { st.base = elapsed(); st.running = false; };
+
+            block.presets.forEach(min => {
+                const b = el("button", "suv-chip", `${formatNumber(min)} min`);
+                b.type = "button";
+                b.addEventListener("click", () => {
+                    Object.assign(st, { running: false, base: 0, since: 0, total: min * 60000, fired: -1 });
+                    persist(); paint(); paintButtons();
+                });
+                presets.append(b);
+            });
+
+            const paintButtons = () => {
+                const e = elapsed();
+                const finished = !pomodoro ? e >= st.total : pomodoroPhase(block, e).done;
+                go.textContent = st.running ? "Pause" : finished ? "Again" : e ? "Resume" : "Start";
+                reset.disabled = !e;
+                Array.from(presets.children).forEach((b, i) => b.classList.toggle("is-active", block.presets[i] * 60000 === st.total));
+            };
+
+            function paint() {
+                const e = elapsed();
+                let remaining, length, label = "", index = 0, finished;
+                if (pomodoro) {
+                    const p = pomodoroPhase(block, e);
+                    remaining = p.remaining; length = p.ms; index = p.index; finished = p.done;
+                    label = finished ? "All rounds done" : p.kind === "work" ? `Focus · round ${p.round}/${block.rounds}` : p.kind === "long" ? "Long break" : "Short break";
+                    node.dataset.phase = finished ? "done" : p.kind;
+                    phase.textContent = label;
+                    dots.textContent = "";
+                    for (let r = 1; r <= block.rounds; r++) {
+                        const dot = el("span", "suv-pomo-dot");
+                        if (r < p.round || finished || (r === p.round && p.kind !== "work")) dot.classList.add("is-done");
+                        else if (r === p.round) dot.classList.add("is-now");
+                        dots.append(dot);
+                    }
+                } else {
+                    remaining = Math.max(0, st.total - e); length = st.total; finished = remaining <= 0; index = 0;
+                }
+                const text = clockText(Math.ceil(remaining / 1000) * 1000, { hours: false });
+                if (time.textContent !== text) time.textContent = text;
+                bar.setAttribute("stroke-dashoffset", (C * (1 - (length ? remaining / length : 0))).toFixed(2));
+                // alerts: once per finished phase
+                if (st.running && pomodoro && index > 0 && st.fired < index - 1 && !finished) {
+                    st.fired = index - 1;
+                    persist();
+                    alertUser(index % 2 ? "Break time" : "Back to focus", label, block.sound);
+                }
+                if (st.running && finished) {
+                    st.base = Math.min(elapsed(), totalMs());
+                    st.running = false;
+                    st.fired = 999;
+                    persist();
+                    paintButtons();
+                    alertUser(block.label || (pomodoro ? "Pomodoro" : "Timer"), pomodoro ? "All rounds done" : "Time's up!", block.sound);
+                }
+                node.classList.toggle("is-running", st.running);
+                node.classList.toggle("is-finished", finished);
+            }
+
+            go.addEventListener("click", () => {
+                const e = elapsed();
+                const finished = !pomodoro ? e >= st.total : pomodoroPhase(block, e).done;
+                if (st.running) stop();
+                else {
+                    if (finished) Object.assign(st, { base: 0, fired: -1 });
+                    st.since = Date.now();
+                    st.running = true;
+                    askNotify();
+                    if (block.sound) { try { audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)(); audioCtx.resume?.(); } catch {} }
+                }
+                persist(); paint(); paintButtons();
+            });
+            reset.addEventListener("click", () => { Object.assign(st, { running: false, base: 0, since: 0, fired: -1 }); persist(); paint(); paintButtons(); });
+            skip.addEventListener("click", () => {
+                const p = pomodoroPhase(block, elapsed());
+                if (p.done) return;
+                st.base += p.remaining;
+                st.fired = p.index;
+                persist(); paint(); paintButtons();
+            });
+            paintButtons();
+            addTicker(node, paint);
+            return node;
         }
     };
 

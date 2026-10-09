@@ -5,6 +5,7 @@ import { verifyAnswer, answerCheckEnabled } from "../lib/verify.js";
 import { createPrivacySession, PRIVACY_RULE, privacyEnabled } from "../lib/privacy.js";
 import { loadWorkspaceContext, saveWorkspaceSuggestions, WORKSPACE_RULE } from "../lib/workspaces.js";
 import { SMART_UI_RULE } from "../lib/smart-ui.js";
+import { MINI_APP_HINT, MINI_APP_RULE, wantsMiniApp } from "../lib/mini-app.js";
 import { MEMORY_RULE, memoryEnabled, createMemoryFilter, applyMemoryMarkers, saveMemories, loadMemoryBox, autoCodeCopies, looksLikeFact, extractFactsWithModel, touchMemories, wantsForget, wantsRemember, pickKeysToForget, resolveForgets } from "../lib/memory.js";
 
 import {
@@ -1000,6 +1001,8 @@ function buildSystemInstruction(
     // Live cards (calculator, checklist, chart, tabs, compare, quiz)
     if (preferences.smartUi !== false) {
         parts.push(SMART_UI_RULE);
+        // Mini apps: short hint always, full rules when the user asks to build something
+        parts.push(preferences.miniApp ? `${MINI_APP_HINT}\n${MINI_APP_RULE}` : MINI_APP_HINT);
     }
 
 
@@ -1202,6 +1205,7 @@ function buildGeminiBody(
             maxOutputTokens:
                 (
                     isDeepResearch ||
+                    preferences.miniApp ||
                     preferences
                         .intelligence ===
                         "maximum"
@@ -3720,6 +3724,11 @@ export default async function handler(
             cleanString(
                 lastMsg.content || ""
             );
+
+        // "game/app/tool bana do": NEYO may build a sandboxed mini app
+        preferences.miniApp =
+            preferences.smartUi !== false &&
+            wantsMiniApp(userText);
 
 
         const autoEffort =

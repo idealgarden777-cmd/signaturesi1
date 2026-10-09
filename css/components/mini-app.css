@@ -1,0 +1,217 @@
+/* =========================================================
+   NEYO MINI APPS v1 — apps NEYO writes, run in a sandbox.
+   The card reuses the Smart UI card look (.sui-card).
+   ========================================================= */
+
+.message.assistant .message-content .nya-card {
+  padding-bottom: 12px;
+}
+
+.message.assistant .message-content .nya-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.message.assistant .message-content .nya-title-row .sui-title {
+  margin: 0;
+  min-width: 0;
+}
+
+.message.assistant .message-content .nya-tools {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.message.assistant .message-content .nya-tool {
+  padding: 5px 9px;
+}
+
+.message.assistant .message-content .nya-tool.is-on {
+  color: var(--r-strong) !important;
+  background: var(--sui-sunken);
+}
+
+.message.assistant .message-content .nya-stage {
+  position: relative;
+  margin-top: 12px;
+  border: 1px solid var(--sui-line);
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--sui-bg);
+}
+
+.message.assistant .message-content .nya-frame {
+  display: block;
+  width: 100%;
+  height: 420px;
+  border: 0;
+  background: transparent;
+  color-scheme: normal;
+  transition: height 0.18s ease;
+}
+
+.message.assistant .message-content .nya-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--r-muted);
+  font-size: 14px;
+  background: var(--sui-bg);
+  pointer-events: none;
+}
+
+.message.assistant .message-content .nya-loading[hidden] {
+  display: none;
+}
+
+.message.assistant .message-content .nya-issue {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--sui-bad) 9%, transparent);
+  color: var(--r-strong);
+  font-size: 13.5px;
+  line-height: 1.4;
+}
+
+.message.assistant .message-content .nya-issue[hidden] {
+  display: none;
+}
+
+.message.assistant .message-content .nya-issue > .sui-icon {
+  color: var(--sui-bad);
+  flex: none;
+}
+
+.message.assistant .message-content .nya-issue-text {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.message.assistant .message-content .nya-fix {
+  flex: none;
+}
+
+.message.assistant .message-content .nya-code {
+  margin-top: 10px;
+}
+
+.message.assistant .message-content .nya-code[hidden] {
+  display: none;
+}
+
+.message.assistant .message-content .nya-pre {
+  margin: 0;
+  max-height: 360px;
+  overflow: auto;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--sui-line);
+  background: var(--sui-sunken);
+  color: var(--r-strong);
+  font: 12.5px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  white-space: pre;
+  tab-size: 2;
+}
+
+/* full screen: the same iframe grows (moving it would restart the app) */
+.message.assistant .message-content .nya-card.is-full {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  margin: 0;
+  border-radius: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 14px 16px;
+  animation: none;
+}
+
+.message.assistant .message-content .nya-card.is-full .nya-stage {
+  flex: 1;
+  min-height: 0;
+}
+
+.message.assistant .message-content .nya-card.is-full .nya-frame {
+  height: 100% !important;
+}
+
+.message.assistant .message-content .nya-card.is-full .sui-actions,
+.message.assistant .message-content .nya-card.is-full .nya-code {
+  display: none;
+}
+
+.message.nya-host-full {
+  translate: none !important;
+  transform: none !important;
+  animation: none !important;
+  contain: none !important;
+  z-index: 2147483000;
+}
+
+.message.assistant .message-content .nya-card:fullscreen {
+  width: 100vw;
+  height: 100vh;
+}
+
+html.nya-lock,
+html.nya-lock body {
+  overflow: hidden !important;
+}
+
+/* while the answer streams */
+.message.assistant .message-content .nya-building {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 14px 0;
+  padding: 16px 18px;
+  border: 1px dashed var(--r-line);
+  border-radius: 16px;
+  color: var(--r-muted);
+  font-size: 14px;
+}
+
+.message.assistant .message-content .nya-building .sui-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: nya-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes nya-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+
+@media (max-width: 560px) {
+  .message.assistant .message-content .nya-tool .sui-btn-label {
+    display: none;
+  }
+  .message.assistant .message-content .nya-issue {
+    flex-wrap: wrap;
+  }
+  .message.assistant .message-content .nya-issue-text {
+    flex-basis: calc(100% - 30px);
+  }
+  .message.assistant .message-content .nya-fix {
+    margin-left: 26px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .message.assistant .message-content .nya-frame { transition: none; }
+  .message.assistant .message-content .nya-building .sui-dot { animation: none; }
+}

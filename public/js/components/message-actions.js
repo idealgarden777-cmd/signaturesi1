@@ -106,7 +106,9 @@ Does NOT own:
             // Smart UI cards copy as clean text, not button labels
             const swaps = [];
             content.querySelectorAll(".sui-card").forEach(card => {
-                const text = window.NeyoSmartUI?.textOf?.(card);
+                const text = card.classList.contains("nya-card")
+                    ? window.NeyoMiniApp?.textOf?.(card)
+                    : window.NeyoSmartUI?.textOf?.(card);
                 if (!text) return;
                 const stand = document.createElement("p");
                 stand.textContent = text;

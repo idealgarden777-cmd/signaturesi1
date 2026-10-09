@@ -44,6 +44,7 @@ test("search: Google grounding has a daily cap", async () => {
     process.env.NEYO_GROUNDING_DAILY_CAP = "0";
     assert.equal(await takeGroundingSlot(), false);
     delete process.env.NEYO_GROUNDING_DAILY_CAP;
+    delete process.env.NEYO_GOOGLE_GROUNDING;
 });
 
 test("search: no results -> the model is told its knowledge may be old", () => {
@@ -58,6 +59,7 @@ test("search: no results -> the model is told its knowledge may be old", () => {
 
 test("search: blocked scrapers -> one Google grounding call, its pages are read", async () => {
     process.env.NEYO_GROUNDING_DAILY_CAP = "50";
+    process.env.NEYO_GOOGLE_GROUNDING = "fallback";
     let groundingCalls = 0;
     await withFetch(async url => {
         if (url.includes("generativelanguage.googleapis.com")) {
@@ -92,8 +94,8 @@ test("search: blocked scrapers -> one Google grounding call, its pages are read"
     delete process.env.NEYO_GROUNDING_DAILY_CAP;
 });
 
-test("search: grounding off -> never called", async () => {
-    process.env.NEYO_GOOGLE_GROUNDING = "off";
+test("search: grounding off by default -> never called", async () => {
+    delete process.env.NEYO_GOOGLE_GROUNDING;
     let groundingCalls = 0;
     await withFetch(async url => {
         if (url.includes("generativelanguage.googleapis.com")) {

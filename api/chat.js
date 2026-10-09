@@ -16,7 +16,8 @@ import {
     buildResearchPrompt,
     runLiveSearch,
     buildLiveSearchPrompt,
-    decideSearch
+    decideSearch,
+    WEAK_SEARCH_NOTE
 } from "../lib/deep-research.js";
 
 import {
@@ -2894,6 +2895,11 @@ async function applyDeepResearch(
 
     let routed = null;
 
+    // Tool results kept when the second check sends us to live search.
+    let carried = null;
+
+    let carriedEffort = "";
+
     // NEW: the model itself picks and chains tools (search, maths,
     // currency, weather, time, read page, its own Python code).
     if (
@@ -2925,7 +2931,46 @@ async function applyDeepResearch(
                 agent.effort = "high";
             }
 
-            if (!agent.used) {
+            const agentSearched =
+                (agent.calls || []).some(
+                    name => name === "web_search" || name === "lookup_law"
+                );
+
+            // Second opinion: the tool planner did not search. If the
+            // search router thinks fresh facts are needed (latest, top,
+            // named products, AI models...), search anyway so the
+            // answer is not built on old memory.
+            if (!agentSearched) {
+                const second =
+                    await decideSearch({
+                        question:
+                            userText,
+                        context,
+                        apiKey:
+                            GEMINI_API_KEY,
+                        model:
+                            SEARCH_ROUTER_MODEL
+                    }).catch(() => null);
+
+                console.log(
+                    "[SEARCH_SECOND_CHECK]",
+                    second?.by,
+                    second?.search,
+                    (second?.queries || []).join(" | ")
+                );
+
+                if (second?.search) {
+                    routed = second;
+                    carried = agent.used ? agent : null;
+                    carriedEffort = agent.effort || "";
+                    onStatus("searching", {
+                        queries:
+                            routed.queries
+                    });
+                }
+            }
+
+            if (!routed && !agent.used) {
                 return {
                     messages,
                     sources: [],
@@ -2934,6 +2979,8 @@ async function applyDeepResearch(
                     lane: decision.lane
                 };
             }
+
+            if (!routed) {
 
             const agentPrompt =
                 agent.research?.contextText
@@ -2945,7 +2992,8 @@ async function applyDeepResearch(
                                 agent.research.contextText
                         }
                     )
-                    : `${userText}\n\n${agent.toolText}\nThese tool results were computed just now and are exact: use them, follow any rules above, and never contradict them. Do not mention the tools by name.`;
+                    : `${userText}\n\n${agent.toolText}\nThese tool results were computed just now and are exact: use them, follow any rules above, and never contradict them. Do not mention the tools by name.` +
+                        (agentSearched ? `\n\n${WEAK_SEARCH_NOTE}` : "");
 
             let agentLast =
                 list[list.length - 1];
@@ -2991,6 +3039,8 @@ async function applyDeepResearch(
                     agent.effort || "low"
             };
 
+            }
+
         } catch (error) {
 
             console.warn(
@@ -3002,7 +3052,7 @@ async function applyDeepResearch(
 
     }
 
-    if (live) {
+    if (live && !routed) {
 
         routed =
             await decideSearch({
@@ -3073,18 +3123,14 @@ async function applyDeepResearch(
 
     }
 
-    if (
-        live &&
-        !research?.contextText
-    ) {
-        return {
-            messages,
-            sources: []
-        };
-    }
-
+    // Live search found nothing: say so to the model (old knowledge
+    // must not be passed off as the latest). buildLiveSearchPrompt
+    // adds WEAK_SEARCH_NOTE when there is no research.
     const prompt =
-        live
+        (carried?.toolText
+            ? `${carried.toolText}\nThese tool results were computed just now and are exact: use them and never contradict them. Do not mention the tools by name.\n\n`
+            : "") +
+        (live
             ? buildLiveSearchPrompt(
                 userText,
                 research
@@ -3092,7 +3138,7 @@ async function applyDeepResearch(
             : buildResearchPrompt(
                 userText,
                 research
-            );
+            ));
 
     let last =
         list[list.length - 1];
@@ -3129,9 +3175,17 @@ async function applyDeepResearch(
         messages:
             list,
         sources:
-            research?.sources || [],
+            [
+                ...(carried?.sources || []),
+                ...(research?.sources || [])
+            ],
         evidence:
-            research?.contextText || ""
+            research?.contextText
+                ? (carried?.toolText || "") + research.contextText
+                : "",
+        ...(carriedEffort
+            ? { effort: decision.effort === "high" ? "high" : carriedEffort }
+            : {})
     };
 
 }

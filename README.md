@@ -44,3 +44,12 @@ NEYO can add one live card to an answer: calculator, checklist/timeline, chart, 
 ## Environment variables (Vercel)
 
 `GEMINI_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `APP_ORIGIN`, `SESSION_COOKIE_NAME` (optional), plus the payment keys used by `api/checkout.js` and `api/webhooks/lemon.js`.
+
+## Web search
+
+Free scrapers (Brave, Bing, DuckDuckGo, Yahoo, Mojeek, news feeds, Wikipedia, Hacker News, Reddit) run in parallel. Cloud servers often get blocked, so there are backups:
+
+- **Google Search grounding** (Gemini 2.5 Flash-Lite, free daily quota): used once per question only when the free results are weak. `NEYO_GOOGLE_GROUNDING` = `fallback` (default) | `always` | `off`. `NEYO_GROUNDING_DAILY_CAP` (default 400, shared across servers when `supabase/neyo_rate_limit.sql` is set up).
+- **Optional search APIs** with free plans; add a key and it joins automatically: `TAVILY_API_KEY`, `BRAVE_SEARCH_API_KEY`, `SERPER_API_KEY`.
+- **Page reader backup** for pages that block servers: r.jina.ai, a few pages per question (`JINA_API_KEY` optional).
+- Results that are not opened still add their snippet (marked as snippet only). If nothing comes back, the model is told to say it could not check live sources instead of passing old knowledge off as the latest.

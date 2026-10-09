@@ -34,7 +34,7 @@ test("web answers carry the accuracy rules", () => {
     for (const must of ["which product/model/person", "cause and effect", "not written in the results", "winner", "hype"]) {
         assert.ok(ACCURACY_RULES.includes(must), `rule mentions ${must}`);
     }
-    assert.equal(buildLiveSearchPrompt("q", null), "q");
+    assert.ok(buildLiveSearchPrompt("q", null).startsWith("q\n\n=== LIVE SEARCH NOTE ==="));
 });
 
 test("Smart UI: no automatic 'best' pick", () => {

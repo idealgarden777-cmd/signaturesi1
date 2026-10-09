@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { applyContextCache, dropContextCache } from "../lib/context-cache.js";
 import { decideLocally, shouldUpgradeForGrounding } from "../lib/decide.js";
+import { verifyAnswer, answerCheckEnabled } from "../lib/verify.js";
 import { createPrivacySession, PRIVACY_RULE, privacyEnabled } from "../lib/privacy.js";
 import { loadWorkspaceContext, saveWorkspaceSuggestions, WORKSPACE_RULE } from "../lib/workspaces.js";
 import { SMART_UI_RULE } from "../lib/smart-ui.js";
@@ -2777,6 +2778,12 @@ const SEARCH_ROUTER_MODEL =
     ) ||
     DEEP_RESEARCH_PLANNER_MODEL;
 
+const ANSWER_CHECK_MODEL =
+    cleanEnv(
+        process.env.NEYO_ANSWER_CHECK_MODEL
+    ) ||
+    NEYO_FREE_FALLBACK_MODEL;
+
 const DEEP_RESEARCH_GROUNDING_MODEL =
     cleanEnv(
         process.env.NEYO_RESEARCH_GROUNDING_MODEL
@@ -2976,6 +2983,10 @@ async function applyDeepResearch(
                     list,
                 sources:
                     agent.sources || [],
+                evidence:
+                    agent.research?.contextText
+                        ? agent.toolText + agent.research.contextText
+                        : "",
                 effort:
                     agent.effort || "low"
             };
@@ -3118,7 +3129,9 @@ async function applyDeepResearch(
         messages:
             list,
         sources:
-            research?.sources || []
+            research?.sources || [],
+        evidence:
+            research?.contextText || ""
     };
 
 }
@@ -4051,6 +4064,8 @@ export default async function handler(
 
             let sources = [];
 
+            let researchEvidence = "";
+
 
             let usedUrlContext =
                 false;
@@ -4217,6 +4232,9 @@ export default async function handler(
 
                 streamMessages =
                     researched.messages;
+
+                researchEvidence =
+                    researched.evidence || "";
 
                 timing.toolsMs =
                     elapsed(totalStarted) -
@@ -4572,10 +4590,68 @@ export default async function handler(
                     memoryLoaded.box
                 );
 
-            const reply =
+            let reply =
                 privacy.restore(
                     signals.text
                 );
+
+            // ANSWER CHECK: an answer written from web results is
+            // read again next to the same evidence; unsupported
+            // pieces are fixed and the browser gets the fixed text.
+            if (
+                reply &&
+                researchEvidence &&
+                sources.length &&
+                answerCheckEnabled(process.env.NEYO_ANSWER_CHECK)
+            ) {
+                writeSSE(
+                    res,
+                    { type: "check", state: "checking" }
+                );
+                const checkStarted =
+                    Date.now();
+                const checked =
+                    await verifyAnswer({
+                        question:
+                            userText,
+                        answer:
+                            reply,
+                        evidence:
+                            researchEvidence,
+                        apiKey:
+                            GEMINI_API_KEY,
+                        model:
+                            ANSWER_CHECK_MODEL
+                    });
+                timing.checkMs =
+                    elapsed(checkStarted);
+                timing.checkFixes =
+                    checked.fixes;
+                if (checked.fixes && checked.text) {
+                    reply =
+                        checked.text;
+                    writeSSE(
+                        res,
+                        {
+                            type: "check",
+                            state: "revised",
+                            fixes: checked.fixes,
+                            text: reply
+                        }
+                    );
+                } else {
+                    writeSSE(
+                        res,
+                        {
+                            type: "check",
+                            state:
+                                checked.checked
+                                    ? "ok"
+                                    : "skipped"
+                        }
+                    );
+                }
+            }
 
             // AUTO_COPY: the writer's signals; if it forgot and the user
             // clearly told a fact, one tiny backup call extracts it.
@@ -4830,6 +4906,8 @@ export default async function handler(
 
         let sources = [];
 
+        let researchEvidence = "";
+
 
         let usedUrlContext =
             false;
@@ -4897,6 +4975,9 @@ export default async function handler(
 
             normalMessages =
                 researched.messages;
+
+            researchEvidence =
+                researched.evidence || "";
 
             sources = [
                 ...sources,
@@ -4972,10 +5053,35 @@ export default async function handler(
             )
             );
 
-        const reply =
+        let reply =
             privacy.restore(
                 finalSignals.text
             );
+
+        if (
+            reply &&
+            researchEvidence &&
+            sources.length &&
+            answerCheckEnabled(process.env.NEYO_ANSWER_CHECK)
+        ) {
+            const checked =
+                await verifyAnswer({
+                    question:
+                        userText,
+                    answer:
+                        reply,
+                    evidence:
+                        researchEvidence,
+                    apiKey:
+                        GEMINI_API_KEY,
+                    model:
+                        ANSWER_CHECK_MODEL
+                });
+            if (checked.fixes && checked.text) {
+                reply =
+                    checked.text;
+            }
+        }
 
         const workspaceSuggested =
             preferences.workspaceCanSuggest

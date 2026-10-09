@@ -903,6 +903,51 @@ public/js/components/chat.js
                 return false;
             }
 
+            /*
+             * Answer check: the server re-read the answer next to
+             * its web sources. "revised" carries the fixed text.
+             */
+            if (
+                event.type === "check"
+            ) {
+                const state =
+                    clean(event.state);
+
+                if (
+                    state === "revised" &&
+                    typeof event.text === "string" &&
+                    event.text.trim()
+                ) {
+                    stopTyping();
+                    received = event.text;
+                    displayed = received;
+                    ensureAssistant();
+                    if (assistantId) {
+                        updateMessageContent(
+                            assistantId,
+                            received
+                        );
+                    }
+                }
+
+                const report = () =>
+                    emit(
+                        "neyo:answer-check",
+                        {
+                            id:
+                                assistantId,
+                            state,
+                            fixes:
+                                Number(event.fixes) || 0
+                        }
+                    );
+
+                // let the message render first
+                window.setTimeout(report, 40);
+
+                return false;
+            }
+
             if (
                 event.type === "error"
             ) {

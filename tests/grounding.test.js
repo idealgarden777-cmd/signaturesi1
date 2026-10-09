@@ -38,7 +38,7 @@ test("web answers carry the accuracy rules", () => {
 });
 
 test("Smart UI: no automatic 'best' pick", () => {
-    assert.match(SMART_UI_RULE, /"best": true on one item ONLY when the user asked/);
+    assert.match(SMART_UI_RULE, /pick[^\n]*ONLY when the user asked which one to choose/);
     const examples = SMART_UI_RULE.split("\n").filter(line => line.trim().startsWith('{"type"'));
     assert.ok(examples.every(line => !line.includes('"best":true')), "examples don't teach a best pick");
 });

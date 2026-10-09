@@ -1,8 +1,10 @@
 /*
 =========================================================
-NEYO — SMART UI v1
+NEYO — SMART UI v2
 Turns ```neyo-ui blocks in NEYO's answers into live cards:
-calculator, checklist / timeline, chart, tabs, compare, quiz.
+"view" (NEYO composes its own visual from safe blocks, see
+smart-ui-view.js) plus the ready-made calculator, checklist /
+timeline, chart, tabs, compare and quiz.
 
 - Data only: everything is built with textContent / SVG
   nodes, never innerHTML from the AI (tabs use the shared,
@@ -24,7 +26,8 @@ import {
     formatNumber,
     compactNumber,
     niceScale
-} from "./smart-ui-core.js?v=1";
+} from "./smart-ui-core.js?v=2";
+import { buildView } from "./smart-ui-view.js?v=1";
 
 (() => {
     "use strict";
@@ -38,6 +41,7 @@ import {
     let streaming = false;
 
     const TYPE_LABEL = {
+        view: "Live view",
         calculator: "Calculator",
         checklist: "Plan",
         chart: "Chart",
@@ -47,6 +51,7 @@ import {
     };
 
     const ICONS = {
+        view: '<rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="5" rx="2"/><rect x="13" y="10" width="8" height="11" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/>',
         calculator: '<rect x="5" y="3" width="14" height="18" rx="2.5"/><path d="M8.5 7.5h7M8.5 12h.01M12 12h.01M15.5 12h.01M8.5 15.5h.01M12 15.5h.01M15.5 15.5h.01"/>',
         checklist: '<path d="M9 6h11M9 12h11M9 18h11"/><path d="m3.5 6 1.2 1.2L7 5M3.5 12l1.2 1.2L7 11M3.5 18l1.2 1.2L7 17"/>',
         chart: '<path d="M4 20V10M10 20V4M16 20v-7M21 20H3"/>',
@@ -130,7 +135,7 @@ import {
 
         const head = el("header", "sui-head");
         const kicker = el("div", "sui-kicker");
-        kicker.append(icon(card.type, 14), el("span", "", TYPE_LABEL[card.type]));
+        kicker.append(icon(card.type, 14), el("span", "", card.kicker || TYPE_LABEL[card.type]));
         head.append(kicker);
         if (card.title) head.append(el("h4", "sui-title", card.title));
 
@@ -626,6 +631,7 @@ import {
     }
 
     const BUILDERS = {
+        view: (card, body, state, persist) => buildView(card, body, state, persist, { el, svg, icon, buildChart }),
         calculator: buildCalculator,
         checklist: buildChecklist,
         chart: buildChart,
@@ -734,6 +740,6 @@ import {
         enhance,
         enhanceAll,
         textOf: node => texts.get(node)?.() || "",
-        version: 1
+        version: 2
     });
 })();

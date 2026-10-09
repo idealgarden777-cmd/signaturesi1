@@ -3,15 +3,14 @@
   "version": "2.0.0-beta.1",
   "private": true,
   "type": "module",
-  "description": "Neyo Beta — clean rewrite of the Signaturesi Neyo experience.",
+  "description": "Neyo Beta \u2014 clean rewrite of the Signaturesi Neyo experience.",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "check": "npm run check:syntax && npm run build",
     "check:syntax": "node scripts/check-syntax.js",
-    "test": "node --test",
-    "test:smoke": "node --test tests/smoke/*.test.js"
+    "test": "node --test \"tests/**/*.test.js\"",
+    "check": "npm run check:syntax && npm test && npm run build"
   },
   "dependencies": {
     "@google/genai": "^1.27.0",

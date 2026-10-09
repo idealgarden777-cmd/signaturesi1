@@ -3,5 +3,17 @@
     "api/chat.js": {
       "includeFiles": "{node_modules/z3-solver/build/**,node_modules/@jitl/quickjs-wasmfile-release-sync/dist/**}"
     }
-  }
+  },
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+        { "key": "X-Frame-Options", "value": "SAMEORIGIN" },
+        { "key": "Permissions-Policy", "value": "microphone=(self), camera=(self), geolocation=()" },
+        { "key": "Strict-Transport-Security", "value": "max-age=31536000; includeSubDomains" }
+      ]
+    }
+  ]
 }

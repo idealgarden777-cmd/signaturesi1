@@ -426,14 +426,10 @@ No decorative glow/blob.
    EYE — OPEN
    ===================================================== */
 
-#neyoMascot[
-  data-eye="open"
-]
+#neyoMascot[data-eye="open"]
 .neyo-eye-core,
 
-#neyoMascot[
-  data-eye="round"
-]
+#neyoMascot[data-eye="round"]
 .neyo-eye-core {
   width:
     21px;
@@ -455,14 +451,10 @@ No decorative glow/blob.
    EYE — ARC / FRIENDLY
    ===================================================== */
 
-#neyoMascot[
-  data-eye="arc"
-]
+#neyoMascot[data-eye="arc"]
 .neyo-eye-core,
 
-#neyoMascot[
-  data-eye="arch"
-]
+#neyoMascot[data-eye="arch"]
 .neyo-eye-core {
   width:
     28px;
@@ -490,15 +482,11 @@ No decorative glow/blob.
 }
 
 
-#neyoMascot[
-  data-eye="arc"
-]
+#neyoMascot[data-eye="arc"]
 .neyo-eye-left
 .neyo-eye-core,
 
-#neyoMascot[
-  data-eye="arch"
-]
+#neyoMascot[data-eye="arch"]
 .neyo-eye-left
 .neyo-eye-core {
   transform:
@@ -508,15 +496,11 @@ No decorative glow/blob.
 }
 
 
-#neyoMascot[
-  data-eye="arc"
-]
+#neyoMascot[data-eye="arc"]
 .neyo-eye-right
 .neyo-eye-core,
 
-#neyoMascot[
-  data-eye="arch"
-]
+#neyoMascot[data-eye="arch"]
 .neyo-eye-right
 .neyo-eye-core {
   transform:
@@ -530,9 +514,7 @@ No decorative glow/blob.
    EYE — HALF / THINKING
    ===================================================== */
 
-#neyoMascot[
-  data-eye="half"
-]
+#neyoMascot[data-eye="half"]
 .neyo-eye-core {
   width:
     27px;
@@ -554,9 +536,7 @@ No decorative glow/blob.
    EXTRA FUTURE EYE GEOMETRIES
    ===================================================== */
 
-#neyoMascot[
-  data-eye="square"
-]
+#neyoMascot[data-eye="square"]
 .neyo-eye-core {
   width:
     20px;
@@ -569,9 +549,7 @@ No decorative glow/blob.
 }
 
 
-#neyoMascot[
-  data-eye="dot"
-]
+#neyoMascot[data-eye="dot"]
 .neyo-eye-core {
   width:
     12px;
@@ -584,14 +562,10 @@ No decorative glow/blob.
 }
 
 
-#neyoMascot[
-  data-eye="sleep"
-]
+#neyoMascot[data-eye="sleep"]
 .neyo-eye-core,
 
-#neyoMascot[
-  data-eye="closed"
-]
+#neyoMascot[data-eye="closed"]
 .neyo-eye-core {
   width:
     26px;
@@ -611,9 +585,7 @@ No decorative glow/blob.
 #neyoMascot.is-blinking
 .neyo-eye-core,
 
-#neyoMascot[
-  data-blink="true"
-]
+#neyoMascot[data-blink="true"]
 .neyo-eye-core {
   height:
     3px !important;
@@ -794,9 +766,7 @@ Talking uses the five bars.
    SMILE
    ===================================================== */
 
-#neyoMascot[
-  data-mouth="smile"
-]
+#neyoMascot[data-mouth="smile"]
 .neyo-mouth::before {
   width:
     45px;
@@ -834,9 +804,7 @@ Talking uses the five bars.
    NEUTRAL
    ===================================================== */
 
-#neyoMascot[
-  data-mouth="neutral"
-]
+#neyoMascot[data-mouth="neutral"]
 .neyo-mouth::before {
   width:
     31px;
@@ -864,9 +832,7 @@ Talking uses the five bars.
    THINKING
    ===================================================== */
 
-#neyoMascot[
-  data-mouth="thinking"
-]
+#neyoMascot[data-mouth="thinking"]
 .neyo-mouth::before {
   width:
     25px;
@@ -900,18 +866,14 @@ Talking uses the five bars.
    TALKING
    ===================================================== */
 
-#neyoMascot[
-  data-mouth="talk"
-]
+#neyoMascot[data-mouth="talk"]
 .neyo-mouth::before {
   opacity:
     0;
 }
 
 
-#neyoMascot[
-  data-mouth="talk"
-]
+#neyoMascot[data-mouth="talk"]
 .neyo-mouth-bar {
   opacity:
     1;
@@ -925,9 +887,7 @@ Talking uses the five bars.
 }
 
 
-#neyoMascot[
-  data-mouth="talk"
-]
+#neyoMascot[data-mouth="talk"]
 .neyo-mouth-bar:nth-child(
   1
 ) {
@@ -939,9 +899,7 @@ Talking uses the five bars.
 }
 
 
-#neyoMascot[
-  data-mouth="talk"
-]
+#neyoMascot[data-mouth="talk"]
 .neyo-mouth-bar:nth-child(
   2
 ) {
@@ -953,9 +911,7 @@ Talking uses the five bars.
 }
 
 
-#neyoMascot[
-  data-mouth="talk"
-]
+#neyoMascot[data-mouth="talk"]
 .neyo-mouth-bar:nth-child(
   3
 ) {
@@ -967,9 +923,7 @@ Talking uses the five bars.
 }
 
 
-#neyoMascot[
-  data-mouth="talk"
-]
+#neyoMascot[data-mouth="talk"]
 .neyo-mouth-bar:nth-child(
   4
 ) {
@@ -981,9 +935,7 @@ Talking uses the five bars.
 }
 
 
-#neyoMascot[
-  data-mouth="talk"
-]
+#neyoMascot[data-mouth="talk"]
 .neyo-mouth-bar:nth-child(
   5
 ) {
@@ -999,9 +951,7 @@ Talking uses the five bars.
    IDLE
    ===================================================== */
 
-#neyoMascot[
-  data-phase="idle"
-] {
+#neyoMascot[data-phase="idle"] {
   animation:
     neyoIdleFloat
     5.4s
@@ -1010,9 +960,7 @@ Talking uses the five bars.
 }
 
 
-#neyoMascot[
-  data-phase="idle"
-]
+#neyoMascot[data-phase="idle"]
 .neyo-mascot-face {
   --face-scale:
     1;
@@ -1023,18 +971,14 @@ Talking uses the five bars.
    LISTENING
    ===================================================== */
 
-#neyoMascot[
-  data-phase="listening"
-]
+#neyoMascot[data-phase="listening"]
 .neyo-mascot-face {
   --face-scale:
     1.018;
 }
 
 
-#neyoMascot[
-  data-phase="listening"
-]
+#neyoMascot[data-phase="listening"]
 .neyo-eye {
   top:
     33%;
@@ -1046,9 +990,7 @@ Mic energy can be provided by mascot.js
 through a CSS variable if available.
 */
 
-#neyoMascot[
-  data-phase="listening"
-] {
+#neyoMascot[data-phase="listening"] {
   transform:
     scale(
       calc(
@@ -1067,9 +1009,7 @@ through a CSS variable if available.
    THINKING
    ===================================================== */
 
-#neyoMascot[
-  data-phase="thinking"
-]
+#neyoMascot[data-phase="thinking"]
 .neyo-mascot-face {
   --face-scale:
     0.99;
@@ -1082,9 +1022,7 @@ through a CSS variable if available.
 }
 
 
-#neyoMascot[
-  data-phase="thinking"
-]
+#neyoMascot[data-phase="thinking"]
 .neyo-eye-left {
   animation:
     neyoThinkingEyeLeft
@@ -1094,9 +1032,7 @@ through a CSS variable if available.
 }
 
 
-#neyoMascot[
-  data-phase="thinking"
-]
+#neyoMascot[data-phase="thinking"]
 .neyo-eye-right {
   animation:
     neyoThinkingEyeRight
@@ -1110,18 +1046,14 @@ through a CSS variable if available.
    SPEAKING
    ===================================================== */
 
-#neyoMascot[
-  data-phase="speaking"
-]
+#neyoMascot[data-phase="speaking"]
 .neyo-mascot-face {
   --face-scale:
     1.012;
 }
 
 
-#neyoMascot[
-  data-phase="speaking"
-] {
+#neyoMascot[data-phase="speaking"] {
   animation:
     neyoSpeakingBody
     1.25s
@@ -1135,18 +1067,14 @@ through a CSS variable if available.
    MUTED
    ===================================================== */
 
-#neyoMascot[
-  data-muted="true"
-]
+#neyoMascot[data-muted="true"]
 .neyo-mascot-face {
   --face-scale:
     0.985;
 }
 
 
-#neyoMascot[
-  data-muted="true"
-]
+#neyoMascot[data-muted="true"]
 .neyo-eye-core {
   opacity:
     0.8;
@@ -1165,15 +1093,11 @@ through a CSS variable if available.
 
 /* NEYO — PREMIUM ROUNDED SQUARE */
 
-#neyoMascot[
-  data-character="neyo"
-]
+#neyoMascot[data-character="neyo"]
 .neyo-mascot-face,
 
 #neyoMascot
-.neyo-mascot-face[
-  data-character="neyo"
-] {
+.neyo-mascot-face[data-character="neyo"] {
   --face-radius:
     34px;
 
@@ -1184,15 +1108,11 @@ through a CSS variable if available.
 
 /* ZADI — SOFT DIAMOND */
 
-#neyoMascot[
-  data-character="zadi"
-]
+#neyoMascot[data-character="zadi"]
 .neyo-mascot-face,
 
 #neyoMascot
-.neyo-mascot-face[
-  data-character="zadi"
-] {
+.neyo-mascot-face[data-character="zadi"] {
   --face-radius:
     32px;
 
@@ -1212,15 +1132,11 @@ through a CSS variable if available.
 
 /* WIZI — ROUND SQUIRCLE */
 
-#neyoMascot[
-  data-character="wizi"
-]
+#neyoMascot[data-character="wizi"]
 .neyo-mascot-face,
 
 #neyoMascot
-.neyo-mascot-face[
-  data-character="wizi"
-] {
+.neyo-mascot-face[data-character="wizi"] {
   --face-radius:
     47%;
 
@@ -1233,15 +1149,11 @@ through a CSS variable if available.
    CHARACTER-SAFE FEATURES
    ===================================================== */
 
-#neyoMascot[
-  data-character
-]
+#neyoMascot[data-character]
 .neyo-eye-core,
 
 #neyoMascot
-.neyo-mascot-face[
-  data-character
-]
+.neyo-mascot-face[data-character]
 .neyo-eye-core {
   color:
     var(
@@ -1250,15 +1162,11 @@ through a CSS variable if available.
 }
 
 
-#neyoMascot[
-  data-character
-]
+#neyoMascot[data-character]
 .neyo-mouth,
 
 #neyoMascot
-.neyo-mascot-face[
-  data-character
-]
+.neyo-mascot-face[data-character]
 .neyo-mouth {
   color:
     var(
@@ -1558,9 +1466,7 @@ body.dark-mode
   }
 
 
-  #neyoMascot[
-    data-mouth="smile"
-  ]
+  #neyoMascot[data-mouth="smile"]
   .neyo-mouth::before {
     width:
       41px;
@@ -1603,9 +1509,7 @@ and
    Jelly squash / stretch follows real audio levels.
    ===================================================== */
 
-#neyoMascot[
-  data-character="crony"
-] {
+#neyoMascot[data-character="crony"] {
   --face-bg:
     linear-gradient(
       160deg,
@@ -1623,9 +1527,7 @@ and
     #111111;
 }
 
-#neyoMascot[
-  data-character="crony"
-]
+#neyoMascot[data-character="crony"]
 .neyo-mascot-face {
   width:
     62%;
@@ -1650,9 +1552,7 @@ and
     crony-jelly 3.6s ease-in-out infinite;
 }
 
-#neyoMascot[
-  data-character="crony"
-]
+#neyoMascot[data-character="crony"]
 .neyo-mascot-face::before {
   background:
     radial-gradient(
@@ -1662,33 +1562,25 @@ and
     );
 }
 
-#neyoMascot[
-  data-character="crony"
-]
+#neyoMascot[data-character="crony"]
 .neyo-eye {
   top:
     32%;
 }
 
-#neyoMascot[
-  data-character="crony"
-]
+#neyoMascot[data-character="crony"]
 .neyo-eye-left {
   left:
     12%;
 }
 
-#neyoMascot[
-  data-character="crony"
-]
+#neyoMascot[data-character="crony"]
 .neyo-eye-right {
   right:
     12%;
 }
 
-#neyoMascot[
-  data-character="crony"
-]
+#neyoMascot[data-character="crony"]
 .neyo-mouth {
   top:
     56%;
@@ -1718,9 +1610,7 @@ and
   prefers-reduced-motion:
     reduce
 ) {
-  #neyoMascot[
-    data-character="crony"
-  ]
+  #neyoMascot[data-character="crony"]
   .neyo-mascot-face {
     animation:
       none;

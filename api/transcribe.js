@@ -1,3 +1,4 @@
+import { guardRequest } from "../lib/guard.js";
 import { GoogleGenAI } from "@google/genai";
 
 export const config = {
@@ -110,6 +111,15 @@ export default async function handler(req, res) {
       error: "GEMINI_API_KEY is missing."
     });
   }
+
+  // same site + logged in + rate limit (spends the Gemini key)
+  const user = await guardRequest(req, res, {
+    name: "transcribe",
+    limit: 40,
+    windowMs: 10 * 60 * 1000
+  });
+
+  if (!user) return;
 
   try {
     const formData = await parseMultipart(req);

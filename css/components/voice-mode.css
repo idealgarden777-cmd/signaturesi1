@@ -250,9 +250,7 @@ aria-hidden="false"
 and display:flex
 */
 
-.voice-mode-shell[
-  aria-hidden="false"
-] {
+.voice-mode-shell[aria-hidden="false"] {
   display:
     flex;
 
@@ -267,9 +265,7 @@ and display:flex
 }
 
 
-.voice-mode-shell[
-  aria-hidden="true"
-] {
+.voice-mode-shell[aria-hidden="true"] {
   opacity:
     0;
 
@@ -287,9 +283,7 @@ while voice mode is open.
 */
 
 body:has(
-  #neyoVoiceMode[
-    aria-hidden="false"
-  ]
+  #neyoVoiceMode[aria-hidden="false"]
 ) {
   overflow:
     hidden;
@@ -508,9 +502,7 @@ LISTENING
 */
 
 .voice-mode-mascot-slot:has(
-  #neyoMascot[
-    data-phase="listening"
-  ]
+  #neyoMascot[data-phase="listening"]
 )::after {
   opacity:
     0.36;
@@ -529,9 +521,7 @@ THINKING
 */
 
 .voice-mode-mascot-slot:has(
-  #neyoMascot[
-    data-phase="thinking"
-  ]
+  #neyoMascot[data-phase="thinking"]
 )::after {
   opacity:
     0.18;
@@ -549,9 +539,7 @@ SPEAKING
 */
 
 .voice-mode-mascot-slot:has(
-  #neyoMascot[
-    data-phase="speaking"
-  ]
+  #neyoMascot[data-phase="speaking"]
 )::after {
   opacity:
     0.48;
@@ -737,9 +725,7 @@ This selector also supports class state.
 )
 .voice-mode-camera-preview,
 
-.voice-mode-camera-preview[
-  aria-hidden="false"
-] {
+.voice-mode-camera-preview[aria-hidden="false"] {
   display:
     block;
 
@@ -829,16 +815,12 @@ video {
 
 
 .voice-mode-stage:has(
-  #neyoMascot[
-    data-phase="listening"
-  ]
+  #neyoMascot[data-phase="listening"]
 )
 .voice-mode-status,
 
 .voice-mode-stage:has(
-  #neyoMascot[
-    data-phase="speaking"
-  ]
+  #neyoMascot[data-phase="speaking"]
 )
 .voice-mode-status {
   color:
@@ -1109,9 +1091,7 @@ svg {
 }
 
 
-#voiceModeMicBtn[
-  aria-pressed="false"
-]::before {
+#voiceModeMicBtn[aria-pressed="false"]::before {
   -webkit-mask-image:
     url(
       "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m2 2 20 20'/%3E%3Cpath d='M9 9v1a3 3 0 0 0 5.12 2.12'/%3E%3Cpath d='M15 9.34V5a3 3 0 0 0-5.94-.6'/%3E%3Cpath d='M17 16.95A7 7 0 0 1 5 12v-2'/%3E%3Cpath d='M19 10v2a7 7 0 0 1-.11 1.23'/%3E%3Cpath d='M12 19v3'/%3E%3C/svg%3E"
@@ -1209,9 +1189,7 @@ Mic is primary while listening.
 }
 
 
-#voiceModeSpeakerBtn[
-  aria-pressed="false"
-]::before {
+#voiceModeSpeakerBtn[aria-pressed="false"]::before {
   -webkit-mask-image:
     url(
       "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M11 5 6 9H2v6h4l5 4z'/%3E%3Cpath d='m22 9-6 6'/%3E%3Cpath d='m16 9 6 6'/%3E%3C/svg%3E"
@@ -1265,9 +1243,7 @@ Only indicate open picker when aria-expanded
 is later wired by JS.
 */
 
-#characterPickerBtn[
-  aria-expanded="true"
-] {
+#characterPickerBtn[aria-expanded="true"] {
   background:
     var(
       --vm-text
@@ -1343,9 +1319,7 @@ is later wired by JS.
    ===================================================== */
 
 .voice-mode-shell
-.character-picker-shell[
-  aria-hidden="true"
-] {
+.character-picker-shell[aria-hidden="true"] {
   opacity:
     0;
 
@@ -1358,9 +1332,7 @@ is later wired by JS.
 
 
 .voice-mode-shell
-.character-picker-shell[
-  aria-hidden="false"
-] {
+.character-picker-shell[aria-hidden="false"] {
   opacity:
     1;
 
@@ -1377,9 +1349,7 @@ is later wired by JS.
    ===================================================== */
 
 .voice-mode-stage:has(
-  #neyoMascot[
-    data-phase="listening"
-  ]
+  #neyoMascot[data-phase="listening"]
 )
 .voice-mode-mascot-slot {
   color:
@@ -1390,9 +1360,7 @@ is later wired by JS.
 
 
 .voice-mode-stage:has(
-  #neyoMascot[
-    data-phase="thinking"
-  ]
+  #neyoMascot[data-phase="thinking"]
 )
 .voice-mode-mascot-slot {
   color:
@@ -1403,9 +1371,7 @@ is later wired by JS.
 
 
 .voice-mode-stage:has(
-  #neyoMascot[
-    data-phase="speaking"
-  ]
+  #neyoMascot[data-phase="speaking"]
 )
 .voice-mode-mascot-slot {
   color:

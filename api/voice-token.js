@@ -24,6 +24,7 @@ IMPORTANT:
 */
 
 import { GoogleGenAI } from "@google/genai";
+import { guardRequest } from "../lib/guard.js";
 import {
   runLiveSearch,
   isNewsQuery
@@ -536,9 +537,23 @@ export default async function handler(
       req
     );
 
+  /* -------------------------------------------------------
+     SECURITY: same site + logged in + rate limit
+     (tokens and searches spend the Gemini key)
+     ------------------------------------------------------- */
+
+  const isSearch =
+    requestBody?.action === "search";
+
+  const user =
+    await guardRequest(req, res, isSearch
+      ? { name: "voice-search", limit: 60, windowMs: 10 * 60 * 1000 }
+      : { name: "voice-token", limit: 20, windowMs: 10 * 60 * 1000 });
+
+  if (!user) return;
+
   if (
-    requestBody?.action ===
-    "search"
+    isSearch
   ) {
     return handleVoiceSearch(
       req,

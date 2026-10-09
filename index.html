@@ -107,7 +107,7 @@
   <link rel="stylesheet" href="/css/components/source-cards.css?v=3">
   <link rel="stylesheet" href="/css/components/response.css?v=1">
   <link rel="stylesheet" href="/css/components/user-collapse.css?v=1">
-  <link rel="stylesheet" href="/css/components/polish.css?v=3">
+  <link rel="stylesheet" href="/css/components/polish.css?v=4">
 
   <!-- KaTeX -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css">
@@ -639,12 +639,52 @@
         <div class="neo-settings-panel active" id="settingsPanelGeneral">
           <div class="neo-settings-panel-header">
             <h2>General</h2>
-            <p>How NEYO answers and starts.</p>
+            <p>Everyday controls for how NEYO looks and answers.</p>
           </div>
 
           <!-- QUICK CONTROLS -->
           <div class="neo-settings-section">
-            <span class="neo-settings-section-title">Chat</span>
+            <span class="neo-settings-section-title">Quick Controls</span>
+
+            <!-- Theme -->
+            <div class="settings-row">
+              <div>
+                <strong>Theme</strong>
+                <small>Choose your preferred interface theme.</small>
+              </div>
+
+              <div
+                class="settings-segmented-control"
+                id="settingsThemeControl"
+                role="group"
+                aria-label="Theme"
+              >
+                <button
+                  type="button"
+                  data-value="system"
+                  class="active"
+                  aria-pressed="true"
+                >
+                  System
+                </button>
+
+                <button
+                  type="button"
+                  data-value="light"
+                  aria-pressed="false"
+                >
+                  Light
+                </button>
+
+                <button
+                  type="button"
+                  data-value="dark"
+                  aria-pressed="false"
+                >
+                  Dark
+                </button>
+              </div>
+            </div>
 
             <!-- Intelligence -->
             <div class="settings-row">
@@ -677,6 +717,70 @@
                 </button>
               </div>
             </div>
+
+            <!-- Private Chat -->
+            <div class="settings-row">
+              <div>
+                <strong>Private Chat</strong>
+                <small>Keep new chats outside saved history and memory.</small>
+              </div>
+
+              <button
+                class="settings-toggle"
+                id="settingsPrivateChatToggle"
+                type="button"
+                role="switch"
+                aria-label="Private Chat"
+                aria-checked="false"
+              >
+                <span aria-hidden="true"></span>
+              </button>
+            </div>
+
+            <!-- Interface -->
+            <div class="settings-row">
+              <div>
+                <strong>Interface</strong>
+                <small>Choose the visual character of NEYO.</small>
+              </div>
+
+              <div
+                class="settings-segmented-control"
+                id="settingsInterfaceControl"
+                role="group"
+                aria-label="Interface style"
+              >
+                <button
+                  type="button"
+                  data-value="minimal"
+                  class="active"
+                  aria-pressed="true"
+                >
+                  Minimal
+                </button>
+
+                <button
+                  type="button"
+                  data-value="warm"
+                  aria-pressed="false"
+                >
+                  Warm
+                </button>
+
+                <button
+                  type="button"
+                  data-value="glass"
+                  aria-pressed="false"
+                >
+                  Glass
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- GENERAL PREFERENCES -->
+          <div class="neo-settings-section">
+            <span class="neo-settings-section-title">General Preferences</span>
 
             <!-- Language -->
             <div class="settings-row settings-select-row">
@@ -764,6 +868,7 @@
                   aria-expanded="false"
                   aria-controls="settingsDefaultPersonalityMenu"
                 >
+                  <span class="personality-mascot settings-option-mascot is-small" id="settingsDefaultPersonalityMascot" data-character="neyo" aria-hidden="true"><span class="personality-mascot-eye"></span><span class="personality-mascot-eye"></span></span>
                   <span id="settingsDefaultPersonalityValue">Neyo</span>
                   <i data-lucide="chevron-down" size="15"></i>
                 </button>
@@ -782,7 +887,8 @@
                     role="option"
                     aria-selected="true"
                   >
-                    Neyo
+                    <span class="personality-mascot settings-option-mascot" data-character="neyo" aria-hidden="true"><span class="personality-mascot-eye"></span><span class="personality-mascot-eye"></span></span>
+                    <span class="settings-option-text"><strong>Neyo</strong><small>Calm, smart and reliable</small></span>
                   </button>
 
                   <button
@@ -792,7 +898,8 @@
                     role="option"
                     aria-selected="false"
                   >
-                    Zadi
+                    <span class="personality-mascot settings-option-mascot" data-character="zadi" aria-hidden="true"><span class="personality-mascot-eye"></span><span class="personality-mascot-eye"></span></span>
+                    <span class="settings-option-text"><strong>Zadi</strong><small>Bold, energetic motivator</small></span>
                   </button>
 
                   <button
@@ -802,7 +909,8 @@
                     role="option"
                     aria-selected="false"
                   >
-                    Wizi
+                    <span class="personality-mascot settings-option-mascot" data-character="wizi" aria-hidden="true"><span class="personality-mascot-eye"></span><span class="personality-mascot-eye"></span></span>
+                    <span class="settings-option-text"><strong>Wizi</strong><small>Curious idea explorer</small></span>
                   </button>
 
                   <button
@@ -812,7 +920,8 @@
                     role="option"
                     aria-selected="false"
                   >
-                    Crony
+                    <span class="personality-mascot settings-option-mascot" data-character="crony" aria-hidden="true"><span class="personality-mascot-eye"></span><span class="personality-mascot-eye"></span></span>
+                    <span class="settings-option-text"><strong>Crony</strong><small>Playful, upbeat buddy</small></span>
                   </button>
                 </div>
               </div>
@@ -1067,10 +1176,10 @@
                 <small>Choose a subtle interface accent.</small>
               </div>
               <div class="settings-segmented-control" id="appearanceAccentControl" role="group" aria-label="Accent color">
-                <button type="button" data-value="neutral" aria-pressed="false">Neutral</button>
-                <button type="button" data-value="emerald" aria-pressed="false">Emerald</button>
-                <button type="button" data-value="violet" aria-pressed="false">Violet</button>
-                <button type="button" data-value="blue" aria-pressed="false">Blue</button>
+                <button type="button" data-value="neutral" aria-pressed="false"><span class="accent-dot" data-accent-dot="neutral" aria-hidden="true"></span>Neutral</button>
+                <button type="button" data-value="emerald" aria-pressed="false"><span class="accent-dot" data-accent-dot="emerald" aria-hidden="true"></span>Emerald</button>
+                <button type="button" data-value="violet" aria-pressed="false"><span class="accent-dot" data-accent-dot="violet" aria-hidden="true"></span>Violet</button>
+                <button type="button" data-value="blue" aria-pressed="false"><span class="accent-dot" data-accent-dot="blue" aria-hidden="true"></span>Blue</button>
               </div>
             </div>
           </div>
@@ -1181,25 +1290,6 @@
           </div>
 
           <div class="neo-settings-section">
-            <!-- Private Chat -->
-            <div class="settings-row">
-              <div>
-                <strong>Private Chat</strong>
-                <small>New chats are not saved in history and NEYO doesn't remember them.</small>
-              </div>
-
-              <button
-                class="settings-toggle"
-                id="settingsPrivateChatToggle"
-                type="button"
-                role="switch"
-                aria-label="Private Chat"
-                aria-checked="false"
-              >
-                <span aria-hidden="true"></span>
-              </button>
-            </div>
-
             <div class="settings-row">
               <div>
                 <strong>Memory</strong>
@@ -1773,7 +1863,7 @@
   <!-- ========================================================= -->
 
   <!-- Main working app -->
-  <script src="/neo.js?v=91"></script>
+  <script src="/neo.js?v=92"></script>
 
   <!-- Model menu (v6) — cache busted -->
   <script type="module" src="/js/components/model-menu.js?v=6"></script>
@@ -1831,7 +1921,7 @@
   <script src="/js/components/memory-chip.js?v=1" defer></script>
   <script src="/js/components/workspace-settings.js?v=1" defer></script>
   <script src="/js/components/neyo-ui.js?v=1" defer></script>
-  <script src="/js/components/memory-settings.js?v=2" defer></script>
+  <script src="/js/components/memory-settings.js?v=3" defer></script>
   <script src="/js/components/workspaces.js?v=3" defer></script>
   <script src="/js/components/voice-search-ui.js?v=1" defer></script>
 

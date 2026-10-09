@@ -389,6 +389,18 @@ body.dark-mode .nm-skel{background:linear-gradient(90deg,rgba(255,255,255,.04) 0
 
   /* ---------------- other settings helpers ---------------- */
 
+  // Default Personality: keep the small character next to the name in sync
+  const personalityValue = document.getElementById("settingsDefaultPersonalityValue");
+  const personalityMascot = document.getElementById("settingsDefaultPersonalityMascot");
+  if (personalityValue && personalityMascot) {
+    const syncMascot = () => {
+      const name = (personalityValue.textContent || "neyo").trim().toLowerCase();
+      personalityMascot.dataset.character = ["neyo", "zadi", "wizi", "crony"].includes(name) ? name : "neyo";
+    };
+    new MutationObserver(syncMascot).observe(personalityValue, { childList: true, characterData: true, subtree: true });
+    syncMascot();
+  }
+
   // "Manage" style buttons that jump to another settings tab
   document.addEventListener("click", event => {
     const jump = event.target.closest?.("[data-open-settings-tab]");

@@ -1010,11 +1010,18 @@
             menu.style.top = "auto";
             menu.style.bottom = "auto";
 
-            // Temporarily position to measure
+            // Temporarily position to measure (no animation while measuring)
+            menu.style.animation = "none";
             menu.style.visibility = "hidden";
             menu.style.display = "block";
 
             const menuRect = menu.getBoundingClientRect();
+
+            // A transformed/animated modal becomes the containing block for
+            // position:fixed, so measure where (0,0) really is and correct.
+            menu.style.left = "0px";
+            menu.style.top = "0px";
+            const origin = menu.getBoundingClientRect();
 
             const spaceBelow =
                 window.innerHeight -
@@ -1067,10 +1074,13 @@
             );
 
             menu.style.left =
-                `${Math.round(left)}px`;
+                `${Math.round(left - origin.left)}px`;
 
             menu.style.top =
-                `${Math.round(top)}px`;
+                `${Math.round(top - origin.top)}px`;
+
+            menu.style.transformOrigin = openUpward ? "bottom right" : "top right";
+            menu.style.animation = "";
 
             menu.style.visibility = "";
             menu.style.display = "";

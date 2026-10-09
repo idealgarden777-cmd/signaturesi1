@@ -341,21 +341,157 @@ body.neyo-theme-switching * {
     }
 }
 
-/* ---------- settings: calm selected state ---------- */
+/* ---------- settings: selected state (soft pill + ring, like before) ---------- */
 
 .neo-settings-modal .settings-segmented-control button.active,
 .neo-settings-modal .settings-pill.active {
-    background: var(--neyo-text, #171717) !important;
-    border-color: var(--neyo-text, #171717) !important;
-    color: var(--neyo-surface, #ffffff) !important;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08) !important;
+    background: #f1f1f1 !important;
+    border-color: #171717 !important;
+    color: #171717 !important;
+    box-shadow: inset 0 0 0 0.5px #171717, 0 1px 2px rgba(0, 0, 0, 0.06) !important;
 }
 
 body.dark-mode .neo-settings-modal .settings-segmented-control button.active,
 body.dark-mode .neo-settings-modal .settings-pill.active {
-    background: #f5f5f5 !important;
-    border-color: #f5f5f5 !important;
-    color: #111111 !important;
+    background: #2a2a2a !important;
+    border-color: #e5e5e5 !important;
+    color: #ffffff !important;
+    box-shadow: inset 0 0 0 0.5px #e5e5e5 !important;
+}
+
+/* Accent: real colour dot, selected pill takes that colour */
+
+.neo-settings-modal #appearanceAccentControl button {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+}
+
+.accent-dot {
+    width: 10px;
+    height: 10px;
+    flex: 0 0 auto;
+    border-radius: 50%;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
+}
+
+.accent-dot[data-accent-dot="neutral"] { background: #171717; }
+.accent-dot[data-accent-dot="emerald"] { background: #0f8f66; }
+.accent-dot[data-accent-dot="violet"] { background: #7660e8; }
+.accent-dot[data-accent-dot="blue"] { background: #3377e8; }
+
+body.dark-mode .accent-dot[data-accent-dot="neutral"] {
+    background: #f5f5f5;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2);
+}
+
+.neo-settings-modal #appearanceAccentControl button.active:not([data-value="neutral"]) {
+    background: var(--neyo-accent-soft) !important;
+    border-color: var(--neyo-accent) !important;
+    color: var(--neyo-accent) !important;
+    box-shadow: inset 0 0 0 0.5px var(--neyo-accent) !important;
+}
+
+body.dark-mode .neo-settings-modal #appearanceAccentControl button.active:not([data-value="neutral"]) {
+    color: #ffffff !important;
+}
+
+/* Default Personality dropdown: show the characters */
+
+.settings-option-mascot {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 28px;
+    height: 28px;
+    margin: 0 !important;
+    gap: 4px !important;
+    border-radius: 9px;
+}
+
+.settings-option-mascot .personality-mascot-eye {
+    width: 4.5px;
+    height: 5.5px;
+}
+
+.settings-option-mascot[data-character="crony"] {
+    width: 20px;
+    margin: 0 4px !important;
+}
+
+.settings-option-mascot.is-small {
+    width: 20px;
+    height: 20px;
+    gap: 3px !important;
+    border-radius: 6px;
+    box-shadow: none;
+}
+
+.settings-option-mascot.is-small .personality-mascot-eye {
+    width: 3.5px;
+    height: 4px;
+}
+
+.settings-option-mascot.is-small[data-character="crony"] {
+    width: 14px;
+    margin: 0 3px !important;
+}
+
+#settingsDefaultPersonalityBtn {
+    gap: 8px;
+}
+
+#settingsDefaultPersonalityMenu {
+    min-width: 248px;
+}
+
+#settingsDefaultPersonalityMenu .settings-select-option {
+    gap: 11px;
+    min-height: 48px;
+    padding: 8px 10px;
+}
+
+.settings-option-text {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+}
+
+.settings-option-text strong {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--neyo-text, #171717);
+}
+
+.settings-option-text small {
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--neyo-text-secondary, #737373);
+}
+
+body.dark-mode .settings-option-text strong { color: #f5f5f5; }
+body.dark-mode .settings-option-text small { color: #a3a3a3; }
+
+/* check mark on the chosen option */
+
+.settings-select-option {
+    position: relative;
+    padding-right: 30px !important;
+}
+
+.settings-select-option.active::after {
+    content: "";
+    position: absolute;
+    right: 11px;
+    top: 50%;
+    width: 9px;
+    height: 5px;
+    border-left: 1.8px solid currentColor;
+    border-bottom: 1.8px solid currentColor;
+    translate: 0 -70%;
+    rotate: -45deg;
 }
 
 .neo-settings-modal .settings-segmented-control button,
@@ -615,4 +751,11 @@ body.dark-mode .settings-status-pill {
     border: 0 !important;
     box-shadow: none !important;
     line-height: 26px;
+}
+
+/* Personalities icon same size as the other settings tabs */
+.neo-settings-tab svg.neyo-icon {
+    width: 24px !important;
+    height: 24px !important;
+    flex: 0 0 24px;
 }

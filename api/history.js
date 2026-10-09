@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { getAuthenticatedUser } from "../lib/auth.js";
 import { handleWorkspaces } from "../lib/workspaces.js";
+import { handleMemoryRequest } from "../lib/memory.js";
 
 const DEFAULT_HISTORY_LIMIT = 100;
 const MAX_HISTORY_LIMIT = 200;
@@ -684,6 +685,23 @@ export default async function handler(
         String(req.query?.resource || "") === "workspaces"
     ) {
         return handleWorkspaces(req, res);
+    }
+
+
+    // Settings > Memory (see / add / edit / forget what NEYO remembers)
+    if (
+        String(req.query?.resource || "") === "memory"
+    ) {
+        try {
+            const me = await getAuthenticatedUser(req);
+            return handleMemoryRequest(req, res, {
+                supabase: createSupabaseAdmin(),
+                userId: me?.userId || null
+            });
+        } catch (error) {
+            console.error("[MEMORY] settings auth", error?.message || error);
+            return res.status(500).json({ error: "Memory request failed. Please try again." });
+        }
     }
 
 

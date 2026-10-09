@@ -3237,11 +3237,10 @@
         });
         personalMemoryBtn?.addEventListener("click", event => {
             event.stopPropagation();
-            attachPopupMenu?.classList.remove("show");
-            const memory = prompt("Update Memory:", localStorage.getItem("neo_user_memories") || "");
-            if (memory !== null) {
-                localStorage.setItem("neo_user_memories", memory.trim());
-            }
+            attachPopupMenu?.classList.remove("show", "active");
+            // was a browser prompt("Update Memory"); the button says
+            // NEYO Personalities, so open that tab
+            openNeoSettings("personalities");
         });
         hiddenFileInput?.addEventListener("change", event => {
             const files = Array.from(event.target.files || []);

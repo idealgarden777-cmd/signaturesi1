@@ -362,3 +362,174 @@ body.dark-mode .neo-settings-modal .settings-pill.active {
 .neo-settings-modal .settings-pill {
     transition: background-color var(--neyo-dur-2) var(--neyo-ease), border-color var(--neyo-dur-2) var(--neyo-ease), color var(--neyo-dur-2) var(--neyo-ease), scale var(--neyo-dur-1) var(--neyo-ease) !important;
 }
+
+/* ---------- NEYO dropdown (replaces the browser's select menu) ---------- */
+
+.nyx-select {
+    position: relative;
+    display: inline-flex;
+    max-width: 100%;
+    min-width: 0;
+    vertical-align: middle;
+}
+
+.nyx-native {
+    position: absolute !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+    margin: 0 !important;
+}
+
+.nyx-trigger {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+    min-width: 0;
+    min-height: 36px;
+    padding: 7px 10px 7px 12px;
+    border: 1px solid var(--neyo-border-strong, rgba(0, 0, 0, 0.14));
+    border-radius: 10px;
+    background: var(--neyo-surface, #fff);
+    color: inherit;
+    font: inherit;
+    font-size: 13.5px;
+    text-align: left;
+    cursor: pointer;
+}
+
+.nyx-trigger:hover:not(:disabled) {
+    border-color: var(--neyo-text-secondary, #737373);
+}
+
+.nyx-trigger:disabled {
+    opacity: 0.55;
+    cursor: default;
+}
+
+.nyx-value {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.nyx-chevron {
+    flex: 0 0 auto;
+    color: var(--neyo-text-muted, #9b9b9b);
+    transition: rotate var(--neyo-dur-2) var(--neyo-ease);
+}
+
+.nyx-select.is-open .nyx-chevron {
+    rotate: 180deg;
+}
+
+.nyx-select.is-open .nyx-trigger {
+    border-color: var(--neyo-text-secondary, #737373);
+    box-shadow: 0 0 0 3px var(--neyo-select);
+}
+
+.nyx-menu {
+    position: fixed;
+    z-index: 65000;
+    display: none;
+    flex-direction: column;
+    gap: 1px;
+    max-width: min(320px, calc(100vw - 16px));
+    padding: 5px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border-radius: 12px;
+    background: var(--neyo-surface, #fff);
+    color: var(--neyo-text, #171717);
+    box-shadow: var(--neyo-pop-shadow);
+    font-size: 13.5px;
+}
+
+.nyx-menu.is-open {
+    display: flex;
+    animation: neyoPopIn var(--neyo-dur-2) var(--neyo-ease-out) both;
+}
+
+.nyx-menu[data-side="top"].is-open {
+    animation-name: neyoPopUp;
+}
+
+body.dark-mode .nyx-menu {
+    background: #1f1f1f;
+    color: #f5f5f5;
+}
+
+.nyx-option {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    min-height: 34px;
+    padding: 0 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+    transition: background-color var(--neyo-dur-1) var(--neyo-ease);
+}
+
+.nyx-option.is-active {
+    background: var(--neyo-surface-hover, #f1f1f1);
+}
+
+body.dark-mode .nyx-option.is-active {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.nyx-option.is-selected {
+    font-weight: 600;
+}
+
+.nyx-check {
+    opacity: 0;
+    flex: 0 0 auto;
+}
+
+.nyx-option.is-selected .nyx-check {
+    opacity: 1;
+}
+
+.nyx-option[aria-disabled="true"] {
+    opacity: 0.4;
+    cursor: default;
+}
+
+/* ---------- NEYO confirm dialog ---------- */
+
+.nyx-dialog .neo-dialog-card {
+    box-shadow: var(--neyo-modal-shadow);
+}
+
+.nyx-dialog .neo-dialog-card h3 {
+    margin-bottom: 6px;
+}
+
+.nyx-dialog-text {
+    margin: 0;
+    color: var(--neyo-text-secondary, #737373);
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.neo-dialog-confirm.nyx-danger {
+    background: #c2410c;
+    color: #fff;
+}
+
+.neo-dialog-cancel,
+.neo-dialog-confirm {
+    transition: background-color var(--neyo-dur-2) var(--neyo-ease), opacity var(--neyo-dur-2) var(--neyo-ease), scale var(--neyo-dur-1) var(--neyo-ease);
+}
+
+.neo-dialog-confirm:hover {
+    opacity: 0.88;
+}

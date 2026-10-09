@@ -1153,9 +1153,11 @@ function buildGeminiBody(
                                 : ""
                         ) +
                         (
-                            memoryEnabled()
+                            memoryEnabled() && !preferences.memoryOff
                                 ? `\n\n${MEMORY_RULE}`
-                                : ""
+                                : memoryEnabled()
+                                    ? "\n\nMEMORY IS OFF: the user switched memory off in Settings. Don't save or recall anything across chats; if they ask you to remember something, say memory is off and they can turn it on in Settings > Memory."
+                                    : ""
                         ) +
                         (
                             preferences.thinkingEffort === "high"
@@ -3449,7 +3451,10 @@ export default async function handler(
                 normalizeWorkspace(
                     body.workspace,
                     privacy
-                )
+                ),
+
+            memoryOff:
+                body.memoryOff === true
 
         };
 
@@ -3458,6 +3463,10 @@ export default async function handler(
             normalizePrivateChat(
                 body.privateChat
             );
+
+        // Settings > Memory switched off: NEYO neither reads nor saves memory.
+        const memoryOff =
+            body.memoryOff === true;
 
 
         // NEYO Workspace picked in the composer: its project, members,
@@ -4140,7 +4149,7 @@ export default async function handler(
                 { box: new Map(), prompt: "" };
 
             const memoryPromise =
-                privateChat
+                privateChat || memoryOff
                     ? Promise.resolve(emptyMemory)
                     : loadMemoryBox(
                         supabase,
@@ -4535,7 +4544,7 @@ export default async function handler(
             // AUTO_COPY: the writer's signals; if it forgot and the user
             // clearly told a fact, one tiny backup call extracts it.
             const memorySaved =
-                privateChat || !memoryEnabled()
+                privateChat || memoryOff || !memoryEnabled()
                     ? null
                     : (async () => {
                         const boxKeys =

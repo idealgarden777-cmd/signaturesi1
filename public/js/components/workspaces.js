@@ -1099,7 +1099,7 @@ body.dark-mode .nw-badge.low{background:#1f2933;color:#a3b1c2}
         break;
       }
       case "delete-ws": {
-        if (!confirm(`Delete "${w.name}" with all its tasks, notes and files? This can't be undone.`)) return;
+        if (!(await ask(`Delete "${w.name}"?`, "All its tasks, notes and files go too. This can't be undone.", "Delete", true))) return;
         try {
           await api("POST", { action: "delete", id: w.id });
           closeModal();
@@ -1145,12 +1145,12 @@ body.dark-mode .nw-badge.low{background:#1f2933;color:#a3b1c2}
         break;
       case "remove-member": {
         const m = state.current.members.find(x => x.id === el.dataset.user);
-        if (!confirm(`Remove ${m?.name || "this member"} from the workspace and its Bean group?`)) return;
+        if (!(await ask(`Remove ${m?.name || "this member"}?`, "They leave the workspace and its Bean group.", "Remove", true))) return;
         await act({ action: "remove_member", userId: el.dataset.user }, "Removed.");
         break;
       }
       case "leave": {
-        if (!confirm(`Leave "${w.name}"?`)) return;
+        if (!(await ask(`Leave "${w.name}"?`, "You can join again with a new invite.", "Leave", true))) return;
         const data = await act({ action: "remove_member" });
         if (data?.left) {
           if (readActive()?.id === w.id) writeActive(null);
@@ -1202,7 +1202,7 @@ body.dark-mode .nw-badge.low{background:#1f2933;color:#a3b1c2}
       }
       case "delete-item": {
         const item = state.current.items.find(i => i.id === el.dataset.item);
-        if (!confirm(`Delete "${item?.title || "this item"}"?`)) return;
+        if (!(await ask(`Delete "${item?.title || "this item"}"?`, "This can't be undone.", "Delete", true))) return;
         if (await act({ action: "delete_item", itemId: el.dataset.item }, "Deleted.")) closeModal();
         break;
       }
@@ -1264,7 +1264,7 @@ body.dark-mode .nw-badge.low{background:#1f2933;color:#a3b1c2}
     if (what === "role") {
       if (el.value === "owner") {
         const m = state.current.members.find(x => x.id === el.dataset.user);
-        if (!confirm(`Make ${m?.name || "this member"} the owner? You'll become an admin.`)) return renderMain();
+        if (!(await ask(`Make ${m?.name || "this member"} the owner?`, "You'll become an admin.", "Make owner"))) return renderMain();
         await act({ action: "transfer_owner", userId: el.dataset.user }, "Ownership transferred.");
         return;
       }
@@ -1273,11 +1273,18 @@ body.dark-mode .nw-badge.low{background:#1f2933;color:#a3b1c2}
     if (what === "task-status") await act({ action: "update_item", itemId: el.dataset.item, status: el.value });
   }
 
+  // NEYO dialog instead of the browser's confirm()
+  function ask(title, text, okText = "Confirm", danger = false) {
+    if (window.NeyoUI?.confirm) return window.NeyoUI.confirm({ title, text, okText, danger });
+    return Promise.resolve(window.confirm(`${title} ${text}`));
+  }
+
   function copy(textValue, message) {
     if (!textValue) return;
     const done = () => toast(message);
-    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(textValue).then(done, () => prompt("Copy this link:", textValue));
-    else prompt("Copy this link:", textValue);
+    const fallback = () => (window.NeyoUI ? window.NeyoUI.copy(textValue) : Promise.resolve(false)).then(ok => (ok ? done() : toast("Couldn't copy. Select the link and copy it.")));
+    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(textValue).then(done, fallback);
+    else fallback();
   }
 
   /* ---------------- in chat: suggestions + save answer ---------------- */

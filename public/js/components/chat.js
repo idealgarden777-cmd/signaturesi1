@@ -418,6 +418,15 @@ public/js/components/chat.js
         return null;
     }
 
+    // Settings > Memory switch (memory-settings.js).
+    function readMemoryOff() {
+        try {
+            return localStorage.getItem("neyo_memory_off") === "1";
+        } catch {
+            return false;
+        }
+    }
+
     // NEYO Workspace picked for this chat (workspaces.js).
     function readWorkspaceId() {
         try {
@@ -484,6 +493,9 @@ public/js/components/chat.js
 
             workspaceId:
                 readWorkspaceId(),
+
+            memoryOff:
+                readMemoryOff(),
 
             stream:
                 true

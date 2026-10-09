@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { applyContextCache, dropContextCache } from "../lib/context-cache.js";
-import { decideLocally } from "../lib/decide.js";
+import { decideLocally, shouldUpgradeForGrounding } from "../lib/decide.js";
 import { createPrivacySession, PRIVACY_RULE, privacyEnabled } from "../lib/privacy.js";
 import { loadWorkspaceContext, saveWorkspaceSuggestions, WORKSPACE_RULE } from "../lib/workspaces.js";
 import { SMART_UI_RULE } from "../lib/smart-ui.js";
@@ -4240,6 +4240,35 @@ export default async function handler(
                     ...researched.sources
                 ];
 
+                // Accuracy: hard questions answered from web results
+                // (comparisons, rankings, exact numbers) go to the
+                // bigger writer, which joins sources more carefully.
+                if (
+                    shouldUpgradeForGrounding({
+                        question:
+                            userText,
+                        sourceCount:
+                            researched.sources.length,
+                        effort:
+                            researched.effort,
+                        isDeepResearch,
+                        currentModel:
+                            modelRoute.primary,
+                        advancedModel:
+                            NEYO_LEVERAGE_ADVANCED_MODEL,
+                        setting:
+                            process.env.NEYO_GROUNDED_UPGRADE
+                    })
+                ) {
+                    modelRoute.fallback =
+                        modelRoute.primary;
+                    modelRoute.primary =
+                        NEYO_LEVERAGE_ADVANCED_MODEL;
+                    modelRoute.route =
+                        `${modelRoute.route}+grounded`;
+                    timing.groundedUpgrade = true;
+                }
+
             }
 
 
@@ -4873,6 +4902,31 @@ export default async function handler(
                 ...sources,
                 ...researched.sources
             ];
+
+            if (
+                shouldUpgradeForGrounding({
+                    question:
+                        userText,
+                    sourceCount:
+                        researched.sources.length,
+                    effort:
+                        researched.effort,
+                    isDeepResearch,
+                    currentModel:
+                        modelRoute.primary,
+                    advancedModel:
+                        NEYO_LEVERAGE_ADVANCED_MODEL,
+                    setting:
+                        process.env.NEYO_GROUNDED_UPGRADE
+                })
+            ) {
+                modelRoute.fallback =
+                    modelRoute.primary;
+                modelRoute.primary =
+                    NEYO_LEVERAGE_ADVANCED_MODEL;
+                modelRoute.route =
+                    `${modelRoute.route}+grounded`;
+            }
 
         }
 

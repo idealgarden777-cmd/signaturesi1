@@ -108,7 +108,9 @@ Does NOT own:
             content.querySelectorAll(".sui-card").forEach(card => {
                 const text = card.classList.contains("nya-card")
                     ? window.NeyoMiniApp?.textOf?.(card)
-                    : window.NeyoSmartUI?.textOf?.(card);
+                    : card.classList.contains("nv-card")
+                        ? window.NeyoVisuals?.textOf?.(card)
+                        : window.NeyoSmartUI?.textOf?.(card);
                 if (!text) return;
                 const stand = document.createElement("p");
                 stand.textContent = text;

@@ -1,0 +1,601 @@
+/* =========================================================
+   NEYO VISUAL INTELLIGENCE v1: diagrams inside answers.
+   The card reuses the Smart UI card (.sui-card). Every colour
+   is a theme variable, so light and dark both work.
+   ========================================================= */
+
+.message.assistant .message-content .nv-card,
+.nv-zoom {
+  --nv-bg: var(--sui-bg, #ffffff);
+  --nv-fg: var(--r-text, #1d1d1f);
+  --nv-strong: var(--r-strong, #0f0f10);
+  --nv-muted: var(--r-muted, #6e6e73);
+  --nv-line: var(--r-line, #ececee);
+  --nv-line-strong: color-mix(in srgb, var(--nv-muted) 42%, var(--nv-line));
+  --nv-soft: var(--r-surface, #f7f7f8);
+  --nv-accent: var(--sui-accent, #0f0f10);
+  --nv-good: #15935f;
+  --nv-bad: #d64545;
+  --nv-warn: #c98a12;
+  --nv-c1: #3377e8;
+  --nv-c2: #e8833a;
+  --nv-c3: #8b6cf0;
+  --nv-c4: #15935f;
+  --nv-c5: #e0508a;
+  --nv-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+body.dark-mode .message.assistant .message-content .nv-card {
+  --nv-good: #3ccf91;
+  --nv-bad: #ff6b6b;
+  --nv-warn: #f2b84b;
+  --nv-c1: #6ea0ff;
+  --nv-c2: #f2a15f;
+  --nv-c3: #a891ff;
+  --nv-c4: #3ccf91;
+  --nv-c5: #ff7fb0;
+}
+
+/* ---------- card ---------- */
+
+.message.assistant .message-content .nv-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: -4px -6px 0 0;
+}
+
+.message.assistant .message-content .nv-tools {
+  display: flex;
+  gap: 4px;
+}
+
+.message.assistant .message-content .nv-tool {
+  padding: 4px 8px;
+  font-size: 13px;
+}
+
+.message.assistant .message-content .nv-head .sui-title {
+  margin-top: 6px;
+}
+
+.message.assistant .message-content .nv-stage {
+  position: relative;
+  margin-top: 14px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
+
+.nv-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 0 auto;
+  overflow: visible;
+  font-family: inherit;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.message.assistant .message-content .nv-caption {
+  margin-top: 10px;
+}
+
+/* ---------- tones ---------- */
+
+.nv-svg .tone-accent { --t: var(--nv-accent); }
+.nv-svg .tone-good { --t: var(--nv-good); }
+.nv-svg .tone-bad { --t: var(--nv-bad); }
+.nv-svg .tone-warn { --t: var(--nv-warn); }
+.nv-svg .tone-muted { --t: var(--nv-muted); }
+.nv-svg .tone-c1 { --t: var(--nv-c1); }
+.nv-svg .tone-c2 { --t: var(--nv-c2); }
+.nv-svg .tone-c3 { --t: var(--nv-c3); }
+.nv-svg .tone-c4 { --t: var(--nv-c4); }
+.nv-svg .tone-c5 { --t: var(--nv-c5); }
+
+/* ---------- shapes ---------- */
+
+.nv-svg .nv-node {
+  fill: color-mix(in srgb, var(--t) 9%, var(--nv-bg));
+  stroke: color-mix(in srgb, var(--t) 36%, var(--nv-line));
+  stroke-width: 1.2;
+  transition: stroke 0.18s, stroke-width 0.18s, opacity 0.35s var(--nv-ease);
+}
+
+.nv-svg .nv-node.tone-muted {
+  fill: var(--nv-soft);
+  stroke: var(--nv-line);
+}
+
+.nv-svg .nv-node.nv-plain {
+  fill: var(--nv-bg);
+  stroke: var(--nv-line);
+}
+
+.nv-svg .nv-node.is-root {
+  fill: color-mix(in srgb, var(--t) 14%, var(--nv-bg));
+  stroke: color-mix(in srgb, var(--t) 60%, var(--nv-line));
+  stroke-width: 1.6;
+}
+
+.nv-svg .nv-node.is-branch {
+  fill: color-mix(in srgb, var(--t) 11%, var(--nv-bg));
+  stroke: color-mix(in srgb, var(--t) 45%, var(--nv-line));
+}
+
+.nv-svg .nv-band {
+  fill: color-mix(in srgb, var(--t) 15%, var(--nv-bg));
+  stroke: color-mix(in srgb, var(--t) 42%, var(--nv-line));
+  stroke-linejoin: round;
+  stroke-width: 1.4;
+}
+
+.nv-svg .nv-layer {
+  fill: color-mix(in srgb, var(--t) 6%, var(--nv-bg));
+  stroke: color-mix(in srgb, var(--t) 24%, var(--nv-line));
+}
+
+.nv-svg .nv-layer-mark {
+  fill: var(--t);
+  stroke: none;
+}
+
+.nv-svg .nv-stat {
+  fill: var(--nv-soft);
+  stroke: none;
+}
+
+.nv-svg .nv-value {
+  fill: var(--t);
+  font-weight: 680;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+.nv-svg .nv-value.tone-muted {
+  fill: var(--nv-strong);
+}
+
+.nv-svg .nv-set {
+  fill: color-mix(in srgb, var(--t) 12%, transparent);
+  stroke: color-mix(in srgb, var(--t) 55%, transparent);
+  stroke-width: 1.5;
+}
+
+.nv-svg .nv-set-label {
+  fill: var(--t);
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.nv-svg .nv-hub {
+  fill: var(--nv-soft);
+  stroke: var(--nv-line);
+  stroke-width: 1.2;
+}
+
+.nv-svg .nv-num {
+  fill: var(--t);
+  stroke: var(--nv-bg);
+  stroke-width: 3;
+}
+
+.nv-svg .nv-num.tone-muted {
+  fill: var(--nv-strong);
+}
+
+.nv-svg .nv-num-text {
+  fill: var(--nv-bg);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.nv-svg .nv-dot {
+  fill: var(--nv-bg);
+  stroke: var(--t);
+  stroke-width: 3;
+}
+
+.nv-svg .nv-dot.tone-muted {
+  stroke: var(--nv-line-strong);
+}
+
+.nv-svg .nv-date {
+  fill: var(--t);
+  font-size: 13px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.nv-svg .nv-date.tone-muted {
+  fill: var(--nv-muted);
+}
+
+/* ---------- lines ---------- */
+
+.nv-svg .nv-edge {
+  stroke: var(--nv-line-strong);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  fill: none;
+}
+
+.nv-svg .nv-arrow {
+  fill: var(--nv-line-strong);
+}
+
+.nv-svg .nv-edge.is-dashed {
+  stroke-dasharray: 5 5;
+}
+
+.nv-svg .is-flow,
+.nv-svg .flow {
+  stroke-dasharray: 6 7;
+  animation: nv-flow 1.1s linear infinite;
+}
+
+.nv-svg .nv-link {
+  fill: none;
+  stroke: color-mix(in srgb, var(--t) 50%, var(--nv-line));
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+
+.nv-svg .nv-rail {
+  stroke: var(--nv-line);
+  stroke-width: 2;
+  stroke-linecap: round;
+  fill: none;
+}
+
+.nv-svg .nv-leader {
+  stroke: var(--nv-line-strong);
+  stroke-width: 1.2;
+  stroke-dasharray: 2 4;
+  fill: none;
+}
+
+.nv-svg .nv-edge-tag {
+  fill: var(--nv-bg);
+  stroke: var(--nv-line);
+}
+
+/* ---------- text ---------- */
+
+.nv-svg text {
+  font-family: inherit;
+  letter-spacing: -0.006em;
+}
+
+.nv-svg .nv-label {
+  fill: var(--nv-strong);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.nv-svg .nv-sub {
+  fill: var(--nv-muted);
+  font-size: 12.5px;
+  font-weight: 400;
+}
+
+.nv-svg .nv-small {
+  font-size: 12.5px;
+}
+
+.nv-svg .nv-band-text {
+  font-size: 13.5px;
+}
+
+.nv-svg .nv-stat-label {
+  font-size: 13px;
+  font-weight: 500;
+  fill: var(--nv-fg);
+}
+
+.nv-svg .nv-edge-text {
+  fill: var(--nv-muted);
+  font-size: 11.5px;
+  font-weight: 500;
+}
+
+/* ---------- raw drawings: helper classes ---------- */
+
+.nv-raw text,
+.nv-raw .nv-rt { fill: var(--nv-strong); }
+/* shapes with no colour would be black: follow the theme instead */
+.nv-raw :is(rect, circle, ellipse, polygon, path):not([fill]):not([class*="f-"]):not([style*="fill"]) { fill: var(--nv-strong); }
+.nv-raw text { font-size: 13px; }
+.nv-raw .label { font-weight: 600; font-size: 14px; }
+.nv-raw .sub, .nv-raw .small { fill: var(--nv-muted); font-size: 12px; }
+.nv-raw .bold { font-weight: 650; }
+.nv-raw .f-accent { fill: var(--nv-accent); }
+.nv-raw .f-good { fill: var(--nv-good); }
+.nv-raw .f-bad { fill: var(--nv-bad); }
+.nv-raw .f-warn { fill: var(--nv-warn); }
+.nv-raw .f-muted { fill: var(--nv-muted); }
+.nv-raw .f-soft { fill: var(--nv-soft); }
+.nv-raw .f-bg { fill: var(--nv-bg); }
+.nv-raw .f-fg, .nv-raw .f-strong { fill: var(--nv-strong); }
+.nv-raw .f-line { fill: var(--nv-line); }
+.nv-raw .f-c1 { fill: var(--nv-c1); }
+.nv-raw .f-c2 { fill: var(--nv-c2); }
+.nv-raw .f-c3 { fill: var(--nv-c3); }
+.nv-raw .f-c4 { fill: var(--nv-c4); }
+.nv-raw .f-c5 { fill: var(--nv-c5); }
+.nv-raw .s-accent { stroke: var(--nv-accent); }
+.nv-raw .s-good { stroke: var(--nv-good); }
+.nv-raw .s-bad { stroke: var(--nv-bad); }
+.nv-raw .s-warn { stroke: var(--nv-warn); }
+.nv-raw .s-muted { stroke: var(--nv-muted); }
+.nv-raw .s-line { stroke: var(--nv-line-strong); }
+.nv-raw .s-fg, .nv-raw .s-strong { stroke: var(--nv-strong); }
+.nv-raw .s-c1 { stroke: var(--nv-c1); }
+.nv-raw .s-c2 { stroke: var(--nv-c2); }
+.nv-raw .s-c3 { stroke: var(--nv-c3); }
+.nv-raw .s-c4 { stroke: var(--nv-c4); }
+.nv-raw .s-c5 { stroke: var(--nv-c5); }
+.nv-raw .t-accent { fill: var(--nv-accent); }
+.nv-raw .t-muted { fill: var(--nv-muted); }
+.nv-raw .t-good { fill: var(--nv-good); }
+.nv-raw .t-bad { fill: var(--nv-bad); }
+.nv-raw .t-bg { fill: var(--nv-bg); }
+.nv-raw .pulse { animation: nv-pulse 1.8s var(--nv-ease) infinite; transform-box: fill-box; transform-origin: center; }
+.nv-raw .spin { animation: nv-spin 6s linear infinite; transform-box: fill-box; transform-origin: center; }
+.nv-raw .float { animation: nv-float 3s ease-in-out infinite; transform-box: fill-box; }
+.nv-raw .draw { stroke-dasharray: 1; stroke-dashoffset: 1; animation: nv-draw 1.6s var(--nv-ease) forwards; }
+
+/* ---------- dynamic ---------- */
+
+.nv-svg.is-intro > :not(defs) {
+  animation: nv-in 0.5s var(--nv-ease) both;
+  animation-delay: calc(min(var(--i, 0), 70) * 16ms);
+}
+
+.nv-svg.is-stepping [data-step] {
+  transition: opacity 0.4s var(--nv-ease), stroke 0.2s, stroke-width 0.2s;
+}
+
+.nv-svg.is-stepping .is-hidden {
+  opacity: 0.07;
+}
+
+.nv-svg.is-stepping .nv-node.is-now,
+.nv-svg.is-stepping .nv-set.is-now {
+  stroke: var(--t);
+  stroke-width: 2;
+}
+
+.nv-svg [data-tip] {
+  cursor: pointer;
+}
+
+.nv-svg .is-hot {
+  stroke: var(--t, var(--nv-strong));
+  stroke-width: 2;
+}
+
+.message.assistant .message-content .nv-tip {
+  position: absolute;
+  z-index: 5;
+  max-width: 260px;
+  padding: 8px 11px;
+  border-radius: 10px;
+  background: var(--nv-strong);
+  color: var(--nv-bg);
+  font-size: 12.5px;
+  line-height: 1.45;
+  box-shadow: 0 8px 24px -10px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+  animation: nv-in 0.16s var(--nv-ease);
+}
+
+.message.assistant .message-content .nv-tip[hidden] {
+  display: none;
+}
+
+/* step player */
+.message.assistant .message-content .nv-player {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 10px 10px 10px 14px;
+  border-radius: 14px;
+  background: var(--nv-soft);
+}
+
+.message.assistant .message-content .nv-player[hidden] {
+  display: none;
+}
+
+.message.assistant .message-content .nv-say {
+  flex: 1;
+  min-width: 0;
+  animation: nv-in 0.25s var(--nv-ease);
+}
+
+.message.assistant .message-content .nv-say-label {
+  color: var(--nv-strong);
+  font-weight: 600;
+  font-size: 14.5px;
+  line-height: 1.35;
+}
+
+.message.assistant .message-content .nv-say-note {
+  color: var(--nv-muted);
+  font-size: 13.5px;
+  line-height: 1.45;
+  margin-top: 2px;
+}
+
+.message.assistant .message-content .nv-say-note:empty {
+  display: none;
+}
+
+.message.assistant .message-content .nv-ctrls {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+}
+
+.message.assistant .message-content .nv-count {
+  min-width: 42px;
+  text-align: center;
+  color: var(--nv-muted);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* while streaming */
+.message.assistant .message-content .nv-building {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 14px 0;
+  padding: 16px 18px;
+  border: 1px dashed var(--r-line);
+  border-radius: 16px;
+  color: var(--r-muted);
+  font-size: 14px;
+}
+
+.message.assistant .message-content .nv-building .sui-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: nv-pulse-dot 1.2s ease-in-out infinite;
+}
+
+/* ---------- zoom ---------- */
+
+.nv-zoom {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  display: flex;
+  flex-direction: column;
+  background: var(--nv-bg);
+  color: var(--nv-fg);
+  animation: nv-in 0.2s var(--nv-ease);
+}
+
+.nv-zoom-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--nv-line);
+}
+
+.nv-zoom-title {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--nv-strong);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nv-zbtn {
+  width: 36px;
+  height: 36px;
+  display: inline-grid;
+  place-items: center;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--nv-strong);
+  cursor: pointer;
+}
+
+.nv-zbtn:hover {
+  background: color-mix(in srgb, var(--nv-strong) 7%, transparent);
+}
+
+.nv-zoom-view {
+  position: relative;
+  flex: 1;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+}
+
+.nv-zoom-view:active {
+  cursor: grabbing;
+}
+
+.nv-zoom-canvas {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  transform-origin: 0 0;
+}
+
+.nv-zoom-canvas .nv-svg {
+  max-width: none;
+}
+
+/* ---------- motion ---------- */
+
+@keyframes nv-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes nv-flow {
+  to { stroke-dashoffset: -26; }
+}
+
+@keyframes nv-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.06); opacity: 0.85; }
+}
+
+@keyframes nv-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes nv-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+@keyframes nv-draw {
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes nv-pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+
+@media (max-width: 560px) {
+  .message.assistant .message-content .nv-tool .sui-btn-label {
+    display: none;
+  }
+  .message.assistant .message-content .nv-player {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .message.assistant .message-content .nv-ctrls {
+    justify-content: flex-end;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nv-svg *,
+  .nv-svg.is-intro > * {
+    animation: none !important;
+    transition: none !important;
+  }
+}

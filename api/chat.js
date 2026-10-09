@@ -6,6 +6,7 @@ import { createPrivacySession, PRIVACY_RULE, privacyEnabled } from "../lib/priva
 import { loadWorkspaceContext, saveWorkspaceSuggestions, WORKSPACE_RULE } from "../lib/workspaces.js";
 import { SMART_UI_RULE } from "../lib/smart-ui.js";
 import { MINI_APP_HINT, MINI_APP_RULE, wantsMiniApp } from "../lib/mini-app.js";
+import { VISUAL_RULE, VISUAL_DRAW_RULE, wantsVisual } from "../lib/visuals.js";
 import { MEMORY_RULE, memoryEnabled, createMemoryFilter, applyMemoryMarkers, saveMemories, loadMemoryBox, autoCodeCopies, looksLikeFact, extractFactsWithModel, touchMemories, wantsForget, wantsRemember, pickKeysToForget, resolveForgets } from "../lib/memory.js";
 
 import {
@@ -1003,6 +1004,8 @@ function buildSystemInstruction(
         parts.push(SMART_UI_RULE);
         // Mini apps: short hint always, full rules when the user asks to build something
         parts.push(preferences.miniApp ? `${MINI_APP_HINT}\n${MINI_APP_RULE}` : MINI_APP_HINT);
+        // Visual intelligence: diagrams NEYO lays out; free SVG drawing rules when a picture is likely
+        parts.push(preferences.visual ? `${VISUAL_RULE}\n${VISUAL_DRAW_RULE}` : VISUAL_RULE);
     }
 
 
@@ -3729,6 +3732,11 @@ export default async function handler(
         preferences.miniApp =
             preferences.smartUi !== false &&
             wantsMiniApp(userText);
+
+        preferences.visual =
+            preferences.smartUi !== false &&
+            !preferences.miniApp &&
+            wantsVisual(userText);
 
 
         const autoEffort =

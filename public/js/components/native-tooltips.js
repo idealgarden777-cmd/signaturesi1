@@ -24,7 +24,24 @@ Purpose:
     }
 
     if (element.hasAttribute("title")) {
+      // Keep the words: they become NEYO's own tooltip
+      // (and a screen-reader label for icon-only buttons).
+      const text =
+        String(element.getAttribute("title") || "").trim();
       element.removeAttribute("title");
+      if (
+        text &&
+        !element.dataset.tooltip &&
+        !(element instanceof SVGElement)
+      ) {
+        element.dataset.tooltip = text;
+        if (
+          !element.getAttribute("aria-label") &&
+          !(element.textContent || "").trim()
+        ) {
+          element.setAttribute("aria-label", text);
+        }
+      }
     }
   }
 

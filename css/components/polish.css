@@ -1,0 +1,364 @@
+/*
+=========================================================
+NEYO — POLISH LAYER (loaded last)
+One calm motion system for the whole app:
+- shared easing + durations
+- menus, dropdowns, modals and panels open softly
+- messages arrive with a short fade-up
+- focus rings only for keyboard users
+- layered depth for floating surfaces
+- one select / input style
+- thin scrollbars, selection colour
+- everything off for "reduce motion"
+Uses the individual `translate` / `scale` properties so it
+never fights a component's own `transform`.
+=========================================================
+*/
+
+:root {
+    --neyo-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+    --neyo-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --neyo-dur-1: 120ms;
+    --neyo-dur-2: 180ms;
+    --neyo-dur-3: 260ms;
+    --neyo-focus: rgba(23, 23, 23, 0.55);
+    --neyo-select: rgba(23, 23, 23, 0.12);
+    --neyo-pop-shadow:
+        0 0 0 1px rgba(0, 0, 0, 0.06),
+        0 2px 6px rgba(0, 0, 0, 0.04),
+        0 12px 32px rgba(0, 0, 0, 0.10);
+    --neyo-modal-shadow:
+        0 0 0 1px rgba(0, 0, 0, 0.05),
+        0 8px 24px rgba(0, 0, 0, 0.08),
+        0 32px 72px rgba(0, 0, 0, 0.16);
+}
+
+body.dark-mode {
+    --neyo-focus: rgba(255, 255, 255, 0.6);
+    --neyo-select: rgba(255, 255, 255, 0.18);
+    --neyo-pop-shadow:
+        0 0 0 1px rgba(255, 255, 255, 0.08),
+        0 2px 6px rgba(0, 0, 0, 0.3),
+        0 12px 32px rgba(0, 0, 0, 0.45);
+    --neyo-modal-shadow:
+        0 0 0 1px rgba(255, 255, 255, 0.07),
+        0 8px 24px rgba(0, 0, 0, 0.35),
+        0 32px 72px rgba(0, 0, 0, 0.55);
+}
+
+/* ---------- keyframes ---------- */
+
+@keyframes neyoPopIn {
+    from { opacity: 0; translate: 0 6px; scale: 0.98; }
+    to   { opacity: 1; translate: 0 0;   scale: 1; }
+}
+
+@keyframes neyoPopUp {
+    from { opacity: 0; translate: 0 -6px; scale: 0.98; }
+    to   { opacity: 1; translate: 0 0;    scale: 1; }
+}
+
+@keyframes neyoFade {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+@keyframes neyoModalIn {
+    from { opacity: 0; translate: 0 12px; scale: 0.97; }
+    to   { opacity: 1; translate: 0 0;    scale: 1; }
+}
+
+@keyframes neyoRise {
+    from { opacity: 0; translate: 0 8px; }
+    to   { opacity: 1; translate: 0 0; }
+}
+
+/* ---------- interaction basics ---------- */
+
+:where(button, [role="button"], a, .popup-item, .history-popup-item, .attachment-popup-item, .model-option, .settings-select-option) {
+    -webkit-tap-highlight-color: transparent;
+    transition-property: background-color, color, border-color, box-shadow, opacity, scale, translate;
+    transition-duration: var(--neyo-dur-2);
+    transition-timing-function: var(--neyo-ease);
+}
+
+:where(button, [role="button"]):active:not(:disabled) {
+    scale: 0.97;
+}
+
+/* big tiles press less */
+.starter-grid > button:active,
+.personality-card:active,
+.leverage-plan-card:active,
+.nw-stat:active,
+.nw-ws:active,
+.history-list :where(button, a):active {
+    scale: 0.99;
+}
+
+:focus {
+    outline: none;
+}
+
+:where(button, a, [role="button"], [tabindex], select, summary, input[type="checkbox"], input[type="radio"]):focus-visible {
+    outline: 2px solid var(--neyo-focus);
+    outline-offset: 2px;
+}
+
+:where(.nw-input, .nw-area, .nw-select, .nw-search, .ws-textarea, .settings-input, input[type="text"], input[type="search"], input[type="email"], input[type="date"], textarea):not(#chatInput):focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--neyo-select);
+}
+
+::selection {
+    background: var(--neyo-select);
+}
+
+/* ---------- one select style ---------- */
+
+select:not([multiple]):not([size]) {
+    -webkit-appearance: none;
+    appearance: none;
+    padding-right: 30px !important;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23737373' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 11px center;
+    background-size: 12px;
+    cursor: pointer;
+    transition: border-color var(--neyo-dur-2) var(--neyo-ease), box-shadow var(--neyo-dur-2) var(--neyo-ease), background-color var(--neyo-dur-2) var(--neyo-ease);
+}
+
+select:not([multiple]):not([size]):hover {
+    border-color: var(--neyo-text-secondary, #737373);
+}
+
+body.dark-mode select:not([multiple]):not([size]) {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23a3a3a3' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    color-scheme: dark;
+}
+
+input[type="date"] {
+    cursor: pointer;
+}
+
+body.dark-mode input[type="date"] {
+    color-scheme: dark;
+}
+
+/* ---------- floating menus & dropdowns ---------- */
+
+#attachPopupMenu.active,
+#historyPopupMenu.show,
+.settings-select-menu:not([hidden]) {
+    animation: neyoPopIn var(--neyo-dur-2) var(--neyo-ease-out) both;
+}
+
+#modelDropdownMenu.show {
+    animation: neyoPopUp var(--neyo-dur-2) var(--neyo-ease-out) both;
+}
+
+#attachPopupMenu,
+#historyPopupMenu,
+#userPopupMenu,
+#modelDropdownMenu,
+.settings-select-menu {
+    box-shadow: var(--neyo-pop-shadow) !important;
+}
+
+:where(.popup-item, .history-popup-item, .attachment-popup-item, .model-option, .settings-select-option):hover {
+    transition-duration: var(--neyo-dur-1);
+}
+
+/* ---------- modals & panels ---------- */
+
+.neo-settings-overlay,
+.modal-overlay {
+    transition-timing-function: var(--neyo-ease) !important;
+}
+
+.neo-settings-overlay.show .neo-settings-modal,
+.modal-overlay.show .leverage-upgrade-modal {
+    animation: neyoModalIn var(--neyo-dur-3) var(--neyo-ease-out) both;
+}
+
+.neo-settings-modal,
+.leverage-upgrade-modal {
+    box-shadow: var(--neyo-modal-shadow) !important;
+}
+
+/* Workspaces panel */
+.nw-overlay.open {
+    animation: neyoFade var(--neyo-dur-2) var(--neyo-ease) both;
+}
+
+.nw-overlay.open .nw-panel {
+    animation: neyoModalIn var(--neyo-dur-3) var(--neyo-ease-out) both;
+    box-shadow: var(--neyo-modal-shadow);
+}
+
+.nw-modal {
+    animation: neyoFade var(--neyo-dur-1) var(--neyo-ease) both;
+}
+
+.nw-modal-box {
+    animation: neyoModalIn var(--neyo-dur-3) var(--neyo-ease-out) both;
+    box-shadow: var(--neyo-modal-shadow) !important;
+}
+
+.nw-body {
+    animation: neyoFade var(--neyo-dur-2) var(--neyo-ease) both;
+}
+
+.nw-chat-card {
+    animation: neyoRise var(--neyo-dur-3) var(--neyo-ease-out) both;
+}
+
+.nw-tab {
+    transition: color var(--neyo-dur-2) var(--neyo-ease), border-color var(--neyo-dur-2) var(--neyo-ease);
+}
+
+.nw-check {
+    transition: background-color var(--neyo-dur-2) var(--neyo-ease), border-color var(--neyo-dur-2) var(--neyo-ease), scale var(--neyo-dur-1) var(--neyo-ease);
+}
+
+.nw-check.on {
+    animation: neyoCheck 260ms var(--neyo-ease-out);
+}
+
+@keyframes neyoCheck {
+    0% { scale: 0.8; }
+    60% { scale: 1.12; }
+    100% { scale: 1; }
+}
+
+/* ---------- messages ---------- */
+
+#chatMessages > .message {
+    animation: neyoRise var(--neyo-dur-3) var(--neyo-ease-out) both;
+}
+
+.message .message-actions {
+    transition: opacity var(--neyo-dur-2) var(--neyo-ease);
+}
+
+.neyo-memory-chip {
+    animation: neyoRise var(--neyo-dur-3) var(--neyo-ease-out) both;
+}
+
+/* ---------- hero ---------- */
+
+.starter-grid > button {
+    transition: background-color var(--neyo-dur-2) var(--neyo-ease), border-color var(--neyo-dur-2) var(--neyo-ease), box-shadow var(--neyo-dur-2) var(--neyo-ease), translate var(--neyo-dur-2) var(--neyo-ease), scale var(--neyo-dur-1) var(--neyo-ease);
+}
+
+@media (hover: hover) {
+    .starter-grid > button:hover {
+        translate: 0 -1px;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 6px 16px rgba(0, 0, 0, 0.06);
+    }
+
+    body.dark-mode .starter-grid > button:hover {
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 6px 16px rgba(0, 0, 0, 0.35);
+    }
+}
+
+.hero-section {
+    animation: neyoRise 360ms var(--neyo-ease-out) both;
+}
+
+/* ---------- composer ---------- */
+
+.glass-input-container {
+    transition: box-shadow var(--neyo-dur-3) var(--neyo-ease), border-color var(--neyo-dur-3) var(--neyo-ease), border-radius var(--neyo-dur-3) var(--neyo-ease);
+}
+
+.glass-input-container:focus-within {
+    box-shadow: 0 0 0 1px var(--neyo-border-strong, rgba(0, 0, 0, 0.14)), 0 8px 28px rgba(0, 0, 0, 0.07);
+}
+
+body.dark-mode .glass-input-container:focus-within {
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12), 0 8px 28px rgba(0, 0, 0, 0.4);
+}
+
+/* ---------- tooltip ---------- */
+
+.neo-tooltip {
+    transition: opacity var(--neyo-dur-1) var(--neyo-ease), transform var(--neyo-dur-1) var(--neyo-ease) !important;
+}
+
+.neo-tooltip.is-instant {
+    transition: none !important;
+}
+
+/* ---------- scrollbars ---------- */
+
+* {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(127, 127, 127, 0.28) transparent;
+}
+
+*::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+*::-webkit-scrollbar-thumb {
+    background: rgba(127, 127, 127, 0.28);
+    border-radius: 999px;
+    border: 3px solid transparent;
+    background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(127, 127, 127, 0.45);
+}
+
+*::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+/* ---------- theme switch ---------- */
+
+body.neyo-theme-switching,
+body.neyo-theme-switching * {
+    transition: background-color 240ms var(--neyo-ease), color 240ms var(--neyo-ease), border-color 240ms var(--neyo-ease) !important;
+}
+
+/* ---------- reduce motion ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 1ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 1ms !important;
+        scroll-behavior: auto !important;
+    }
+
+    :where(button, [role="button"]):active:not(:disabled) {
+        scale: 1;
+    }
+}
+
+/* ---------- settings: calm selected state ---------- */
+
+.neo-settings-modal .settings-segmented-control button.active,
+.neo-settings-modal .settings-pill.active {
+    background: var(--neyo-text, #171717) !important;
+    border-color: var(--neyo-text, #171717) !important;
+    color: var(--neyo-surface, #ffffff) !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08) !important;
+}
+
+body.dark-mode .neo-settings-modal .settings-segmented-control button.active,
+body.dark-mode .neo-settings-modal .settings-pill.active {
+    background: #f5f5f5 !important;
+    border-color: #f5f5f5 !important;
+    color: #111111 !important;
+}
+
+.neo-settings-modal .settings-segmented-control button,
+.neo-settings-modal .settings-pill {
+    transition: background-color var(--neyo-dur-2) var(--neyo-ease), border-color var(--neyo-dur-2) var(--neyo-ease), color var(--neyo-dur-2) var(--neyo-ease), scale var(--neyo-dur-1) var(--neyo-ease) !important;
+}

@@ -833,6 +833,18 @@
             value === "dark" ||
             (value === "system" && systemDark);
 
+        // soft cross-fade when the theme really changes (not on first load)
+        if (
+            document.body.dataset.neyoTheme &&
+            document.body.classList.contains("dark-mode") !== isDark
+        ) {
+            document.body.classList.add("neyo-theme-switching");
+            clearTimeout(applyTheme.timer);
+            applyTheme.timer = setTimeout(
+                () => document.body.classList.remove("neyo-theme-switching"),
+                320
+            );
+        }
         document.body.classList.toggle("dark-mode", isDark);
         document.body.dataset.neyoTheme = value;
     }
@@ -1904,10 +1916,17 @@
             });
         }
 
+        // First tooltip waits a moment; moving to the next one
+        // soon after shows it at once (like macOS).
+        let warmUntil = 0;
         function scheduleShow(target) {
             clearTimeout(showTimer);
             clearTimeout(hideTimer);
-            showTimer = setTimeout(() => showTooltip(target), 380);
+            const warm = Date.now() < warmUntil;
+            showTimer = setTimeout(() => {
+                tooltip?.classList.toggle("is-instant", warm);
+                showTooltip(target);
+            }, warm ? 30 : 420);
         }
 
         function hideTooltip({ immediate = false } = {}) {
@@ -1921,6 +1940,7 @@
                 return;
             }
             const close = () => {
+                if (tooltip.classList.contains("is-visible")) warmUntil = Date.now() + 600;
                 tooltip.classList.remove("is-visible");
                 tooltip.setAttribute("aria-hidden", "true");
                 if (activeTarget) {
@@ -1949,9 +1969,17 @@
             hideTooltip({ immediate: true });
         });
         document.addEventListener("focusin", event => {
+            // keyboard focus only; a mouse click shouldn't leave a tooltip behind
+            let keyboard = true;
+            try { keyboard = event.target.matches(":focus-visible"); } catch {}
+            if (!keyboard) return;
             const target = getTooltipTarget(event.target);
             if (target) scheduleShow(target);
         });
+        document.addEventListener("pointerdown", () => {
+            warmUntil = 0;
+            hideTooltip({ immediate: true });
+        }, true);
         document.addEventListener("focusout", event => {
             const target = getTooltipTarget(event.target);
             if (target) hideTooltip({ immediate: true });

@@ -53,3 +53,10 @@ Free scrapers (Brave, Bing, DuckDuckGo, Yahoo, Mojeek, news feeds, Wikipedia, Ha
 - **Optional search APIs** with free plans; add a key and it joins automatically: `TAVILY_API_KEY`, `BRAVE_SEARCH_API_KEY`, `SERPER_API_KEY`.
 - **Page reader backup** for pages that block servers: r.jina.ai, a few pages per question (`JINA_API_KEY` optional).
 - Results that are not opened still add their snippet (marked as snippet only). If nothing comes back, the model is told to say it could not check live sources instead of passing old knowledge off as the latest.
+
+### Flexible search tools (tool agent picks per question)
+
+- `web_search` modes: `quick`, `news`, `deep` (more pages + gap search), `discover` (many angles + "explore next" ideas); plus `freshness` (day/week/month/year) and `site`.
+- `read_url`: live extraction from 1-4 pages with `focus` and `format` (text, tables, list, links) — `lib/web-extract.js`.
+- `search_memory`: the user's own earlier NEYO answers and their sources (`lib/search-memory.js`, existing chat tables, off in Private Chat).
+- The chosen modes shape the answer (quick, news timeline, deep report, discovery overview).

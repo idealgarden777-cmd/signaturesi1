@@ -17,12 +17,17 @@ import {
     runLiveSearch,
     buildLiveSearchPrompt,
     decideSearch,
-    WEAK_SEARCH_NOTE
+    WEAK_SEARCH_NOTE,
+    searchStyleNote
 } from "../lib/deep-research.js";
 
 import {
     runToolAgent
 } from "../lib/agent-tools.js";
+
+import {
+    searchPastResearch
+} from "../lib/search-memory.js";
 
 
 /* =========================================================
@@ -2923,6 +2928,16 @@ async function applyDeepResearch(
                         DEEP_RESEARCH_PLANNER_MODEL,
                     groundingModel:
                         DEEP_RESEARCH_GROUNDING_MODEL,
+                    memorySearch:
+                        extra.userId && !extra.privateChat
+                            ? query =>
+                                searchPastResearch({
+                                    supabase,
+                                    userId:
+                                        extra.userId,
+                                    query
+                                })
+                            : null,
                     onStatus
                 });
 
@@ -2940,7 +2955,13 @@ async function applyDeepResearch(
             // search router thinks fresh facts are needed (latest, top,
             // named products, AI models...), search anyway so the
             // answer is not built on old memory.
-            if (!agentSearched) {
+            const agentGathered =
+                agentSearched ||
+                (agent.calls || []).some(
+                    name => name === "read_url" || name === "search_memory"
+                );
+
+            if (!agentGathered) {
                 const second =
                     await decideSearch({
                         question:
@@ -2989,11 +3010,18 @@ async function applyDeepResearch(
                         {
                             contextText:
                                 agent.toolText +
-                                agent.research.contextText
+                                agent.research.contextText,
+                            sources:
+                                agent.research.sources,
+                            styles:
+                                agent.styles,
+                            explore:
+                                agent.explore
                         }
                     )
                     : `${userText}\n\n${agent.toolText}\nThese tool results were computed just now and are exact: use them, follow any rules above, and never contradict them. Do not mention the tools by name.` +
-                        (agentSearched ? `\n\n${WEAK_SEARCH_NOTE}` : "");
+                        searchStyleNote(agent.styles, agent.explore) +
+                        (agentSearched && !(agent.styles || []).includes("memory") ? `\n\n${WEAK_SEARCH_NOTE}` : "");
 
             let agentLast =
                 list[list.length - 1];

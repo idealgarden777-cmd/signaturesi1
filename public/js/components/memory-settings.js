@@ -387,6 +387,44 @@ body.dark-mode .nm-skel{background:linear-gradient(90deg,rgba(255,255,255,.04) 0
     if (state.loaded) load();
   });
 
+  /* ---------------- other settings helpers ---------------- */
+
+  // "Manage" style buttons that jump to another settings tab
+  document.addEventListener("click", event => {
+    const jump = event.target.closest?.("[data-open-settings-tab]");
+    if (!jump) return;
+    document.querySelector(`.neo-settings-tab[data-settings-tab="${jump.dataset.openSettingsTab}"]`)?.click();
+  });
+
+  // Settings > Privacy > Delete all chats
+  document.addEventListener("click", async event => {
+    const button = event.target.closest?.("#settingsDeleteAllChatsBtn");
+    if (!button) return;
+    const ok = window.NeyoUI?.confirm
+      ? await window.NeyoUI.confirm({ title: "Delete all chats?", text: "Every saved chat leaves your history. This can't be undone.", okText: "Delete all", danger: true })
+      : window.confirm("Delete all chats?");
+    if (!ok) return;
+    button.disabled = true;
+    try {
+      const response = await fetch("/api/history", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "delete_all" })
+      });
+      let data = {};
+      try { data = await response.json(); } catch {}
+      if (!response.ok) throw new Error(response.status === 401 ? "Log in first." : data.error || "Couldn't delete chats. Please try again.");
+      try { await window.NeyoHistory?.load?.(); } catch {}
+      document.getElementById("newChatBtn")?.click();
+      toast(data.deleted ? `Deleted ${data.deleted} ${data.deleted === 1 ? "chat" : "chats"}.` : "No saved chats to delete.");
+    } catch (error) {
+      toast(error.message, "error");
+    } finally {
+      button.disabled = false;
+    }
+  });
+
   window.NeyoMemorySettings = { reload: load, isOff };
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", watch, { once: true });

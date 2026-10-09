@@ -1108,6 +1108,35 @@ export default async function handler(
 
 
         /* =================================================
+           DELETE ALL (Settings > Privacy)
+           ================================================= */
+        if (
+            action === "delete_all" &&
+            req.method === "POST"
+        ) {
+            const { data: rows, error: listError } =
+                await supabase
+                    .from("chat_conversations")
+                    .select("id")
+                    .eq("user_id", userId)
+                    .limit(5000);
+            if (listError) throw listError;
+            const ids = (rows || []).map(row => row.id);
+            for (let i = 0; i < ids.length; i += 200) {
+                const part = ids.slice(i, i + 200);
+                const { error: msgError } =
+                    await supabase.from("chat_messages").delete().in("conversation_id", part);
+                if (msgError) throw msgError;
+            }
+            const { error: convError } =
+                await supabase.from("chat_conversations").delete().eq("user_id", userId);
+            if (convError) throw convError;
+            console.log("[HISTORY] deleted all chats", ids.length);
+            return res.status(200).json({ success: true, deleted: ids.length });
+        }
+
+
+        /* =================================================
            DELETE
            ================================================= */
 

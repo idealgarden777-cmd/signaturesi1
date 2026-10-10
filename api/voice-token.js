@@ -32,6 +32,13 @@ import {
 } from "../lib/characters.js";
 import { guardRequest } from "../lib/guard.js";
 import {
+  BRAIN_TOOLS,
+  BRAIN_RULES,
+  BRAIN_ACTIONS,
+  runBrainAction,
+  voiceMemoryPrompt
+} from "../lib/voice-brain.js";
+import {
   runLiveSearch,
   isNewsQuery
 } from "../lib/deep-research.js";
@@ -41,7 +48,13 @@ import {
    CONFIG
    ========================================================= */
 
+// Newest stable live model (Gemini 3.8 Live). The old preview
+// model is kept only as an automatic fallback; Google shuts it
+// down on 17 Nov 2026.
 const MODEL =
+  "gemini-3.8-live";
+
+const LEGACY_MODEL =
   "gemini-3.1-flash-live-preview";
 
 
@@ -126,6 +139,7 @@ function buildPersonaInstruction(
     `Today is ${now.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: "Asia/Karachi" })}. ` +
     "Your training knowledge is older than today. For anything current or time-sensitive (news, today's events, prices, rates, scores, weather, who holds a position, people, companies, AI models, products, releases, dates), call the web_search tool first (or Google Search if web_search is not available) and answer from what it finds. When unsure, search. " +
     "Before calling web_search, say a very short filler in the user's language like 'ek second, dekhta hoon' and then call it. Write the query in English with the month and year when it is about something recent. " +
+    "web_search has depth: 'quick' for one simple fact (a price, a score, the weather, who someone is), 'deep' when the user asks for detail, research, a comparison, 'poori detail', 'achi tarah check karo', or several things at once. For deep, first say it will take a few seconds (like 'thoda detail mein dekhta hoon'). If quick results are thin or unclear, call web_search again with depth deep instead of guessing. " +
     "Results have Published dates: the newest dated information wins, say 'as of <date>' for numbers that change, and never present old news as current. " +
     "Say the result naturally in a short spoken sentence, never read out links, numbers in brackets or long lists. If search finds nothing, say you couldn't confirm the latest.";
 
@@ -275,6 +289,16 @@ const WEB_SEARCH_TOOL = {
           "STRING",
         description:
           "Short English web search query, include month and year for recent topics."
+      },
+      depth: {
+        type:
+          "STRING",
+        enum: [
+          "quick",
+          "deep"
+        ],
+        description:
+          "quick = one simple fact, fast (about 8-12 s). deep = detail, comparison or research: several searches and more pages read (about 20-25 s)."
       }
     },
     required: [
@@ -326,6 +350,13 @@ async function handleVoiceSearch(
     new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Karachi" })
       .format(new Date());
 
+  // quick: one query, 6 pages. deep: the planner writes 3-4 queries
+  // from the user's words, 10 pages read, fact-checked.
+  const deep =
+    body?.depth === "deep";
+  const contextChars =
+    deep ? 16000 : 10000;
+
   try {
     const research =
       await runLiveSearch({
@@ -336,25 +367,58 @@ async function handleVoiceSearch(
           VOICE_SEARCH_PLANNER_MODEL,
         groundingModel:
           VOICE_SEARCH_GROUNDING_MODEL,
-        options: {
-          queries: [
-            query
-          ],
-          news:
-            isNewsQuery(
+        options: deep
+          ? {
+            hard:
+              true,
+            news:
+              isNewsQuery(
+                query
+              ),
+            maxQueries:
+              4,
+            maxPages:
+              10,
+            readerFallbacks:
+              5,
+            maxPdf:
+              1,
+            maxVideo:
+              0,
+            totalContextChars:
+              contextChars,
+            budgetMs:
+              24000,
+            verifyChars:
+              20000,
+            verifyTimeoutMs:
+              9000
+          }
+          : {
+            queries: [
               query
-            ),
-          maxPages:
-            4,
-          totalContextChars:
-            9000,
-          budgetMs:
-            11000,
-          verifyChars:
-            12000,
-          verifyTimeoutMs:
-            6000
-        }
+            ],
+            news:
+              isNewsQuery(
+                query
+              ),
+            maxPages:
+              6,
+            readerFallbacks:
+              3,
+            maxPdf:
+              0,
+            maxVideo:
+              0,
+            totalContextChars:
+              contextChars,
+            budgetMs:
+              12000,
+            verifyChars:
+              12000,
+            verifyTimeoutMs:
+              6000
+          }
       });
 
     const sources =
@@ -366,6 +430,7 @@ async function handleVoiceSearch(
 
     console.log(
       "[VOICE_SEARCH]",
+      deep ? "deep" : "quick",
       query,
       sources.length,
       research?.tookMs
@@ -385,7 +450,7 @@ async function handleVoiceSearch(
           String(
             research?.contextText ||
             ""
-          ).slice(0, 9000),
+          ).slice(0, contextChars),
         sources
       }
     );
@@ -489,8 +554,11 @@ export default async function handler(
      (tokens and searches spend the Gemini key)
      ------------------------------------------------------- */
 
+  const isBrain =
+    BRAIN_ACTIONS.has(requestBody?.action);
+
   const isSearch =
-    requestBody?.action === "search";
+    requestBody?.action === "search" || isBrain;
 
   const user =
     await guardRequest(req, res, isSearch
@@ -498,6 +566,22 @@ export default async function handler(
       : { name: "voice-token", limit: 20, windowMs: 10 * 60 * 1000 });
 
   if (!user) return;
+
+  if (isBrain) {
+    try {
+      const result =
+        await runBrainAction({
+          action: requestBody.action,
+          body: requestBody,
+          userId: user.userId,
+          apiKey
+        });
+      return sendJson(res, 200, result);
+    } catch (error) {
+      console.error("[VOICE_BRAIN_FAILED]", requestBody.action, error?.message || error);
+      return sendJson(res, 200, { error: "That didn't work right now." });
+    }
+  }
 
   if (
     isSearch
@@ -611,6 +695,25 @@ export default async function handler(
         return typeof h === "string" && /^[\w\-./=+:]{8,4000}$/.test(h) ? h : "";
       })();
 
+    const legacy =
+      getRequestBody(req)?.legacy === true;
+
+    const model =
+      legacy ? LEGACY_MODEL : MODEL;
+
+    // 3.8 runs tools in the background by default; NEYO waits
+    // for search results before speaking, so ask for BLOCKING.
+    const voiceTools =
+      [WEB_SEARCH_TOOL, ...BRAIN_TOOLS].map(item =>
+        legacy ? item : { ...item, behavior: "BLOCKING" }
+      );
+
+    // what NEYO already knows about this user (same memory as chat)
+    const memoryText =
+      await voiceMemoryPrompt(user.userId, {
+        off: getRequestBody(req)?.memoryOff === true
+      });
+
     const personaConfig = {
       sessionResumption:
         resumeHandle ? { handle: resumeHandle } : {},
@@ -631,15 +734,14 @@ export default async function handler(
               buildPersonaInstruction(
                 character,
                 getRequestBody(req)?.characterName
-              )
+              ) + " " + BRAIN_RULES + memoryText
           }
         ]
       },
       tools: [
         {
-          functionDeclarations: [
-            WEB_SEARCH_TOOL
-          ]
+          functionDeclarations:
+            voiceTools
         }
       ],
       inputAudioTranscription:
@@ -671,8 +773,7 @@ export default async function handler(
             expireTime,
             newSessionExpireTime,
             liveConnectConstraints: {
-              model:
-                MODEL,
+              model,
               config
             }
           }
@@ -797,7 +898,7 @@ export default async function handler(
           voiceName,
 
         model:
-          MODEL,
+          model,
 
         expiresAt:
           expireTime
@@ -815,7 +916,7 @@ export default async function handler(
 
 
         model:
-          MODEL,
+          model,
 
 
         /*

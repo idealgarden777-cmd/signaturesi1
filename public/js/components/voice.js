@@ -93,7 +93,7 @@ After neo.js removal this file continues unchanged.
   "use strict";
 
   const VERSION =
-    "neyo-voice-final-v12";
+    "neyo-voice-final-v14";
 
   if (
     window.NeyoVoice
@@ -1821,7 +1821,107 @@ After neo.js removal this file continues unchanged.
   function tokenKey(
     character
   ) {
-    return `${cleanId(character)}|${window.NeyoRoster?.customName?.(cleanId(character)) || ""}`;
+    return `${cleanId(character)}|${window.NeyoRoster?.customName?.(cleanId(character)) || ""}|${useLegacyModel ? "legacy" : "new"}`;
+  }
+
+  // Settings > Memory off, or a private chat: voice keeps nothing
+  function memoryIsOff() {
+    try {
+      if (localStorage.getItem("neyo_memory_off") === "1") return true;
+    } catch {}
+    return Boolean(window.NeyoChat?.getPreferences?.()?.privateChat);
+  }
+
+  // what the user said this call, so NEYO can learn lasting facts
+  let callHeard = "";
+
+  function learnFromCall() {
+    const text = callHeard.trim();
+    callHeard = "";
+    if (text.length < 20 || memoryIsOff()) return;
+    fetch(CONFIG.tokenEndpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      keepalive: true,
+      body: JSON.stringify({ action: "learn", text: text.slice(-3000) })
+    }).catch(() => {});
+  }
+
+  async function runBrain(action, payload, timeoutMs = 25_000) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetch(CONFIG.tokenEndpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, ...payload, memoryOff: memoryIsOff() }),
+        signal: controller.signal
+      });
+      if (!response.ok) throw new Error(`${action} ${response.status}`);
+      return await response.json();
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  // tools that run in the browser or through the voice endpoint
+  async function runBrainTool(name, args) {
+    const text = value => cleanText(String(value || ""), 6000).trim();
+    switch (name) {
+      case "recall_memory":
+        return runBrain("recall", { query: text(args?.query).slice(0, 200) });
+      case "remember":
+        return runBrain("remember", { key: text(args?.key).slice(0, 60), value: text(args?.value).slice(0, 400) });
+      case "forget":
+        return runBrain("forget", { key: text(args?.key).slice(0, 60) });
+      case "think_deep":
+        emit("neyo:voice-thinking", { question: text(args?.question).slice(0, 200) });
+        return runBrain("think", { question: text(args?.question), context: text(args?.context) }, 50_000);
+      case "show_in_chat": {
+        const request = text(args?.request);
+        const chat = window.NeyoChat;
+        if (!request || !chat?.send) {
+          return { ok: false, note: "The chat is not available right now." };
+        }
+        if (chat.isGenerating?.()) {
+          return { ok: false, note: "The chat is still busy with the last answer. Ask the user to wait a moment." };
+        }
+        // don't wait for the whole answer: it streams into the chat
+        Promise.resolve(chat.send({ text: request })).catch(() => {});
+        emit("neyo:voice-to-chat", { request });
+        return { ok: true, note: "It is being made in the chat now. Tell the user in a few words to look at the chat; don't read it out." };
+      }
+      default:
+        return { error: "Unknown tool." };
+    }
+  }
+
+  /*
+   * NEYO talks through Google's newest stable live model.
+   * If that model refuses to start for this account, NEYO
+   * switches to the older one by itself and remembers it
+   * for this browser tab.
+   */
+  let useLegacyModel =
+    (() => {
+      try {
+        return sessionStorage.getItem("neyo_voice_legacy") === "1";
+      } catch {
+        return false;
+      }
+    })();
+
+  function switchToLegacyModel() {
+    if (useLegacyModel) {
+      return false;
+    }
+    useLegacyModel = true;
+    preparedToken = null;
+    try {
+      sessionStorage.setItem("neyo_voice_legacy", "1");
+    } catch {}
+    console.warn("[NEYO Voice] new live model failed, using the older one");
+    return true;
   }
 
   function prefetchVoiceToken(
@@ -1955,7 +2055,11 @@ After neo.js removal this file continues unchanged.
                 resumeHandle:
                   !background && reconnecting
                     ? resumeHandle
-                    : ""
+                    : "",
+                legacy:
+                  useLegacyModel,
+                memoryOff:
+                  memoryIsOff()
               })
           },
           CONFIG.tokenTimeoutMs,
@@ -2141,6 +2245,10 @@ After neo.js removal this file continues unchanged.
 
         const userText =
           userTranscriptBuffer;
+
+        if (userText) {
+          callHeard = `${callHeard}\n${userText}`.slice(-6000);
+        }
 
         const assistantText =
           assistantTranscriptBuffer;
@@ -2505,15 +2613,17 @@ After neo.js removal this file continues unchanged.
      ===================================================== */
 
   async function runVoiceSearch(
-    query
+    query,
+    depth = "quick"
   ) {
     const controller =
       new AbortController();
 
+    // deep research reads more pages: give it more time
     const timer =
       setTimeout(
         () => controller.abort(),
-        16_000
+        depth === "deep" ? 36_000 : 18_000
       );
 
     try {
@@ -2531,7 +2641,8 @@ After neo.js removal this file continues unchanged.
               JSON.stringify({
                 action:
                   "search",
-                query
+                query,
+                depth
               }),
             signal:
               controller.signal
@@ -2594,15 +2705,20 @@ After neo.js removal this file continues unchanged.
             name !==
             "web_search"
           ) {
-            return {
-              id:
-                call?.id,
-              name,
-              response: {
-                error:
-                  "Unknown tool."
-              }
-            };
+            try {
+              return {
+                id: call?.id,
+                name,
+                response: await runBrainTool(name, call?.args || {})
+              };
+            } catch (error) {
+              console.warn("[NEYO Voice] tool failed", name, error?.message || error);
+              return {
+                id: call?.id,
+                name,
+                response: { error: "That didn't work right now. Tell the user simply." }
+              };
+            }
           }
 
           const query =
@@ -2624,9 +2740,15 @@ After neo.js removal this file continues unchanged.
           );
 
           try {
+            const depth =
+              call?.args?.depth === "deep"
+                ? "deep"
+                : "quick";
+
             const data =
               await runVoiceSearch(
-                query
+                query,
+                depth
               );
 
             const sources =
@@ -3098,6 +3220,17 @@ After neo.js removal this file continues unchanged.
       if (resumed !== "limit") {
         return;
       }
+
+      // keeps dropping on the new model: move to the older one
+      if (switchToLegacyModel()) {
+        reconnectTimes = [];
+        resumeHandle = "";
+        const second =
+          await reconnect("model-fallback");
+        if (second !== "limit") {
+          return;
+        }
+      }
     }
 
     active =
@@ -3126,12 +3259,16 @@ After neo.js removal this file continues unchanged.
     );
 
     reportError(
-      "Voice connection lost.",
+      lastCloseInfo?.reason
+        ? `Voice connection lost (${lastCloseInfo.reason}).`
+        : "Voice connection lost.",
       {
         reason:
           "socket-close"
       }
     );
+
+    learnFromCall();
 
     emit(
       "neyo:voice-session-ended",
@@ -3556,6 +3693,20 @@ After neo.js removal this file continues unchanged.
       setupComplete =
         false;
 
+      // the new model would not start: try the older one once
+      const retryOlder =
+        !stopping &&
+        !/log ?in|auth|permission|microphone|denied|notallowed|notfound|abort/i.test(
+          `${error?.name || ""} ${error?.message || ""}`
+        ) &&
+        switchToLegacyModel();
+
+      if (retryOlder) {
+        closeSocket("model-fallback");
+        clearTimeout(setupTimer);
+        return startConversation({ character: sessionCharacterId, quiet });
+      }
+
       await cleanupLiveResources();
 
       lastPhase =
@@ -3638,6 +3789,10 @@ After neo.js removal this file continues unchanged.
     const hadSession =
       active ||
       setupComplete;
+
+    if (reason !== "reconnect") {
+      learnFromCall();
+    }
 
     active =
       false;

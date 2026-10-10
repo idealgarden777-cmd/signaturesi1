@@ -7,6 +7,7 @@
     content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover"
   >
   <meta name="theme-color" content="#ffffff">
+  <link rel="icon" href="/favicon.svg?v=1" type="image/svg+xml">
   <meta name="referrer" content="strict-origin-when-cross-origin">
 
   <!-- Monetag Verification (kept) -->
@@ -75,6 +76,8 @@
   <!-- Messages & Hero -->
   <link rel="stylesheet" href="/css/components/messages.css?v=1">
   <link rel="stylesheet" href="/css/components/hero.css?v=1">
+  <link rel="stylesheet" href="/css/components/ink-logo.css?v=1">
+  <link rel="stylesheet" href="/css/components/hero-cast.css?v=1">
 
   <!-- Sidebar & Topbar -->
   <link rel="stylesheet" href="/css/components/sidebar.css?v=17">
@@ -190,7 +193,7 @@
         data-tooltip="NEYO home"
         data-tooltip-position="right"
       >
-        <img src="/icon.png" alt="NEYO" class="brand-logo" width="24" height="24">
+        <span class="brand-logo ink-logo" data-ink-logo role="img" aria-label="Signaturesi"></span>
         <span class="brand-name">NEYO</span>
       </button>
       <button
@@ -412,6 +415,7 @@
       <div class="conversation-column">
 
         <div class="hero-section" id="heroSection">
+          <div class="hero-cast-host" data-hero-cast></div>
           <h1>What can I help with today?</h1>
           <p class="hero-copy">Powered by NEYO Engine. Select a prompt or type your message below.</p>
           <div class="starter-grid">
@@ -1921,6 +1925,8 @@
   <script type="module" src="/js/components/smart-ui.js?v=3"></script>
   <script src="/js/components/mini-app.js?v=2" defer></script>
   <script type="module" src="/js/components/visuals.js?v=1"></script>
+  <script src="/js/components/ink-logo.js?v=1" defer></script>
+  <script src="/js/components/hero-cast.js?v=1" defer></script>
   <script src="/js/components/answer-check.js?v=1" defer></script>
 
   <script src="/js/components/source-cards.js?v=4" defer></script>

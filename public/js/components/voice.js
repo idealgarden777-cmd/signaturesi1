@@ -1951,7 +1951,11 @@ After neo.js removal this file continues unchanged.
                 characterName:
                   window.NeyoRoster?.customName?.(
                     requestedCharacter
-                  ) || ""
+                  ) || "",
+                resumeHandle:
+                  !background && reconnecting
+                    ? resumeHandle
+                    : ""
               })
           },
           CONFIG.tokenTimeoutMs,
@@ -2239,6 +2243,42 @@ After neo.js removal this file continues unchanged.
     /* =================================================
        WEB SEARCH TOOL CALL
        ================================================= */
+
+    if (
+      message?.sessionResumptionUpdate
+    ) {
+      const update =
+        message.sessionResumptionUpdate;
+
+      if (
+        update.resumable !== false &&
+        typeof update.newHandle === "string" &&
+        update.newHandle
+      ) {
+        resumeHandle =
+          update.newHandle.slice(0, 4000);
+      }
+    }
+
+    if (
+      message?.goAway
+    ) {
+      // server will close soon: move to a fresh connection first
+      if (!assistantSpeaking) {
+        void reconnect("go-away");
+      } else {
+        const waitForQuiet =
+          window.setInterval(() => {
+            if (!assistantSpeaking || !active) {
+              window.clearInterval(waitForQuiet);
+              if (active) void reconnect("go-away");
+            }
+          }, 250);
+
+        window.setTimeout(() => window.clearInterval(waitForQuiet), 20000);
+      }
+      return;
+    }
 
     if (
       message?.toolCall
@@ -2927,6 +2967,91 @@ After neo.js removal this file continues unchanged.
      microphone/audio context alive after connection loss.
      ===================================================== */
 
+  /* =====================================================
+     AUTO RECONNECT
+     Gemini closes a live connection now and then (time
+     limit, network blip, server restart). Instead of
+     ending the call, NEYO reconnects quietly with the
+     same character, keeps the mic and speaker open, and
+     continues the same conversation (session resumption
+     handle). Gives up after 3 tries in 2 minutes.
+     ===================================================== */
+
+  let resumeHandle =
+    "";
+
+  let reconnecting =
+    false;
+
+  let reconnectTimes =
+    [];
+
+  let lastCloseInfo =
+    null;
+
+  async function reconnect(
+    why
+  ) {
+    if (
+      reconnecting ||
+      stopping
+    ) {
+      return true;
+    }
+
+    const now =
+      Date.now();
+
+    reconnectTimes =
+      reconnectTimes.filter(t => now - t < 120000);
+
+    if (
+      reconnectTimes.length >= 3
+    ) {
+      return "limit";
+    }
+
+    reconnectTimes.push(now);
+    reconnecting = true;
+    metrics.reconnects =
+      (metrics.reconnects || 0) + 1;
+
+    const character =
+      sessionCharacterId;
+
+    // drop the old socket without touching mic/speaker
+    closeSocket("reconnect");
+    clearTimeout(setupTimer);
+    clearTimeout(sessionTimer);
+    stopPlayback();
+    preparedToken = null;
+    active = false;
+    connecting = false;
+    setupComplete = false;
+    assistantSpeaking = false;
+    responsePending = false;
+
+    emit(
+      "neyo:voice-reconnecting",
+      { reason: why, character }
+    );
+
+    try {
+      let ok =
+        await startConversation({ character, quiet: true });
+
+      if (!ok && resumeHandle && !stopping) {
+        // the saved conversation could not be resumed: start fresh
+        resumeHandle = "";
+        ok = await startConversation({ character, quiet: true });
+      }
+
+      return ok;
+    } finally {
+      reconnecting = false;
+    }
+  }
+
   async function handleUnexpectedClose(
     generation
   ) {
@@ -2959,6 +3084,21 @@ After neo.js removal this file continues unchanged.
 
     metrics.unexpectedCloses +=
       1;
+
+    if (
+      setupComplete &&
+      !stopping
+    ) {
+      const resumed =
+        await reconnect(
+          "socket-close"
+        );
+
+      // reconnected, or the retry already reported its own error
+      if (resumed !== "limit") {
+        return;
+      }
+    }
 
     active =
       false;
@@ -3007,7 +3147,8 @@ After neo.js removal this file continues unchanged.
      ===================================================== */
 
   async function startConversation({
-    character
+    character,
+    quiet = false
   } = {}) {
     if (
       active
@@ -3091,7 +3232,9 @@ After neo.js removal this file continues unchanged.
       "neyo:voice-session-starting",
       {
         character:
-          sessionCharacterId
+          sessionCharacterId,
+        reconnecting:
+          Boolean(quiet)
       }
     );
 
@@ -3326,7 +3469,27 @@ After neo.js removal this file continues unchanged.
               };
 
             ws.onclose =
-              () => {
+              event => {
+                lastCloseInfo = {
+                  code: event?.code || 0,
+                  reason: String(event?.reason || "").slice(0, 300),
+                  at: Date.now()
+                };
+
+                if (
+                  generation ===
+                  socketGeneration
+                ) {
+                  metrics.lastClose =
+                    lastCloseInfo;
+
+                  console.warn(
+                    "[NEYO Voice] connection closed",
+                    lastCloseInfo.code,
+                    lastCloseInfo.reason
+                  );
+                }
+
                 if (
                   generation !==
                   socketGeneration
@@ -3339,7 +3502,9 @@ After neo.js removal this file continues unchanged.
                 ) {
                   finishReject(
                     new Error(
-                      "Voice connection closed during setup."
+                      lastCloseInfo?.reason
+                        ? `Voice connection closed during setup (${lastCloseInfo.reason}).`
+                        : "Voice connection closed during setup."
                     )
                   );
 
@@ -3436,6 +3601,11 @@ After neo.js removal this file continues unchanged.
     reason =
       "user"
   } = {}) {
+    if (reason !== "reconnect") {
+      resumeHandle = "";
+      reconnectTimes = [];
+    }
+
     if (
       stopping
     ) {

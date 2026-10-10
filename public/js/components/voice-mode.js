@@ -2993,7 +2993,7 @@ After neo.js is removed this file continues unchanged.
 
   window.addEventListener(
     "neyo:voice-session-starting",
-    () => {
+    event => {
       open();
 
       setState(
@@ -3001,7 +3001,9 @@ After neo.js is removed this file continues unchanged.
       );
 
       setStatus(
-        "Connecting…"
+        event?.detail?.reconnecting
+          ? "Reconnecting…"
+          : "Connecting…"
       );
 
       syncComposerMicButton();

@@ -604,9 +604,16 @@ export default async function handler(
      * If Gemini rejects this richer config, fall back to the
      * previous minimal token so voice never breaks.
      */
+    // reconnecting? continue the same conversation
+    const resumeHandle =
+      (() => {
+        const h = getRequestBody(req)?.resumeHandle;
+        return typeof h === "string" && /^[\w\-./=+:]{8,4000}$/.test(h) ? h : "";
+      })();
+
     const personaConfig = {
       sessionResumption:
-        {},
+        resumeHandle ? { handle: resumeHandle } : {},
       responseModalities: [
         "AUDIO"
       ],
@@ -673,7 +680,29 @@ export default async function handler(
 
     let token;
 
+    /*
+     * Sliding-window context compression removes Gemini's
+     * ~15 minute audio session limit, so long calls don't
+     * drop. If Gemini refuses it, the normal chain below runs.
+     */
     try {
+      token =
+        await createToken({
+          ...personaConfig,
+          contextWindowCompression: {
+            slidingWindow: {}
+          }
+        });
+    } catch (compressionError) {
+      console.warn(
+        "[NEYO Voice Token] Compression not accepted, continuing without it",
+        compressionError?.message
+      );
+      token =
+        null;
+    }
+
+    if (!token) try {
       token =
         await createToken(
           personaConfig

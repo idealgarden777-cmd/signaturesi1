@@ -17,7 +17,7 @@ Storage:
   "use strict";
 
   const CHARACTER_KEY = "neo_default_personality";
-  const CHARACTERS = ["neyo", "zadi", "wizi", "crony"];
+  const CHARACTERS = window.NeyoRoster?.ids || ["neyo", "zadi", "wizi", "crony"];
 
   const read = (key, fallback, allowed) => {
     try {
@@ -52,7 +52,7 @@ Storage:
 
     const label = document.getElementById("settingsDefaultPersonalityValue");
     if (label) {
-      label.textContent = current.charAt(0).toUpperCase() + current.slice(1);
+      label.textContent = window.NeyoRoster?.name?.(current) || current.charAt(0).toUpperCase() + current.slice(1);
     }
 
     document
@@ -137,6 +137,9 @@ Storage:
   const chance = p => Math.random() < p;
 
   function buildMascot(id) {
+    if (window.NeyoRoster) {
+      return window.NeyoRoster.avatar(id, { size: 24, className: "neyo-thinking-mascot personality-mascot" });
+    }
     const mascot = document.createElement("span");
     mascot.className = "neyo-thinking-mascot personality-mascot";
     mascot.dataset.character = id;
@@ -153,7 +156,7 @@ Storage:
   }
 
   function startLife(mascot, id) {
-    const t = TEMPERAMENT[id] || TEMPERAMENT.neyo;
+    const t = TEMPERAMENT[id] || window.NeyoRoster?.get?.(id)?.temper || TEMPERAMENT.neyo;
     const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
     const timers = new Set();
     const later = (fn, ms) => {
@@ -300,7 +303,7 @@ Storage:
     activeThinking?.stop?.();
 
     const id = getCharacter();
-    const name = NAMES[id] || "Neyo";
+    const name = window.NeyoRoster?.name?.(id) || NAMES[id] || "Neyo";
     message.dataset.characterThinking = "1";
     message.dataset.character = id;
 

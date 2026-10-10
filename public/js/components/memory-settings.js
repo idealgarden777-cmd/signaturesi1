@@ -213,7 +213,7 @@ body.dark-mode .nm-skel{background:linear-gradient(90deg,rgba(255,255,255,.04) 0
     state.items.forEach(i => (counts[i.kind] = (counts[i.kind] || 0) + 1));
     root.innerHTML = `
       <div class="nm-row">
-        <div><strong>Use memory</strong><small>${off ? "Off. NEYO won't read or save memories in new chats." : "NEYO remembers useful things across chats. Neyo, Zadi, Wizi and Crony all share this memory."}</small></div>
+        <div><strong>Use memory</strong><small>${off ? "Off. NEYO won't read or save memories in new chats." : "NEYO remembers useful things across chats. All characters share this memory."}</small></div>
         <button class="settings-toggle${off ? "" : " active"}" type="button" role="switch" aria-checked="${!off}" aria-label="Use memory" data-nm="switch"><span></span></button>
       </div>
       <div class="nm-add">
@@ -394,6 +394,10 @@ body.dark-mode .nm-skel{background:linear-gradient(90deg,rgba(255,255,255,.04) 0
   const personalityMascot = document.getElementById("settingsDefaultPersonalityMascot");
   if (personalityValue && personalityMascot) {
     const syncMascot = () => {
+      if (window.NeyoRoster) {
+        window.NeyoRoster.syncSmallMascot();
+        return;
+      }
       const name = (personalityValue.textContent || "neyo").trim().toLowerCase();
       personalityMascot.dataset.character = ["neyo", "zadi", "wizi", "crony"].includes(name) ? name : "neyo";
     };

@@ -1856,7 +1856,11 @@ After neo.js removal this file continues unchanged.
             body:
               JSON.stringify({
                 character:
-                  requestedCharacter
+                  requestedCharacter,
+                characterName:
+                  window.NeyoRoster?.customName?.(
+                    requestedCharacter
+                  ) || ""
               })
           },
           CONFIG.tokenTimeoutMs,

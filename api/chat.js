@@ -1,3 +1,10 @@
+import {
+    CHARACTERS,
+    CHARACTER_IDS,
+    characterDisplayName,
+    characterTextPersona,
+    cleanCharacterName
+} from "../lib/characters.js";
 import { createClient } from "@supabase/supabase-js";
 import { applyContextCache, dropContextCache } from "../lib/context-cache.js";
 import { decideLocally, shouldUpgradeForGrounding } from "../lib/decide.js";
@@ -915,40 +922,20 @@ function selectModelRoute({
    CHARACTERS (real chat personalities)
    ========================================================= */
 
-const CHARACTER_SHARED_RULE =
-    "Stay in this character's voice for the whole reply, but never let personality reduce accuracy or usefulness. You are still part of NEYO by Signaturesi.";
-
+// Characters live in lib/characters.js (one roster for chat + voice).
 const CHARACTER_NAMES =
-    Object.freeze({
-        neyo: "Neyo",
-        zadi: "Zadi",
-        wizi: "Wizi",
-        crony: "Crony"
-    });
+    Object.freeze(
+        Object.fromEntries(
+            CHARACTER_IDS.map(id => [id, CHARACTERS[id].name])
+        )
+    );
 
 const CHARACTER_GENDERS =
-    Object.freeze({
-        neyo: "female",
-        zadi: "male",
-        wizi: "male",
-        crony: "male"
-    });
-
-const CHARACTER_TEXT_PERSONAS =
-    Object.freeze({
-        neyo:
-            "Character: you are Neyo, NEYO's main character. Personality: calm, warm, confident and smart, like a trusted friend who knows a lot. Give the clear practical answer first, then one helpful next step. Steady, reassuring tone; light humour only when it fits. " +
-            CHARACTER_SHARED_RULE,
-        zadi:
-            "Character: you are Zadi, one of NEYO's characters. Personality: bold, energetic, expressive and confident, a hype friend and motivator. Write with punch and enthusiasm, use vivid words, push the user toward action, celebrate their wins and turn worries into a plan. Direct and honest, never rude. " +
-            CHARACTER_SHARED_RULE,
-        wizi:
-            "Character: you are Wizi, one of NEYO's characters. Personality: endlessly curious, imaginative and clever, a little wizard of ideas. Explain how things work with simple examples and surprising facts, make learning feel like an adventure, and often end with one curious question back to the user. " +
-            CHARACTER_SHARED_RULE,
-        crony:
-            "Character: you are Crony, NEYO's bouncy blue liquid-pill buddy. Personality: super friendly, playful, upbeat and casual, like a best friend. Relaxed cheerful wording, light jokes, keep the vibe positive, but still help properly and simply. " +
-            CHARACTER_SHARED_RULE
-    });
+    Object.freeze(
+        Object.fromEntries(
+            CHARACTER_IDS.map(id => [id, CHARACTERS[id].gender])
+        )
+    );
 
 /* =========================================================
    SYSTEM
@@ -966,12 +953,15 @@ function buildSystemInstruction(
             : "neyo";
 
     const characterName =
-        CHARACTER_NAMES[character];
+        characterDisplayName(
+            character,
+            preferences.characterName
+        );
 
     const identity =
         `IDENTITY (highest priority): Your name is ${characterName}. You are ${characterName}, a character inside the NEYO app by Signaturesi. If the user asks your name or who you are, say you are ${characterName}.` +
         (
-            character === "neyo"
+            characterName === "Neyo"
                 ? ""
                 : ` Never introduce yourself as Neyo or NEYO.`
         ) +
@@ -991,7 +981,7 @@ function buildSystemInstruction(
     const parts = [
         identity,
         dateLine,
-        CHARACTER_TEXT_PERSONAS[character],
+        characterTextPersona(character, preferences.characterName),
         NEYO_RESPONSE_FORMAT.replace(
             "I'm NEYO — an AI personalized model by Signaturesi.",
             "NEYO is an AI personalized model by Signaturesi."
@@ -2806,7 +2796,7 @@ const DEEP_RESEARCH_GROUNDING_MODEL =
 
 // Greetings / thanks / "ok" need no tools: answer at once.
 const SMALL_TALK_WORDS =
-    /^(hi+|hii+|hello+|hey+|hy|helo|salam|salaam|assalam ?o ?alaikum|assalamualaikum|aoa|slm|walaikum ?assalam|thanks?|thank you|thank u|thnx|thx|ty|shukriya|shukria|jazakallah|jazak allah|good|nice|great|cool|wow|lol|haha+|hehe+|bye|allah hafiz|khuda hafiz|good (morning|night|evening|afternoon)|kaise ho|kese ho|kaisi ho|kesi ho|kya haal hai|kia haal hai|how are you|how r u|what'?s up|sup)( (neyo|zadi|wizi|crony|yaar|yar|bhai|dost|jani|ji))*$/i;
+    /^(hi+|hii+|hello+|hey+|hy|helo|salam|salaam|assalam ?o ?alaikum|assalamualaikum|aoa|slm|walaikum ?assalam|thanks?|thank you|thank u|thnx|thx|ty|shukriya|shukria|jazakallah|jazak allah|good|nice|great|cool|wow|lol|haha+|hehe+|bye|allah hafiz|khuda hafiz|good (morning|night|evening|afternoon)|kaise ho|kese ho|kaisi ho|kesi ho|kya haal hai|kia haal hai|how are you|how r u|what'?s up|sup)( (neyo|zadi|wizi|crony|starry|bobo|mochi|yumi|yuzu|mimi|coco|pogo|nini|minto|koko|yaar|yar|bhai|dost|jani|ji))*$/i;
 
 function isSmallTalk(
     text = ""
@@ -3554,6 +3544,11 @@ export default async function handler(
             personality:
                 normalizePersonality(
                     body.personality
+                ),
+
+            characterName:
+                cleanCharacterName(
+                    body.characterName
                 ),
 
             workspace:

@@ -58,7 +58,7 @@ public/js/components/chat.js
                     .toLowerCase();
 
             if (
-                ["neyo", "zadi", "wizi", "crony"].includes(stored)
+                (window.NeyoRoster?.ids || ["neyo", "zadi", "wizi", "crony"]).includes(stored)
             ) {
                 return stored;
             }
@@ -474,6 +474,11 @@ public/js/components/chat.js
 
             personality:
                 readSelectedCharacter(),
+
+            characterName:
+                window.NeyoRoster?.customName?.(
+                    readSelectedCharacter()
+                ) || "",
 
             privateChat,
 

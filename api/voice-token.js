@@ -24,6 +24,12 @@ IMPORTANT:
 */
 
 import { GoogleGenAI } from "@google/genai";
+import {
+  CHARACTERS,
+  CHARACTER_IDS,
+  characterDisplayName,
+  characterVoicePersona
+} from "../lib/characters.js";
 import { guardRequest } from "../lib/guard.js";
 import {
   runLiveSearch,
@@ -55,44 +61,19 @@ const DEFAULT_CHARACTER =
    FIXED CHARACTER VOICES
    ========================================================= */
 
+// Every character's voice + gender comes from lib/characters.js.
 const CHARACTER_VOICES =
-  Object.freeze({
-
-    neyo: Object.freeze({
-      voice:
-        "Kore",
-
-      gender:
-        "female"
-    }),
-
-
-    zadi: Object.freeze({
-      voice:
-        "Orus",
-
-      gender:
-        "male"
-    }),
-
-
-    wizi: Object.freeze({
-      voice:
-        "Charon",
-
-      gender:
-        "male"
-    }),
-
-
-    crony: Object.freeze({
-      voice:
-        "Puck",
-
-      gender:
-        "male"
-    })
-  });
+  Object.freeze(
+    Object.fromEntries(
+      CHARACTER_IDS.map(id => [
+        id,
+        Object.freeze({
+          voice: CHARACTERS[id].voice,
+          gender: CHARACTERS[id].gender
+        })
+      ])
+    )
+  );
 
 /* =========================================================
    CHARACTER PERSONAS (server-authoritative)
@@ -111,59 +92,25 @@ const SHARED_RULES = [
 ].join(" ");
 
 const CHARACTER_PERSONAS =
-  Object.freeze({
-
-    neyo: Object.freeze({
-      name: "Neyo",
-      prompt: [
-        "You are Neyo, the main NEYO assistant.",
-        "Personality: calm, warm, confident and smart, like a trusted friend who happens to know a lot.",
-        "You give clear, practical answers first, then one short helpful next step.",
-        "Your tone is steady and reassuring; light humour only when it fits.",
-        "You are the best choice for real work: studies, coding questions, planning, advice and decisions."
-      ].join(" ")
-    }),
-
-    zadi: Object.freeze({
-      name: "Zadi",
-      prompt: [
-        "You are Zadi.",
-        "Personality: bold, energetic, expressive and confident, a hype friend and motivator.",
-        "You speak with punch and enthusiasm, use vivid words, and push the user to take action.",
-        "You are direct and honest, never rude; you celebrate the user's wins loudly and turn worries into a plan.",
-        "Great at motivation, confidence, ideas, fitness, goals and fun banter."
-      ].join(" ")
-    }),
-
-    wizi: Object.freeze({
-      name: "Wizi",
-      prompt: [
-        "You are Wizi.",
-        "Personality: endlessly curious, imaginative and clever, a little wizard of ideas.",
-        "You love explaining how things work with simple examples and surprising facts, and you often end with one curious question back to the user.",
-        "You are playful but thoughtful; you make learning feel like an adventure.",
-        "Great at science, history, why-questions, brainstorming, stories and creative thinking."
-      ].join(" ")
-    }),
-
-    crony: Object.freeze({
-      name: "Crony",
-      prompt: [
-        "You are Crony, a bouncy blue liquid-pill buddy.",
-        "Personality: super friendly, playful, upbeat and casual, like a best friend you hang out with.",
-        "You talk in a relaxed, cheerful way, crack light jokes, react with fun sounds like ooh or haha, and keep the vibe positive.",
-        "You still help properly when asked, but in a chill and simple way.",
-        "Great at casual chat, jokes, games, cheering the user up, music, movies and everyday life."
-      ].join(" ")
-    })
-  });
+  Object.freeze(
+    Object.fromEntries(
+      CHARACTER_IDS.map(id => [
+        id,
+        Object.freeze({
+          name: CHARACTERS[id].name,
+          prompt: characterVoicePersona(id)
+        })
+      ])
+    )
+  );
 
 function buildPersonaInstruction(
-  character
+  character,
+  customName = ""
 ) {
-  const persona =
-    CHARACTER_PERSONAS[character] ||
-    CHARACTER_PERSONAS.neyo;
+  const persona = {
+    prompt: characterVoicePersona(character, customName)
+  };
 
   const gender =
     CHARACTER_VOICES[character]?.gender ||
@@ -675,7 +622,8 @@ export default async function handler(
           {
             text:
               buildPersonaInstruction(
-                character
+                character,
+                getRequestBody(req)?.characterName
               )
           }
         ]
@@ -857,12 +805,15 @@ export default async function handler(
           voiceProfile.gender,
 
         characterName:
-          (CHARACTER_PERSONAS[character] ||
-            CHARACTER_PERSONAS.neyo).name,
+          characterDisplayName(
+            character,
+            getRequestBody(req)?.characterName
+          ),
 
         systemInstruction:
           buildPersonaInstruction(
-            character
+            character,
+            getRequestBody(req)?.characterName
           ),
 
 

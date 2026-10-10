@@ -1,0 +1,550 @@
+/* =========================================================
+   NEYO — CHARACTER AVATARS v1 (roster.js)
+   One avatar for every place a character appears.
+   Image characters: faceless 3D body + live face on top.
+   ========================================================= */
+
+.nr-avatar {
+  --nr-size: 40px;
+  --ex: 0;
+  --ey: 0;
+  --nr-ink: #121212;
+  position: relative;
+  display: inline-block;
+  flex: 0 0 auto;
+  width: var(--nr-size);
+  height: var(--nr-size);
+  font-size: var(--nr-size);
+  line-height: 0;
+  container-type: size;
+  vertical-align: middle;
+}
+
+/* Image characters never take the old square body styles */
+.nr-avatar[data-kind="image"] {
+  background: none !important;
+  box-shadow: none !important;
+  clip-path: none !important;
+  border-radius: 0 !important;
+  gap: 0 !important;
+}
+
+.nr-art,
+.nr-art img {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.nr-avatar .nr-art img {
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none !important;
+  max-height: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  background: none !important;
+  cursor: inherit !important;
+  object-fit: contain;
+  filter: var(--nr-filter, none);
+  user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: none;
+}
+
+.nr-face {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* ---------- eyes ---------- */
+
+.nr-avatar .nr-eye {
+  position: absolute;
+  display: block;
+  border-radius: 50%;
+  background: var(--nr-ink);
+  transform:
+    translate(-50%, -50%)
+    translate(
+      calc(var(--ex) * 1.7cqw + var(--eye-x, 0px) * 0.45 + var(--life-gx, 0px) * 0.3),
+      calc(var(--ey) * 1.5cqw + var(--eye-y, 0px) * 0.45 + var(--life-gy, 0px) * 0.3)
+    )
+    scaleY(var(--blink, 1));
+  transition: transform 0.16s ease-out;
+}
+
+.nr-avatar .nr-eye.is-square {
+  border-radius: 24%;
+}
+
+/* tiny highlight makes the eyes feel alive */
+.nr-avatar[data-kind="image"] .nr-eye::after {
+  content: "";
+  position: absolute;
+  top: 18%;
+  left: 22%;
+  width: 30%;
+  height: 24%;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.85);
+}
+
+.nr-avatar.is-blinking,
+.nr-avatar .is-blinking {
+  --blink: 0.1;
+}
+
+/* ---------- mouth ---------- */
+
+.nr-avatar[data-kind="image"] .nr-mouth {
+  --mt: 2cqw;
+  position: absolute;
+  display: block;
+  height: var(--mt);
+  border-radius: 99px;
+  background: var(--nr-ink);
+  transform:
+    translate(-50%, -50%)
+    translate(calc(var(--ex) * 1cqw), calc(var(--ey) * 0.8cqw));
+  transition: height 0.2s ease, border-radius 0.2s ease, background 0.2s ease, transform 0.16s ease-out;
+}
+
+/* smile: a curved line instead of a flat one */
+.nr-avatar.is-smiling .nr-mouth,
+.is-active > .nr-avatar .nr-mouth,
+:hover > .nr-avatar:not(.is-static) .nr-mouth,
+#neyoMascot:is([data-mouth="smile"], [data-mouth="grin"], [data-mouth="open-smile"]) .nr-mouth {
+  height: calc(var(--mt) * 3.4);
+  background: transparent;
+  border-bottom: var(--mt) solid var(--nr-ink);
+  border-radius: 0 0 999px 999px;
+}
+
+/* talking */
+.nr-avatar.is-talking .nr-mouth,
+#neyoMascot[data-phase="speaking"] .nr-mouth {
+  border-bottom: 0;
+  background: var(--nr-ink);
+  animation: nr-talk 0.36s ease-in-out infinite alternate;
+}
+
+@keyframes nr-talk {
+  0% { height: var(--mt); border-radius: 99px; }
+  40% { height: calc(var(--mt) * 3.6); border-radius: 45%; }
+  100% { height: calc(var(--mt) * 2.2); border-radius: 50%; }
+}
+
+/* ---------- classic CSS bodies (Zadi, Wizi, Crony) ---------- */
+
+.nr-avatar[data-kind="css"] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.nr-css-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4cqw;
+  width: 76%;
+  height: 76%;
+  border-radius: 26%;
+  background: var(--nr-tint, #0d0d0d);
+  box-shadow: 0 0.12em 0.26em rgba(0, 0, 0, 0.14);
+  filter: var(--nr-filter, none);
+}
+
+.nr-css-eyes {
+  display: flex;
+  gap: 11.5cqw;
+}
+
+.nr-avatar[data-kind="css"] .nr-eye {
+  position: relative;
+  width: 10.5cqw;
+  height: 13cqw;
+  background: #fff;
+  transform:
+    translate(
+      calc(var(--ex) * 4cqw + var(--eye-x, 0px) * 0.6 + var(--life-gx, 0px) * 0.3),
+      calc(var(--ey) * 3cqw + var(--eye-y, 0px) * 0.6 + var(--life-gy, 0px) * 0.3)
+    )
+    scaleY(var(--blink, 1));
+}
+
+.nr-avatar[data-kind="css"] .nr-mouth {
+  display: block;
+  width: 15cqw;
+  height: 7cqw;
+  border: max(1.5px, 3cqw) solid #fff;
+  border-top: 0;
+  border-radius: 0 0 99px 99px;
+  opacity: 0;
+  transform: scale(0.4);
+  transition: opacity 0.25s ease, transform 0.3s cubic-bezier(0.34, 1.5, 0.64, 1);
+}
+
+.nr-avatar[data-kind="css"].is-smiling .nr-mouth,
+.is-active > .nr-avatar[data-kind="css"] .nr-mouth,
+:hover > .nr-avatar[data-kind="css"]:not(.is-static) .nr-mouth {
+  opacity: 1;
+  transform: none;
+}
+
+.nr-avatar[data-character="zadi"] .nr-css-body {
+  border-radius: 22%;
+  clip-path: polygon(50% 2%, 95% 28%, 98% 66%, 72% 95%, 31% 98%, 4% 72%, 3% 31%, 29% 5%);
+  box-shadow: none;
+}
+
+.nr-avatar[data-character="wizi"] .nr-css-body {
+  border-radius: 50%;
+}
+
+.nr-avatar[data-character="crony"] .nr-css-body {
+  width: 50%;
+  border-radius: 999px;
+  gap: 4cqw;
+  background: var(--nr-tint, linear-gradient(160deg, #9fd2ff 0%, #4fa3f7 45%, #1f6fd6 100%));
+  box-shadow: 0 0.12em 0.26em rgba(31, 111, 214, 0.28), inset 0 0.04em 0 rgba(255, 255, 255, 0.35);
+}
+
+.nr-avatar[data-character="crony"] .nr-css-eyes { gap: 7cqw; }
+.nr-avatar[data-character="crony"] .nr-eye { width: 8.5cqw; height: 10.5cqw; background: #0d2a4d; }
+.nr-avatar[data-character="crony"] .nr-mouth { border-color: #0d2a4d; }
+
+body.dark-mode .nr-avatar[data-kind="css"]:not([data-character="crony"]) .nr-css-body {
+  background: var(--nr-tint, #f2f2f2);
+}
+
+body.dark-mode .nr-avatar[data-kind="css"]:not([data-character="crony"]) .nr-eye {
+  background: #111;
+}
+
+body.dark-mode .nr-avatar[data-kind="css"]:not([data-character="crony"]) .nr-mouth {
+  border-color: #111;
+}
+
+/* ---------- where avatars sit ---------- */
+
+/* settings dropdown + small value mascot */
+.nr-avatar.settings-option-mascot {
+  width: var(--nr-size) !important;
+  height: var(--nr-size) !important;
+  background: none;
+  box-shadow: none;
+}
+
+/* personalities grid */
+.personality-character-card .nr-avatar.personality-avatar {
+  background: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  clip-path: none !important;
+  width: var(--nr-size) !important;
+  height: var(--nr-size) !important;
+  transition: transform 0.35s cubic-bezier(0.34, 1.5, 0.64, 1);
+}
+
+.personality-character-card:hover .nr-avatar {
+  transform: translateY(-2px) scale(1.06);
+}
+
+.personality-character-card:hover .nr-avatar .nr-eye {
+  animation: nr-blink 0.9s ease;
+}
+
+@keyframes nr-blink {
+  0%, 40%, 100% { --blink: 1; }
+  50% { --blink: 0.12; }
+}
+
+/* thinking indicator in chat */
+.nr-avatar.neyo-thinking-mascot[data-kind="image"] {
+  width: 30px !important;
+  height: 30px !important;
+  margin: -2px 0;
+}
+
+.nr-avatar.neyo-thinking-mascot[data-kind="css"] {
+  background: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  width: 24px !important;
+}
+
+/* voice mode: image character replaces the classic body */
+#neyoMascot[data-kind="image"] {
+  background: transparent !important;
+  box-shadow: none !important;
+  border-color: transparent !important;
+  clip-path: none !important;
+}
+
+#neyoMascot[data-kind="image"]::before,
+#neyoMascot[data-kind="image"]::after {
+  display: none !important;
+}
+
+#neyoMascot[data-kind="image"] > .neyo-mascot-face {
+  visibility: hidden;
+}
+
+#neyoMascot > .nr-voice {
+  position: absolute;
+  inset: -14%;
+  width: auto;
+  height: auto;
+  pointer-events: none;
+}
+
+#neyoMascot > .nr-voice.nr-avatar {
+  width: 128%;
+  height: 128%;
+}
+
+#neyoMascot[data-eye="closed"] .nr-eye,
+#neyoMascot[data-eye="line"] .nr-eye {
+  --blink: 0.12;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nr-avatar *,
+  .nr-avatar {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+@property --blink {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 1;
+}
+
+/* =========================================================
+   CHARACTER STUDIO (Settings > Personalities > Customize)
+   ========================================================= */
+
+.nr-studio {
+  display: grid;
+  grid-template-columns: 150px 1fr;
+  gap: 20px;
+  margin-top: 16px;
+  padding: 18px;
+  border: 1px solid var(--neyo-border, rgba(0, 0, 0, 0.08));
+  border-radius: 18px;
+  background: var(--neyo-surface, rgba(0, 0, 0, 0.02));
+}
+
+.nr-studio-preview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 150px;
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at 50% 40%, color-mix(in srgb, var(--nr-studio-color, #f7849a) 22%, transparent), transparent 70%);
+}
+
+.nr-studio-stage .nr-avatar.is-pop {
+  animation: nr-pop 0.5s cubic-bezier(0.34, 1.6, 0.64, 1);
+}
+
+@keyframes nr-pop {
+  0% { transform: scale(1); }
+  30% { transform: scale(0.88, 1.1) translateY(-6px); }
+  60% { transform: scale(1.08, 0.94); }
+  100% { transform: scale(1); }
+}
+
+.nr-studio-shadow {
+  width: 64px;
+  height: 8px;
+  margin-top: 6px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(0, 0, 0, 0.16), transparent);
+}
+
+.nr-studio-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.nr-studio-title strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.nr-studio-title small {
+  color: var(--neyo-muted, #8a8a8a);
+  font-size: 12px;
+}
+
+.nr-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.nr-field > span {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--neyo-muted, #8a8a8a);
+}
+
+.nr-field input[type="text"] {
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--neyo-border, rgba(0, 0, 0, 0.12));
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+}
+
+.nr-field input[type="text"]:focus {
+  outline: none;
+  border-color: var(--neyo-text, #171717);
+}
+
+.nr-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.nr-swatch {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  background: var(--sw, #ccc);
+  filter: var(--sw-filter, none);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.nr-swatch:first-child {
+  background: conic-gradient(from 90deg, var(--sw) 0 50%, #fff 0 100%);
+}
+
+.nr-swatch:hover { transform: scale(1.1); }
+
+.nr-swatch.is-on {
+  outline: 2px solid var(--neyo-text, #171717);
+  outline-offset: 2px;
+}
+
+.nr-hue {
+  width: 100%;
+  max-width: 300px;
+  height: 8px;
+  border-radius: 99px;
+  background: linear-gradient(90deg, red, #ff0, lime, cyan, blue, #f0f, red);
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.nr-hue::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: #171717;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+
+.nr-hue::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: #171717;
+}
+
+.nr-skins {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.nr-skin {
+  height: 28px;
+  padding: 0 11px;
+  border: 1px solid var(--neyo-border, rgba(0, 0, 0, 0.12));
+  border-radius: 99px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.nr-skin.is-on {
+  border-color: var(--neyo-text, #171717);
+  background: var(--neyo-text, #171717);
+  color: #fff;
+}
+
+.nr-reset {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--neyo-muted, #8a8a8a);
+  font: inherit;
+  font-size: 12px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+body.dark-mode .nr-studio {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+body.dark-mode .nr-skin.is-on {
+  border-color: #f5f5f7;
+  background: #f5f5f7;
+  color: #111;
+}
+
+body.dark-mode .nr-swatch.is-on,
+body.dark-mode .nr-field input[type="text"]:focus {
+  outline-color: #f5f5f7;
+  border-color: #f5f5f7;
+}
+
+@media (max-width: 560px) {
+  .nr-studio {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* personalities grid holds 15 now */
+.personality-character-grid {
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)) !important;
+}
+
+.character-picker-preview.has-nr-avatar {
+  background: none !important;
+  box-shadow: none !important;
+  clip-path: none !important;
+  border-radius: 0 !important;
+}

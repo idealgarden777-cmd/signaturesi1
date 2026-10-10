@@ -21,19 +21,26 @@ welcome screen instead of a logo.
 
   if (window.NeyoHeroCast) return;
 
-  const CAST = [
-    { id: "neyo", name: "Neyo", role: "Balanced and calm", hi: "Hi, I'm Neyo. Let's think it through." },
-    { id: "zadi", name: "Zadi", role: "Expressive and warm", hi: "Hey! I'm Zadi. Tell me everything." },
-    { id: "wizi", name: "Wizi", role: "Curious explorer", hi: "Wizi here. What are we exploring?" },
-    { id: "crony", name: "Crony", role: "Playful buddy", hi: "Yo! Crony's ready. Hit me." }
+  const R = window.NeyoRoster;
+  const SHOW = 5;
+
+  const FALLBACK = [
+    { id: "neyo", name: "Neyo", tag: "Calm and smart", hi: "Hi, I'm Neyo." }
   ];
 
-  const TEMPER = {
-    neyo: { pace: 1.25, tilt: 4, hop: 4, hopChance: 0.12, squish: 0.04 },
-    zadi: { pace: 0.7, tilt: 8, hop: 9, hopChance: 0.36, squish: 0.1 },
-    wizi: { pace: 1.05, tilt: 9, hop: 5, hopChance: 0.14, squish: 0.05 },
-    crony: { pace: 0.85, tilt: 6, hop: 7, hopChance: 0.24, squish: 0.16 }
-  };
+  // active character + 4 others, a fresh mix each visit
+  function pickCast() {
+    const all = R ? R.list() : FALLBACK;
+    const active = R ? R.current() : "neyo";
+    const others = all.filter(c => c.id !== active).sort(() => Math.random() - 0.5);
+    const chosen = [all.find(c => c.id === active) || all[0], ...others.slice(0, SHOW - 1)];
+    // active stands in the middle
+    const mid = Math.floor(chosen.length / 2);
+    const rest = chosen.slice(1);
+    return [...rest.slice(0, mid), chosen[0], ...rest.slice(mid)];
+  }
+
+  const TEMPER_DEFAULT = { pace: 1.1, tilt: 5, hop: 5, hopChance: 0.15, squish: 0.06 };
 
   const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
   const rand = (a, b) => a + Math.random() * (b - a);
@@ -59,40 +66,57 @@ welcome screen instead of a logo.
 
   /* ---------------- build ---------------- */
 
+  function addMember(c, before = null) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "cast-member";
+    btn.dataset.id = c.id;
+    const nm = R ? R.name(c.id) : c.name;
+    btn.setAttribute("aria-label", `Chat with ${nm}, ${c.tag}`);
+    const bubble = document.createElement("span");
+    bubble.className = "cast-bubble";
+    bubble.setAttribute("aria-hidden", "true");
+    const float = document.createElement("span");
+    float.className = "cast-float";
+    const body = R ? R.avatar(c.id, { size: "var(--size)" }) : document.createElement("span");
+    body.classList.add("cast-body");
+    float.appendChild(body);
+    const shadow = document.createElement("span");
+    shadow.className = "cast-shadow";
+    shadow.setAttribute("aria-hidden", "true");
+    const name = document.createElement("span");
+    name.className = "cast-name";
+    name.dataset.nrName = c.id;
+    name.textContent = nm;
+    const role = document.createElement("span");
+    role.className = "cast-role";
+    role.textContent = c.tag;
+    btn.append(bubble, float, shadow, name, role);
+    root.insertBefore(btn, before);
+    const m = { ...c, el: btn, float, body, bubble, t: c.temper || TEMPER_DEFAULT, look: null, timers: new Set() };
+    members.set(c.id, m);
+    return m;
+  }
+
+
   function build(host) {
     root = document.createElement("div");
     root.className = "hero-cast";
     root.setAttribute("role", "group");
     root.setAttribute("aria-label", "Choose who chats with you");
 
-    for (const c of CAST) {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "cast-member";
-      btn.dataset.id = c.id;
-      btn.setAttribute("aria-label", `Chat with ${c.name}, ${c.role}`);
-      btn.innerHTML =
-        `<span class="cast-bubble" aria-hidden="true"></span>` +
-        `<span class="cast-float">` +
-          `<span class="cast-body" data-character="${c.id}">` +
-            `<span class="cast-eyes"><span class="cast-eye"></span><span class="cast-eye"></span></span>` +
-            `<span class="cast-mouth"></span>` +
-          `</span>` +
-        `</span>` +
-        `<span class="cast-shadow" aria-hidden="true"></span>` +
-        `<span class="cast-name">${c.name}</span>` +
-        `<span class="cast-role">${c.role}</span>`;
-      root.appendChild(btn);
-      members.set(c.id, {
-        ...c,
-        el: btn,
-        float: btn.querySelector(".cast-float"),
-        body: btn.querySelector(".cast-body"),
-        bubble: btn.querySelector(".cast-bubble"),
-        t: TEMPER[c.id],
-        look: null,
-        timers: new Set()
+    for (const c of pickCast()) addMember(c);
+
+    if (R) {
+      const all = document.createElement("button");
+      all.type = "button";
+      all.className = "cast-all";
+      all.innerHTML = `<span>+${R.ids.length - SHOW}</span><small>All</small>`;
+      all.setAttribute("aria-label", "See all characters");
+      all.addEventListener("click", () => {
+        document.getElementById("sidebarPersonalitiesBtn")?.click();
       });
+      root.appendChild(all);
     }
 
     host.replaceWith(root);
@@ -106,6 +130,18 @@ welcome screen instead of a logo.
 
   function sync(celebrate = true) {
     const id = current();
+    if (R && root && !members.has(id) && R.get(id)) {
+      // chosen somewhere else and not standing here: swap in for the middle one
+      const old = [...members.values()].find(m => m.el.classList.contains("is-active")) ||
+        [...members.values()][Math.floor(members.size / 2)];
+      const fresh = addMember(R.get(id), old ? old.el : root.querySelector(".cast-all"));
+      if (old) {
+        old.timers.forEach(clearTimeout);
+        old.el.remove();
+        members.delete(old.id);
+      }
+      if (!reduce) live(fresh);
+    }
     for (const m of members.values()) {
       const on = m.id === id;
       m.el.classList.toggle("is-active", on);
@@ -128,7 +164,8 @@ welcome screen instead of a logo.
     if (!m || !root) return;
     clearTimeout(bubbleTimer);
     for (const o of members.values()) o.el.classList.remove("is-saying");
-    m.bubble.textContent = m.hi;
+    const nm = R ? R.name(id) : m.name;
+    m.bubble.textContent = R && nm !== m.name ? m.hi.split(m.name).join(nm) : m.hi;
     m.el.classList.add("is-saying");
     bubbleTimer = setTimeout(() => m.el.classList.remove("is-saying"), 3200);
   }
@@ -150,8 +187,8 @@ welcome screen instead of a logo.
   }
 
   function eyes(m, x, y) {
-    m.body.style.setProperty("--ex", `${x.toFixed(2)}px`);
-    m.body.style.setProperty("--ey", `${y.toFixed(2)}px`);
+    m.body.style.setProperty("--ex", (x / 3).toFixed(3));
+    m.body.style.setProperty("--ey", (y / 3).toFixed(3));
   }
 
   function blink(m, twice = false) {

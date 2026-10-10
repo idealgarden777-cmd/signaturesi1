@@ -171,7 +171,29 @@ Server roster with personas/voices: lib/characters.js
 
   const pct = v => `${v}%`;
 
-  function avatar(id, { size = 40, className = "", live = true } = {}) {
+  const imageUrl = id => `/characters/${id}.webp?v=1`;
+
+  // the character you use is fetched first, the rest quietly after
+  function preload() {
+    const first = current();
+    if (BY_ID[first]?.kind === "image") {
+      const link = document.createElement("link");
+      link.rel = "preload";
+      link.as = "image";
+      link.href = imageUrl(first);
+      link.setAttribute("fetchpriority", "high");
+      document.head.appendChild(link);
+    }
+    const rest = () => LIST.filter(c => c.kind === "image" && c.id !== first).forEach(c => {
+      const im = new Image();
+      im.decoding = "async";
+      im.src = imageUrl(c.id);
+    });
+    if (window.requestIdleCallback) requestIdleCallback(rest, { timeout: 2500 });
+    else setTimeout(rest, 1200);
+  }
+
+  function avatar(id, { size = 40, className = "", live = true, lazy = false } = {}) {
     const ch = get(id) || BY_ID.neyo;
     const el = document.createElement("span");
     el.className = `nr-avatar ${className}`.trim();
@@ -184,11 +206,15 @@ Server roster with personas/voices: lib/characters.js
       const art = document.createElement("span");
       art.className = "nr-art";
       const img = document.createElement("img");
-      img.src = `/characters/${ch.id}.webp?v=1`;
+      img.src = imageUrl(ch.id);
       img.alt = "";
       img.draggable = false;
       img.decoding = "async";
-      img.loading = "lazy";
+      if (lazy) img.loading = "lazy";
+      const ready = () => el.classList.add("is-ready");
+      img.addEventListener("load", ready, { once: true });
+      img.addEventListener("error", ready, { once: true });
+      if (img.complete && img.naturalWidth) ready();
       art.appendChild(img);
       const face = document.createElement("span");
       face.className = "nr-face";
@@ -304,6 +330,7 @@ Server roster with personas/voices: lib/characters.js
     refresh();
   }
 
+  preload();
   buildStatic();
 
   window.addEventListener("neyo:character-select", () => setTimeout(syncSmallMascot, 0));

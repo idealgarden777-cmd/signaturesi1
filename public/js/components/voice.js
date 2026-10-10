@@ -1807,8 +1807,93 @@ After neo.js removal this file continues unchanged.
      TOKEN
      ===================================================== */
 
+  /*
+   * Faster calls: the token is fetched ahead of time while
+   * the user moves toward the mic button, and in parallel
+   * with the microphone permission when a call starts.
+   * A prepared token is used once and only while fresh
+   * (the server allows 60s to open a new session).
+   */
+
+  let preparedToken =
+    null;
+
+  function tokenKey(
+    character
+  ) {
+    return `${cleanId(character)}|${window.NeyoRoster?.customName?.(cleanId(character)) || ""}`;
+  }
+
+  function prefetchVoiceToken(
+    character
+  ) {
+    const id =
+      cleanId(
+        character ||
+        (() => {
+          try {
+            return localStorage.getItem("neo_default_personality");
+          } catch {
+            return "";
+          }
+        })() ||
+        "neyo"
+      ) || "neyo";
+
+    if (
+      connecting ||
+      preparedToken &&
+      preparedToken.key === tokenKey(id) &&
+      Date.now() - preparedToken.at < 35000
+    ) {
+      return;
+    }
+
+    const entry = {
+      key: tokenKey(id),
+      at: Date.now(),
+      promise: null
+    };
+
+    entry.promise =
+      requestVoiceToken(id, true)
+        .catch(() => null);
+
+    preparedToken =
+      entry;
+  }
+
   async function fetchVoiceToken(
     character
+  ) {
+    const entry =
+      preparedToken;
+
+    preparedToken =
+      null;
+
+    if (
+      entry &&
+      entry.key === tokenKey(character) &&
+      Date.now() - entry.at < 40000
+    ) {
+      const ready =
+        await entry.promise;
+
+      if (ready?.token) {
+        return ready;
+      }
+    }
+
+    return requestVoiceToken(
+      character,
+      false
+    );
+  }
+
+  async function requestVoiceToken(
+    character,
+    background = false
   ) {
     const requestedCharacter =
       cleanId(
@@ -1816,7 +1901,8 @@ After neo.js removal this file continues unchanged.
       );
 
     if (
-      tokenController
+      tokenController &&
+      !background
     ) {
       try {
         tokenController.abort(
@@ -1825,8 +1911,13 @@ After neo.js removal this file continues unchanged.
       } catch {}
     }
 
-    tokenController =
+    const ownController =
       new AbortController();
+
+    if (!background) {
+      tokenController =
+        ownController;
+    }
 
     try {
       const response =
@@ -1864,7 +1955,7 @@ After neo.js removal this file continues unchanged.
               })
           },
           CONFIG.tokenTimeoutMs,
-          tokenController
+          ownController
         );
 
       const raw =
@@ -1919,8 +2010,10 @@ After neo.js removal this file continues unchanged.
       };
 
     } finally {
-      tokenController =
-        null;
+      if (tokenController === ownController) {
+        tokenController =
+          null;
+      }
     }
   }
 
@@ -3008,14 +3101,20 @@ After neo.js removal this file continues unchanged.
        * therefore create/resume output context early.
        */
 
+      // token + microphone at the same time = faster call
+      const credentialsPromise =
+        fetchVoiceToken(
+          sessionCharacterId
+        );
+
+      credentialsPromise.catch(() => {});
+
       await ensureOutputContext();
 
       await ensureMicrophone();
 
       const credentials =
-        await fetchVoiceToken(
-          sessionCharacterId
-        );
+        await credentialsPromise;
 
       if (
         !connecting ||
@@ -4143,6 +4242,17 @@ After neo.js removal this file continues unchanged.
     }
   );
 
+  /* heading to the mic button: get the call ready */
+  (() => {
+    const mic =
+      document.getElementById("micBtn");
+    if (!mic) return;
+    const warm = () => prefetchVoiceToken();
+    mic.addEventListener("pointerenter", warm, { passive: true });
+    mic.addEventListener("touchstart", warm, { passive: true });
+    mic.addEventListener("focus", warm);
+  })();
+
   /* =====================================================
      PUBLIC API
      ===================================================== */
@@ -4164,6 +4274,9 @@ After neo.js removal this file continues unchanged.
 
       start:
         startConversation,
+
+      prefetch:
+        prefetchVoiceToken,
 
       stop:
         stopConversation,

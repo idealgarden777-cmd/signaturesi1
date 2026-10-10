@@ -1,6 +1,6 @@
 /*
 =========================================================
-NEYO — HERO CAST v1
+NEYO — HERO CAST v2 (motion by character-life.js)
 The four characters (Neyo, Zadi, Wizi, Crony) live on the
 welcome screen instead of a logo.
 
@@ -40,16 +40,11 @@ welcome screen instead of a logo.
     return [...rest.slice(0, mid), chosen[0], ...rest.slice(mid)];
   }
 
-  const TEMPER_DEFAULT = { pace: 1.1, tilt: 5, hop: 5, hopChance: 0.15, squish: 0.06 };
 
   const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
-  const rand = (a, b) => a + Math.random() * (b - a);
-  const chance = p => Math.random() < p;
 
   let root = null;
   const members = new Map();
-  let pointer = null;
-  let raf = 0;
   let bubbleTimer = 0;
 
   const current = () => {
@@ -61,8 +56,6 @@ welcome screen instead of a logo.
     }
   };
 
-  const visible = () =>
-    root && root.isConnected && !document.hidden && root.offsetParent !== null;
 
   /* ---------------- build ---------------- */
 
@@ -93,7 +86,7 @@ welcome screen instead of a logo.
     role.textContent = c.tag;
     btn.append(bubble, float, shadow, name, role);
     root.insertBefore(btn, before);
-    const m = { ...c, el: btn, float, body, bubble, t: c.temper || TEMPER_DEFAULT, look: null, timers: new Set() };
+    const m = { ...c, el: btn, float, body, bubble, detach: null };
     members.set(c.id, m);
     return m;
   }
@@ -136,7 +129,7 @@ welcome screen instead of a logo.
         [...members.values()][Math.floor(members.size / 2)];
       const fresh = addMember(R.get(id), old ? old.el : root.querySelector(".cast-all"));
       if (old) {
-        old.timers.forEach(clearTimeout);
+        old.detach?.();
         old.el.remove();
         members.delete(old.id);
       }
@@ -170,118 +163,32 @@ welcome screen instead of a logo.
     bubbleTimer = setTimeout(() => m.el.classList.remove("is-saying"), 3200);
   }
 
-  /* ---------------- motion ---------------- */
+  /* ---------------- motion (character-life.js) ---------------- */
 
-  function later(m, fn, ms) {
-    const h = setTimeout(() => {
-      m.timers.delete(h);
-      fn();
-    }, ms);
-    m.timers.add(h);
+  const L = () => window.NeyoLife;
+
+  function neighbours() {
+    return [...members.values()].map(m => m.body);
   }
 
-  function pose(m, { x = 0, y = 0, r = 0, sx = 1, sy = 1 }, ms) {
-    m.float.style.transitionDuration = `${Math.round(ms)}ms`;
-    m.float.style.transform =
-      `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) rotate(${r.toFixed(1)}deg) scale(${sx.toFixed(3)}, ${sy.toFixed(3)})`;
-  }
-
-  function eyes(m, x, y) {
-    m.body.style.setProperty("--ex", (x / 3).toFixed(3));
-    m.body.style.setProperty("--ey", (y / 3).toFixed(3));
-  }
-
-  function blink(m, twice = false) {
-    m.body.classList.add("is-blinking");
-    later(m, () => {
-      m.body.classList.remove("is-blinking");
-      if (twice) later(m, () => blink(m), 160);
-    }, 130);
+  function live(m) {
+    if (!L() || reduce) return;
+    m.detach = L().attach(m.body, { host: m.float, hero: true, neighbours });
   }
 
   function hop(m, power = 1) {
-    const h = m.t.hop * power;
-    const s = m.t.squish;
-    pose(m, { y: 1, sx: 1 + s, sy: 1 - s }, 110);
-    later(m, () => pose(m, { y: -h, sx: 1 - s * 0.6, sy: 1 + s * 0.6 }, 200), 110);
-    later(m, () => pose(m, { y: 0, sx: 1 + s * 0.5, sy: 1 - s * 0.5 }, 180), 330);
-    later(m, () => pose(m, {}, 260), 520);
+    L()?.hop(m.body, power);
   }
 
   function glanceAt(m, other, hold) {
     const a = m.el.getBoundingClientRect();
     const b = other.el.getBoundingClientRect();
-    m.look = { x: Math.sign(b.left - a.left) * 3, y: -0.5, until: performance.now() + hold };
-    pose(m, { r: Math.sign(b.left - a.left) * m.t.tilt * 0.5 }, 380);
-    later(m, () => pose(m, {}, 500), hold);
-    kick();
+    L()?.lookAt(m.body, Math.sign(b.left - a.left), -0.15, hold);
   }
 
-  // one small random action, then schedule the next
-  function live(m) {
-    const next = () => later(m, () => {
-      if (visible()) act(m);
-      next();
-    }, rand(1600, 4200) * m.t.pace);
-    later(m, () => blink(m), rand(600, 2400));
-    next();
-  }
+  function blink() {}
 
-  function act(m) {
-    const roll = Math.random();
-    if (roll < 0.34) {
-      blink(m, chance(0.25));
-    } else if (roll < 0.34 + m.t.hopChance) {
-      hop(m);
-    } else if (roll < 0.72) {
-      const others = [...members.values()].filter(o => o !== m);
-      glanceAt(m, others[Math.floor(Math.random() * others.length)], rand(700, 1500));
-    } else {
-      const dir = chance(0.5) ? 1 : -1;
-      pose(m, { r: dir * m.t.tilt, y: -1 }, 420);
-      later(m, () => pose(m, {}, 520), rand(600, 1100));
-    }
-  }
-
-  /* ---------------- eyes follow ---------------- */
-
-  function target() {
-    const input = document.getElementById("chatInput");
-    if (input && (document.activeElement === input || input.value.trim())) {
-      const r = input.getBoundingClientRect();
-      return { x: r.left + r.width * 0.3, y: r.top + r.height / 2, typing: true };
-    }
-    return pointer;
-  }
-
-  function frame() {
-    raf = 0;
-    if (!visible()) return;
-    const goal = target();
-    const now = performance.now();
-    for (const m of members.values()) {
-      if (m.look && m.look.until > now) {
-        eyes(m, m.look.x, m.look.y);
-        continue;
-      }
-      m.look = null;
-      if (!goal) {
-        eyes(m, 0, 0);
-        continue;
-      }
-      const r = m.body.getBoundingClientRect();
-      const dx = goal.x - (r.left + r.width / 2);
-      const dy = goal.y - (r.top + r.height / 2);
-      const d = Math.hypot(dx, dy) || 1;
-      const pull = Math.min(1, d / 160) * (goal.typing ? 3.4 : 3);
-      eyes(m, (dx / d) * pull, (dy / d) * pull * 0.8);
-    }
-    if (members.size && [...members.values()].some(m => m.look)) kick();
-  }
-
-  function kick() {
-    if (!raf && !reduce) raf = requestAnimationFrame(frame);
-  }
+  function kick() {}
 
   /* ---------------- wiring ---------------- */
 
@@ -304,39 +211,38 @@ welcome screen instead of a logo.
       sync(true);
     });
 
-    root.addEventListener("pointerenter", e => {
-      const btn = e.target.closest?.(".cast-member");
-      const m = btn && members.get(btn.dataset.id);
-      if (m && !reduce) blink(m);
-    }, true);
 
-    window.addEventListener("pointermove", e => {
-      pointer = { x: e.clientX, y: e.clientY };
-      kick();
-    }, { passive: true });
-
-    document.addEventListener("pointerleave", () => {
-      pointer = null;
-      kick();
-    });
-
-    const input = document.getElementById("chatInput");
-    input?.addEventListener("focus", kick);
-    input?.addEventListener("blur", kick);
-    input?.addEventListener("input", kick);
 
     // character changed somewhere else (settings, voice mode)
     const external = e => {
       if (e.detail?.source === "hero-cast") return;
       setTimeout(() => sync(false), 0);
     };
+    // woke up after a nap: the active character says so
+    window.addEventListener("neyo:life-mood", e => {
+      const { mood, was } = e.detail || {};
+      if (was === "asleep" && (mood === "awake" || mood === "working")) {
+        const id = current();
+        const m = members.get(id);
+        if (!m || !root || root.offsetParent === null) return;
+        const nm = R ? R.name(id) : m.name;
+        const lines = [`Oh, you're back! ${nm} was napping.`, "Mmm... I'm awake, I'm awake!", "Yawn... okay, ready when you are."];
+        setTimeout(() => {
+          m.bubble.textContent = lines[Math.floor(Math.random() * lines.length)];
+          for (const o of members.values()) o.el.classList.remove("is-saying");
+          m.el.classList.add("is-saying");
+          clearTimeout(bubbleTimer);
+          bubbleTimer = setTimeout(() => m.el.classList.remove("is-saying"), 3000);
+        }, 700);
+      }
+    });
+
     window.addEventListener("neyo:character-select", external);
     window.addEventListener("neyo:character-change", external);
     window.addEventListener("storage", e => {
       if (e.key === "neo_default_personality") sync(false);
     });
 
-    document.addEventListener("visibilitychange", kick);
   }
 
   function init() {

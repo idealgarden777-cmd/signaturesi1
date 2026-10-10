@@ -156,6 +156,9 @@ Storage:
   }
 
   function startLife(mascot, id) {
+    if (window.NeyoLife && mascot.classList?.contains("nr-avatar")) {
+      return window.NeyoLife.attach(mascot);
+    }
     const t = TEMPERAMENT[id] || window.NeyoRoster?.get?.(id)?.temper || TEMPERAMENT.neyo;
     const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
     const timers = new Set();

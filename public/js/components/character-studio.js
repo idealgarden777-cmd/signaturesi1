@@ -105,9 +105,14 @@ Needs window.NeyoRoster (public/js/characters/roster.js).
       if (s || k || e.target.closest(".nr-reset")) {
         const a = studio.querySelector(".nr-studio-stage .nr-avatar");
         if (a && !reduce) {
-          a.classList.remove("is-pop");
-          void a.offsetWidth;
-          a.classList.add("is-pop");
+          if (window.NeyoLife && a.__life) {
+            window.NeyoLife.hop(a, 1.3);
+            window.NeyoLife.smile(a, 1400);
+          } else {
+            a.classList.remove("is-pop");
+            void a.offsetWidth;
+            a.classList.add("is-pop");
+          }
         }
         syncStudio(false);
       }
@@ -115,7 +120,7 @@ Needs window.NeyoRoster (public/js/characters/roster.js).
 
     studio.addEventListener("pointermove", e => {
       const a = studio.querySelector(".nr-studio-stage .nr-avatar");
-      if (a && !reduce) lookAt(a, e.clientX, e.clientY);
+      if (a && !reduce && !a.__life) lookAt(a, e.clientX, e.clientY);
     });
     studio.addEventListener("pointerleave", () => {
       const a = studio.querySelector(".nr-studio-stage .nr-avatar");
@@ -133,10 +138,11 @@ Needs window.NeyoRoster (public/js/characters/roster.js).
     const c = R.custom(id);
     const stage = studio.querySelector(".nr-studio-stage");
     if (rebuildAvatar || stage.firstElementChild?.dataset.character !== id) {
+      stage.firstElementChild?.__life?.detach?.();
       const a = R.avatar(id, { size: 96 });
-      a.classList.add("is-smiling");
       stage.replaceChildren(a);
-      blinkLoop(a);
+      if (window.NeyoLife) window.NeyoLife.attach(a);
+      else blinkLoop(a);
     }
     studio.querySelector(".nr-studio-preview").style.setProperty("--nr-studio-color", ch.color);
     const label = document.getElementById("settingsDefaultPersonalityValue");
@@ -203,6 +209,8 @@ Needs window.NeyoRoster (public/js/characters/roster.js).
       const ch = R.get(id);
       if (!ch) return;
       const prev = item.querySelector(".character-picker-preview");
+      const label = item.querySelector(".character-card-name, .character-picker-name");
+      if (label && R.customName(id) && label.textContent !== R.name(id)) label.textContent = R.name(id);
       if (prev && ch.kind === "image" && !prev.querySelector(".nr-avatar")) {
         prev.classList.add("has-nr-avatar");
         prev.replaceChildren(R.avatar(id, { size: "100%" }));
@@ -225,7 +233,10 @@ Needs window.NeyoRoster (public/js/characters/roster.js).
     watchPicker();
     window.addEventListener("neyo:character-select", () => setTimeout(() => syncStudio(true), 0));
     window.addEventListener("neyo:character-change", () => setTimeout(() => syncStudio(true), 0));
-    window.addEventListener("neyo:character-custom", () => syncStudio(false));
+    window.addEventListener("neyo:character-custom", () => {
+      syncStudio(false);
+      syncPicker();
+    });
   }
 
   if (document.readyState === "loading") {

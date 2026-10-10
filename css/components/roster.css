@@ -548,3 +548,97 @@ body.dark-mode .nr-field input[type="text"]:focus {
   clip-path: none !important;
   border-radius: 0 !important;
 }
+
+/* =========================================================
+   LIFE (character-life.js): sleep, wake, work, yawn
+   ========================================================= */
+
+/* the engine moves eyes every frame: no CSS lag on top */
+.nr-avatar.nr-live .nr-eye {
+  transition: none;
+}
+
+/* image appears only when ready: no half-drawn characters */
+.nr-avatar[data-kind="image"] .nr-art img {
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+.nr-avatar[data-kind="image"].is-ready .nr-art img {
+  opacity: 1;
+}
+
+.nr-avatar[data-kind="image"]:not(.is-ready) .nr-face {
+  opacity: 0;
+}
+
+.nr-avatar.is-smiling-life .nr-mouth {
+  height: calc(var(--mt) * 3.4);
+  background: transparent;
+  border-bottom: var(--mt) solid var(--nr-ink);
+  border-radius: 0 0 999px 999px;
+}
+
+.nr-avatar[data-kind="css"].is-smiling-life .nr-mouth {
+  opacity: 1;
+  transform: none;
+}
+
+/* yawn: a big round "o" */
+.nr-avatar.nr-avatar.is-yawning .nr-mouth {
+  height: calc(var(--mt) * 6);
+  background: var(--nr-ink);
+  border-bottom: 0;
+  border-radius: 50%;
+  transform: translate(-50%, -35%) scaleX(0.42);
+}
+
+.nr-avatar[data-kind="css"].is-yawning .nr-mouth {
+  width: 12cqw;
+  height: 12cqw;
+  border: max(1.5px, 3cqw) solid #fff;
+  border-radius: 50%;
+  opacity: 1;
+  transform: none;
+}
+
+/* sleeping: closed eyes, tiny relaxed mouth, no shine */
+.nr-avatar.is-asleep .nr-eye::after,
+.nr-avatar.is-drowsy .nr-eye::after {
+  opacity: 0.35;
+}
+
+.nr-avatar.is-asleep .nr-eye::after {
+  display: none;
+}
+
+.nr-avatar.is-asleep:not(.is-yawning) .nr-mouth {
+  transform: translate(-50%, -50%) scaleX(0.4);
+}
+
+/* working: focused, tight mouth */
+.nr-avatar.is-working:not(.is-smiling-life) .nr-mouth {
+  transform: translate(-50%, -50%) scaleX(0.6);
+}
+
+/* floating z's while asleep */
+.nr-z {
+  position: absolute;
+  top: 2%;
+  right: 4%;
+  z-index: 3;
+  font: 800 calc(14px * var(--zs, 1)) / 1 ui-rounded, system-ui, sans-serif;
+  color: #8f8fa3;
+  pointer-events: none;
+  animation: nr-z 2.6s ease-out forwards;
+}
+
+@keyframes nr-z {
+  0% { opacity: 0; transform: translate(0, 4px) scale(0.6); }
+  20% { opacity: 0.9; }
+  100% { opacity: 0; transform: translate(var(--zx, 6px), -26px) scale(1.25) rotate(-12deg); }
+}
+
+body.dark-mode .nr-z {
+  color: #a3a3a8;
+}

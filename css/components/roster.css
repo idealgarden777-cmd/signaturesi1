@@ -642,3 +642,160 @@ body.dark-mode .nr-field input[type="text"]:focus {
 body.dark-mode .nr-z {
   color: #a3a3a8;
 }
+
+/* =========================================================
+   VECTOR MOUTH (image characters)
+   One crisp SVG per face. States only fade and scale its
+   shapes, so it stays sharp at every size.
+   ========================================================= */
+
+.nr-avatar .nr-mouth.nr-vmouth {
+  position: absolute;
+  display: block;
+  height: auto !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: none !important;
+  animation: none !important;
+  color: var(--nr-ink);
+  transform:
+    translate(-50%, -30%)
+    translate(calc(var(--ex) * 1cqw), calc(var(--ey) * 0.8cqw)) !important;
+  transition: transform 0.16s ease-out !important;
+}
+
+.nr-avatar.nr-live .nr-mouth.nr-vmouth {
+  transition: none !important;
+}
+
+.nr-vmouth svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.nr-vmouth .m-rest,
+.nr-vmouth .m-smile,
+.nr-vmouth .m-open,
+.nr-vmouth .m-yawn {
+  transform-box: view-box;
+  transform-origin: 50% 25%;
+  transition: opacity 0.18s ease, transform 0.24s cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+
+.nr-vmouth .m-smile,
+.nr-vmouth .m-open,
+.nr-vmouth .m-yawn {
+  opacity: 0;
+}
+
+.nr-vmouth .m-smile { transform: scale(0.8, 0.5); }
+.nr-vmouth .m-open { transform: scale(0.85, 0.2); }
+.nr-vmouth .m-yawn { transform: scale(0.6, 0.3); transform-origin: 50% 40%; }
+
+/* smile */
+.nr-avatar.is-smiling .nr-vmouth .m-smile,
+.is-active > .nr-avatar .nr-vmouth .m-smile,
+:hover > .nr-avatar:not(.is-static) .nr-vmouth .m-smile,
+#neyoMascot[data-mouth="smile"] .nr-vmouth .m-smile {
+  opacity: 1;
+  transform: none;
+}
+
+.nr-avatar.is-smiling .nr-vmouth .m-rest,
+.is-active > .nr-avatar .nr-vmouth .m-rest,
+:hover > .nr-avatar:not(.is-static) .nr-vmouth .m-rest,
+#neyoMascot[data-mouth="smile"] .nr-vmouth .m-rest {
+  opacity: 0;
+}
+
+/* big happy smile (reply arrived, waking up, tapped) */
+.nr-avatar.is-smiling-life .nr-vmouth .m-open,
+#neyoMascot:is([data-mouth="grin"], [data-mouth="open-smile"]) .nr-vmouth .m-open {
+  opacity: 1;
+  transform: scale(1, 0.72);
+}
+
+/* talking: the open mouth moves like speech */
+.nr-avatar.is-talking .nr-vmouth .m-open,
+#neyoMascot[data-phase="speaking"] .nr-vmouth .m-open {
+  opacity: 1;
+  animation: nr-vtalk 0.34s ease-in-out infinite alternate;
+}
+
+@keyframes nr-vtalk {
+  0% { transform: scale(0.82, 0.22); }
+  45% { transform: scale(0.92, 0.85); }
+  100% { transform: scale(0.88, 0.5); }
+}
+
+/* yawn */
+.nr-avatar.is-yawning .nr-vmouth .m-yawn {
+  opacity: 1;
+  transform: none;
+  transition-duration: 0.3s, 0.6s;
+}
+
+.nr-avatar:is(.is-smiling-life, .is-talking, .is-yawning) .nr-vmouth :is(.m-rest, .m-smile),
+#neyoMascot:is([data-phase="speaking"], [data-mouth="grin"], [data-mouth="open-smile"]) .nr-vmouth :is(.m-rest, .m-smile) {
+  opacity: 0 !important;
+}
+
+.nr-avatar.is-yawning .nr-vmouth .m-open {
+  opacity: 0 !important;
+  animation: none !important;
+}
+
+/* sleeping: small relaxed mouth; working: focused, a bit tighter */
+.nr-avatar.is-asleep:not(.is-yawning) .nr-vmouth .m-rest {
+  transform: scale(0.5, 0.6);
+}
+
+.nr-avatar.is-working:not(.is-smiling-life) .nr-vmouth .m-rest {
+  transform: scale(0.72, 0.4);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nr-vmouth * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* Zadi, Wizi, Crony: same vector mouth, in their own colours.
+   At rest they keep their clean eyes-only look. */
+.nr-avatar[data-kind="css"] .nr-mouth.nr-vmouth {
+  position: relative;
+  width: 24cqw;
+  margin-top: -1cqw;
+  color: #fff;
+  opacity: 1;
+  transform: translate(calc(var(--ex) * 0.8cqw), calc(var(--ey) * 0.6cqw)) !important;
+}
+
+.nr-avatar[data-character="crony"] .nr-mouth.nr-vmouth {
+  width: 30cqw;
+  color: #0d2a4d;
+}
+
+body.dark-mode .nr-avatar[data-kind="css"]:not([data-character="crony"]) .nr-mouth.nr-vmouth {
+  color: #111;
+}
+
+.nr-avatar[data-kind="css"] .nr-vmouth .m-rest {
+  opacity: 0;
+}
+
+.nr-avatar[data-kind="css"].is-asleep .nr-vmouth .m-rest,
+.nr-avatar[data-kind="css"].is-working .nr-vmouth .m-rest {
+  opacity: 1;
+}
+
+.nr-avatar:is(.is-asleep, .is-working):not(.is-smiling-life, .is-yawning, .is-talking) .nr-vmouth .m-smile {
+  opacity: 0 !important;
+}
+
+.nr-avatar:is(.is-asleep, .is-working):not(.is-smiling-life, .is-yawning, .is-talking) .nr-vmouth .m-rest {
+  opacity: 1 !important;
+}

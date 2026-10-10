@@ -171,6 +171,39 @@ Server roster with personas/voices: lib/characters.js
 
   const pct = v => `${v}%`;
 
+  /* Crisp vector mouth: real curves with round ends, an open
+     mouth with a tongue for talking, laughing and yawning.
+     Every shape is drawn once; CSS only fades/scales them. */
+  let mouthSeq = 0;
+  function vectorMouth(mx = 0, my = 0, mw = 0, mh = 0) {
+    const id = `nrm${++mouthSeq}`;
+    const sw = mw ? Math.max(7, Math.min(15, (mh / mw) * 100 * 0.9)).toFixed(1) : "12";
+    const wrap = document.createElement("i");
+    wrap.className = "nr-mouth nr-vmouth";
+    if (mw) Object.assign(wrap.style, { left: pct(mx), top: pct(my), width: pct(+(mw * 1.12).toFixed(2)) });
+    wrap.innerHTML =
+      `<svg viewBox="0 0 100 64" aria-hidden="true" focusable="false">` +
+        `<defs><clipPath id="${id}"><path d="M15 14 Q50 19 85 14 Q83 52 50 56 Q17 52 15 14Z"/></clipPath>` +
+        `<clipPath id="${id}y"><ellipse cx="50" cy="32" rx="19" ry="25"/></clipPath></defs>` +
+        `<g fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round">` +
+          `<path class="m-rest" d="M25 20 Q50 29 75 20"/>` +
+          `<path class="m-smile" d="M15 13 Q50 47 85 13"/>` +
+        `</g>` +
+        `<g class="m-open">` +
+          `<path d="M15 14 Q50 19 85 14 Q83 52 50 56 Q17 52 15 14Z" fill="#2a1015"/>` +
+          `<g clip-path="url(#${id})"><ellipse cx="50" cy="54" rx="24" ry="13" fill="#ff7d95"/>` +
+          `<path d="M24 15 Q50 20 76 15 L74 22 Q50 26 26 22Z" fill="#fff" opacity=".92"/></g>` +
+          `<path d="M15 14 Q50 19 85 14 Q83 52 50 56 Q17 52 15 14Z" fill="none" stroke="currentColor" stroke-width="${(sw * 0.7).toFixed(1)}" stroke-linejoin="round"/>` +
+        `</g>` +
+        `<g class="m-yawn">` +
+          `<ellipse cx="50" cy="32" rx="19" ry="25" fill="#2a1015"/>` +
+          `<g clip-path="url(#${id}y)"><ellipse cx="50" cy="56" rx="17" ry="11" fill="#ff7d95"/></g>` +
+          `<ellipse cx="50" cy="32" rx="19" ry="25" fill="none" stroke="currentColor" stroke-width="${(sw * 0.7).toFixed(1)}"/>` +
+        `</g>` +
+      `</svg>`;
+    return wrap;
+  }
+
   const imageUrl = id => `/characters/${id}.webp?v=1`;
 
   // the character you use is fetched first, the rest quietly after
@@ -225,16 +258,13 @@ Server roster with personas/voices: lib/characters.js
         face.appendChild(eye);
       }
       const [mx, my, mw, mh] = ch.face.mouth;
-      const mouth = document.createElement("i");
-      mouth.className = "nr-mouth";
-      Object.assign(mouth.style, { left: pct(mx), top: pct(my), width: pct(mw) });
-      mouth.style.setProperty("--mt", `${mh}cqw`);
-      face.appendChild(mouth);
+      face.appendChild(vectorMouth(mx, my, mw, mh));
       el.append(art, face);
     } else {
       const body = document.createElement("span");
       body.className = "nr-css-body";
-      body.innerHTML = '<span class="nr-css-eyes"><i class="nr-eye"></i><i class="nr-eye"></i></span><i class="nr-mouth"></i>';
+      body.innerHTML = '<span class="nr-css-eyes"><i class="nr-eye"></i><i class="nr-eye"></i></span>';
+      body.appendChild(vectorMouth());
       el.appendChild(body);
     }
     if (!live) el.classList.add("is-static");

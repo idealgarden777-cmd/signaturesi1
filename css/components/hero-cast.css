@@ -263,3 +263,13 @@ body.dark-mode .cast-bubble {
     transition: none !important;
   }
 }
+
+/* active / hovered character smiles (vector mouth) */
+.cast-member:is(.is-active, :hover) .nr-vmouth .m-smile {
+  opacity: 1;
+  transform: none;
+}
+
+.cast-member:is(.is-active, :hover) .nr-vmouth .m-rest {
+  opacity: 0;
+}
